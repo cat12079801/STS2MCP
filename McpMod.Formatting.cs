@@ -407,6 +407,7 @@ public static partial class McpMod
                     string uid = card.TryGetValue("uid", out var u) && u != null ? $" `{u}`" : "";
                     sb.AppendLine($"- [{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {playable}{keywords} - {card["description"]} (target: {card["target_type"]})");
                     FormatCardTargetPreviews(sb, card);
+                    AppendUpgradePreviewLine(sb, card);   // only present while the hand can be upgraded (D-13)
                 }
                 sb.AppendLine();
             }

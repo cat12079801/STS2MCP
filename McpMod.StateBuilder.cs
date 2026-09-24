@@ -1478,12 +1478,16 @@ public static partial class McpMod
                 state["stars"] = combatState.Stars;
             }
 
-            // Hand
+            // Hand. "upgrade_preview" rides along only while something in reach can upgrade
+            // cards in hand this turn (D-13): otherwise it is dead weight on every combat state.
             var hand = new List<Dictionary<string, object?>>();
+            bool previewHandUpgrades = CanUpgradeHandThisTurn(player, combatState.Hand.Cards);
             int cardIndex = 0;
             foreach (var card in combatState.Hand.Cards)
             {
-                hand.Add(BuildCardState(card, cardIndex));
+                var cardState = BuildCardState(card, cardIndex);
+                if (previewHandUpgrades) AttachUpgradePreview(cardState, card);
+                hand.Add(cardState);
                 cardIndex++;
             }
             state["hand"] = hand;
@@ -1689,6 +1693,31 @@ public static partial class McpMod
 
         var preview = BuildUpgradePreviewInfo(card);
         if (preview != null) cardInfo["upgrade_preview"] = preview;
+    }
+
+    /// <summary>
+    /// Card and potion ids that upgrade cards already in hand, mid-combat: Armaments
+    /// (one or all of the hand), Apotheosis (every card) and Blessing of the Forge (the
+    /// whole hand). Cards that create upgraded copies (Begone, Primal Force...) are not
+    /// here: the copies arrive already upgraded and read correctly without a preview.
+    /// </summary>
+    private static readonly HashSet<string> HandUpgradeCardIds = new() { "ARMAMENTS", "APOTHEOSIS" };
+    private static readonly HashSet<string> HandUpgradePotionIds = new() { "BLESSING_OF_THE_FORGE" };
+
+    private static bool CanUpgradeHandThisTurn(Player player, IEnumerable<CardModel> hand)
+    {
+        try
+        {
+            foreach (var potion in player.PotionSlots)
+                if (potion != null && HandUpgradePotionIds.Contains(potion.Id.Entry)) return true;
+            foreach (var card in hand)
+                if (HandUpgradeCardIds.Contains(card.Id.Entry)) return true;
+        }
+        catch (Exception ex)
+        {
+            Warn("hand.upgrade_preview", ex);
+        }
+        return false;
     }
 
     private static Dictionary<string, object?> BuildCardState(CardModel card, int index)
