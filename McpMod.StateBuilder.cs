@@ -589,7 +589,7 @@ public static partial class McpMod
                 // NMerchantRoom.Inventory (UI node) can be null before the scene is fully ready;
                 // OpenInventory() itself accesses Inventory.IsOpen, so guard against null.
                 var merchUI = NMerchantRoom.Instance;
-                if (merchUI?.Inventory != null && !merchUI.Inventory.IsOpen)
+                if (!_passiveRead && merchUI?.Inventory != null && !merchUI.Inventory.IsOpen)
                 {
                     merchUI.OpenInventory();
                 }
@@ -2418,7 +2418,7 @@ public static partial class McpMod
                 // ForceClick the merchant button to go through the proper signal chain
                 // (disables proceed button, wires InventoryClosed callback, etc.)
                 var merchantButton = fakeMerchantNode.MerchantButton;
-                if (merchantButton != null && merchantButton.Visible && merchantButton.IsEnabled)
+                if (!_passiveRead && merchantButton != null && merchantButton.Visible && merchantButton.IsEnabled)
                     merchantButton.ForceClick();
             }
         }
@@ -2510,6 +2510,13 @@ public static partial class McpMod
 
         return state;
     }
+
+    /// <summary>
+    /// True while a GET /api/v1/singleplayer?passive=1 is building the state: the screens that
+    /// normally nudge the UI while being read (merchant inventory, fake merchant, treasure chest)
+    /// leave it alone. Only touched on the main thread (inside RunOnMainThreadBlocking).
+    /// </summary>
+    private static bool _passiveRead;
 
     private static Dictionary<string, object?> BuildShopState(MerchantRoom merchantRoom, RunState runState)
     {
@@ -3605,7 +3612,7 @@ public static partial class McpMod
 
         // Auto-open chest if not yet opened
         var chestButton = treasureUI.GetNodeOrNull<NClickableControl>("Chest");
-        if (chestButton is { IsEnabled: true })
+        if (!_passiveRead && chestButton is { IsEnabled: true })
         {
             chestButton.ForceClick();
             state["message"] = "Opening chest...";

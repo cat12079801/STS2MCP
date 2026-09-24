@@ -619,7 +619,16 @@ public static partial class McpMod
 
         try
         {
-            var state = RunOnMainThreadBlocking(() => BuildGameState());
+            // ?passive=1: read without the UI side effects some screens have (auto-opening the
+            // merchant inventory, force-clicking the fake merchant / treasure chest). A watcher that
+            // polls the state while a human plays must not reopen what the human just closed.
+            bool passive = ReadFlagParam(new Dictionary<string, JsonElement>(), request, "passive", false);
+            var state = RunOnMainThreadBlocking(() =>
+            {
+                _passiveRead = passive;
+                try { return BuildGameState(); }
+                finally { _passiveRead = false; }
+            });
 
             if (format == "markdown")
             {
