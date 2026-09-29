@@ -185,7 +185,7 @@ On **every** card entry — hand, `draw_pile` / `discard_pile` / `exhaust_pile`,
 
 **`null` and a missing key mean different things.** `null` is observed ("no enchantment", "no plain damage base"). A missing key means the value was not observed: an older mod build, or a getter that threw, which also adds a `card.enchantment` / `card.replay` / `card.damage_base` entry to `warnings`. The same holds for `relics[].status` (`relic.status` in `warnings`). These are additions, so `schema_version` stays `3`; detect them by presence.
 
-`relics[].status` for once-per-combat relics: Throwing Axe is `Active` only while its extra play is still available this combat; `Normal` or `Disabled` means it has been spent. Any card play counts, including automatic ones (`CardCmd.AutoPlay`, e.g. Imbued at combat start).
+`relics[].status` for once-per-combat relics: Throwing Axe is `Active` only while its extra play is still available this combat; during combat, `Normal` or `Disabled` means it has been spent; outside combat, `Normal` does not indicate usage. Any successful card play counts, including automatic ones (`CardCmd.AutoPlay`, e.g. Imbued at combat start).
 
 ### Orb Object
 
@@ -1773,3 +1773,5 @@ In multiplayer, this is a vote. The turn ends only when all players submit.
 Retract the end-turn vote before all players have committed.
 
 All other actions work identically to singleplayer.
+
+`damage_base` preserves the decimal `BaseValue` without rounding; current v0.111.0 card definitions use integer damage values, but clients should tolerate decimal values or conservatively report an unknown base.

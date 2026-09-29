@@ -1745,9 +1745,9 @@ public static partial class McpMod
                 return null;
 
             decimal value = dynamicVar.BaseValue;
-            return value == decimal.Truncate(value) && value >= int.MinValue && value <= int.MaxValue
-                ? (int)value
-                : value;
+            if (value == decimal.Truncate(value) && value >= int.MinValue && value <= int.MaxValue)
+                return (int)value;
+            return value;
         }
         return null;
     }
