@@ -78,6 +78,71 @@ public static partial class McpMod
         return digest(run);
     }
 
+    private static JsonObject RunParts(SerializableRun run, Func<IPacketSerializable, string> digest)
+    {
+        var parts = new JsonObject();
+        foreach (var p in typeof(SerializableRun).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+        {
+            if (p.GetIndexParameters().Length != 0 || p.GetMethod == null)
+                continue;
+            object? v;
+            try { v = p.GetValue(run); }
+            catch { continue; }
+            string d = v switch
+            {
+                null => "null",
+                IPacketSerializable ps => digest(ps),
+                System.Collections.IEnumerable seq and not string => string.Join(",", seq.Cast<object?>().Select(x =>
+                    x is IPacketSerializable xp ? digest(xp)[..12]
+                    : x is System.Collections.IEnumerable inner and not string
+                        ? "[" + string.Join(",", inner.Cast<object?>().Select(y => y is IPacketSerializable yp ? digest(yp)[..12] : y?.ToString())) + "]"
+                        : x?.ToString())),
+                _ => v.ToString() ?? "",
+            };
+            // Lists stay item by item (short digests), so the item that differs can be named.
+            parts[p.Name] = d.Length > 64 && v is not System.Collections.IEnumerable
+                ? Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(d))).ToLowerInvariant() : d;
+        }
+        // The history of the current act, entry by entry and field by field (the save rewrites it).
+        var history = new JsonArray();
+        if (run.MapPointHistory.Count > 0)
+        {
+            foreach (var entry in run.MapPointHistory[^1])
+            {
+                var e = new JsonObject
+                {
+                    ["type"] = entry.MapPointType.ToString(),
+                    ["rooms"] = string.Join(";", entry.Rooms.Cast<object?>().Select(x => x is IPacketSerializable xp ? digest(xp)[..12] : x?.ToString())),
+                };
+                var stats = new JsonArray();
+                foreach (var stat in entry.PlayerStats)
+                {
+                    var o = new JsonObject();
+                    foreach (var sp in stat.GetType().GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+                    {
+                        if (sp.GetIndexParameters().Length != 0 || sp.GetMethod == null)
+                            continue;
+                        object? sv;
+                        try { sv = sp.GetValue(stat); } catch { continue; }
+                        o[sp.Name] = sv switch
+                        {
+                            null => null,
+                            string str => str,
+                            System.Collections.ICollection c => string.Join(";", c.Cast<object?>().Select(x =>
+                                x is IPacketSerializable xp ? digest(xp)[..12] : x?.ToString())),
+                            _ => sv.ToString(),
+                        };
+                    }
+                    stats.Add(o);
+                }
+                e["player_stats"] = stats;
+                history.Add(e);
+            }
+        }
+        parts["last_act_history"] = history;
+        return parts;
+    }
+
     private static JsonObject InspectReplay(string file)
     {
         string full = Path.GetFullPath(file);
@@ -160,6 +225,8 @@ public static partial class McpMod
             ["start_time"] = replay.serializableRun.StartTime,
             ["serializable_run_sha256"] = Digest(replay.serializableRun),
             ["serializable_run_sha256_normalized"] = NormalizedRunDigest(replay.serializableRun, Digest),
+            // Per property of the normalized run, so a difference can be located.
+            ["serializable_run_parts"] = RunParts(replay.serializableRun, x => Digest(x)),
             ["events"] = events,
             ["checksums"] = checksums,
         };
