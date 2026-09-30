@@ -616,10 +616,12 @@ internal static class CombatRecorder
                 data["choice_id"] = ev.choiceId;
                 data["result"] = RecordObserve.DescribeChoiceResult(ev.playerChoiceResult, SlotOf);
                 data["origin"] = WindowOrigin();
-                AttachChoiceParent(rec, data, SlotOf(ev.playerId), ev.choiceId);
+                // Copied late, the reservation was never seen: nothing to settle or to check.
+                if (!backfilled)
+                    AttachChoiceParent(rec, data, SlotOf(ev.playerId), ev.choiceId);
                 break;
         }
-        long seq = Emit("game_event", data, hidden: true);
+        long seq = Emit("game_event", data, hidden: true, noAt: backfilled);
         EmitHidden(seq, "game_event", new JsonObject
         {
             ["index"] = index,
@@ -697,7 +699,7 @@ internal static class CombatRecorder
         };
         if (backfilled)
             data["backfilled"] = true;
-        long seq = Emit("checksum", data, hidden: true);
+        long seq = Emit("checksum", data, hidden: true, noAt: backfilled);
         EmitHidden(seq, "checksum", new JsonObject
         {
             ["index"] = index,
@@ -871,6 +873,27 @@ internal static class CombatRecorder
                     // ResumeActionWithoutSynchronizing hands out exactly one new id after the event.
                     ["new_action_id"] = nextActionId - 1,
                 };
+                // A choice the game settles without asking (e.g. HEADBUTT with one card in the
+                // discard pile) is reserved and resumed with no PlayerChoice result in between.
+                if (_rec.Paused != null)
+                {
+                    var paused = _rec.Paused;
+                    uint? key = KeyOf(paused);
+                    uint? hook = (paused as GenericHookGameAction)?.HookId;
+                    var unanswered = new JsonArray();
+                    foreach (var ((slot, choice), owner) in _rec.ChoiceOwners.ToList())
+                    {
+                        bool mine = (key != null && AsUInt(owner["action_key"]) == key)
+                                    || (hook != null && AsUInt(owner["hook_id"]) == hook);
+                        if (!mine)
+                            continue;
+                        _rec.ChoiceOwners.Remove((slot, choice));
+                        if (_rec.OpenChoices.TryGetValue(slot, out var open))
+                            open.Remove(choice);
+                        unanswered.Add(choice);
+                    }
+                    data["unanswered_choice_ids"] = unanswered;
+                }
                 if (_rec.Paused != null && (_rec.Paused.Id == oldId || _rec.Paused.Id == nextActionId - 1))
                 {
                     data["action_key"] = KeyOf(_rec.Paused);
@@ -1192,7 +1215,9 @@ internal static class CombatRecorder
     // Emit helpers (all called with Gate held)
     // ========================================================================================
 
-    private static long Emit(string kind, JsonObject? data, bool hidden = false)
+    /// <param name="noAt">For entries copied after the fact (backfill): "at" would be the
+    /// moment of copying, not of the entry, so it is left out.</param>
+    private static long Emit(string kind, JsonObject? data, bool hidden = false, bool noAt = false)
     {
         var rec = _rec;
         if (rec == null)
@@ -1202,7 +1227,7 @@ internal static class CombatRecorder
             ["seq"] = rec.Seq++,
             ["kind"] = kind,
             ["t_ms"] = Clock.ElapsedMilliseconds - rec.OpenedMs,
-            ["at"] = SafeAt(),
+            ["at"] = noAt ? null : SafeAt(),
         };
         if (hidden)
             line["hidden"] = true;
@@ -1432,6 +1457,12 @@ internal static class CombatRecorder
             ["total_floor"] = run?.TotalFloor,
             ["map_coord"] = run?.CurrentMapCoord is { } c ? new JsonObject { ["col"] = c.col, ["row"] = c.row } : null,
         };
+    }
+
+    private static uint? AsUInt(JsonNode? node)
+    {
+        try { return node is JsonValue v && v.TryGetValue(out uint u) ? u : null; }
+        catch { return null; }
     }
 
     private static uint? KeyOf(GameAction action) =>
