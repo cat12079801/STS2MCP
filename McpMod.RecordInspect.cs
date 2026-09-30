@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -48,6 +49,33 @@ public static partial class McpMod
         {
             SendError(response, 500, $"Inspect failed: {ex.GetType().Name}: {ex.Message}", pretty);
         }
+    }
+
+    /// <summary>
+    /// The run's digest with only the fields that differ between two plays of the same save
+    /// removed: the wall-clock fields (SaveTime, RunTime, WinTime), NumReloads (a "continue" adds
+    /// one), the map drawings, and the players' ids (IdAnonymizer draws them per process; they
+    /// become the player's slot). Everything else - RNG, decks, relics, map, history - stays in.
+    /// Works on the copy this request just read from the file, never on the live run.
+    /// </summary>
+    private static string NormalizedRunDigest(SerializableRun run, Func<SerializableRun, string> digest)
+    {
+        var slots = new Dictionary<ulong, ulong>();
+        for (int i = 0; i < run.Players.Count; i++)
+        {
+            slots[run.Players[i].NetId] = (ulong)i;
+            run.Players[i].NetId = (ulong)i;
+        }
+        foreach (var act in run.MapPointHistory)
+            foreach (var entry in act)
+                foreach (var stat in entry.PlayerStats)
+                    stat.PlayerId = slots.TryGetValue(stat.PlayerId, out var slot) ? slot : ulong.MaxValue;
+        run.SaveTime = 0;
+        run.RunTime = 0;
+        run.WinTime = 0;
+        run.NumReloads = 0;
+        run.MapDrawings = null;
+        return digest(run);
     }
 
     private static JsonObject InspectReplay(string file)
@@ -131,6 +159,7 @@ public static partial class McpMod
             ["reward_ids"] = new JsonArray(replay.rewardIds.Select(c => (JsonNode)JsonValue.Create(c)).ToArray()),
             ["start_time"] = replay.serializableRun.StartTime,
             ["serializable_run_sha256"] = Digest(replay.serializableRun),
+            ["serializable_run_sha256_normalized"] = NormalizedRunDigest(replay.serializableRun, Digest),
             ["events"] = events,
             ["checksums"] = checksums,
         };

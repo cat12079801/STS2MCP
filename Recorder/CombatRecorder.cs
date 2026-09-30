@@ -98,6 +98,8 @@ internal static class CombatRecorder
         internal required int Floor;
         /// <summary>MOD requests between entering the room and the combat (an event that starts a fight).</summary>
         internal readonly JsonArray Requests = new();
+        /// <summary>Console commands run after the room's start was taken (single player runs them outside the queue).</summary>
+        internal readonly JsonArray ConsoleCommands = new();
     }
 
     private sealed class OpenRecord
@@ -121,6 +123,11 @@ internal static class CombatRecorder
         internal readonly Dictionary<(int, uint), JsonObject> ChoiceOwners = new();
         /// <summary>The action currently paused for a choice (single player: at most one).</summary>
         internal GameAction? Paused;
+        /// <summary>The paused action was already paused when the record opened (its choice was reserved unseen).</summary>
+        internal bool PausedBeforeOpen;
+        /// <summary>Per player slot, the next choice id the game would give out when the record opened.
+        /// A result for a smaller id was reserved before the record could see it.</summary>
+        internal readonly Dictionary<int, uint> ChoiceFloor = new();
         internal JsonObject? LossOutcome;
         internal readonly List<double> HookMicros = new();
         internal int SentryAtOpen;
@@ -135,6 +142,11 @@ internal static class CombatRecorder
     private static string? _lastFault;
     private static int _recordsOpened;
     private static int _sentryCaptures;
+    /// <summary>
+    /// Directories handed out in this process. The writer thread creates a directory only when it
+    /// writes the first line, so numbering from the disk alone could give a name out twice.
+    /// </summary>
+    private static readonly HashSet<string> ReservedDirs = new(StringComparer.Ordinal);
 
     // ========================================================================================
     // Configuration and install
@@ -641,18 +653,25 @@ internal static class CombatRecorder
         int s = slot ?? -1;
         if (choiceId is { } c)
         {
+            bool beforeOpen = rec.ChoiceFloor.TryGetValue(s, out uint floor) && c < floor;
             if (rec.ChoiceOwners.Remove((s, c), out var owner))
-                data["owner"] = owner;
-            if (rec.OpenChoices.TryGetValue(s, out var open))
             {
-                if (!open.Remove(c))
-                    Fault(rec, $"patch_missed:reserve:{c}", "choice result for an id ReserveChoiceId was not seen giving out");
+                data["owner"] = owner;
+                data["owner_state"] = "observed";
             }
             else
             {
-                Fault(rec, $"patch_missed:reserve:{c}", "choice result for an id ReserveChoiceId was not seen giving out");
+                // Reserved before the record opened: the owner was never seen. Not a patch miss.
+                data["owner"] = null;
+                data["owner_state"] = beforeOpen ? "reserved_before_open" : "unobserved";
             }
+            bool reservedSeen = rec.OpenChoices.TryGetValue(s, out var open) && open.Remove(c);
+            if (!reservedSeen && !beforeOpen)
+                Fault(rec, $"patch_missed:reserve:{c}", "choice result for an id ReserveChoiceId was not seen giving out");
         }
+        // "paused" / "not_paused" are both observations: the record looks for a paused action when
+        // it opens and follows every pause and resume after that.
+        data["pause_state"] = rec.Paused == null ? "not_paused" : rec.PausedBeforeOpen ? "paused_since_before_open" : "paused";
         data["paused_action"] = rec.Paused == null ? null : RecordObserve.DescribeAction(rec.Paused, KeyOf(rec.Paused));
         data["pending_choice_ids"] = PendingChoices(rec, s);
     }
@@ -851,7 +870,10 @@ internal static class CombatRecorder
                 data["state_after"] = action.State.ToString();
                 data["pending_choice_ids"] = PendingChoices(_rec, OwnerSlot(action));
                 if (action.State == GameActionState.GatheringPlayerChoice)
+                {
                     _rec.Paused = action;
+                    _rec.PausedBeforeOpen = false;
+                }
                 EmitWithObservation("choice_paused", data, hidden: true);
             }
         });
@@ -893,6 +915,9 @@ internal static class CombatRecorder
                         unanswered.Add(choice);
                     }
                     data["unanswered_choice_ids"] = unanswered;
+                    if (_rec.PausedBeforeOpen)
+                        data["paused_since_before_open"] = true;
+                    _rec.PausedBeforeOpen = false;
                 }
                 if (_rec.Paused != null && (_rec.Paused.Id == oldId || _rec.Paused.Id == nextActionId - 1))
                 {
@@ -946,6 +971,37 @@ internal static class CombatRecorder
     }
 
     internal static void OnSentryCapture() => Interlocked.Increment(ref _sentryCaptures);
+
+    /// <summary>
+    /// Prefix of DevConsole.ProcessCommand(string). In single player the command runs directly
+    /// (ProcessCommandInternal), not as a ConsoleCmdGameAction, so whatever it changes is not in
+    /// the game's replay. Outside a record that is harmless (the next room's start is taken after
+    /// it); after the room's start was taken, the record can no longer be replayed and says so.
+    /// </summary>
+    internal static void OnConsoleCommand(string inputValue)
+    {
+        if (!_active)
+            return;
+        Guard("console_command", () =>
+        {
+            lock (Gate)
+            {
+                // Multiplayer enqueues networked commands as ConsoleCmdGameAction (DevConsole.ProcessCommand).
+                bool viaQueue = !RunManager.Instance.IsSingleplayerOrFakeMultiplayer;
+                var line = new JsonObject { ["command"] = inputValue.Trim(), ["via_action_queue"] = viaQueue };
+                if (_rec != null)
+                {
+                    if (!viaQueue)
+                        _rec.Faults.Add("console_command_outside_action_queue");
+                    Emit("console_command", line);
+                }
+                else if (_pending != null && !viaQueue)
+                {
+                    _pending.ConsoleCommands.Add(line);
+                }
+            }
+        });
+    }
 
     internal static void OnCleanUpStart() => _inCleanup = true;
     internal static void OnCleanUpEnd() => _inCleanup = false;
@@ -1034,6 +1090,22 @@ internal static class CombatRecorder
             SentryAtOpen = _sentryCaptures,
         };
         _recordsOpened++;
+        ReservedDirs.Add(_rec.Dir);
+
+        // What is already under way when the record opens: the ids the game would hand out next,
+        // and an action already paused for a choice (the record would otherwise have no way to
+        // tell "not paused" from "paused before we looked").
+        var choiceIdsAtOpen = RunManager.Instance.PlayerChoiceSynchronizer?.ChoiceIds;
+        if (choiceIdsAtOpen != null)
+            for (int i = 0; i < choiceIdsAtOpen.Count; i++)
+                _rec.ChoiceFloor[i] = choiceIdsAtOpen[i];
+        var pausedAtOpen = RecorderPatches.QueuedActions(RunManager.Instance.ActionQueueSet)
+            .FirstOrDefault(a => a.State == GameActionState.GatheringPlayerChoice);
+        if (pausedAtOpen != null)
+        {
+            _rec.Paused = pausedAtOpen;
+            _rec.PausedBeforeOpen = true;
+        }
 
         Emit("record_open", new JsonObject
         {
@@ -1074,8 +1146,14 @@ internal static class CombatRecorder
                 ["game_writer_recording"] = replay != null,
                 ["reproducible_from_start"] = boundary == "room_entry",
                 ["pre_combat_requests"] = eventRoom ? pending?.Requests.DeepClone() : null,
+                ["choice_ids_at_open"] = choiceIdsAtOpen == null ? null
+                    : new JsonArray(choiceIdsAtOpen.Select(c => (JsonNode)JsonValue.Create(c)).ToArray()),
+                ["paused_at_open"] = pausedAtOpen == null ? null : RecordObserve.DescribeAction(pausedAtOpen, KeyOf(pausedAtOpen)),
+                ["console_after_room_entry"] = pending?.ConsoleCommands.Count > 0 ? pending.ConsoleCommands.DeepClone() : null,
             },
         });
+        if (pending?.ConsoleCommands.Count > 0)
+            _rec.Faults.Add("console_command_after_room_entry");
 
         if (replay != null)
         {
@@ -1194,11 +1272,16 @@ internal static class CombatRecorder
         string suffix = $"-a{act}f{floor:D2}";
         try
         {
+            var names = new HashSet<string>(StringComparer.Ordinal);
             if (Directory.Exists(runDir))
-            {
                 foreach (var d in Directory.GetDirectories(runDir))
+                    names.Add(Path.GetFileName(d));
+            foreach (var d in ReservedDirs)
+                if (string.Equals(Path.GetDirectoryName(d), runDir, StringComparison.Ordinal))
+                    names.Add(Path.GetFileName(d));
+            {
+                foreach (var n in names)
                 {
-                    string n = Path.GetFileName(d);
                     int dash = n.IndexOf('-');
                     if (dash > 0 && int.TryParse(n[..dash], out int k))
                         max = Math.Max(max, k);

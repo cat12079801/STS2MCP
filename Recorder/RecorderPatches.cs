@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Debug;
@@ -65,6 +66,8 @@ internal static class RecorderPatches
         // GameAction.Cancel, which could be inlined into its callers.
         Patch(typeof(ActionExecutor), "AfterActionFinished", prefix: nameof(ActionFinishedPrefix));
         Patch(typeof(RunManager), nameof(RunManager.CleanUp), prefix: nameof(CleanUpPrefix), postfix: nameof(CleanUpPostfix));
+        Patch(typeof(MegaCrit.Sts2.Core.DevConsole.DevConsole), nameof(MegaCrit.Sts2.Core.DevConsole.DevConsole.ProcessCommand),
+            prefix: nameof(ConsolePrefix), parameters: new[] { typeof(string) });
         // Counted only: AC2 asks that recording sends nothing to Sentry (docs/recording.md).
         foreach (var m in AccessTools.GetDeclaredMethods(typeof(SentryService)))
         {
@@ -83,9 +86,9 @@ internal static class RecorderPatches
         AppliedList.Clear();
     }
 
-    private static void Patch(Type type, string method, string? prefix = null, string? postfix = null)
+    private static void Patch(Type type, string method, string? prefix = null, string? postfix = null, Type[]? parameters = null)
     {
-        var original = AccessTools.DeclaredMethod(type, method)
+        var original = (parameters == null ? AccessTools.DeclaredMethod(type, method) : AccessTools.DeclaredMethod(type, method, parameters))
             ?? throw new MissingMethodException(type.FullName, method);
         Harmony.Patch(original,
             prefix: prefix == null ? null : new HarmonyMethod(typeof(RecorderPatches), prefix),
@@ -154,6 +157,25 @@ internal static class RecorderPatches
         => CombatRecorder.OnChoiceBegun(__instance, chooser, __state);
 
     private static void SentryPrefix() => CombatRecorder.OnSentryCapture();
+
+    private static void ConsolePrefix(string inputValue) => CombatRecorder.OnConsoleCommand(inputValue);
+
+    private static readonly System.Reflection.FieldInfo? QueuesField =
+        AccessTools.Field(typeof(ActionQueueSet), "_actionQueues");
+
+    /// <summary>Every action in the player queues (read through the private list; nothing is changed).</summary>
+    internal static IEnumerable<GameAction> QueuedActions(ActionQueueSet? set)
+    {
+        if (set == null || QueuesField?.GetValue(set) is not System.Collections.IEnumerable queues)
+            yield break;
+        foreach (var q in queues)
+        {
+            if (q == null || AccessTools.Field(q.GetType(), "actions")?.GetValue(q) is not IEnumerable<GameAction> actions)
+                continue;
+            foreach (var a in actions.ToList())
+                yield return a;
+        }
+    }
 
     private static void ActionFinishedPrefix(GameAction action) => CombatRecorder.OnActionFinished(action);
 

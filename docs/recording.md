@@ -47,6 +47,16 @@
 
 記録器は、実行中の action が無いのにターンが終わったこと（`CombatManager.PlayerEndedTurn`）を `end_turn_outside_action_queue` として記録の `faults` に出す（別の MOD や古いビルドの経路を拾うため）。
 
+### キューを通らない入力: 開発コンソール
+
+**単独プレイの開発コンソールは GameAction を積まない。** `DevConsole.ProcessCommand` は協力プレイでだけ networked なコマンドを `ConsoleCmdGameAction` として積み、
+単独プレイでは `ProcessCommandInternal` で直接実行する（`energy`→`PlayerCmd.GainEnergy`、`card`→`CardPileCmd.Add` など）。その変更は本体の replay に入らない。
+記録器は `DevConsole.ProcessCommand(string)` を読み、
+
+- 記録中なら `console_command` 行（`command`・`via_action_queue`）を書き、キューを通らなければ `console_command_outside_action_queue` を `faults` に入れる（**その記録は再生できない**）
+- 部屋の開始データを取った後・記録を開く前なら、開くときに `start.console_after_room_entry` に並べ、`console_command_after_room_entry` を `faults` に入れる
+- 部屋に入る前（地図の上など）のコマンドは次の部屋の開始データに入るので印を付けない
+
 ## 置き場所と設定
 
 `STS2_MCP.conf`:
@@ -67,6 +77,7 @@
 
 - `start_time` は本体のランの開始時刻（`RunManager._startTime`。`history/<start_time>.run` と同じ値）
 - `NNN` はそのランの中で 1 から。`act` は 0 始まり、`floor` はその幕の中の階（`RunState.ActFloor`）
+- 番号はディスクの既存ディレクトリと、**このプロセスが既に渡した名前**の両方から決める（書込みスレッドがディレクトリを作る前に次の記録が開いても、同じ名前にならない）
 - 記録を作るのは戦闘が始まった部屋だけ（部屋入りで開始データを保留し、`CombatManager.CombatSetUp` で開く）
 
 ## 行の形
@@ -78,14 +89,15 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 
 | kind | いつ | 主な中身 |
 |---|---|---|
-| `record_open` | 記録を開いた（先頭） | `schema`・`record_id`・`trigger`・`attempt`・`session`（起動ごとの乱数 id・pid・起動時刻）・`mod`・`game`（version・commit・model_id_hash・sts2_dll_sha256）・`profile_id`・`run`・`start` |
+| `record_open` | 記録を開いた（先頭） | `schema`・`record_id`・`trigger`・`attempt`・`session`（起動ごとの乱数 id・pid・起動時刻）・`mod`・`game`（version・commit・model_id_hash・sts2_dll_sha256）・`profile_id`・`run`・`start`（`boundary`・`initial_state`・`game_events_before_open`・`checksums_before_open`・`reproducible_from_start`・`pre_combat_requests`・`choice_ids_at_open`（本体が次に振る choice id、slot ごと）・`paused_at_open`（開いた時点で選択のために止まっていた action）・`console_after_room_entry`） |
+| `console_command` | 開発コンソールのコマンド（記録中） | `command`・`via_action_queue`（上の節） |
 | `initial_state` | 開いた直後（本体の replay があるとき） | `ids`（header の値＝部屋入りの時点: next_action_id・next_hook_id・next_checksum_id・choice_ids・reward_ids）と `ids_at_open`（開いた時点の本体の値）。hidden: 本体の CombatReplay の header（events・checksums は空）の packet |
 | `combat_setup` | `CombatManager.CombatSetUp` | encounter・room_type・room_class・parent_event・room_count・combat_local_id（`CombatManager.CurrentCombatId`。プロセスの中の通し番号）・敵の combat_id と monster・観測 |
 | `turn_started` | `CombatManager.TurnStarted` | 観測（public と hidden）。**判断の境界** |
 | `combat_began` / `turn_ended` / `player_ended_turn` / `player_unended_turn` | CombatManager の同名のイベント | `player_ended_turn` は実行中の action |
 | `combat_lost` | `CombatManager.CombatEnded`（勝ったときは記録が閉じた後に来るので、記録に残るのは負けたときだけ） | outcome・観測 |
 | `api_request` / `api_response` | MOD が POST を受けた／返した | `request`（起動ごとの通し番号）・action・引数／status |
-| `game_event` | 本体が replay の events に 1 件積んだ（prefix と postfix で件数が増えたときだけ） | `index`（本体の events の位置）・`type`・`player_slot`。GameAction は `action_id`・`action_key`・`class`・`game_action_type`・`action`・`origin`・`cause_action_id`。PlayerChoice は `choice_id`・`result`・`origin`・`owner`・`paused_action`・`pending_choice_ids`。hidden: その event の packet（プレイヤー id は本体が持つ値のまま） |
+| `game_event` | 本体が replay の events に 1 件積んだ（prefix と postfix で件数が増えたときだけ） | `index`（本体の events の位置）・`type`・`player_slot`。GameAction は `action_id`・`action_key`・`class`・`game_action_type`・`action`・`origin`・`cause_action_id`。PlayerChoice は `choice_id`・`result`・`origin`・`owner`・`owner_state`・`pause_state`・`paused_action`・`pending_choice_ids`。hidden: その event の packet（プレイヤー id は本体が持つ値のまま） |
 | `checksum` | 本体が replay の checksumData に 1 件積んだ | `index`・`checksum_id`・`context`・`action_id`（null あり）。hidden: checksum の値。全状態は `replay.mcr` にだけある |
 | `enqueue_unrecorded` | 戦闘中に積まれた action を本体の記録器が積まなかった | action。**記録は再現できない**（`faults` に入る） |
 | `enqueue_outside_combat` | 戦闘の準備中（`IsInProgress` の前）に積まれた action | 本体のリプレイは記録しない（開始データから再生で作り直される）。一覧を完全にするため |
@@ -129,8 +141,10 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 | `combat_local_id` | `CombatManager.CurrentCombatId` | プロセスの中の戦闘の通し番号（再起動で振り直されるので永続の鍵にはしない） |
 
 単独プレイでは、選択の結果が来た時点で止まっている action は高々 1 つ（`ActionQueueSet.GetReadyAction` は選択を集めている queue を飛ばし、queue はプレイヤーごとに 1 本）。
-止まらない文脈（`BlockingPlayerChoiceContext`・`ThrowingPlayerChoiceContext`）の選択は `paused_action: null` で来る。
-予約していない id の結果が来たら `patch_missed:reserve` を `faults` に入れる（patch が効かなかった印）。
+
+- `owner_state`: `observed`（`choice_begun` を見た）／`reserved_before_open`（id が `choice_ids_at_open` より小さい: 記録を開く前に予約された。親は見ていない）／`unobserved`
+- `pause_state`: `paused` ／ `paused_since_before_open`（記録を開いたとき既に止まっていた action。開くときに本体の queue を読んで見つける）／`not_paused`（止まっている action が無い: `BlockingPlayerChoiceContext`・`ThrowingPlayerChoiceContext` の選択）。**null を「止まっていない」の意味には使わない**
+- 記録を開いた後に予約されたはずの id（`choice_ids_at_open` 以上）で予約を見ていない結果が来たら `patch_missed:reserve` を `faults` に入れる（patch が効かなかった印）
 
 `origin` の意味:
 
@@ -177,9 +191,11 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 ### 記録あり／なしの比較（A/B/A）
 
 同じ戦闘を、保存して終了→再開でやり直し、`"record": false`（起動し直して patch なし）と `true` で同じ操作列を流して、本体の `latest.mcr` を inspect で比べる。
-比べるもの: header の version・git_commit・model_id_hash・choice_ids・reward_ids・next_*、events の型と `sha256_without_player`、checksums の id・値・context。
-除くもの: プレイヤー id（`IdAnonymizer` がプロセスごとに乱数で振る）、`serializable_run_sha256`（`SaveTime`・`RunTime`・`NumReloads`（再開で増える）・`MapDrawings` を含む）、ファイル全体の SHA-256、
-checksum の `context` の中の `(<数字>)`（本体が文字列に入れるオブジェクトのハッシュコードで、プロセスごとに違う。例 `PlayCardAction card: CARD.BOLAS (49817169) index: 20`）。
+比べるもの: header の version・git_commit・model_id_hash・choice_ids・reward_ids・next_*・`serializable_run_sha256_normalized`、events の型と `sha256_without_player`、checksums の id・値・context。
+除くもの（既知の非意味的なものだけ）: プレイヤー id（`IdAnonymizer` がプロセスごとに乱数で振る）、ラン全体の digest のうち `SaveTime`・`RunTime`・`WinTime`（時計）・`NumReloads`（再開で増える）・`MapDrawings`
+（`serializable_run_sha256_normalized` はこれらを外しプレイヤー id を slot にした digest。乱数・デッキ・レリック・マップ・履歴は含む）、ファイル全体の SHA-256、
+checksum の `context` の中の `<型>.<ID> (<数字>)` の数字（本体が文字列に入れるオブジェクトのハッシュコードで、プロセスごとに違う。例 `PlayCardAction card: CARD.BOLAS (49817169) index: 20`）。
+比較は親リポジトリの `tools/native/record_aba.py`。
 
 比べるのは**どれも再開（continue）で始めた試行どうし**にする。部屋に歩いて入った試行は、そのプロセスで前の部屋から続いている id（next_action_id・choice_ids・checksum id）が header と checksum の値に入るので、再開した試行とは一致しない（実測: 同じ操作で checksum の値が違った）。
 
