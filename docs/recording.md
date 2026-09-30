@@ -54,7 +54,8 @@
 コマンドが残す効果は 1 つの部屋にもセーブにも収まるとは限らない（例: `GodModeConsoleCmd` は static な状態を持ち、`CombatManager.CombatSetUp` を購読して**以後の戦闘ごとに**筋力などを直接付ける）。
 コマンドごとの効果を記録器が見分けることはしない（本体の全コマンドを監査していない）。代わりに**プロセス単位**で扱う:
 
-- 記録器が入っている間は、記録していなくても、キューを通らないコマンドを `console_in_process` に覚える（プロセスが終わるまで消さない）
+- 記録器が入っている間は、記録していなくても、キューを通らないコマンドを `console_in_process` に覚える（プロセスが終わるまで消さない）。
+  キューを通るかは本体の `DevConsole.ProcessCommand` と同じ条件で決める（協力プレイのランで、networked なコマンドで、ローカルのプレイヤーがいるときだけ）。**メニューで打ったコマンドも直接実行として数える**
 - 記録を開くとき、それまでに 1 つでもあれば `start.inputs_outside_replay: "tainted"`・`start.console_in_process`（コマンド・幕・階・戦闘中か）を書き、`console_command_in_process` を `faults` に入れる
 - 記録中のコマンドは `console_command` 行と `console_command_outside_action_queue` の fault
 - `start.inputs_outside_replay` が `"complete"` なのは、記録器がゲームの起動時に入り（`recorder_installed: "startup"`）、そのプロセスで一度もコマンドが無いときだけ。
