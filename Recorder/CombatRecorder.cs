@@ -1047,14 +1047,16 @@ internal static class CombatRecorder
     /// (ProcessCommandInternal), not as a ConsoleCmdGameAction, so nothing it does is in the game's
     /// replay, and what it leaves behind need not be in the save either (see ConsoleInProcess).
     /// </summary>
-    internal static void OnConsoleCommand(string inputValue)
+    internal static void OnConsoleCommand(string inputValue, Func<bool> goesThroughQueue)
     {
         Guard("console_command", () =>
         {
             lock (Gate)
             {
-                // Multiplayer enqueues networked commands as ConsoleCmdGameAction (DevConsole.ProcessCommand).
-                bool viaQueue = !RunManager.Instance.IsSingleplayerOrFakeMultiplayer;
+                // Only a networked command in a multiplayer run with a local player is enqueued as a
+                // ConsoleCmdGameAction (DevConsole.ProcessCommand); everything else - single player,
+                // and every command at the menu - runs directly.
+                bool viaQueue = goesThroughQueue();
                 var run = RunManager.Instance.DebugOnlyGetState();
                 var line = new JsonObject
                 {

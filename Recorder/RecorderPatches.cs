@@ -161,7 +161,31 @@ internal static class RecorderPatches
 
     private static void SentryPrefix() => CombatRecorder.OnSentryCapture();
 
-    private static void ConsolePrefix(string inputValue) => CombatRecorder.OnConsoleCommand(inputValue);
+    private static void ConsolePrefix(MegaCrit.Sts2.Core.DevConsole.DevConsole __instance, string inputValue)
+        => CombatRecorder.OnConsoleCommand(inputValue, () => GoesThroughQueue(__instance, inputValue));
+
+    private static readonly FieldInfo? CommandsField =
+        AccessTools.Field(typeof(MegaCrit.Sts2.Core.DevConsole.DevConsole), "_commands");
+
+    /// <summary>
+    /// The same test DevConsole.ProcessCommand makes before enqueueing a ConsoleCmdGameAction:
+    /// not single player (IsSingleplayerOrFakeMultiplayer is false with no run too), the command
+    /// is networked, and there is a local player (none at the menu). Anything else runs directly.
+    /// If the command table cannot be read, the answer is "runs directly" (the safe side).
+    /// </summary>
+    private static bool GoesThroughQueue(MegaCrit.Sts2.Core.DevConsole.DevConsole console, string inputValue)
+    {
+        var rm = RunManager.Instance;
+        if (rm.IsSingleplayerOrFakeMultiplayer)
+            return false;
+        var run = rm.DebugOnlyGetState();
+        if (run == null || MegaCrit.Sts2.Core.Context.LocalContext.GetMe(run) == null)
+            return false;
+        string name = inputValue.Trim().Split(' ')[0].ToLowerInvariant();
+        if (CommandsField?.GetValue(console) is not System.Collections.IDictionary commands || !commands.Contains(name))
+            return false;
+        return commands[name] is MegaCrit.Sts2.Core.DevConsole.ConsoleCommands.AbstractConsoleCmd cmd && cmd.IsNetworked;
+    }
 
     private static readonly System.Reflection.FieldInfo? QueuesField =
         AccessTools.Field(typeof(ActionQueueSet), "_actionQueues");
