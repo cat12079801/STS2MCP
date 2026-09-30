@@ -249,7 +249,9 @@ internal static class CombatRecorder
                 {
                     _active = true;
                     // A combat already under way is recorded from here on, marked as started late.
-                    if (CombatManager.Instance.DebugOnlyGetState() != null)
+                    // (Not after it: a finished combat's state lingers until the next room, and
+                    // its replay has already been written and stopped.)
+                    if (CombatManager.Instance.IsInProgress || CombatManager.Instance.IsStarting)
                         Guard("open_on_enable", () => TryOpen("recording_enabled"));
                 }
             }
@@ -690,7 +692,8 @@ internal static class CombatRecorder
             ["index"] = index,
             ["checksum_id"] = cs.checksumData.id,
             ["context"] = cs.context,
-            ["action_id"] = RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.Id,
+            // The action running now is only the checksum's action when it is copied as it happens.
+            ["action_id"] = backfilled ? null : RunManager.Instance.ActionExecutor.CurrentlyRunningAction?.Id,
         };
         if (backfilled)
             data["backfilled"] = true;
