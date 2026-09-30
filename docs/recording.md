@@ -58,7 +58,15 @@
 - 記録を開くとき、それまでに 1 つでもあれば `start.inputs_outside_replay: "tainted"`・`start.console_in_process`（コマンド・幕・階・戦闘中か）を書き、`console_command_in_process` を `faults` に入れる
 - 記録中のコマンドは `console_command` 行と `console_command_outside_action_queue` の fault
 - `start.inputs_outside_replay` が `"complete"` なのは、記録器がゲームの起動時に入り（`recorder_installed: "startup"`）、そのプロセスで一度もコマンドが無いときだけ。
-  `set_recording` で途中から入れた（`recorder_installed: "runtime"`）ときは、それより前が見えないので `"unknown"`
+  `set_recording` で後から入れた（`recorder_installed: "runtime"`。メニューで入れた場合も含む）ときは、それより前が見えないので `"unknown"`
+
+### 対応範囲: 完全な記録は「起動時から記録器が入っていたプロセス」だけ
+
+`"record": false` で起動し、後から `set_recording` で記録器を入れたプロセス（`recorder_installed: "runtime"`）では、入れる前の出来事を記録器は見ていない。
+本体はそれを後で新しいもののように返すことがある（敵ターン中に保留された action は、次のプレイヤーターンにもう一度 `RequestEnqueue` を通る）。
+入れる前の要求か入れた後の要求かを後から見分ける手段は無いので、そのプロセスでは**来歴と入力の完全性を保証しない**:
+MOD の印（入れた後に MOD の handler が作った action）が無いプレイヤー由来の action はすべて `origin: unknown`、`inputs_outside_replay` は `unknown`。
+来歴まで完全な記録が要るときは `"record": true`（既定）でゲームを起動する。
 - ゲームを起動し直せば消える。戦闘外で打ったコマンドの結果（デッキ・レリック・ポーション）はセーブに入り、次のプロセスでは開始データの一部になる
 
 ### 追跡層と出力層
@@ -162,7 +170,7 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 
 - `{"kind": "mod_api", "request": N}` — MOD の handler が作った action そのもの（オブジェクトで結ぶので、敵ターン中に保留されて後で積まれても外れない。その要求が記録を開く前なら `request_before_open: true`）
 - `{"kind": "not_mod_api"}` — 追跡層が `RequestEnqueue` に来たのを見た、MOD の印の無いプレイヤー由来の action（手で押した UI など）
-- `{"kind": "unknown"}` — `RequestEnqueue` に来たのを見ていないプレイヤー由来の action（記録器を入れる前に要求された、または別の経路）。MOD 由来かどうかを推測しない
+- `{"kind": "unknown"}` — `RequestEnqueue` に来たのを見ていないプレイヤー由来の action（別の経路）と、記録器を後から入れたプロセスの印の無いプレイヤー由来の action すべて（上の「対応範囲」）。MOD 由来かどうかを推測しない
 - `{"kind": "game"}` — Hook など本体が自分で積んだ action
 - 選択の結果は `{"kind": "in_api_window", "request": N}` / `{"kind": "outside_api_window"}`。**MOD の POST の受付から応答までの時間の窓**で付けるもので、因果ではない（本体の選択画面は MOD の UI 操作の後のフレームで結果を出すことがある）
 

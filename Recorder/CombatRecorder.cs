@@ -165,8 +165,18 @@ internal static class CombatRecorder
 
     private static RoomTracker _track = new();
 
-    /// <summary>"startup" (installed before any run: nothing was missed) or "runtime" (set_recording installed it).</summary>
-    private static string _installedAt = "startup";
+    /// <summary>
+    /// "startup": installed by the mod's initializer (StartIfConfigured), before the game has run a
+    /// single console command, API request or run - the tracking layer has seen the whole process.
+    /// "runtime": installed later by set_recording, at the menu or mid-run. Whatever happened in the
+    /// process before that (a console command at the menu, an action requested and held back by the
+    /// game) was not seen, and the game can hand such things back later looking new - a held-back
+    /// action comes through RequestEnqueue again at the next player turn. So in a "runtime"
+    /// process the recorder guarantees neither provenance nor the absence of outside inputs: every
+    /// untagged player-driven action is "unknown" and inputs_outside_replay is "unknown".
+    /// Supported scope: complete records come only from a process that started with "record": true.
+    /// </summary>
+    private static string _installedAt = "not_installed";
 
     /// <summary>Every action seen at ActionQueueSynchronizer.RequestEnqueue since install.</summary>
     private static readonly ConditionalWeakTable<GameAction, object> SeenRequests = new();
@@ -213,12 +223,13 @@ internal static class CombatRecorder
     /// config enables recording, or later from set_recording. With "record": false in the config
     /// nothing is patched at all - the game runs exactly as with a mod that has no recorder.
     /// </summary>
-    internal static bool Install()
+    internal static bool Install(string by)
     {
         lock (Gate)
         {
             if (InstallState == "installed")
                 return true;
+            _installedAt = by;
             try
             {
                 RecorderPatches.Apply();
@@ -226,10 +237,7 @@ internal static class CombatRecorder
                 InstallState = "installed";
                 InstallError = null;
                 if (RunManager.Instance.IsInProgress)
-                {
-                    _installedAt = "runtime";
                     StartTrackingInsideRoom();
-                }
                 StartDllHash();
                 AppDomain.CurrentDomain.ProcessExit += (_, _) => OnProcessExit();
                 return true;
@@ -247,7 +255,7 @@ internal static class CombatRecorder
 
     internal static void StartIfConfigured()
     {
-        if (ConfigEnabled && Install())
+        if (ConfigEnabled && Install("startup"))
             _active = true;
     }
 
@@ -291,7 +299,7 @@ internal static class CombatRecorder
     {
         if (enabled)
         {
-            if (!Install())
+            if (!Install("runtime"))
                 return new() { ["status"] = "error", ["error"] = $"Recorder could not be installed: {InstallError}" };
             lock (Gate)
             {
@@ -330,6 +338,7 @@ internal static class CombatRecorder
                 ["active"] = _active,
                 ["install"] = InstallState,
                 ["install_error"] = InstallError,
+                ["installed_at"] = _installedAt,
                 ["patches"] = RecorderPatches.Applied,
                 ["root"] = Root,
                 ["session"] = SessionId,
@@ -475,6 +484,8 @@ internal static class CombatRecorder
         }
         if (action is GenericHookGameAction || !ActionQueueSet.IsGameActionPlayerDriven(action))
             return new JsonObject { ["kind"] = "game" };
+        if (_installedAt != "startup")
+            return new JsonObject { ["kind"] = "unknown", ["why"] = "recorder installed at runtime: requests before the install were not seen" };
         if (SeenRequests.TryGetValue(action, out _))
             return new JsonObject { ["kind"] = "not_mod_api" };
         return new JsonObject { ["kind"] = "unknown", ["why"] = "not seen at RequestEnqueue" };
