@@ -238,7 +238,8 @@ public static partial class McpMod
         }
 
         // Play the card via the action queue (same path as the game UI)
-        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new PlayCardAction(card, target));
+        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
+            Recorder.CombatRecorder.TagApiAction(new PlayCardAction(card, target)));
 
         return new Dictionary<string, object?>
         {
@@ -261,7 +262,15 @@ public static partial class McpMod
         if (hand != null && (hand.InCardPlay || hand.CurrentMode != NPlayerHand.Mode.Play))
             return Error("Cannot end turn while a card is being played or hand is in selection mode");
 
-        PlayerCmd.EndTurn(player, canBackOut: false);
+        // The same input the end-turn button sends (NEndTurnButton.CallReleaseLogic): an
+        // EndPlayerTurnAction through the action queue, which then runs PlayerCmd.EndTurn itself.
+        // Calling PlayerCmd.EndTurn from here instead ended the turn outside the queue, so the
+        // game's combat replay never saw the player end it and could not be replayed.
+        if (CombatManager.Instance.IsPlayerReadyToEndTurn(player))
+            return Error("Turn is already ending");
+        int turnNumber = player.PlayerCombatState?.TurnNumber ?? -1;
+        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
+            Recorder.CombatRecorder.TagApiAction(new EndPlayerTurnAction(player, turnNumber)));
 
         return new Dictionary<string, object?>
         {
@@ -383,7 +392,8 @@ public static partial class McpMod
         if (target != null && !potion.IsValidTarget(target))
             return Error($"Potion '{SafeGetText(() => potion.Title)}' cannot target {SafeGetText(() => target.Monster?.Title) ?? "that creature"}");
 
-        potion.EnqueueManualUse(target);
+        using (Recorder.CombatRecorder.ExpectApiAction(typeof(UsePotionAction)))
+            potion.EnqueueManualUse(target);
 
         string targetMsg = potion.TargetType switch
         {
@@ -535,7 +545,11 @@ public static partial class McpMod
             return Error(DescribeEmptyPotionSlot(player, slot));
 
         string potionName = SafeGetText(() => potion.Title) ?? "unknown";
-        _ = PotionCmd.Discard(potion);
+        // The potion popup's discard button (NPotionPopup.OnDiscardButtonPressed) goes through a
+        // DiscardPotionGameAction; so does this, so a discard mid-combat is in the game's replay.
+        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(
+            Recorder.CombatRecorder.TagApiAction(
+                new DiscardPotionGameAction(player, (uint)slot, CombatManager.Instance.IsInProgress)));
 
         return new Dictionary<string, object?>
         {
