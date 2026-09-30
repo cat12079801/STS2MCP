@@ -182,6 +182,7 @@ public static partial class McpMod
 
             string content = File.ReadAllText(configPath);
             using var doc = JsonDocument.Parse(content);
+            Recorder.CombatRecorder.Configure(doc.RootElement);
             if (doc.RootElement.TryGetProperty("port", out var portElem)
                 && portElem.TryGetInt32(out int port)
                 && port is > 0 and <= 65535)
@@ -211,6 +212,9 @@ public static partial class McpMod
             tree.Connect(SceneTree.SignalName.ProcessFrame, Callable.From(ProcessMainThreadQueue));
 
             int port = LoadPort();
+
+            // Combat recorder (docs/recording.md). After LoadPort, which reads its config keys.
+            Recorder.CombatRecorder.StartIfConfigured();
 
             _listener = new HttpListener();
             _listener.Prefixes.Add($"http://localhost:{port}/");
@@ -448,6 +452,20 @@ public static partial class McpMod
             {
                 if (request.HttpMethod == "GET")
                     HandleGetCompendium(request, response);
+                else
+                    SendError(response, 405, "Method not allowed", pretty);
+            }
+            else if (path == "/api/v1/record")
+            {
+                if (request.HttpMethod == "GET")
+                    SendJson(response, Recorder.CombatRecorder.Status(), pretty);
+                else
+                    SendError(response, 405, "Method not allowed", pretty);
+            }
+            else if (path == "/api/v1/record/inspect")
+            {
+                if (request.HttpMethod == "GET")
+                    HandleInspectReplay(request, response);
                 else
                     SendError(response, 405, "Method not allowed", pretty);
             }
@@ -931,13 +949,18 @@ public static partial class McpMod
 
         string action = actionElem.GetString() ?? "";
 
-        // Revealing timeline epochs is a main-menu operation, so it must not require a run.
-        if (action == "timeline_reveal_epochs")
+        // The recorder's switch works with or without a run, and is not itself recorded.
+        if (action == "set_recording")
         {
             try
             {
-                SendJson(response,
-                    ExecuteWithOptionalWait(request, parsed, () => ExecuteTimelineRevealEpochs()), pretty);
+                if (!parsed.TryGetValue("enabled", out var en) || en.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                {
+                    SendError(response, 400, "set_recording needs 'enabled': true or false", pretty);
+                    return;
+                }
+                bool enabled = en.GetBoolean();
+                SendJson(response, EnsureStatus(RunOnMainThreadBlocking(() => Recorder.CombatRecorder.SetRecording(enabled))), pretty);
             }
             catch (MainThreadUnavailableException ex)
             {
@@ -945,9 +968,50 @@ public static partial class McpMod
             }
             catch (Exception ex)
             {
-                SendError(response, 500, $"Timeline reveal failed: {ex.Message}", pretty);
+                SendError(response, 500, $"set_recording failed: {ex.Message}", pretty);
             }
             return;
+        }
+
+        // Every other POST is listed in the combat record (when one is open), and the game
+        // actions its handler enqueues are tagged with the request - see docs/recording.md.
+        long apiRequest = Recorder.CombatRecorder.ApiBegin(action, parsed);
+        string? apiStatus = null;
+        try
+        {
+            apiStatus = DispatchPostAction(request, response, parsed, action, apiRequest, pretty);
+        }
+        finally
+        {
+            Recorder.CombatRecorder.ApiEnd(apiRequest, apiStatus);
+        }
+    }
+
+    /// <summary>Runs one singleplayer POST and answers it. Returns the result's status for the record.</summary>
+    private static string? DispatchPostAction(
+        HttpListenerRequest request, HttpListenerResponse response,
+        Dictionary<string, JsonElement> parsed, string action, long apiRequest, bool pretty)
+    {
+        // Revealing timeline epochs is a main-menu operation, so it must not require a run.
+        if (action == "timeline_reveal_epochs")
+        {
+            try
+            {
+                var result = ExecuteWithOptionalWait(request, parsed,
+                    Recorder.CombatRecorder.InHandler(apiRequest, () => ExecuteTimelineRevealEpochs()));
+                SendJson(response, result, pretty);
+                return result.GetValueOrDefault("status") as string;
+            }
+            catch (MainThreadUnavailableException ex)
+            {
+                SendUnavailable(response, ex.Message, pretty);
+                return "unavailable";
+            }
+            catch (Exception ex)
+            {
+                SendError(response, 500, $"Timeline reveal failed: {ex.Message}", pretty);
+                return "exception";
+            }
         }
 
         // Handle menu actions separately (no run required)
@@ -958,33 +1022,39 @@ public static partial class McpMod
                 var option = parsed.TryGetValue("option", out var optElem) ? optElem.GetString() ?? "" : "";
                 var seed = parsed.TryGetValue("seed", out var seedElem) ? seedElem.GetString() : null;
                 int? ascension = ReadOptionalInt(parsed, "ascension");
-                var result = ExecuteWithOptionalWait(
-                    request, parsed, () => ExecuteMenuSelect(option, seed, ascension));
+                var result = ExecuteWithOptionalWait(request, parsed,
+                    Recorder.CombatRecorder.InHandler(apiRequest, () => ExecuteMenuSelect(option, seed, ascension)));
                 SendJson(response, result, pretty);
+                return result.GetValueOrDefault("status") as string;
             }
             catch (MainThreadUnavailableException ex)
             {
                 SendUnavailable(response, ex.Message, pretty);
+                return "unavailable";
             }
             catch (Exception ex)
             {
                 SendError(response, 500, $"Menu action failed: {ex.Message}", pretty);
+                return "exception";
             }
-            return;
         }
 
         try
         {
-            var result = ExecuteWithOptionalWait(request, parsed, () => ExecuteAction(action, parsed));
+            var result = ExecuteWithOptionalWait(request, parsed,
+                Recorder.CombatRecorder.InHandler(apiRequest, () => ExecuteAction(action, parsed)));
             SendJson(response, result, pretty);
+            return result.GetValueOrDefault("status") as string;
         }
         catch (MainThreadUnavailableException ex)
         {
             SendUnavailable(response, ex.Message, pretty);
+            return "unavailable";
         }
         catch (Exception ex)
         {
             SendError(response, 500, $"Action failed: {ex.Message}", pretty);
+            return "exception";
         }
     }
 }

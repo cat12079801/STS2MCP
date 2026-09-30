@@ -12,6 +12,9 @@ HTTP API on `localhost:15526`. No authentication.
 - `GET /api/v1/wiki` — fuzzy-search discovered card/relic wiki entries
 - `GET /api/v1/profiles` — list profile slots
 - `POST /api/v1/profiles` — switch or delete profile slots
+- `GET /api/v1/record` — combat recorder status (see [recording.md](recording.md))
+- `GET /api/v1/record/inspect?file=<.mcr>` — decode a combat replay with the game's reader (verification only; contains hidden checksums)
+- `POST /api/v1/singleplayer {"action": "set_recording", "enabled": true|false}` — turn the combat recorder on/off (works without a run)
 
 Singleplayer and multiplayer endpoints are mutually exclusive (HTTP 409 if mismatched).
 
