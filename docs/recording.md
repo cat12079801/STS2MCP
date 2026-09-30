@@ -92,7 +92,7 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 | `choice_reserved` | `PlayerChoiceSynchronizer.ReserveChoiceId` | `choice_id`・`player_slot`・`running_action`（その時点で実行中の action） |
 | `choice_begun` | `PlayerChoiceContext.SignalPlayerChoiceBegun`（GameAction・Hook・Blocking・Throwing の各実装。Branching は中の文脈へ渡すだけ） | `choice_id`（prefix の時点でそのプレイヤーが最後に予約した id）・`context`・`owner`（選択を持つ action。Hook なら生成した Hook action） |
 | `choice_paused` | `ActionQueueSet.PauseActionForPlayerChoice` | 止まった action・`action_id_before`・`options`・`state_after`・`pending_choice_ids`・観測（public と hidden）。**選択待ちの境界** |
-| `action_resumed` | `ActionQueueSet.ResumeActionWithoutSynchronizing` | `old_action_id`・`new_action_id`（再開で振り直される id）・`action_key` |
+| `action_resumed` | `ActionQueueSet.ResumeActionWithoutSynchronizing` | `old_action_id`・`new_action_id`（再開で振り直される id）・`action_key`・`unanswered_choice_ids`（その action の選択のうち、結果が来ないまま再開したもの。本体が画面を出さずに決めた選択: 例 v0.111.0 で捨て札が 1 枚のときのヘッドバット。本体の replay にも結果の event は無い） |
 | `action_cancelled` | `GameAction.BeforeCancelled`（記録した action に購読） | action |
 | `action_finished` | `ActionExecutor.AfterActionFinished`（完了したとき） | action。プレイヤー由来の action（`ActionQueueSet.IsGameActionPlayerDriven`）なら公開観測つき（**判断の境界**） |
 | `recorder_fault` | 記録器の例外 | `where`・例外 |
@@ -116,7 +116,7 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 | 識別子 | 出どころ | 使い方 |
 |---|---|---|
 | `record_id` | `<start_time>/<NNN>-a<act>f<floor>` | 記録 1 つ（= 戦闘の 1 attempt） |
-| `attempt` | 同じランの同じ (act, floor) の記録の数 + 1 | 保存して終了→再開、再起動後の再開で増える。`session` が変われば別プロセス |
+| `attempt` | 同じランの同じ (act, floor) の**記録**の数 + 1 | 保存して終了→再開、再起動後の再開で増える。記録を切っていた試行は数えない。`session` が変われば別プロセス |
 | `seq` | 記録の中の通し番号 | public と hidden の対応、欠落の検出 |
 | `index`（game_event / checksum） | 本体の replay の events / checksumData の位置 | 本体の `replay.mcr` の同じ位置と対応 |
 | `action_id` | 本体の `GameAction.Id`（積んだときに振られる。選択の後の再開で振り直される） | `action_resumed` が旧→新を結ぶ。`cause_action_id`・`running_action` はその時点で実行中の action |
@@ -146,12 +146,13 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 - **始まり**: `record_open.start.boundary` が `room_entry` 以外（`event_room` / `mid_room` / `mid_combat`）。`reproducible_from_start` が false。
   - `event_room`: `CombatRoom.ParentEventId` がある、または部屋が重なっている（`RunState.CurrentRoomCount > 1`）。イベントから戦闘に入ると本体は `RecordInitialState` を呼ばず（`RunManager.EnterRoomWithoutExitingCurrentRoom`）、
     本体の replay の開始データはイベントの部屋に入った時点のまま、イベント中の選択は replay に入らない。部屋に入ってからの MOD の要求を `pre_combat_requests` に付ける（手で押したイベントの選択は取れない）
-  - `mid_combat` / `mid_room`: 記録を途中で有効にした。本体の replay は部屋入りから積んでいるので、それまでの event と checksum を `backfilled: true` で写す（`initial_state: "read_back"`）。MOD 自身の行（出どころ・ターンの文脈・観測）はその区間だけ無い。`game_events_before_open` / `checksums_before_open` に件数
+  - `mid_combat` / `mid_room`: 記録を途中で有効にした。本体の replay は部屋入りから積んでいるので、それまでの event と checksum を `backfilled: true` で写す（`initial_state: "read_back"`。`at` は写した時点のものになるので付けない）。MOD 自身の行（出どころ・ターンの文脈・観測・選択の予約）はその区間だけ無い。`game_events_before_open` / `checksums_before_open` に件数
 - **途中**: `seq` の欠番、`prev` の鎖の切れ、public と hidden の対応漏れ、`enqueue_unrecorded`、`recorder_fault`、`faults`
 - **終わり**: `record_close` が無い（ゲームが落ちた・強制終了）。`reason` は `combat_won`（`EndCombatInternal` が replay を書いた）/ `combat_lost`（負けた後の `CleanUp`）/ `cleanup`（保存して終了など、戦闘の途中で抜けた）/ `superseded_by_room_entry` / `recording_disabled` / `process_exit`
 - **自己検査**（`record_close.self_check`）: close の時点の本体の replay と、写してきたものを位置ごとに比べる（events は packet の SHA-256、checksums は id・値・context）。`complete` が true なのは不一致 0・件数一致のときだけ。`replay_mcr_sha256` は `replay.mcr` の SHA-256
 
 [`tools/record_check.py`](../tools/record_check.py) がこれらをまとめて検査する（packet の中身は読まない。読むのは下の inspect か M3）。
+壊れ方ごとの回帰は [`tools/record_check_selftest.py`](../tools/record_check_selftest.py)（ゲーム不要）。
 
 ## 公開と非公開
 
@@ -177,7 +178,18 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 
 同じ戦闘を、保存して終了→再開でやり直し、`"record": false`（起動し直して patch なし）と `true` で同じ操作列を流して、本体の `latest.mcr` を inspect で比べる。
 比べるもの: header の version・git_commit・model_id_hash・choice_ids・reward_ids・next_*、events の型と `sha256_without_player`、checksums の id・値・context。
-除くもの: プレイヤー id（`IdAnonymizer` がプロセスごとに乱数で振る）、`serializable_run_sha256`（`SaveTime`・`RunTime`・`NumReloads`（再開で増える）・`MapDrawings` を含む）、ファイル全体の SHA-256。
+除くもの: プレイヤー id（`IdAnonymizer` がプロセスごとに乱数で振る）、`serializable_run_sha256`（`SaveTime`・`RunTime`・`NumReloads`（再開で増える）・`MapDrawings` を含む）、ファイル全体の SHA-256、
+checksum の `context` の中の `(<数字>)`（本体が文字列に入れるオブジェクトのハッシュコードで、プロセスごとに違う。例 `PlayCardAction card: CARD.BOLAS (49817169) index: 20`）。
+
+比べるのは**どれも再開（continue）で始めた試行どうし**にする。部屋に歩いて入った試行は、そのプロセスで前の部屋から続いている id（next_action_id・choice_ids・checksum id）が header と checksum の値に入るので、再開した試行とは一致しない（実測: 同じ操作で checksum の値が違った）。
+
+### 実測（v0.111.0、MOD `fd82338`）
+
+同じエリート戦（ラン `1790736458`、1 幕 9 階のビャードニス）を、記録なし→あり→なし の 3 回、同じ操作列（道具箱の選択・武装の選択・手で押したターン終了・焦熱の契約の選択・MOD の `end_turn`）で 3 ターン目の頭まで流し、
+本体の `latest.mcr` を上の手順で比べた: events 17 件・checksum 18 件（id・値・context）・header が**3 回とも一致**。記録ありの回の `replay.mcr` は、その回の `latest.mcr` とバイト単位で同じ。
+
+- メインスレッドでのフックの時間（`main_thread_us`）: 1 戦闘あたり p50 は 45〜51 µs。p99 は、起動して最初の戦闘で 5〜8.5 ms、同じプロセスの 2 戦目以降で 0.14〜0.18 ms（最初の呼び出しの JIT と見ている。確かめてはいない）
+- 記録中の `SentryService.CaptureException`: 全記録で 0 回
 
 ## 未確認・範囲外
 
