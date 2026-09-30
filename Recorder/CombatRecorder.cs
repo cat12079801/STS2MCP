@@ -115,17 +115,8 @@ internal static class CombatRecorder
         internal readonly List<string> ChecksumKeys = new();
         internal readonly List<string> Faults = new();
         internal readonly HashSet<GameAction> JournaledActions = new(ReferenceEqualityComparer.Instance);
-        /// <summary>Choices reserved and not yet answered, per player slot.</summary>
-        internal readonly Dictionary<int, SortedSet<uint>> OpenChoices = new();
-        /// <summary>(slot, choice id) -> the action that owns it (from SignalPlayerChoiceBegun).</summary>
-        internal readonly Dictionary<(int, uint), JsonObject> ChoiceOwners = new();
-        /// <summary>The action currently paused for a choice (single player: at most one).</summary>
-        internal GameAction? Paused;
-        /// <summary>The paused action was already paused when the record opened (its choice was reserved unseen).</summary>
-        internal bool PausedBeforeOpen;
-        /// <summary>Per player slot, the next choice id the game would give out when the record opened.
-        /// A result for a smaller id was reserved before the record could see it.</summary>
-        internal readonly Dictionary<int, uint> ChoiceFloor = new();
+        /// <summary>The first API request this record lists (earlier ones happened before it opened).</summary>
+        internal long FirstRequest;
         internal JsonObject? LossOutcome;
         internal readonly List<double> HookMicros = new();
         internal int SentryAtOpen;
@@ -146,14 +137,49 @@ internal static class CombatRecorder
     /// </summary>
     private static readonly HashSet<string> ReservedDirs = new(StringComparer.Ordinal);
 
-    // --- tracked whenever the recorder is installed, recording on or off ----------------------
-    // Inputs that bypass the action queue change the combat without leaving anything in the game's
-    // replay. A record opened later (set_recording mid-combat) copies that replay back to the room
-    // entry, so it has to know about them even though nothing was being recorded when they ran.
+    // --- the tracking layer ------------------------------------------------------------------
+    //
+    // Two layers. The tracking layer follows the game from the moment the recorder is installed,
+    // whether a record is being written or not: which API request made which action, which choices
+    // are reserved / begun / paused, which console commands ran. The output layer (a record, turned
+    // on and off by set_recording) only writes. A record that opens late therefore still knows what
+    // happened before it opened, and what the tracking layer itself did not see is said to be
+    // unseen ("unknown", "reserved_before_tracking") instead of being taken as absent.
 
-    /// <summary>The game replay started at the last room entry seen since install (null = none seen yet).</summary>
-    private static CombatReplay? _trackedReplay;
-    private static readonly JsonArray ConsoleSinceEntry = new();
+    /// <summary>What the tracking layer knows about the current room.</summary>
+    private sealed class RoomTracker
+    {
+        /// <summary>The game replay whose room entry was seen. Null when tracking started inside a room.</summary>
+        internal CombatReplay? Replay;
+        /// <summary>Choices reserved and not yet answered, per player slot.</summary>
+        internal readonly Dictionary<int, SortedSet<uint>> OpenChoices = new();
+        /// <summary>(slot, choice id) -> the action that owns it (from SignalPlayerChoiceBegun).</summary>
+        internal readonly Dictionary<(int, uint), JsonObject> ChoiceOwners = new();
+        /// <summary>The action currently paused for a choice (single player: at most one).</summary>
+        internal GameAction? Paused;
+        /// <summary>Paused when tracking started: its reservation and begin were not seen.</summary>
+        internal bool PausedUnseen;
+        /// <summary>Per slot, the next choice id when tracking started inside a room: smaller ids were reserved unseen.</summary>
+        internal readonly Dictionary<int, uint> ChoiceFloor = new();
+    }
+
+    private static RoomTracker _track = new();
+
+    /// <summary>"startup" (installed before any run: nothing was missed) or "runtime" (set_recording installed it).</summary>
+    private static string _installedAt = "startup";
+
+    /// <summary>Every action seen at ActionQueueSynchronizer.RequestEnqueue since install.</summary>
+    private static readonly ConditionalWeakTable<GameAction, object> SeenRequests = new();
+
+    /// <summary>
+    /// Console commands run in this process since install that bypassed the action queue. Their
+    /// effects need not stay in one room nor in the save (GodModeConsoleCmd keeps static state and a
+    /// CombatManager.CombatSetUp subscription that acts in every later combat), so every record
+    /// opened after one in the same process carries the list and a fault. A new process starts clean.
+    /// </summary>
+    private static readonly JsonArray ConsoleInProcess = new();
+
+    private static bool Installed => InstallState == "installed";
 
     // ========================================================================================
     // Configuration and install
@@ -199,6 +225,11 @@ internal static class CombatRecorder
                 SubscribeCombatEvents();
                 InstallState = "installed";
                 InstallError = null;
+                if (RunManager.Instance.IsInProgress)
+                {
+                    _installedAt = "runtime";
+                    StartTrackingInsideRoom();
+                }
                 StartDllHash();
                 AppDomain.CurrentDomain.ProcessExit += (_, _) => OnProcessExit();
                 return true;
@@ -326,10 +357,10 @@ internal static class CombatRecorder
     // API attribution
     // ========================================================================================
 
-    /// <summary>Opens the request window. Returns the request id (0 when not recording).</summary>
+    /// <summary>Opens the request window. Returns the request id (0 when the recorder is not installed).</summary>
     internal static long ApiBegin(string action, Dictionary<string, JsonElement> parsed)
     {
-        if (!_active)
+        if (!Installed)
             return 0;
         long id = Interlocked.Increment(ref _apiSeq);
         Interlocked.Exchange(ref _windowRequest, id);
@@ -386,7 +417,9 @@ internal static class CombatRecorder
     /// </summary>
     internal static T TagApiAction<T>(T action) where T : GameAction
     {
-        if (_active && _handlerRequest != 0)
+        // Tracking layer: tagged whether or not a record is open (a record opened before the game
+        // enqueues a held-back action still names the request).
+        if (Installed && _handlerRequest != 0)
         {
             long request = _handlerRequest;
             Guard("tag_api_action", () => ApiActions.AddOrUpdate(action, new StrongBox<long>(request)));
@@ -414,20 +447,37 @@ internal static class CombatRecorder
     /// <summary>Prefix of ActionQueueSynchronizer.RequestEnqueue.</summary>
     internal static void OnRequestEnqueue(GameAction action)
     {
-        if (!_active || _handlerRequest == 0 || _expectType == null || action.GetType() != _expectType)
-            return;
-        _expectType = null;
-        long request = _handlerRequest;
-        Guard("request_enqueue", () => ApiActions.AddOrUpdate(action, new StrongBox<long>(request)));
+        Guard("request_enqueue", () =>
+        {
+            SeenRequests.AddOrUpdate(action, true);
+            if (_handlerRequest == 0 || _expectType == null || action.GetType() != _expectType)
+                return;
+            _expectType = null;
+            ApiActions.AddOrUpdate(action, new StrongBox<long>(_handlerRequest));
+        });
     }
 
+    /// <summary>
+    /// mod_api: made by a MOD handler (tagged on the object). not_mod_api: a player-driven action the
+    /// tracking layer saw reach RequestEnqueue untagged (the UI, including a click by hand).
+    /// unknown: a player-driven action it never saw requested - requested before the recorder was
+    /// installed, or through some other door; never guessed to be either. game: hook actions and the
+    /// game's own (ReadyToBeginEnemyTurnAction ...).
+    /// </summary>
     private static JsonObject OriginOf(GameAction action)
     {
         if (ApiActions.TryGetValue(action, out var box))
-            return new JsonObject { ["kind"] = "mod_api", ["request"] = box.Value };
-        if (action is not GenericHookGameAction && ActionQueueSet.IsGameActionPlayerDriven(action))
+        {
+            var o = new JsonObject { ["kind"] = "mod_api", ["request"] = box.Value };
+            if (_rec != null && box.Value < _rec.FirstRequest)
+                o["request_before_open"] = true;
+            return o;
+        }
+        if (action is GenericHookGameAction || !ActionQueueSet.IsGameActionPlayerDriven(action))
+            return new JsonObject { ["kind"] = "game" };
+        if (SeenRequests.TryGetValue(action, out _))
             return new JsonObject { ["kind"] = "not_mod_api" };
-        return new JsonObject { ["kind"] = "game" };
+        return new JsonObject { ["kind"] = "unknown", ["why"] = "not seen at RequestEnqueue" };
     }
 
     private static JsonObject WindowOrigin()
@@ -561,8 +611,6 @@ internal static class CombatRecorder
     /// <summary>Postfix of the writer's RecordGameAction / RecordActionResume / RecordPlayerChoice.</summary>
     internal static void OnGameEvent(CombatReplayWriter writer, int countBefore, GameAction? action)
     {
-        if (!_active)
-            return;
         Guard("game_event", () =>
         {
             lock (Gate)
@@ -571,16 +619,23 @@ internal static class CombatRecorder
                 // The writer returns early outside combat / when disabled: nothing was appended.
                 if (replay == null || countBefore < 0 || replay.events.Count != countBefore + 1)
                     return;
+                var ev = replay.events[^1];
+                // Tracking layer: a choice result settles its choice, recording or not.
+                JsonObject? parent = ev.eventType == CombatReplayEventType.PlayerChoice
+                    ? SettleChoice(SlotOf(ev.playerId), ev.choiceId) : null;
+                if (!_active)
+                    return;
                 if (_rec == null)
                     TryOpen("game_event");
                 if (_rec == null || !ReferenceEquals(_rec.Replay, replay))
                     return;
-                JournalEvent(replay, replay.events.Count - 1, action, backfilled: false);
+                JournalEvent(replay, replay.events.Count - 1, action, backfilled: false, parent);
             }
         });
     }
 
-    private static void JournalEvent(CombatReplay replay, int index, GameAction? action, bool backfilled)
+    private static void JournalEvent(CombatReplay replay, int index, GameAction? action, bool backfilled,
+        JsonObject? choiceParent = null)
     {
         var rec = _rec!;
         var ev = replay.events[index];
@@ -635,9 +690,16 @@ internal static class CombatRecorder
                 data["choice_id"] = ev.choiceId;
                 data["result"] = RecordObserve.DescribeChoiceResult(ev.playerChoiceResult, SlotOf);
                 data["origin"] = WindowOrigin();
-                // Copied late, the reservation was never seen: nothing to settle or to check.
-                if (!backfilled)
-                    AttachChoiceParent(rec, data, SlotOf(ev.playerId), ev.choiceId);
+                if (choiceParent != null)
+                {
+                    foreach (var (k, v) in choiceParent.ToList())
+                    {
+                        choiceParent.Remove(k);
+                        data[k] = v;
+                    }
+                    if (data["patch_missed"]?.GetValue<bool>() == true)
+                        rec.Faults.Add($"patch_missed:reserve:{ev.choiceId}");
+                }
                 break;
         }
         long seq = Emit("game_event", data, hidden: true, noAt: backfilled);
@@ -654,33 +716,37 @@ internal static class CombatRecorder
     /// right now. In single player the queue is one and GetReadyAction skips a queue that is
     /// gathering a choice, so at most one action is paused. A choice with no pause at all came from
     /// a context that does not pause (BlockingPlayerChoiceContext / ThrowingPlayerChoiceContext).
+    /// Tracking layer: runs for every result, recording or not.
     /// </summary>
-    private static void AttachChoiceParent(OpenRecord rec, JsonObject data, int? slot, uint? choiceId)
+    private static JsonObject SettleChoice(int? slot, uint? choiceId)
     {
+        var t = _track;
         int s = slot ?? -1;
+        var data = new JsonObject();
         if (choiceId is { } c)
         {
-            bool beforeOpen = rec.ChoiceFloor.TryGetValue(s, out uint floor) && c < floor;
-            if (rec.ChoiceOwners.Remove((s, c), out var owner))
+            bool beforeTracking = t.ChoiceFloor.TryGetValue(s, out uint floor) && c < floor;
+            if (t.ChoiceOwners.Remove((s, c), out var owner))
             {
                 data["owner"] = owner;
                 data["owner_state"] = "observed";
             }
             else
             {
-                // Reserved before the record opened: the owner was never seen. Not a patch miss.
                 data["owner"] = null;
-                data["owner_state"] = beforeOpen ? "reserved_before_open" : "unobserved";
+                data["owner_state"] = beforeTracking ? "reserved_before_tracking" : "unobserved";
             }
-            bool reservedSeen = rec.OpenChoices.TryGetValue(s, out var open) && open.Remove(c);
-            if (!reservedSeen && !beforeOpen)
-                Fault(rec, $"patch_missed:reserve:{c}", "choice result for an id ReserveChoiceId was not seen giving out");
+            bool reservedSeen = t.OpenChoices.TryGetValue(s, out var open) && open.Remove(c);
+            // A reservation the tracking layer should have seen and did not: the patch missed it.
+            if (!reservedSeen && !beforeTracking)
+                data["patch_missed"] = true;
         }
-        // "paused" / "not_paused" are both observations: the record looks for a paused action when
-        // it opens and follows every pause and resume after that.
-        data["pause_state"] = rec.Paused == null ? "not_paused" : rec.PausedBeforeOpen ? "paused_since_before_open" : "paused";
-        data["paused_action"] = rec.Paused == null ? null : RecordObserve.DescribeAction(rec.Paused, KeyOf(rec.Paused));
-        data["pending_choice_ids"] = PendingChoices(rec, s);
+        // "paused" / "not_paused" are both observations: tracking reads the queue when it starts and
+        // follows every pause and resume after that.
+        data["pause_state"] = t.Paused == null ? "not_paused" : t.PausedUnseen ? "paused_since_before_tracking" : "paused";
+        data["paused_action"] = t.Paused == null ? null : RecordObserve.DescribeAction(t.Paused, KeyOf(t.Paused));
+        data["pending_choice_ids"] = PendingChoices(s);
+        return data;
     }
 
     /// <summary>Postfix of the writer's RecordChecksum.</summary>
@@ -770,18 +836,16 @@ internal static class CombatRecorder
 
     internal static void OnChoiceReserved(Player player, uint choiceId)
     {
-        if (!_active)
-            return;
         Guard("choice_reserved", () =>
         {
             lock (Gate)
             {
-                if (_rec == null)
-                    return;
                 int slot = PlayerSlot(player) ?? -1;
-                if (!_rec.OpenChoices.TryGetValue(slot, out var open))
-                    _rec.OpenChoices[slot] = open = new SortedSet<uint>();
+                if (!_track.OpenChoices.TryGetValue(slot, out var open))
+                    _track.OpenChoices[slot] = open = new SortedSet<uint>();
                 open.Add(choiceId);
+                if (!_active || _rec == null)
+                    return;
                 var running = RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
                 Emit("choice_reserved", new JsonObject
                 {
@@ -801,14 +865,12 @@ internal static class CombatRecorder
     /// </summary>
     internal static uint? OnChoiceBegunPrefix(Player chooser)
     {
-        if (!_active)
+        if (!Installed)
             return null;
         lock (Gate)
         {
-            if (_rec == null)
-                return null;
             int slot = PlayerSlot(chooser) ?? -1;
-            return _rec.OpenChoices.TryGetValue(slot, out var open) && open.Count > 0 ? open.Max : null;
+            return _track.OpenChoices.TryGetValue(slot, out var open) && open.Count > 0 ? open.Max : null;
         }
     }
 
@@ -819,14 +881,10 @@ internal static class CombatRecorder
     /// </summary>
     internal static void OnChoiceBegun(PlayerChoiceContext context, Player chooser, uint? choiceId)
     {
-        if (!_active)
-            return;
         Guard("choice_begun", () =>
         {
             lock (Gate)
             {
-                if (_rec == null)
-                    return;
                 GameAction? owner = context switch
                 {
                     GameActionPlayerChoiceContext g => g.Action,
@@ -834,27 +892,26 @@ internal static class CombatRecorder
                     _ => null,
                 };
                 int slot = PlayerSlot(chooser) ?? -1;
-                var data = new JsonObject
-                {
-                    ["choice_id"] = choiceId,
-                    ["context"] = context.GetType().Name,
-                    ["player_slot"] = slot,
-                    ["owner"] = owner == null ? null : RecordObserve.DescribeAction(owner, KeyOf(owner)),
-                };
                 if (choiceId is { } c)
                 {
                     var ownerJson = new JsonObject { ["context"] = context.GetType().Name };
                     if (owner != null)
                         foreach (var (k, v) in RecordObserve.DescribeAction(owner, KeyOf(owner)))
                             ownerJson[k] = v?.DeepClone();
-                    _rec.ChoiceOwners[(slot, c)] = ownerJson;
+                    _track.ChoiceOwners[(slot, c)] = ownerJson;
                 }
-                Emit("choice_begun", data);
+                if (!_active || _rec == null)
+                    return;
+                Emit("choice_begun", new JsonObject
+                {
+                    ["choice_id"] = choiceId,
+                    ["context"] = context.GetType().Name,
+                    ["player_slot"] = slot,
+                    ["owner"] = owner == null ? null : RecordObserve.DescribeAction(owner, KeyOf(owner)),
+                });
             }
         });
     }
-
-    internal static uint? OnPausingForChoice(GameAction action) => action.Id;
 
     /// <summary>
     /// Postfix of ActionQueueSet.PauseActionForPlayerChoice - the pending-choice boundary. When a
@@ -863,24 +920,24 @@ internal static class CombatRecorder
     /// </summary>
     internal static void OnPausedForChoice(GameAction action, PlayerChoiceOptions options, uint? idBefore)
     {
-        if (!_active)
-            return;
         Guard("choice_paused", () =>
         {
             lock (Gate)
             {
-                if (_rec == null)
+                if (idBefore is { } first && !ActionKeys.TryGetValue(action, out _))
+                    ActionKeys.AddOrUpdate(action, new StrongBox<uint>(first));
+                if (action.State == GameActionState.GatheringPlayerChoice)
+                {
+                    _track.Paused = action;
+                    _track.PausedUnseen = false;
+                }
+                if (!_active || _rec == null)
                     return;
                 var data = RecordObserve.DescribeAction(action, KeyOf(action));
                 data["action_id_before"] = idBefore;
                 data["options"] = options.ToString();
                 data["state_after"] = action.State.ToString();
-                data["pending_choice_ids"] = PendingChoices(_rec, OwnerSlot(action));
-                if (action.State == GameActionState.GatheringPlayerChoice)
-                {
-                    _rec.Paused = action;
-                    _rec.PausedBeforeOpen = false;
-                }
+                data["pending_choice_ids"] = PendingChoices(OwnerSlot(action));
                 EmitWithObservation("choice_paused", data, hidden: true);
             }
         });
@@ -888,14 +945,11 @@ internal static class CombatRecorder
 
     internal static void OnResumed(uint oldId, uint nextActionId)
     {
-        if (!_active)
-            return;
         Guard("action_resumed", () =>
         {
             lock (Gate)
             {
-                if (_rec == null)
-                    return;
+                var t = _track;
                 var data = new JsonObject
                 {
                     ["old_action_id"] = oldId,
@@ -904,35 +958,33 @@ internal static class CombatRecorder
                 };
                 // A choice the game settles without asking (e.g. HEADBUTT with one card in the
                 // discard pile) is reserved and resumed with no PlayerChoice result in between.
-                if (_rec.Paused != null)
+                if (t.Paused != null && (t.Paused.Id == oldId || t.Paused.Id == nextActionId - 1))
                 {
-                    var paused = _rec.Paused;
+                    var paused = t.Paused;
                     uint? key = KeyOf(paused);
                     uint? hook = (paused as GenericHookGameAction)?.HookId;
                     var unanswered = new JsonArray();
-                    foreach (var ((slot, choice), owner) in _rec.ChoiceOwners.ToList())
+                    foreach (var ((slot, choice), owner) in t.ChoiceOwners.ToList())
                     {
                         bool mine = (key != null && AsUInt(owner["action_key"]) == key)
                                     || (hook != null && AsUInt(owner["hook_id"]) == hook);
                         if (!mine)
                             continue;
-                        _rec.ChoiceOwners.Remove((slot, choice));
-                        if (_rec.OpenChoices.TryGetValue(slot, out var open))
+                        t.ChoiceOwners.Remove((slot, choice));
+                        if (t.OpenChoices.TryGetValue(slot, out var open))
                             open.Remove(choice);
                         unanswered.Add(choice);
                     }
                     data["unanswered_choice_ids"] = unanswered;
-                    if (_rec.PausedBeforeOpen)
-                        data["paused_since_before_open"] = true;
-                    _rec.PausedBeforeOpen = false;
+                    if (t.PausedUnseen)
+                        data["paused_since_before_tracking"] = true;
+                    data["action_key"] = key;
+                    data["class"] = paused.GetType().Name;
+                    t.Paused = null;
+                    t.PausedUnseen = false;
                 }
-                if (_rec.Paused != null && (_rec.Paused.Id == oldId || _rec.Paused.Id == nextActionId - 1))
-                {
-                    data["action_key"] = KeyOf(_rec.Paused);
-                    data["class"] = _rec.Paused.GetType().Name;
-                    _rec.Paused = null;
-                }
-                Emit("action_resumed", data);
+                if (_active && _rec != null)
+                    Emit("action_resumed", data);
             }
         });
     }
@@ -981,30 +1033,33 @@ internal static class CombatRecorder
 
     /// <summary>
     /// Prefix of DevConsole.ProcessCommand(string). In single player the command runs directly
-    /// (ProcessCommandInternal), not as a ConsoleCmdGameAction, so whatever it changes is not in
-    /// the game's replay. Outside a record that is harmless (the next room's start is taken after
-    /// it); after the room's start was taken, the record can no longer be replayed and says so.
+    /// (ProcessCommandInternal), not as a ConsoleCmdGameAction, so nothing it does is in the game's
+    /// replay, and what it leaves behind need not be in the save either (see ConsoleInProcess).
     /// </summary>
     internal static void OnConsoleCommand(string inputValue)
     {
-        // Not gated on _active: see ConsoleSinceEntry.
         Guard("console_command", () =>
         {
             lock (Gate)
             {
                 // Multiplayer enqueues networked commands as ConsoleCmdGameAction (DevConsole.ProcessCommand).
                 bool viaQueue = !RunManager.Instance.IsSingleplayerOrFakeMultiplayer;
-                var line = new JsonObject { ["command"] = inputValue.Trim(), ["via_action_queue"] = viaQueue };
-                if (!viaQueue && _trackedReplay != null)
-                    ConsoleSinceEntry.Add(line.DeepClone());
-                if (!_active)
-                    return;
-                if (_rec != null)
+                var run = RunManager.Instance.DebugOnlyGetState();
+                var line = new JsonObject
                 {
-                    if (!viaQueue)
-                        _rec.Faults.Add("console_command_outside_action_queue");
-                    Emit("console_command", line);
-                }
+                    ["command"] = inputValue.Trim(),
+                    ["via_action_queue"] = viaQueue,
+                    ["act"] = run?.CurrentActIndex,
+                    ["act_floor"] = run?.ActFloor,
+                    ["in_combat"] = CombatManager.Instance.IsInProgress,
+                };
+                if (!viaQueue)
+                    ConsoleInProcess.Add(line.DeepClone());
+                if (!_active || _rec == null)
+                    return;
+                if (!viaQueue)
+                    _rec.Faults.Add("console_command_outside_action_queue");
+                Emit("console_command", line);
             }
         });
     }
@@ -1016,10 +1071,38 @@ internal static class CombatRecorder
         {
             lock (Gate)
             {
-                _trackedReplay = RecorderPatches.ReplayOf(writer);
-                ConsoleSinceEntry.Clear();
+                _track = new RoomTracker { Replay = RecorderPatches.ReplayOf(writer) };
             }
         });
+    }
+
+    /// <summary>
+    /// Installed with a run already going (set_recording with "record": false in the config): the
+    /// room's entry was not seen. Take what can be read now - the next choice ids and an action
+    /// already paused - and mark the rest as unseen.
+    /// </summary>
+    private static void StartTrackingInsideRoom()
+    {
+        var t = new RoomTracker { Replay = null };
+        try
+        {
+            var ids = RunManager.Instance.PlayerChoiceSynchronizer?.ChoiceIds;
+            if (ids != null)
+                for (int i = 0; i < ids.Count; i++)
+                    t.ChoiceFloor[i] = ids[i];
+            var paused = RecorderPatches.QueuedActions(RunManager.Instance.ActionQueueSet)
+                .FirstOrDefault(a => a.State == GameActionState.GatheringPlayerChoice);
+            if (paused != null)
+            {
+                t.Paused = paused;
+                t.PausedUnseen = true;
+                // Its first id was given out before tracking; the id it has now stands in.
+                if (paused.Id is { } idNow)
+                    ActionKeys.AddOrUpdate(paused, new StrongBox<uint>(idNow));
+            }
+        }
+        catch (Exception ex) { NoteFault("start_tracking", ex); }
+        _track = t;
     }
 
     internal static void OnCleanUpStart() => _inCleanup = true;
@@ -1111,24 +1194,13 @@ internal static class CombatRecorder
         _recordsOpened++;
         ReservedDirs.Add(_rec.Dir);
 
-        // What is already under way when the record opens: the ids the game would hand out next,
-        // and an action already paused for a choice (the record would otherwise have no way to
-        // tell "not paused" from "paused before we looked").
+        _rec.FirstRequest = Interlocked.Read(ref _apiSeq) + 1;
+        bool roomTracked = replay != null && ReferenceEquals(_track.Replay, replay);
         var choiceIdsAtOpen = RunManager.Instance.PlayerChoiceSynchronizer?.ChoiceIds;
-        if (choiceIdsAtOpen != null)
-            for (int i = 0; i < choiceIdsAtOpen.Count; i++)
-                _rec.ChoiceFloor[i] = choiceIdsAtOpen[i];
-        var pausedAtOpen = RecorderPatches.QueuedActions(RunManager.Instance.ActionQueueSet)
-            .FirstOrDefault(a => a.State == GameActionState.GatheringPlayerChoice);
-        if (pausedAtOpen != null)
-        {
-            _rec.Paused = pausedAtOpen;
-            _rec.PausedBeforeOpen = true;
-            // Its first id was given out before the record could see it; the id it has now stands in.
-            if (pausedAtOpen.Id is { } idNow && !ActionKeys.TryGetValue(pausedAtOpen, out _))
-                ActionKeys.AddOrUpdate(pausedAtOpen, new StrongBox<uint>(idNow));
-        }
-        bool consoleTracked = replay != null && ReferenceEquals(_trackedReplay, replay);
+        var pausedAtOpen = _track.Paused;
+        // Inputs the game's replay cannot reproduce: "complete" only when the recorder was installed
+        // before any run (it saw every console command of this process) and there were none.
+        string inputs = ConsoleInProcess.Count > 0 ? "tainted" : _installedAt == "startup" ? "complete" : "unknown";
 
         Emit("record_open", new JsonObject
         {
@@ -1169,18 +1241,20 @@ internal static class CombatRecorder
                 ["game_writer_recording"] = replay != null,
                 ["reproducible_from_start"] = boundary == "room_entry",
                 ["pre_combat_requests"] = eventRoom ? pending?.Requests.DeepClone() : null,
+                // "room_entry": the tracking layer saw this room's entry (it knows every reservation,
+                // pause and request since). "inside_room": it started inside the room (installed by
+                // set_recording): what came before is marked unseen where it matters.
+                ["tracking"] = roomTracked ? "room_entry" : "inside_room",
+                ["recorder_installed"] = _installedAt,
                 ["choice_ids_at_open"] = choiceIdsAtOpen == null ? null
                     : new JsonArray(choiceIdsAtOpen.Select(c => (JsonNode)JsonValue.Create(c)).ToArray()),
                 ["paused_at_open"] = pausedAtOpen == null ? null : RecordObserve.DescribeAction(pausedAtOpen, KeyOf(pausedAtOpen)),
-                ["console_after_room_entry"] = consoleTracked && ConsoleSinceEntry.Count > 0 ? ConsoleSinceEntry.DeepClone() : null,
-                // "tracked": every console command since this replay's room entry is known (none or listed).
-                // "unknown": the recorder was installed after the room was entered (set_recording with
-                // "record": false in the config), so commands before the install were not seen.
-                ["console_tracking"] = consoleTracked ? "tracked" : "unknown",
+                ["inputs_outside_replay"] = inputs,
+                ["console_in_process"] = ConsoleInProcess.Count > 0 ? ConsoleInProcess.DeepClone() : null,
             },
         });
-        if (consoleTracked && ConsoleSinceEntry.Count > 0)
-            _rec.Faults.Add("console_command_after_room_entry");
+        if (inputs == "tainted")
+            _rec.Faults.Add("console_command_in_process");
 
         if (replay != null)
         {
@@ -1578,8 +1652,8 @@ internal static class CombatRecorder
     private static uint? KeyOf(GameAction action) =>
         ActionKeys.TryGetValue(action, out var box) ? box.Value : action.Id;
 
-    private static JsonArray PendingChoices(OpenRecord rec, int? slot) =>
-        new((rec.OpenChoices.TryGetValue(slot ?? -1, out var open) ? open : new SortedSet<uint>())
+    private static JsonArray PendingChoices(int? slot) =>
+        new((_track.OpenChoices.TryGetValue(slot ?? -1, out var open) ? open : new SortedSet<uint>())
             .Select(c => (JsonNode)JsonValue.Create(c)).ToArray());
 
     private static int? PlayerSlot(Player player)

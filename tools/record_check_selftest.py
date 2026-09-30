@@ -31,7 +31,8 @@ def whole() -> tuple[list[dict], list[dict], bytes]:
     mcr = b"\x01\x02\x03"
     pub = [
         {"seq": 0, "kind": "record_open", "schema": "sts2-mod-record/1", "record_id": "1/001-a0f01", "attempt": 1,
-         "start": {"boundary": "room_entry", "initial_state": "room_entry", "game_events_before_open": 0}},
+         "start": {"boundary": "room_entry", "initial_state": "room_entry", "game_events_before_open": 0,
+                   "inputs_outside_replay": "complete"}},
         {"seq": 1, "kind": "initial_state", "hidden": True},
         {"seq": 2, "kind": "game_event", "hidden": True, "type": "GameAction"},
         {"seq": 3, "kind": "record_close", "reason": "combat_won", "game_replay_captured": True, "faults": [],
@@ -68,7 +69,7 @@ def main() -> int:
     case("hidden line missing", False, lambda p, h, m: (p, h[:1], m, None), "pairing")
     case("started mid-combat", False,
          lambda p, h, m: ([dict(p[0], start={"boundary": "mid_combat", "initial_state": "read_back",
-                                              "game_events_before_open": 5})] + p[1:], h, m, None), "started late")
+                                              "game_events_before_open": 5, "inputs_outside_replay": "complete"})] + p[1:], h, m, None), "started late")
     case("self check mismatch", False,
          lambda p, h, m: (p[:-1] + [dict(p[-1], self_check=dict(p[-1]["self_check"], events={"complete": False}))], h, m, None),
          "self_check.events not complete")
@@ -81,6 +82,13 @@ def main() -> int:
     case("unrecorded enqueue", False,
          lambda p, h, m: (p[:-1] + [{"seq": 3, "kind": "enqueue_unrecorded", "action_id": 9}, dict(p[-1], seq=4, faults=["enqueue_unrecorded:9"])], h, m, None),
          "enqueue_unrecorded")
+    case("console command earlier in the process", False,
+         lambda p, h, m: ([dict(p[0], start=dict(p[0]["start"], inputs_outside_replay="tainted",
+                                                  console_in_process=[{"command": "godmode"}]))] + p[1:], h, m, None),
+         "inputs outside the game's replay: tainted")
+    case("recorder installed mid-run", False,
+         lambda p, h, m: ([dict(p[0], start=dict(p[0]["start"], inputs_outside_replay="unknown"))] + p[1:], h, m, None),
+         "inputs outside the game's replay: unknown")
     case("sentry capture during the record", False,
          lambda p, h, m: (p[:-1] + [dict(p[-1], sentry_captures=1)], h, m, None), "sentry_captures")
 

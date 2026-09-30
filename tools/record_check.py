@@ -76,6 +76,11 @@ def check_record(d: Path) -> dict:
     if start.get("boundary") != "room_entry" or start.get("initial_state") != "room_entry":
         problems.append(f"started late: boundary={start.get('boundary')} initial_state={start.get('initial_state')} "
                         f"game_events_before_open={start.get('game_events_before_open')}")
+    inputs = start.get("inputs_outside_replay")
+    if inputs != "complete":
+        # "tainted": a console command ran in this process (outside the action queue); "unknown":
+        # the recorder was installed mid-run and could not see what came before.
+        problems.append(f"inputs outside the game's replay: {inputs} {start.get('console_in_process') or ''}".rstrip())
     if closed is None:
         problems.append("no record_close (the game stopped, crashed, or is still in this combat)")
     else:

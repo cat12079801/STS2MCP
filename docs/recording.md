@@ -51,13 +51,21 @@
 
 **単独プレイの開発コンソールは GameAction を積まない。** `DevConsole.ProcessCommand` は協力プレイでだけ networked なコマンドを `ConsoleCmdGameAction` として積み、
 単独プレイでは `ProcessCommandInternal` で直接実行する（`energy`→`PlayerCmd.GainEnergy`、`card`→`CardPileCmd.Add` など）。その変更は本体の replay に入らない。
-記録器は `DevConsole.ProcessCommand(string)` を読み、
+コマンドが残す効果は 1 つの部屋にもセーブにも収まるとは限らない（例: `GodModeConsoleCmd` は static な状態を持ち、`CombatManager.CombatSetUp` を購読して**以後の戦闘ごとに**筋力などを直接付ける）。
+コマンドごとの効果を記録器が見分けることはしない（本体の全コマンドを監査していない）。代わりに**プロセス単位**で扱う:
 
-- 記録中なら `console_command` 行（`command`・`via_action_queue`）を書き、キューを通らなければ `console_command_outside_action_queue` を `faults` に入れる（**その記録は再生できない**）
-- 記録していない間（`set_recording` で切っている間を含む）も、recorder の patch が当たっていれば、部屋に入ってからのコマンドを覚えておく。
-  その部屋の戦闘の記録を後から開いたら（途中開始で本体の replay を部屋入りから写すとき）、`start.console_after_room_entry` に並べ、`console_command_after_room_entry` を `faults` に入れる
-- `start.console_tracking`: `tracked`（部屋入りからのコマンドをすべて見ている）／`unknown`（`"record": false` で起動して部屋に入った後に `set_recording` で patch を当てた: それより前は見ていない）
-- 部屋に入る前（地図の上など）のコマンドは次の部屋の開始データに入るので印を付けない
+- 記録器が入っている間は、記録していなくても、キューを通らないコマンドを `console_in_process` に覚える（プロセスが終わるまで消さない）
+- 記録を開くとき、それまでに 1 つでもあれば `start.inputs_outside_replay: "tainted"`・`start.console_in_process`（コマンド・幕・階・戦闘中か）を書き、`console_command_in_process` を `faults` に入れる
+- 記録中のコマンドは `console_command` 行と `console_command_outside_action_queue` の fault
+- `start.inputs_outside_replay` が `"complete"` なのは、記録器がゲームの起動時に入り（`recorder_installed: "startup"`）、そのプロセスで一度もコマンドが無いときだけ。
+  `set_recording` で途中から入れた（`recorder_installed: "runtime"`）ときは、それより前が見えないので `"unknown"`
+- ゲームを起動し直せば消える。戦闘外で打ったコマンドの結果（デッキ・レリック・ポーション）はセーブに入り、次のプロセスでは開始データの一部になる
+
+### 追跡層と出力層
+
+記録器は 2 層に分かれている。**追跡層**は、記録器が入っている間ずっと（`set_recording` で切っていても）本体を読む: どの API 要求がどの action を作ったか・RequestEnqueue に来た action・選択の予約／開始／停止／結果／再開・開発コンソール。
+**出力層**（記録そのもの。`set_recording` で切り替わる）は書くだけ。途中で開いた記録も、それより前に起きたことを追跡層から知っている（例: 記録を切っている間に敵ターン中に保留された MOD の `discard_potion` は、後で積まれたとき `mod_api`・`request_before_open: true`）。
+追跡層自身が見ていないもの（記録器を途中で入れた・部屋の途中から追い始めた）は、見ていないと書く（`unknown`・`reserved_before_tracking`・`paused_since_before_tracking`・`tracking: "inside_room"`）。見ていないものを「無い」とは扱わない。
 
 ## 置き場所と設定
 
@@ -91,7 +99,7 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 
 | kind | いつ | 主な中身 |
 |---|---|---|
-| `record_open` | 記録を開いた（先頭） | `schema`・`record_id`・`trigger`・`attempt`・`session`（起動ごとの乱数 id・pid・起動時刻）・`mod`・`game`（version・commit・model_id_hash・sts2_dll_sha256）・`profile_id`・`run`・`start`（`boundary`・`initial_state`・`game_events_before_open`・`checksums_before_open`・`reproducible_from_start`・`pre_combat_requests`・`choice_ids_at_open`（本体が次に振る choice id、slot ごと）・`paused_at_open`（開いた時点で選択のために止まっていた action。`action_key` はその時点の id）・`console_after_room_entry`・`console_tracking`） |
+| `record_open` | 記録を開いた（先頭） | `schema`・`record_id`・`trigger`・`attempt`・`session`（起動ごとの乱数 id・pid・起動時刻）・`mod`・`game`（version・commit・model_id_hash・sts2_dll_sha256）・`profile_id`・`run`・`start`（`boundary`・`initial_state`・`game_events_before_open`・`checksums_before_open`・`reproducible_from_start`・`pre_combat_requests`・`tracking`（`room_entry` / `inside_room`）・`recorder_installed`（`startup` / `runtime`）・`choice_ids_at_open`（本体が次に振る choice id、slot ごと）・`paused_at_open`（開いた時点で選択のために止まっていた action）・`inputs_outside_replay`（`complete` / `tainted` / `unknown`）・`console_in_process`） |
 | `console_command` | 開発コンソールのコマンド（記録中） | `command`・`via_action_queue`（上の節） |
 | `initial_state` | 開いた直後（本体の replay があるとき） | `ids`（header の値＝部屋入りの時点: next_action_id・next_hook_id・next_checksum_id・choice_ids・reward_ids）と `ids_at_open`（開いた時点の本体の値）。hidden: 本体の CombatReplay の header（events・checksums は空）の packet |
 | `combat_setup` | `CombatManager.CombatSetUp` | encounter・room_type・room_class・parent_event・room_count・combat_local_id（`CombatManager.CurrentCombatId`。プロセスの中の通し番号）・敵の combat_id と monster・観測 |
@@ -144,14 +152,17 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 
 単独プレイでは、選択の結果が来た時点で止まっている action は高々 1 つ（`ActionQueueSet.GetReadyAction` は選択を集めている queue を飛ばし、queue はプレイヤーごとに 1 本）。
 
-- `owner_state`: `observed`（`choice_begun` を見た）／`reserved_before_open`（id が `choice_ids_at_open` より小さい: 記録を開く前に予約された。親は見ていない）／`unobserved`
-- `pause_state`: `paused` ／ `paused_since_before_open`（記録を開いたとき既に止まっていた action。開くときに本体の queue を読んで見つける）／`not_paused`（止まっている action が無い: `BlockingPlayerChoiceContext`・`ThrowingPlayerChoiceContext` の選択）。**null を「止まっていない」の意味には使わない**
-- 記録を開いた後に予約されたはずの id（`choice_ids_at_open` 以上）で予約を見ていない結果が来たら `patch_missed:reserve` を `faults` に入れる（patch が効かなかった印）
+選択の親子は追跡層が持つので、記録を切っている間に始まった選択も、後で開いた記録で親が分かる。
+
+- `owner_state`: `observed`（`choice_begun` を見た）／`reserved_before_tracking`（追跡層が部屋の途中から追い始め、その前に予約された。親は見ていない）／`unobserved`
+- `pause_state`: `paused` ／ `paused_since_before_tracking`（追い始めたとき既に止まっていた action。本体の queue を読んで見つける）／`not_paused`（止まっている action が無い: `BlockingPlayerChoiceContext`・`ThrowingPlayerChoiceContext` の選択）。**null を「止まっていない」の意味には使わない**
+- 追跡層が見ているはずの予約（追い始めた後の id）を見ていない結果が来たら `patch_missed:reserve` を `faults` に入れる（patch が効かなかった印）
 
 `origin` の意味:
 
-- `{"kind": "mod_api", "request": N}` — MOD の handler が作った action そのもの（オブジェクトで結ぶので、敵ターン中に保留されて後で積まれても外れない）
-- `{"kind": "not_mod_api"}` — それ以外のプレイヤー由来の action（手で押した UI、開発コンソールなど）
+- `{"kind": "mod_api", "request": N}` — MOD の handler が作った action そのもの（オブジェクトで結ぶので、敵ターン中に保留されて後で積まれても外れない。その要求が記録を開く前なら `request_before_open: true`）
+- `{"kind": "not_mod_api"}` — 追跡層が `RequestEnqueue` に来たのを見た、MOD の印の無いプレイヤー由来の action（手で押した UI など）
+- `{"kind": "unknown"}` — `RequestEnqueue` に来たのを見ていないプレイヤー由来の action（記録器を入れる前に要求された、または別の経路）。MOD 由来かどうかを推測しない
 - `{"kind": "game"}` — Hook など本体が自分で積んだ action
 - 選択の結果は `{"kind": "in_api_window", "request": N}` / `{"kind": "outside_api_window"}`。**MOD の POST の受付から応答までの時間の窓**で付けるもので、因果ではない（本体の選択画面は MOD の UI 操作の後のフレームで結果を出すことがある）
 
