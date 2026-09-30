@@ -11,7 +11,6 @@ using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
-using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -59,7 +58,7 @@ internal static class RecordObserve
     /// (public, hidden). public is what a human player can see; hidden is what they cannot
     /// (RNG state, the enemies' internal move ids, the draw pile's order).
     /// </summary>
-    internal static (JsonObject pub, JsonObject hidden)? Observe()
+    internal static (JsonObject pub, JsonObject hidden)? Observe(Func<ulong?, int?> slotOf)
     {
         var player = LocalPlayer();
         var run = RunManager.Instance.DebugOnlyGetState();
@@ -167,7 +166,7 @@ internal static class RecordObserve
     /// INetAction the game itself put in its replay - never re-derived from the live action.
     /// Other kinds come out as {"type": "&lt;net action class&gt;", ...its public fields}.
     /// </summary>
-    internal static JsonObject DescribeNetAction(INetAction? net)
+    internal static JsonObject DescribeNetAction(INetAction? net, Func<ulong?, int?> slotOf)
     {
         switch (net)
         {
@@ -185,18 +184,18 @@ internal static class RecordObserve
                 return new JsonObject { ["type"] = "end_turn", ["turn"] = end.turnNumber };
             default:
                 var obj = new JsonObject { ["type"] = net.GetType().Name };
-                foreach (var (name, value) in PublicMembers(net))
+                foreach (var (name, value) in PublicMembers(net, slotOf))
                     obj[name] = value;
                 return obj;
         }
     }
 
-    internal static JsonObject DescribeChoiceResult(NetPlayerChoiceResult? result)
+    internal static JsonObject DescribeChoiceResult(NetPlayerChoiceResult? result, Func<ulong?, int?> slotOf)
     {
         if (result is not { } r)
             return new JsonObject { ["type"] = null };
         var obj = new JsonObject { ["type"] = r.type.ToString() };
-        foreach (var (name, value) in PublicMembers(r))
+        foreach (var (name, value) in PublicMembers(r, slotOf))
         {
             if (name != "type" && value != null)
                 obj[name] = value;
@@ -204,24 +203,33 @@ internal static class RecordObserve
         return obj;
     }
 
-    private static IEnumerable<(string, JsonNode?)> PublicMembers(object o)
+    private static IEnumerable<(string, JsonNode?)> PublicMembers(object o, Func<ulong?, int?> slotOf)
     {
         var type = o.GetType();
         foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
-            yield return (f.Name, ToJson(f.Name, f.GetValue(o), 0));
+            yield return (JsonName(f.Name), ToJson(f.Name, f.GetValue(o), 0, slotOf));
         foreach (var p in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
         {
             if (p.GetIndexParameters().Length != 0 || p.GetMethod == null)
                 continue;
-            yield return (p.Name, ToJson(p.Name, p.GetValue(o), 0));
+            yield return (JsonName(p.Name), ToJson(p.Name, p.GetValue(o), 0, slotOf));
         }
     }
 
+    /// <summary>A field that holds a platform player id (NetId). Written as the player's slot.</summary>
+    private static bool IsPlayerIdField(string name) =>
+        name.EndsWith("playerId", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith("PlayerId", StringComparison.Ordinal)
+        || name.EndsWith("Owner", StringComparison.Ordinal)
+        || name.EndsWith("ownerId", StringComparison.OrdinalIgnoreCase);
+
+    private static string JsonName(string name) => IsPlayerIdField(name) ? name + "_slot" : name;
+
     /// <summary>
-    /// Plain values only. Player ids are Steam ids, so they go through the game's own
-    /// IdAnonymizer - the same one CombatReplay.Anonymized applies to the replay's player ids.
+    /// Plain values only. Player ids are platform (Steam) ids: they come out as the player's slot
+    /// in the run. IdAnonymizer is not used here - it draws from Rng.Chaotic on each new id.
     /// </summary>
-    private static JsonNode? ToJson(string name, object? value, int depth)
+    private static JsonNode? ToJson(string name, object? value, int depth, Func<ulong?, int?> slotOf)
     {
         if (value == null)
             return null;
@@ -231,8 +239,7 @@ internal static class RecordObserve
         {
             case string s: return JsonValue.Create(s);
             case bool b: return JsonValue.Create(b);
-            case ulong u when name.Contains("layer", StringComparison.OrdinalIgnoreCase) || name.Contains("wner", StringComparison.OrdinalIgnoreCase):
-                return JsonValue.Create(IdAnonymizer.Anonymize(u));
+            case ulong u when IsPlayerIdField(name): return JsonValue.Create(slotOf(u));
             case ulong u: return JsonValue.Create(u);
             case long l: return JsonValue.Create(l);
             case uint ui: return JsonValue.Create(ui);
@@ -249,7 +256,7 @@ internal static class RecordObserve
             case IEnumerable seq:
                 var arr = new JsonArray();
                 foreach (var item in seq)
-                    arr.Add(ToJson(name, item, depth + 1));
+                    arr.Add(ToJson(name, item, depth + 1, slotOf));
                 return arr;
         }
         var t = value.GetType();
@@ -257,22 +264,25 @@ internal static class RecordObserve
         {
             var obj = new JsonObject();
             foreach (var f in t.GetFields(BindingFlags.Instance | BindingFlags.Public))
-                obj[f.Name] = ToJson(f.Name, f.GetValue(value), depth + 1);
+                obj[JsonName(f.Name)] = ToJson(f.Name, f.GetValue(value), depth + 1, slotOf);
             foreach (var p in t.GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
                 if (p.GetIndexParameters().Length == 0 && p.GetMethod != null)
-                    obj[p.Name] = ToJson(p.Name, p.GetValue(value), depth + 1);
+                    obj[JsonName(p.Name)] = ToJson(p.Name, p.GetValue(value), depth + 1, slotOf);
             }
             return obj;
         }
-        return JsonValue.Create(value.ToString());
+        // Class instances (SerializableCard in a MutableCard choice, ...) are not walked: their
+        // members are not all public-information and their getters are not all plain reads.
+        return JsonValue.Create(value.GetType().Name);
     }
 
-    internal static JsonObject DescribeAction(GameAction action)
+    internal static JsonObject DescribeAction(GameAction action, uint? key)
     {
         var obj = new JsonObject
         {
             ["action_id"] = action.Id,
+            ["action_key"] = key,
             ["class"] = action.GetType().Name,
             ["game_action_type"] = action.ActionType.ToString(),
         };

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions;
@@ -49,7 +50,7 @@ internal static class RecorderPatches
 
         var set = typeof(ActionQueueSet);
         Patch(set, nameof(ActionQueueSet.EnqueueWithoutSynchronizing), postfix: nameof(EnqueuedPostfix));
-        Patch(set, nameof(ActionQueueSet.PauseActionForPlayerChoice), postfix: nameof(PausedPostfix));
+        Patch(set, nameof(ActionQueueSet.PauseActionForPlayerChoice), prefix: nameof(PausedPrefix), postfix: nameof(PausedPostfix));
         Patch(set, nameof(ActionQueueSet.ResumeActionWithoutSynchronizing), postfix: nameof(ResumedPostfix));
 
         Patch(typeof(ActionQueueSynchronizer), nameof(ActionQueueSynchronizer.RequestEnqueue), prefix: nameof(RequestEnqueuePrefix));
@@ -57,10 +58,22 @@ internal static class RecorderPatches
         // BranchingPlayerChoiceContext only forwards to the context it wraps, which is patched itself.
         foreach (var ctx in new[] { typeof(GameActionPlayerChoiceContext), typeof(HookPlayerChoiceContext),
                                     typeof(BlockingPlayerChoiceContext), typeof(ThrowingPlayerChoiceContext) })
-            Patch(ctx, nameof(PlayerChoiceContext.SignalPlayerChoiceBegun), postfix: nameof(ChoiceBegunPostfix));
-        Patch(typeof(GameAction), nameof(GameAction.Cancel), postfix: nameof(CancelPostfix));
+            Patch(ctx, nameof(PlayerChoiceContext.SignalPlayerChoiceBegun),
+                prefix: nameof(ChoiceBegunPrefix), postfix: nameof(ChoiceBegunPostfix));
+        // Reached through the action's AfterFinished delegate, so a call the JIT cannot inline.
+        // Cancellation is read from GameAction.BeforeCancelled instead of patching the few-line
+        // GameAction.Cancel, which could be inlined into its callers.
         Patch(typeof(ActionExecutor), "AfterActionFinished", prefix: nameof(ActionFinishedPrefix));
         Patch(typeof(RunManager), nameof(RunManager.CleanUp), prefix: nameof(CleanUpPrefix), postfix: nameof(CleanUpPostfix));
+        // Counted only: AC2 asks that recording sends nothing to Sentry (docs/recording.md).
+        foreach (var m in AccessTools.GetDeclaredMethods(typeof(SentryService)))
+        {
+            if (m.Name == nameof(SentryService.CaptureException))
+            {
+                Harmony.Patch(m, prefix: new HarmonyMethod(typeof(RecorderPatches), nameof(SentryPrefix)));
+                AppliedList.Add($"SentryService.CaptureException({m.GetParameters().Length})");
+            }
+        }
     }
 
     internal static void RemoveAll()
@@ -118,8 +131,10 @@ internal static class RecorderPatches
 
     private static void EnqueuedPostfix(GameAction gameAction) => CombatRecorder.OnEnqueued(gameAction);
 
-    private static void PausedPostfix(GameAction action, PlayerChoiceOptions options)
-        => CombatRecorder.OnPausedForChoice(action, options);
+    private static void PausedPrefix(GameAction action, out uint? __state) => __state = action.Id;
+
+    private static void PausedPostfix(GameAction action, PlayerChoiceOptions options, uint? __state)
+        => CombatRecorder.OnPausedForChoice(action, options, __state);
 
     private static void ResumedPostfix(ActionQueueSet __instance, uint id)
         => CombatRecorder.OnResumed(id, __instance.NextActionId);
@@ -128,10 +143,17 @@ internal static class RecorderPatches
 
     private static void ReservePostfix(Player player, uint __result) => CombatRecorder.OnChoiceReserved(player, __result);
 
-    private static void ChoiceBegunPostfix(PlayerChoiceContext __instance, Player chooser)
-        => CombatRecorder.OnChoiceBegun(__instance, chooser);
+    private static void ChoiceBegunPrefix(Player chooser, out uint? __state)
+    {
+        __state = null;
+        try { __state = CombatRecorder.OnChoiceBegunPrefix(chooser); }
+        catch { /* never throw into the game */ }
+    }
 
-    private static void CancelPostfix(GameAction __instance) => CombatRecorder.OnCancelled(__instance);
+    private static void ChoiceBegunPostfix(PlayerChoiceContext __instance, Player chooser, uint? __state)
+        => CombatRecorder.OnChoiceBegun(__instance, chooser, __state);
+
+    private static void SentryPrefix() => CombatRecorder.OnSentryCapture();
 
     private static void ActionFinishedPrefix(GameAction action) => CombatRecorder.OnActionFinished(action);
 

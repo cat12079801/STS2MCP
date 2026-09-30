@@ -73,7 +73,7 @@ def check_record(d: Path) -> dict:
     elif opened.get("schema") != SCHEMA:
         problems.append(f"schema {opened.get('schema')!r} is not {SCHEMA}")
     start = (opened or {}).get("start") or {}
-    if start.get("boundary") != "room_entry" or not start.get("initial_state"):
+    if start.get("boundary") != "room_entry" or start.get("initial_state") != "room_entry":
         problems.append(f"started late: boundary={start.get('boundary')} initial_state={start.get('initial_state')} "
                         f"game_events_before_open={start.get('game_events_before_open')}")
     if closed is None:
@@ -88,7 +88,9 @@ def check_record(d: Path) -> dict:
                 problems.append(f"self_check.{part} not complete: {p}")
         if closed.get("faults"):
             problems.append(f"faults: {closed['faults']}")
-        if closed.get("reason") not in ("combat_end",):
+        if closed.get("sentry_captures"):
+            problems.append(f"sentry_captures: {closed['sentry_captures']}")
+        if closed.get("reason") not in ("combat_won", "combat_lost"):
             problems.append(f"ended by {closed.get('reason')} (combat not finished in this attempt)")
         mcr = d / "replay.mcr"
         if closed.get("game_replay_captured"):

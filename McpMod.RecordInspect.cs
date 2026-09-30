@@ -84,11 +84,14 @@ public static partial class McpMod
                 ["index"] = i,
                 ["type"] = e.eventType.ToString(),
                 ["sha256"] = Digest(e),
+                // Each .mcr anonymizes player ids with values drawn per process (IdAnonymizer), so
+                // two replays of the same play differ there; this digest leaves the id out.
+                ["sha256_without_player"] = Digest(e with { playerId = e.playerId.HasValue ? 0UL : null }),
             };
             switch (e.eventType)
             {
                 case CombatReplayEventType.GameAction:
-                    entry["action"] = RecordObserve.DescribeNetAction(e.action);
+                    entry["action"] = RecordObserve.DescribeNetAction(e.action, CombatRecorder.SlotOf);
                     break;
                 case CombatReplayEventType.HookAction:
                     entry["hook_id"] = e.hookId;
@@ -98,7 +101,7 @@ public static partial class McpMod
                     break;
                 case CombatReplayEventType.PlayerChoice:
                     entry["choice_id"] = e.choiceId;
-                    entry["result"] = RecordObserve.DescribeChoiceResult(e.playerChoiceResult);
+                    entry["result"] = RecordObserve.DescribeChoiceResult(e.playerChoiceResult, CombatRecorder.SlotOf);
                     break;
             }
             events.Add(entry);
