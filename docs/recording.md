@@ -54,7 +54,9 @@
 記録器は `DevConsole.ProcessCommand(string)` を読み、
 
 - 記録中なら `console_command` 行（`command`・`via_action_queue`）を書き、キューを通らなければ `console_command_outside_action_queue` を `faults` に入れる（**その記録は再生できない**）
-- 部屋の開始データを取った後・記録を開く前なら、開くときに `start.console_after_room_entry` に並べ、`console_command_after_room_entry` を `faults` に入れる
+- 記録していない間（`set_recording` で切っている間を含む）も、recorder の patch が当たっていれば、部屋に入ってからのコマンドを覚えておく。
+  その部屋の戦闘の記録を後から開いたら（途中開始で本体の replay を部屋入りから写すとき）、`start.console_after_room_entry` に並べ、`console_command_after_room_entry` を `faults` に入れる
+- `start.console_tracking`: `tracked`（部屋入りからのコマンドをすべて見ている）／`unknown`（`"record": false` で起動して部屋に入った後に `set_recording` で patch を当てた: それより前は見ていない）
 - 部屋に入る前（地図の上など）のコマンドは次の部屋の開始データに入るので印を付けない
 
 ## 置き場所と設定
@@ -89,7 +91,7 @@ public の共通フィールド: `seq`・`kind`・`prev`・`t_ms`（記録を開
 
 | kind | いつ | 主な中身 |
 |---|---|---|
-| `record_open` | 記録を開いた（先頭） | `schema`・`record_id`・`trigger`・`attempt`・`session`（起動ごとの乱数 id・pid・起動時刻）・`mod`・`game`（version・commit・model_id_hash・sts2_dll_sha256）・`profile_id`・`run`・`start`（`boundary`・`initial_state`・`game_events_before_open`・`checksums_before_open`・`reproducible_from_start`・`pre_combat_requests`・`choice_ids_at_open`（本体が次に振る choice id、slot ごと）・`paused_at_open`（開いた時点で選択のために止まっていた action）・`console_after_room_entry`） |
+| `record_open` | 記録を開いた（先頭） | `schema`・`record_id`・`trigger`・`attempt`・`session`（起動ごとの乱数 id・pid・起動時刻）・`mod`・`game`（version・commit・model_id_hash・sts2_dll_sha256）・`profile_id`・`run`・`start`（`boundary`・`initial_state`・`game_events_before_open`・`checksums_before_open`・`reproducible_from_start`・`pre_combat_requests`・`choice_ids_at_open`（本体が次に振る choice id、slot ごと）・`paused_at_open`（開いた時点で選択のために止まっていた action。`action_key` はその時点の id）・`console_after_room_entry`・`console_tracking`） |
 | `console_command` | 開発コンソールのコマンド（記録中） | `command`・`via_action_queue`（上の節） |
 | `initial_state` | 開いた直後（本体の replay があるとき） | `ids`（header の値＝部屋入りの時点: next_action_id・next_hook_id・next_checksum_id・choice_ids・reward_ids）と `ids_at_open`（開いた時点の本体の値）。hidden: 本体の CombatReplay の header（events・checksums は空）の packet |
 | `combat_setup` | `CombatManager.CombatSetUp` | encounter・room_type・room_class・parent_event・room_count・combat_local_id（`CombatManager.CurrentCombatId`。プロセスの中の通し番号）・敵の combat_id と monster・観測 |

@@ -99,7 +99,10 @@ internal static class RecorderPatches
     // --- CombatReplayWriter --------------------------------------------------------------------
 
     private static void InitialStatePostfix(CombatReplayWriter __instance, SerializableRun serializableRun)
-        => CombatRecorder.OnInitialState(__instance, serializableRun);
+    {
+        CombatRecorder.TrackRoomEntry(__instance);
+        CombatRecorder.OnInitialState(__instance, serializableRun);
+    }
 
     private static void EventCountPrefix(CombatReplayWriter __instance, out int __state)
     {

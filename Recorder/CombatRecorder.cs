@@ -98,8 +98,6 @@ internal static class CombatRecorder
         internal required int Floor;
         /// <summary>MOD requests between entering the room and the combat (an event that starts a fight).</summary>
         internal readonly JsonArray Requests = new();
-        /// <summary>Console commands run after the room's start was taken (single player runs them outside the queue).</summary>
-        internal readonly JsonArray ConsoleCommands = new();
     }
 
     private sealed class OpenRecord
@@ -147,6 +145,15 @@ internal static class CombatRecorder
     /// writes the first line, so numbering from the disk alone could give a name out twice.
     /// </summary>
     private static readonly HashSet<string> ReservedDirs = new(StringComparer.Ordinal);
+
+    // --- tracked whenever the recorder is installed, recording on or off ----------------------
+    // Inputs that bypass the action queue change the combat without leaving anything in the game's
+    // replay. A record opened later (set_recording mid-combat) copies that replay back to the room
+    // entry, so it has to know about them even though nothing was being recorded when they ran.
+
+    /// <summary>The game replay started at the last room entry seen since install (null = none seen yet).</summary>
+    private static CombatReplay? _trackedReplay;
+    private static readonly JsonArray ConsoleSinceEntry = new();
 
     // ========================================================================================
     // Configuration and install
@@ -980,8 +987,7 @@ internal static class CombatRecorder
     /// </summary>
     internal static void OnConsoleCommand(string inputValue)
     {
-        if (!_active)
-            return;
+        // Not gated on _active: see ConsoleSinceEntry.
         Guard("console_command", () =>
         {
             lock (Gate)
@@ -989,16 +995,29 @@ internal static class CombatRecorder
                 // Multiplayer enqueues networked commands as ConsoleCmdGameAction (DevConsole.ProcessCommand).
                 bool viaQueue = !RunManager.Instance.IsSingleplayerOrFakeMultiplayer;
                 var line = new JsonObject { ["command"] = inputValue.Trim(), ["via_action_queue"] = viaQueue };
+                if (!viaQueue && _trackedReplay != null)
+                    ConsoleSinceEntry.Add(line.DeepClone());
+                if (!_active)
+                    return;
                 if (_rec != null)
                 {
                     if (!viaQueue)
                         _rec.Faults.Add("console_command_outside_action_queue");
                     Emit("console_command", line);
                 }
-                else if (_pending != null && !viaQueue)
-                {
-                    _pending.ConsoleCommands.Add(line);
-                }
+            }
+        });
+    }
+
+    /// <summary>Postfix of RecordInitialState, recording on or off: a new room, a new replay to track.</summary>
+    internal static void TrackRoomEntry(CombatReplayWriter writer)
+    {
+        Guard("track_room_entry", () =>
+        {
+            lock (Gate)
+            {
+                _trackedReplay = RecorderPatches.ReplayOf(writer);
+                ConsoleSinceEntry.Clear();
             }
         });
     }
@@ -1105,7 +1124,11 @@ internal static class CombatRecorder
         {
             _rec.Paused = pausedAtOpen;
             _rec.PausedBeforeOpen = true;
+            // Its first id was given out before the record could see it; the id it has now stands in.
+            if (pausedAtOpen.Id is { } idNow && !ActionKeys.TryGetValue(pausedAtOpen, out _))
+                ActionKeys.AddOrUpdate(pausedAtOpen, new StrongBox<uint>(idNow));
         }
+        bool consoleTracked = replay != null && ReferenceEquals(_trackedReplay, replay);
 
         Emit("record_open", new JsonObject
         {
@@ -1149,10 +1172,14 @@ internal static class CombatRecorder
                 ["choice_ids_at_open"] = choiceIdsAtOpen == null ? null
                     : new JsonArray(choiceIdsAtOpen.Select(c => (JsonNode)JsonValue.Create(c)).ToArray()),
                 ["paused_at_open"] = pausedAtOpen == null ? null : RecordObserve.DescribeAction(pausedAtOpen, KeyOf(pausedAtOpen)),
-                ["console_after_room_entry"] = pending?.ConsoleCommands.Count > 0 ? pending.ConsoleCommands.DeepClone() : null,
+                ["console_after_room_entry"] = consoleTracked && ConsoleSinceEntry.Count > 0 ? ConsoleSinceEntry.DeepClone() : null,
+                // "tracked": every console command since this replay's room entry is known (none or listed).
+                // "unknown": the recorder was installed after the room was entered (set_recording with
+                // "record": false in the config), so commands before the install were not seen.
+                ["console_tracking"] = consoleTracked ? "tracked" : "unknown",
             },
         });
-        if (pending?.ConsoleCommands.Count > 0)
+        if (consoleTracked && ConsoleSinceEntry.Count > 0)
             _rec.Faults.Add("console_command_after_room_entry");
 
         if (replay != null)
