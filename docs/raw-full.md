@@ -115,7 +115,8 @@ Always present at the top level (except `menu`). Contains everything about the l
       "name": "Burning Blood",
       "description": "At the end of combat, heal 6 HP.",
       "counter": null,       // Number if relic shows a counter, null otherwise
-      "keywords": [ /* Keyword Objects */ ]
+      "keywords": [ /* Keyword Objects */ ],
+      "status": "Normal"     // RelicStatus: Normal, Active, Disabled. Absent if unreadable (see warnings)
     }
   ],
   "potions": [
@@ -148,7 +149,10 @@ Always present at the top level (except `menu`). Contains everything about the l
   "can_play": true,
   "unplayable_reason": null, // e.g. "NotEnoughEnergy", "Unplayable", null if playable
   "is_upgraded": false,
-  "keywords": [ /* Keyword Objects */ ]
+  "keywords": [ /* Keyword Objects */ ],
+  "enchantment": null,       // See "Card observation fields" below
+  "replay": 0,
+  "damage_base": 6
 }
 ```
 
@@ -156,12 +160,32 @@ Always present at the top level (except `menu`). Contains everything about the l
 
 ```jsonc
 {
+  "uid": "STRIKE_R#2",
+  "id": "STRIKE_R",
   "name": "Strike",
+  "type": "Attack",
+  "target_type": "AnyEnemy",
+  "is_upgraded": false,
   "cost": "1",               // Energy cost as string ("X" for X-cost)
   "star_cost": null,          // Regent star cost as string, null if N/A
-  "description": "Deal 6 damage."
+  "description": "Deal 6 damage.",
+  "enchantment": { "id": "VIGOROUS", "amount": 3, "status": "Normal" },
+  "replay": 0,
+  "damage_base": 6
 }
 ```
+
+### Card observation fields
+
+On **every** card entry — hand, `draw_pile` / `discard_pile` / `exhaust_pile`, `deck`, rewards, selection screens and `upgrade_preview` (read from the upgraded clone). Plain getters only: reading them runs no description, hover tip or damage preview and changes nothing.
+
+- `enchantment` — `null` when the card has no enchantment, else `{ id, amount, status }`. `status` is the live `EnchantmentStatus`: `Normal` (not used yet this combat) or `Disabled` (a once-per-combat enchantment such as Glam, Vigorous, Sown or Swift that has fired). The card text alone cannot tell these apart.
+- `replay` — `CardModel.GetEnchantedReplayCount()`: the card's own extra plays (its base replay count plus its enchantment's, e.g. Glam adds 1 only while `Normal`). Play-count modifiers from relics and powers (Throwing Axe, Duplication) are **not** in it.
+- `damage_base` — `BaseValue` of the damage var `vs_targets` reads (`CalculatedDamage` first, then `Damage`), before the enchantment's bonus, Strength, multipliers and rounding. `null` when that var is not a plain `DamageVar` (a `CalculatedDamage` card such as Body Slam) or the card has no damage var.
+
+**`null` and a missing key mean different things.** `null` is observed ("no enchantment", "no plain damage base"). A missing key means the value was not observed: an older mod build, or a getter that threw, which also adds a `card.enchantment` / `card.replay` / `card.damage_base` entry to `warnings`. The same holds for `relics[].status` (`relic.status` in `warnings`). These are additions, so `schema_version` stays `3`; detect them by presence.
+
+`relics[].status` for once-per-combat relics: Throwing Axe is `Active` only while its extra play is still available this combat; during combat, `Normal` or `Disabled` means it has been spent; outside combat, `Normal` does not indicate usage. Any successful card play counts, including automatic ones (`CardCmd.AutoPlay`, e.g. Imbued at combat start).
 
 ### Orb Object
 
@@ -1749,3 +1773,5 @@ In multiplayer, this is a vote. The turn ends only when all players submit.
 Retract the end-turn vote before all players have committed.
 
 All other actions work identically to singleplayer.
+
+`damage_base` preserves the decimal `BaseValue` without rounding; current v0.111.0 card definitions use integer damage values, but clients should tolerate decimal values or conservatively report an unknown base.

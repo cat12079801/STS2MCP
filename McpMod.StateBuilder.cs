@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.HoverTips;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
@@ -1555,14 +1556,20 @@ public static partial class McpMod
         var relics = new List<Dictionary<string, object?>>();
         foreach (var relic in player.Relics)
         {
-            relics.Add(new Dictionary<string, object?>
+            var relicInfo = new Dictionary<string, object?>
             {
                 ["id"] = relic.Id.Entry,
                 ["name"] = SafeGetText(() => relic.Title),
                 ["description"] = SafeGetText(() => relic.DynamicDescription),
                 ["counter"] = relic.ShowCounter ? relic.DisplayAmount : null,
                 ["keywords"] = BuildHoverTips(relic.HoverTipsExcludingRelic)
-            });
+            };
+            // Once-per-combat relics keep "used" only here (Throwing Axe: Active until the
+            // first card play, Normal after). Left out when the getter throws, so a missing
+            // key never reads as a status.
+            try { relicInfo["status"] = relic.Status.ToString(); }
+            catch (Exception ex) { Warn("relic.status", ex); }
+            relics.Add(relicInfo);
         }
         state["relics"] = relics;
 
@@ -1644,7 +1651,7 @@ public static partial class McpMod
     /// </summary>
     private static Dictionary<string, object?> BuildCardInfo(CardModel card, PileType pile = PileType.None)
     {
-        return new Dictionary<string, object?>
+        var info = new Dictionary<string, object?>
         {
             ["id"] = card.Id.Entry,
             ["name"] = SafeGetText(() => card.Title),
@@ -1659,6 +1666,90 @@ public static partial class McpMod
             ["max_upgrade_level"] = card.MaxUpgradeLevel,
             ["keywords"] = BuildHoverTips(card.HoverTips)
         };
+        AddCardObservation(info, card);
+        return info;
+    }
+
+    /// <summary>
+    /// Card state the text cannot carry, shared by every card entry (hand, piles, deck,
+    /// rewards, selection screens, upgrade_preview).
+    ///
+    /// Vigorous has no extra card text; Glam is reflected only in the total replay count.
+    /// Sown's extra line
+    /// reads like the card's own energy line, so "used this combat" was only guessable.
+    /// These are plain getters: nothing here runs a description, a hover tip or a dynamic
+    /// var preview, so reading them leaves the card exactly as it was.
+    ///
+    ///   enchantment  null when the card has none, else { id, amount, status } with
+    ///                status the live EnchantmentStatus (Normal / Disabled)
+    ///   replay       GetEnchantedReplayCount(): the card's own extra plays, base plus its
+    ///                enchantment's (Glam counts only while Normal). Relic and power play
+    ///                count modifiers are not in it
+    ///   damage_base  BaseValue of the damage var vs_targets would read, before the
+    ///                enchantment, Strength, multipliers and rounding. null when that var is
+    ///                not a plain DamageVar (CalculatedDamage etc.) or the card has none
+    ///
+    /// A getter that throws leaves its key out and warns, so a missing key means "not
+    /// observed" and never collides with a known null.
+    /// </summary>
+    private static void AddCardObservation(Dictionary<string, object?> info, CardModel card)
+    {
+        try
+        {
+            // Built in full before the assignment: a throw on one member drops the key.
+            var enchantment = card.Enchantment;
+            info["enchantment"] = enchantment == null ? null : new Dictionary<string, object?>
+            {
+                ["id"] = enchantment.Id.Entry,
+                ["amount"] = enchantment.Amount,
+                ["status"] = enchantment.Status.ToString()
+            };
+        }
+        catch (Exception ex) { Warn("card.enchantment", ex); }
+
+        try { info["replay"] = card.GetEnchantedReplayCount(); }
+        catch (Exception ex) { Warn("card.replay", ex); }
+
+        try { info["damage_base"] = ReadDamageBase(card); }
+        catch (Exception ex) { Warn("card.damage_base", ex); }
+    }
+
+    /// <summary>
+    /// The order vs_targets picks a card's damage var in. Shared so damage_base describes
+    /// the same var as vs_targets[].damage.
+    /// </summary>
+    private static readonly string[] DamageVarNames = { "CalculatedDamage", "Damage" };
+
+    /// <summary>
+    /// BaseValue of the first var in DamageVarNames the card carries, when that var is a
+    /// plain DamageVar. Anything else (CalculatedDamageVar, a DamageVar subclass) computes
+    /// its number some other way, so it reports null rather than a base that is not the
+    /// base. BaseValue is read as is - no enchantment, hook or rounding - and only turned
+    /// into an int when it already is one.
+    ///
+    /// vs_targets picks by name among the vars whose value could be read; this picks among
+    /// the vars the card has. They only differ when a CalculatedDamage var cannot be read at
+    /// all, and then this still says null.
+    /// </summary>
+    private static object? ReadDamageBase(CardModel card)
+    {
+        var vars = new Dictionary<string, DynamicVar>();
+        foreach (var (name, dynamicVar) in card.DynamicVars)
+            vars[name] = dynamicVar;
+
+        foreach (var name in DamageVarNames)
+        {
+            if (!vars.TryGetValue(name, out var dynamicVar))
+                continue;
+            if (dynamicVar.GetType() != typeof(DamageVar))
+                return null;
+
+            decimal value = dynamicVar.BaseValue;
+            if (value == decimal.Truncate(value) && value >= int.MinValue && value <= int.MaxValue)
+                return (int)value;
+            return value;
+        }
+        return null;
     }
 
     /// <summary>
@@ -1671,7 +1762,7 @@ public static partial class McpMod
         var preview = SafeBuildUpgradedCardPreview(card);
         if (preview == null) return null;
 
-        return new Dictionary<string, object?>
+        var info = new Dictionary<string, object?>
         {
             ["name"] = SafeGetText(() => preview.Title),
             ["cost"] = GetCostDisplay(preview),
@@ -1679,6 +1770,10 @@ public static partial class McpMod
             ["description"] = SafeGetCardDescription(preview),
             ["keywords"] = BuildHoverTips(preview.HoverTips)
         };
+        // Read off the upgraded clone (which keeps the enchantment), so damage_base is the
+        // upgraded base, not the live card's.
+        AddCardObservation(info, preview);
+        return info;
     }
 
     /// <summary>
@@ -1786,7 +1881,7 @@ public static partial class McpMod
                     // and the typed accessors throw when a card has no var of that name,
                     // so read whatever the card actually carries.
                     var values = ReadDynamicVarValues(card);
-                    int? damage = PickDynamicVar(values, "CalculatedDamage", "Damage");
+                    int? damage = PickDynamicVar(values, DamageVarNames);
                     if (damage != null)
                         preview["damage"] = damage;
 
@@ -1973,15 +2068,22 @@ public static partial class McpMod
         var list = new List<Dictionary<string, object?>>();
         foreach (var card in cards)
         {
-            // Pile cards only need a subset - keep it lightweight
-            list.Add(new Dictionary<string, object?>
+            // Pile cards only need a subset - keep it lightweight. No keywords: hover tips
+            // are the expensive part, and enchantment below already says what they would.
+            var cardInfo = new Dictionary<string, object?>
             {
                 ["uid"] = GetStableCardUid(card),
+                ["id"] = card.Id.Entry,
                 ["name"] = SafeGetText(() => card.Title),
+                ["type"] = card.Type.ToString(),
+                ["target_type"] = card.TargetType.ToString(),
+                ["is_upgraded"] = card.IsUpgraded,
                 ["cost"] = GetCostDisplay(card),
                 ["star_cost"] = GetStarCostDisplay(card),
                 ["description"] = SafeGetCardDescription(card, pile)
-            });
+            };
+            AddCardObservation(cardInfo, card);
+            list.Add(cardInfo);
         }
         return list;
     }
