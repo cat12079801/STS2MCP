@@ -40,7 +40,7 @@ Every response — `menu` and error-ish states included — carries the build st
   "state_type": "...",      // Screen identifier (see sections below)
   "mod_version": "0.4.0",   // Mod version
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
-  "schema_version": 2       // Contract version — see below
+  "schema_version": 3       // Contract version — see below
 }
 ```
 
@@ -48,6 +48,8 @@ Every response — `menu` and error-ish states included — carries the build st
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
 
+- **3** — `map.next_encounters` was removed because it exposed future rooms before the player
+  could see them. `map.encounters_seen` reports only travelled encounters.
 - **2** — `battle.enemies` is no longer "the living enemies": a corpse the game keeps in the
   fight (a Decimillipede segment waiting to reattach) is listed with `alive: false`. Filter on
   the new `alive` field instead of assuming every entry is a valid target.
@@ -137,7 +139,8 @@ Always present at the top level (except `menu`). Contains everything about the l
 
 Owned relics always include boolean `used_up` and `melted`, in singleplayer and the
 multiplayer local `player` object (both use `BuildPlayerState`). Markdown marks true
-values with `(used)` and `(melted)`, in and out of combat. These fields are additive:
+values with `(used)` and `(melted)` in singleplayer outside combat, and during combat.
+Multiplayer outside combat does not list relics in Markdown. These fields are additive:
 feature-detect their presence; the schema stays at 3. Older builds omit them.
 `melted` is separate from consumption: `RelicModel.HoverTip` exposes the melted
 notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint comes
