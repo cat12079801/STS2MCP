@@ -72,6 +72,17 @@ public static partial class McpMod
             sb.AppendLine();
         }
 
+        if (state.GetValueOrDefault("player") is Dictionary<string, object?> poolPlayer
+            && poolPlayer.GetValueOrDefault("generation_pool") is Dictionary<string, object?> pool)
+        {
+            string summary = pool.GetValueOrDefault("known") is true
+                && pool.GetValueOrDefault("cards") is List<Dictionary<string, object?>> cards
+                ? $"{cards.Count} cards (Attack/Skill/Power), {pool.GetValueOrDefault("players")} player(s)"
+                : $"unknown: {pool.GetValueOrDefault("reason")}";
+            sb.AppendLine($"Generation pool: {summary}");
+            sb.AppendLine();
+        }
+
         // Multiplayer players summary (top-level)
         if (isMultiplayer && state.TryGetValue("players", out var playersListObj)
             && playersListObj is List<Dictionary<string, object?>> playersList && playersList.Count > 0)

@@ -241,6 +241,8 @@ public static partial class McpMod
         {
             ["act"] = runState.CurrentActIndex + 1,
             ["floor"] = runState.TotalFloor,
+            ["player_count"] = runState.Players.Count,
+            ["card_multiplayer_constraint"] = ((IRunState)runState).CardMultiplayerConstraint.ToString(),
             ["ascension"] = runState.AscensionLevel
         };
 

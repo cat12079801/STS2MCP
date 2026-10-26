@@ -64,12 +64,56 @@ state-specific data:
   "run": {
     "act": 1,               // Current act (1-indexed)
     "floor": 3,             // Total floors visited
+    "player_count": 1,
+    "card_multiplayer_constraint": "SingleplayerOnly",
     "ascension": 0          // Ascension level
   },
   "player": { ... },        // Full player state (see Player Object below)
   // ... state-specific fields
 }
 ```
+
+### 解放済みの戦闘生成 pool（追加、schema 3）
+
+`player.generation_pool` は単独プレイとマルチのローカル `player` に入る。
+`BuildPlayerState` と同じ snapshot で、その Player 自身の `UnlockState` を使う。
+対象の照合用に `player.character_id` / `player.player_id`、`run.player_count` /
+`run.card_multiplayer_constraint` も追加した。ID は表示名や配列添字ではない。
+
+```jsonc
+"generation_pool": {
+  "character_id": "IRONCLAD",
+  "player_id": "1", // Player.NetId.ToString()
+  "players": 1,
+  "multiplayer_constraint": "SingleplayerOnly",
+  "known": true,
+  "cards": [ { "id": "UPPERCUT", "type": "Attack" } ], // 例示。実際には全候補
+  "game_assembly_sha256": "9cb4f1ad8c9f284aa8fec3122ffd6d780bbf543d875c817abdd12ff63fbf12b4",
+  "filter_version": 1,
+  "filter_source": "CardPoolModel.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForPlayerCount;CardFactory.FilterForCombat;OrobicAcid.OnUse:Attack,Skill,Power"
+}
+```
+
+`GetUnlockedCards` の結果に実人数の filter、`CardFactory.FilterForCombat`、
+Attack/Skill/Power の型 filter を適用し、ID の昇順で出す。`FilterForPlayerCount` は private
+なので、人数 > 1 では SingleplayerOnly、そうでなければ MultiplayerOnly を除く同じ条件を実装した。
+抽選、戦闘カード作成、RNG の読み取りはしない。ID と型だけを載せ、本文・コストは複製しない。
+`game_assembly_sha256` は実際にロードした `CardModel` の assembly ファイルから初回に計算して保持する。
+`filter_version` はこの pool 契約の版であり、state の schema とは別。
+
+取得中に例外が出た場合は `known: false, cards: []` と `reason`（例外の型とメッセージ）、
+state の `warnings` を返す。取得前に失敗したメタデータは欠落しうる。部分一覧を known=true にしない。
+旧 MOD にはこの欄が無い。取得不能と空一覧を同一視せず、欄の存在を検出すること。
+Markdown は単独・マルチのローカル player について件数・人数、または unknown と理由の1行だけを出す。
+追加項目なので schema は 3 のまま。
+
+出典は sts2-9cb4f1ad の `OrobicAcid.OnUse`、`CardPoolModel.GetUnlockedCards`、
+`CardFactory.FilterForCombat/FilterForPlayerCount`。これは discovered_cards とは別の情報。
+`NCardLibraryGrid.GetCardVisibility` は profile の解放条件と発見条件を分け、解放済みでも未発見なら
+NotSeen にする。図鑑がこのラン固有の候補ID一覧をそのまま見せるとは言えない。
+解放対象札は各 Epoch の `QueueUnlocks` → `NTimelineScreen.QueueCardUnlock` →
+`NUnlockCardsScreen.Open` で表示される。保存ランの `Player.UnlockState` は profile の現在値と
+異なりうる（`UnlockState` の契約、`Player.FromSerializable`）。未来の抽選結果・山札順は含まない。
 
 ### Player Object
 
@@ -78,6 +122,8 @@ Always present at the top level (except `menu`). Contains everything about the l
 ```jsonc
 {
   "character": "The Ironclad",
+  "character_id": "IRONCLAD", // Stable model ID (not localized)
+  "player_id": "1",          // Player.NetId as a string
   "hp": 72,
   "max_hp": 80,
   "block": 0,

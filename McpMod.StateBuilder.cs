@@ -647,6 +647,8 @@ public static partial class McpMod
         {
             ["act"] = runState.CurrentActIndex + 1,
             ["floor"] = runState.TotalFloor,
+            ["player_count"] = runState.Players.Count,
+            ["card_multiplayer_constraint"] = ((IRunState)runState).CardMultiplayerConstraint.ToString(),
             ["ascension"] = runState.AscensionLevel
         };
 
@@ -1458,6 +1460,9 @@ public static partial class McpMod
         var combatState = player.PlayerCombatState;
 
         state["character"] = SafeGetText(() => player.Character.Title);
+        state["character_id"] = player.Character.Id.Entry;
+        state["player_id"] = player.NetId.ToString();
+        state["generation_pool"] = BuildGenerationPool(player);
         state["hp"] = creature.CurrentHp;
         state["max_hp"] = creature.MaxHp;
         state["block"] = creature.Block;
