@@ -113,7 +113,9 @@ public static partial class McpMod
             FormatListSection(sb, "Relics", topPlayer, "relics", r =>
             {
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
-                return $"- **{r["name"]}**{counter}: {r["description"]}";
+                string used = r.GetValueOrDefault("used_up") is true ? " (used)" : "";
+                string melted = r.GetValueOrDefault("melted") is true ? " (melted)" : "";
+                return $"- **{r["name"]}**{counter}{used}{melted}: {r["description"]}";
             });
             FormatPotionsSection(sb, topPlayer);
             FormatMasterDeckMarkdown(sb, topPlayer);
@@ -391,7 +393,9 @@ public static partial class McpMod
             FormatListSection(sb, "Relics", player, "relics", r =>
             {
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
-                return $"- **{r["name"]}**{counter}: {r["description"]}";
+                string used = r.GetValueOrDefault("used_up") is true ? " (used)" : "";
+                string melted = r.GetValueOrDefault("melted") is true ? " (melted)" : "";
+                return $"- **{r["name"]}**{counter}{used}{melted}: {r["description"]}";
             });
             FormatPotionsSection(sb, player);
 

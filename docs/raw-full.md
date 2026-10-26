@@ -115,6 +115,8 @@ Always present at the top level (except `menu`). Contains everything about the l
       "name": "Burning Blood",
       "description": "At the end of combat, heal 6 HP.",
       "counter": null,       // Number if relic shows a counter, null otherwise
+      "used_up": false,      // RelicModel.IsUsedUp: the relic has been used up
+      "melted": false,       // RelicModel.IsMelted: a separate melted-wax state
       "keywords": [ /* Keyword Objects */ ]
     }
   ],
@@ -132,6 +134,16 @@ Always present at the top level (except `menu`). Contains everything about the l
   "max_potion_slots": 3      // Belt capacity. Default 3, grows with belt-expanding relics (e.g. Potion Belt: +2). Use to detect a full belt: len(potions) >= max_potion_slots.
 }
 ```
+
+Owned relics always include boolean `used_up` and `melted`, in singleplayer and the
+multiplayer local `player` object (both use `BuildPlayerState`). Markdown marks true
+values with `(used)` and `(melted)`, in and out of combat. These fields are additive:
+feature-detect their presence; the schema stays at 3. Older builds omit them.
+`melted` is separate from consumption: `RelicModel.HoverTip` exposes the melted
+notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint comes
+from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for example,
+`LizardTail.WasUsed` sets that status when consumed. These booleans do not claim to
+encode every reason a relic can be disabled.
 
 ### Card Object (in hand)
 

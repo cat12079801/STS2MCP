@@ -1561,6 +1561,8 @@ public static partial class McpMod
                 ["name"] = SafeGetText(() => relic.Title),
                 ["description"] = SafeGetText(() => relic.DynamicDescription),
                 ["counter"] = relic.ShowCounter ? relic.DisplayAmount : null,
+                ["used_up"] = relic.IsUsedUp,
+                ["melted"] = relic.IsMelted,
                 ["keywords"] = BuildHoverTips(relic.HoverTipsExcludingRelic)
             });
         }
