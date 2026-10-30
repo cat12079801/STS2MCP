@@ -728,6 +728,11 @@ public static partial class McpMod
         if (stateType != null && _playerInputStates.Contains(stateType))
             reasons.Clear();
 
+        // A submitted reward choice is resolving until the public completion signal or the
+        // next OptionSelected wait. Merely displaying a choice is still an input boundary.
+        if (stateType is "rewards" or "card_reward" && _rewardSession.Entries.Any(e => e.Resolving))
+            reasons.Add("reward_selection_resolving");
+
         result["is_resolving"] = reasons.Count > 0;
         if (reasons.Count > 0)
             result["resolving_reasons"] = reasons;
@@ -3054,7 +3059,9 @@ public static partial class McpMod
         var state = new Dictionary<string, object?>();
 
         // Reward items
-        var rewardButtons = FindAll<NRewardButton>(rewardsScreen);
+        var rewardButtons = GetRewardButtons(rewardsScreen);
+        state["screen_revision"] = _rewardSession.Revision;
+        if (!_rewardTrackingAvailable) Warn("rewards.selection_state", "UI tracking unavailable; missing observations are unknown");
         var items = new List<Dictionary<string, object?>>();
         int index = 0;
         foreach (var button in rewardButtons)
@@ -3062,12 +3069,10 @@ public static partial class McpMod
             if (button.Reward == null || !button.IsEnabled) continue;
             var reward = button.Reward;
 
-            var item = new Dictionary<string, object?>
-            {
-                ["index"] = index,
-                ["type"] = GetRewardTypeName(reward),
-                ["description"] = SafeGetText(() => reward.Description)
-            };
+            var item = _rewardSession.Find(reward)!.Describe(claimable: true);
+            item["index"] = index;
+            item["type"] = GetRewardTypeName(reward);
+            item["description"] = SafeGetText(() => reward.Description);
 
             // Type-specific details
             if (reward is GoldReward goldReward)
@@ -3083,6 +3088,10 @@ public static partial class McpMod
             index++;
         }
         state["items"] = items;
+        // Completed rewards stay out of legacy items. This session-local history retains only
+        // identities and observed UI outcomes, not hidden reward contents.
+        state["selection_history"] = _rewardSession.Entries.Select(e =>
+            e.Describe(_rewardSession.Claimable.Contains(e))).ToList();
 
         // Proceed button
         var proceedButton = FindFirst<NProceedButton>(rewardsScreen);
@@ -3094,6 +3103,9 @@ public static partial class McpMod
     private static Dictionary<string, object?> BuildCardRewardState(NCardRewardSelectionScreen cardScreen)
     {
         var state = new Dictionary<string, object?>();
+        var parent = GetCardRewardParent(cardScreen);
+        state["parent_reward_id"] = parent?.Id;
+        state["selection_state"] = parent?.SelectionState ?? "unknown";
 
         var cardHolders = FindAllSortedByPosition<NCardHolder>(cardScreen);
         var cards = new List<Dictionary<string, object?>>();

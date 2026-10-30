@@ -558,6 +558,42 @@ Appears after combat ends or when triggered by events (e.g. TheFutureOfPotions, 
 }
 ```
 
+### 報酬 ID と選択状態（加算契約、schema 3）
+
+`rewards.items` の既存キーと有効ボタンだけを列挙する挙動は維持する。
+各 item に `reward_id` / `selection_state` / `claimable` / `skipped` /
+`reward_consumed` / `last_selection` / `last_option_id` を追加する。
+`rewards.screen_revision` は現在の一覧と選択状態を表す opaque な文字列。
+`rewards.selection_history` は同じセッションで観測した報酬の ID と上記状態を保持し、
+取得後に `items` から消えた報酬も `claimed` として確認できる。履歴に報酬の中身は含めない。
+`claimable` は現在の有効ボタンの有無であり、ポーション枠など取得条件の保証ではない。
+
+`reward_id` はプロセスごとのランダム epoch と単調番号から生成する。
+シード・抽選・メモリアドレスとは無関係で、同じ画面の同じ Reward オブジェクトに対して固定。
+他の報酬取得で index が詰まっても残存 ID は変わらない。
+報酬画面の終了、マップの開封、別の報酬画面、ランの変更で登録を破棄し、再起動でも別 epoch となる。
+一時的なカード三択・デッキ選択・一時停止の表示だけでは親セッションを破棄しない。
+
+| selection_state | 意味 |
+|---|---|
+| `unopened` | 画面生成から追跡できた未開封の報酬 |
+| `opened` | 開封・選択中。操作送信だけで取得済みにはしない |
+| `skipped` | Skip の選択結果と親の RewardSkipped 通知を観測。親は未消費で再開封可能 |
+| `claimed` | 親の RewardClaimed 通知を観測。カード取得と alternative による完了は last_selection で区別 |
+| `unknown` | 観測欠落、中断、選択失敗等。未閲覧／完了へ決め打ちしない |
+
+`skipped` は selection_state が `skipped` のとき true。
+`reward_consumed` は `claimed` で true、`skipped` で false、それ以外は null（または欠落）。
+`last_selection` は `card` / `skip` / `alternative` / `direct` / `interrupted` / `unknown` 等。
+`last_option_id` に `Skip` / `SACRIFICE` / `REROLL` 等の表示中の option ID が入る。
+REROLL は同じ親のまま `opened` に戻り、SACRIFICE は親の完了通知が来るまでは完了にしない。
+手動の再開封は許可し、再開封すると `opened` になる。GET は Skip 状態を消去せず、報酬を選択／完了しない。
+
+`card_reward.parent_reward_id` は対応する親 ID（親を特定できない直接表示では null／欠落）。
+`card_reward.selection_state` も追加する。対応が不明なら `unknown`。
+未開封カードの中身、次の報酬、生成候補・抽選結果の先読みは追加しない。
+Markdown にも ID・revision・選択状態・親 ID を表示する。新項目のない入力も表示できる。
+
 ### `card_reward` — Card Reward Selection
 
 Pick one card to add to your deck. Appears after claiming a card reward, or directly during events (e.g. Draft modifier at Neow).
@@ -1406,19 +1442,35 @@ Confirm the in-combat hand card selection.
 
 ### `claim_reward`
 
-Claim a reward from the rewards screen.
+現在の報酬画面で ID を解決して操作を送る。推奨は ID 指定。
 
 ```json
-{ "action": "claim_reward", "index": 0 }
+{ "action": "claim_reward", "reward_id": "<rewards.items[].reward_id>", "wait": true }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `index` | int | Yes | 0-based reward index |
+| `reward_id` | string | ID または index | 現在の画面の有効報酬 ID。推奨 |
+| `index` | int | ID または index | 互換の現在一覧の 0 始まり位置。別名 `reward_index` |
+| `screen_revision` | string | No | state の値をそのまま送る。古い値は ID 指定でも拒否 |
 
-Gold, potion, and relic rewards are claimed immediately. Card rewards open the `card_reward` screen.
+存在しない／別画面／取得済み／現在無効な ID はエラー。index へのフォールバックはしない。
+ID と index を併記して別の報酬を指す場合もエラー。revision + index で古い一覧を検出できる。
+**revision なしの旧 index 要求は古いか識別できず、現在位置として実行する。完全な安全保証はない。**
+ポーション満杯のエラーは維持する。金・ポーション・レリック等は直接取得を開始し、card は三択を開く。
+`special_card` は特定カードの直接取得であり、card の三択とは別の報酬。
 
-**Note:** Claiming a reward may change indices of remaining rewards.
+成功応答の `status:ok` と `action_stage:submitted` は操作送信を表し、取得完了の保証ではない。
+claim 応答に `reward_id` / `screen_revision`、カード選択／alternative 応答に `parent_reward_id` を追加する。
+`wait:true` では UI の解決待ち後に `outcome_observed` / `selection_state` / `reward_consumed` を付ける。
+`claimed` または `skipped` を確認できた場合のみ `action_stage:resolved` と
+`claimable` / `selection_closed` を出す。タイムアウト・観測欠落・セッション終了時は成功を取得完了へ読み替えず、
+`outcome_observed:false` とし、消費状態は不明にする。`settled:true` だけも取得完了を保証しない。
+開封された三択・デッキ選択は入力待ちであり、その入力を待つためにサーバの settle 待ちを継続しない。
+
+出典: `NRewardButton.GetReward`、`NRewardsScreen.RewardCollectedFrom / RewardSkippedFrom`、
+`CardReward.OnSelect / Populate`、`NCardRewardSelectionScreen.OptionSelected`、
+`CardRewardAlternative.Generate`、`SpecialCardReward.OnSelect`。
 
 ### `select_card_reward`
 
@@ -1434,7 +1486,13 @@ Pick a card from the card reward selection screen.
 
 ### `skip_card_reward`
 
-Skip the card reward (if a skip/bowl option is available).
+表示中の `Skip` option を選ぶ。カード三択を閉じ、親報酬は未消費で残り得る。
+SACRIFICE や他の alternative の代用にはしない。
+応答の `closes_selection_without_consuming_reward:true` は UI option の動作契約を表す。
+実際の完了確認は `wait:true` 後の `outcome_observed:true` / `selection_closed:true` /
+`reward_consumed:false` と同じ `parent_reward_id` で行う。待機なしの `submitted` は送信段階。
+自動進行側は同じ親 ID の `skipped` を自動再開封対象から外し、他の報酬は個別に処理する。
+明示的な再開封は可能。新項目のない旧 state は unknown と扱う。
 
 ```json
 { "action": "skip_card_reward" }

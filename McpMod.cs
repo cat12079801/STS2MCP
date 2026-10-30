@@ -206,6 +206,7 @@ public static partial class McpMod
         {
             // Optional settings UI patches should not block the HTTP bridge itself.
             TryApplyHarmonyPatches();
+            InstallRewardTracking();
 
             // Connect to main thread process frame for action execution
             var tree = (SceneTree)Engine.GetMainLoop();
@@ -251,6 +252,7 @@ public static partial class McpMod
 
     private static void ProcessMainThreadQueue()
     {
+        RewardObservation(RefreshRewardRun);
         int processed = 0;
         while (_mainThreadQueue.TryDequeue(out var action) && processed < 10)
         {
@@ -918,7 +920,14 @@ public static partial class McpMod
 
         // Waiting on an action the game rejected would just burn the whole timeout.
         if (result.GetValueOrDefault("status") as string == "ok")
+        {
             AppendSettleResult(result, before, timeoutMs, includeState);
+            if (result.ContainsKey("reward_id") || result.ContainsKey("parent_reward_id"))
+            {
+                try { RunOnMainThreadBlocking(() => { AppendRewardActionOutcome(result); return true; }); }
+                catch (MainThreadUnavailableException) { result["outcome_observed"] = false; }
+            }
+        }
 
         return result;
     }

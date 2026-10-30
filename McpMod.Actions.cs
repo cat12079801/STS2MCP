@@ -834,20 +834,27 @@ public static partial class McpMod
     private static Dictionary<string, object?> ExecuteClaimReward(Dictionary<string, JsonElement> data)
     {
         var overlay = NOverlayStack.Instance?.Peek();
-        if (overlay is not NRewardsScreen rewardsScreen)
+        if (IsMapScreenOpenOrVisible() || overlay is not NRewardsScreen rewardsScreen)
             return Error("Rewards screen is not open");
 
-        if (!TryGetIntParam(data, out int index, "index", "reward_index"))
-            return MissingIntParam("reward index", "index", "reward_index");
-
-        var enabledButtons = FindAll<NRewardButton>(rewardsScreen)
-            .Where(b => b.IsEnabled && b.Reward != null)
-            .ToList();
-
-        if (index < 0 || index >= enabledButtons.Count)
-            return Error($"Reward index {index} out of range (screen has {enabledButtons.Count} claimable rewards)");
-
-        var button = enabledButtons[index];
+        var enabledButtons = GetRewardButtons(rewardsScreen);
+        string? rewardId = TryReadStringParam(data, "reward_id");
+        string? revision = TryReadStringParam(data, "screen_revision");
+        if (data.ContainsKey("reward_id") && string.IsNullOrWhiteSpace(rewardId))
+            return Error("reward_id must be a non-empty string");
+        if (data.ContainsKey("screen_revision") && string.IsNullOrWhiteSpace(revision))
+            return Error("screen_revision must be a non-empty string from rewards state");
+        bool hasIndex = data.ContainsKey("index") || data.ContainsKey("reward_index");
+        int? index = null;
+        if (hasIndex)
+        {
+            if (!TryGetIntParam(data, out int parsedIndex, "index", "reward_index"))
+                return MissingIntParam("current reward index", "index", "reward_index");
+            index = parsedIndex;
+        }
+        var error = _rewardSession.Resolve(rewardId, index, revision, out var entry);
+        if (error != null) return Error(error);
+        var button = enabledButtons.First(b => ReferenceEquals(b.Reward, entry!.Key));
         var reward = button.Reward!;
         string rewardDesc = GetRewardTypeName(reward);
         if (reward is GoldReward g)
@@ -873,7 +880,10 @@ public static partial class McpMod
         return new Dictionary<string, object?>
         {
             ["status"] = "ok",
-            ["message"] = $"Claiming reward: {rewardDesc}"
+            ["message"] = $"Claiming reward: {rewardDesc}",
+            ["reward_id"] = entry!.Id,
+            ["action_stage"] = "submitted",
+            ["screen_revision"] = _rewardSession.Revision
         };
     }
 
@@ -892,11 +902,14 @@ public static partial class McpMod
 
         var holder = cardHolders[cardIndex];
         string cardName = SafeGetText(() => holder.CardModel?.Title) ?? "unknown";
+        var parent = GetCardRewardParent(cardScreen);
         holder.EmitSignal(NCardHolder.SignalName.Pressed, holder);
 
         return new Dictionary<string, object?>
         {
             ["status"] = "ok",
+            ["parent_reward_id"] = parent?.Id,
+            ["action_stage"] = "submitted",
             ["message"] = $"Selecting card: {cardName}"
         };
     }
@@ -978,11 +991,20 @@ public static partial class McpMod
         if (!button.IsEnabled)
             return Error($"Alternative '{alternatives[index].GetValueOrDefault("option_id")}' is disabled");
 
+        var parent = GetCardRewardParent(cardScreen);
+        var uiOptions = GetInstanceFieldValue(cardScreen, "_extraOptions")
+            as System.Collections.Generic.IReadOnlyList<MegaCrit.Sts2.Core.Entities.CardRewardAlternatives.CardRewardAlternative>;
+        bool? closesWithoutConsuming = uiOptions != null && index < uiOptions.Count
+            ? uiOptions[index].AfterSelected == MegaCrit.Sts2.Core.Entities.Rewards.PostAlternateCardRewardAction.EndSelectionAndDoNotCompleteReward
+            : null;
         button.ForceClick();
 
         return new Dictionary<string, object?>
         {
             ["status"] = "ok",
+            ["parent_reward_id"] = parent?.Id,
+            ["action_stage"] = "submitted",
+            ["closes_selection_without_consuming_reward"] = closesWithoutConsuming,
             ["message"] = $"Taking card reward alternative: {alternatives[index].GetValueOrDefault("title") ?? alternatives[index].GetValueOrDefault("option_id")}",
             ["option_id"] = alternatives[index].GetValueOrDefault("option_id")
         };

@@ -49,6 +49,7 @@
   </Target>
 
   <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
     <Reference Include="sts2">
       <HintPath>$(STS2GameDataDir)/sts2.dll</HintPath>
       <Private>false</Private>

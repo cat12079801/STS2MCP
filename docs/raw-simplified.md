@@ -224,8 +224,15 @@ When `mode` is `upgrade_select`, each selectable card with an upgrade left carri
 
 | Action | Parameters | When to Use |
 |---|---|---|
-| `claim_reward` | `index`: int | Claim a reward. Card rewards open the `card_reward` screen. |
+| `claim_reward` | `reward_id`: string (推奨)、または `index`: int + `screen_revision`: string | 現在の有効報酬を指定。古い revision、ID/index の矛盾、無効 ID はエラー。revision なしの旧 index は現在位置として互換受理。card は三択を開く。 |
 | `proceed` | _(none)_ | Leave the rewards screen. |
+
+各 item に `reward_id` / `selection_state` / `claimable` / `skipped` /
+`reward_consumed` / `last_selection` / `last_option_id` を追加。
+`rewards.screen_revision` は一覧と選択状態の版、`selection_history` は同じ画面内の取得済みを含む ID と状態。
+ID は金取得で index が詰まっても固定。画面終了・マップ表示・別報酬画面・ラン変更で破棄し、再起動でも無効になる。
+`selection_state` は `unopened / opened / skipped / claimed / unknown`。観測欠落は unknown。
+既存キーの変更はなく、schema は 3 のまま。詳細は raw-full.md の報酬 ID 契約を参照。
 
 ### Card Reward (`card_reward`)
 
@@ -236,6 +243,13 @@ When `mode` is `upgrade_select`, each selectable card with an upgrade left carri
 | `select_card_reward_alternative` | `option_id`: string (or `index`: int) | Take one of the card reward's alternative options, listed in state under `card_reward.alternatives`. `Skip` is one; relics add others (Pael's Wing adds `SACRIFICE`, which turns the reward into progress towards a relic — skipping does **not** count as sacrificing). |
 
 Each offered card with an upgrade left carries `upgrade_preview`, so the upgraded form can weigh into the pick.
+
+`card_reward.parent_reward_id` と `selection_state` で親報酬を識別する（不明なら null／unknown）。
+Skip は三択を閉じるが親報酬を消費しない。応答に親 ID と
+`closes_selection_without_consuming_reward:true` を追加。`action_stage:submitted` は送信段階で、
+`wait:true` 後に `outcome_observed:true` / `selection_closed:true` / `reward_consumed:false` を確認する。
+Skip 後も `claimable:true, skipped:true` となり再開封できる。
+SACRIFICE の完了、REROLL の継続、中断はそれぞれ別に記録する。GET では状態を消去しない。
 
 ### Map (`map`)
 
