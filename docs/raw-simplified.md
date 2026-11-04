@@ -72,6 +72,13 @@ Every card object carries `is_upgraded`, `is_upgradable`, `upgrade_level` and `m
 | `game_over` | Run ended | `menu_select` with `main_menu` |
 | `overlay` | Unhandled overlay (catch-all, prevents soft-lock) | None (manual interaction needed) |
 
+`menu_screen: "popup"` では、縦型ポップアップの表示タイトルを `message`、本文を `body` に返す。
+現在のゲーム言語・書式展開後の文字列で、リッチテキストのタグは除去する。Markdown にも両方を表示する。
+読み取り失敗は該当項目だけを省略し、`warnings` の `menu.popup.message` / `menu.popup.body` に記録する。
+欠落は unknown と扱い、選択肢は現在の `options` を参照する。ボタンだけを検出した場合は従来どおり
+`message: "Popup active."` / `body: null`。取得修正・表示追加なので schema は 3 のまま。
+[文言例・出典・契約](raw-full.md#popup--確認ポップアップの表示文言schema-3) を参照。
+
 **Note:** `use_potion` and `discard_potion` work during any state where potions are accessible (combat, map, events, etc.).
 
 **Note:** the settings screen is reported as `state_type: menu`, `menu_screen: "settings"` wherever it is

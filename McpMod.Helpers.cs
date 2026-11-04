@@ -254,6 +254,26 @@ public static partial class McpMod
         return null;
     }
 
+    private static System.Reflection.PropertyInfo? GetInstanceProperty(object source, string propertyName)
+    {
+        const System.Reflection.BindingFlags Flags =
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.DeclaredOnly;
+
+        // Private properties on a base class are not returned by GetProperty on a
+        // derived type, even with NonPublic (for example NErrorPopup : NVerticalPopup).
+        for (var type = source.GetType(); type != null; type = type.BaseType)
+        {
+            var property = type.GetProperty(propertyName, Flags);
+            if (property != null)
+                return property;
+        }
+
+        return null;
+    }
+
     private static void AddMenuOptionIfVisible(
         List<Dictionary<string, object?>> options,
         object owner,
@@ -736,8 +756,19 @@ public static partial class McpMod
 
         var state = NewStateResult("menu");
         state["menu_screen"] = "popup";
-        state["message"] = popup != null ? GetVerticalPopupText(popup, "TitleLabel") ?? "Popup active." : "Popup active.";
-        state["body"] = popup != null ? GetVerticalPopupText(popup, "BodyLabel") : null;
+        if (popup != null)
+        {
+            var title = GetVerticalPopupText(popup, "TitleLabel", "message");
+            var body = GetVerticalPopupText(popup, "BodyLabel", "body");
+            if (title != null) state["message"] = title;
+            if (body != null) state["body"] = body;
+        }
+        else
+        {
+            // Button-only modals do not necessarily have NVerticalPopup labels.
+            state["message"] = "Popup active.";
+            state["body"] = null;
+        }
         state["options"] = stateOptions;
         return state;
     }
@@ -859,10 +890,28 @@ public static partial class McpMod
         options.Add((name, button!));
     }
 
-    private static string? GetVerticalPopupText(NVerticalPopup popup, string propertyName)
+    private static string? GetVerticalPopupText(NVerticalPopup popup, string propertyName, string stateField)
     {
-        var label = popup.GetType().GetProperty(propertyName)?.GetValue(popup);
-        return GetNodeText(label);
+        try
+        {
+            var property = GetInstanceProperty(popup, propertyName)
+                ?? throw new MissingMemberException(typeof(NVerticalPopup).FullName, propertyName);
+            var label = property.GetValue(popup);
+            // Read Text directly here so a failed getter is reported against this
+            // field, rather than swallowed by the optional-name probes in GetNodeText.
+            var text = label switch
+            {
+                Label title => title.Text,
+                RichTextLabel body => body.Text,
+                _ => throw new InvalidOperationException($"{propertyName} is not an initialized text label")
+            };
+            return StripRichTextTags(text);
+        }
+        catch (Exception ex)
+        {
+            Warn($"menu.popup.{stateField}", ex);
+            return null;
+        }
     }
 
     private static string? GetPopupButtonLabel(NPopupYesNoButton button)

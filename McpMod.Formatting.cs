@@ -239,6 +239,12 @@ public static partial class McpMod
             sb.AppendLine(msg.ToString());
         sb.AppendLine();
 
+        if (screen == "popup" && state.TryGetValue("body", out var body) && body != null)
+        {
+            sb.AppendLine(body.ToString());
+            sb.AppendLine();
+        }
+
         // MP lobby block — ready/ascension/roster — same shape on character_select and load_lobby
         if (state.TryGetValue("lobby", out var lobbyObj) &&
             lobbyObj is Dictionary<string, object?> lobby)

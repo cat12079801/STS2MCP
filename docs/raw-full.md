@@ -318,7 +318,7 @@ Used for both player `status` and enemy `status`.
 
 ### `menu`
 
-No run in progress.
+No run in progress, or a blocking menu/popup shown during a run.
 
 ```jsonc
 {
@@ -346,6 +346,44 @@ Menu sub-screens expose their own options:
 - `timeline`: `advance`, `back`
 
 The `multiplayer` submenu is gated on whether a multiplayer save exists: with no save, `host` is shown and `load` / `abandon` are hidden; with a save, those are shown and `host` is hidden. `abandon` opens a vertical popup — the next state turn surfaces the popup's `confirm` / `cancel` options, not a transition.
+
+#### `popup` — 確認ポップアップの表示文言（schema 3）
+
+`NVerticalPopup` の画面上のタイトルを `message`、本文を `body` に返す。
+ゲームの現在の言語・書式展開後のラベルから読み、リッチテキストのタグを除去する。
+Markdown もタイトル、本文、選択肢の順で表示する。
+
+```jsonc
+{
+  "state_type": "menu",
+  "menu_screen": "popup",
+  "message": "ゲーム終了",
+  "body": "本当に終了しますか？",
+  "options": [
+    { "name": "はい", "enabled": true },
+    { "name": "いいえ", "enabled": true }
+  ]
+}
+```
+
+これは日本語の終了確認の文言例で、実機取得の fixture ではない。
+`message` / `body` は省略されることがあるため、存在を確認して読むこと。
+縦型ポップアップの読み取りが失敗した場合、その項目だけを省略し、
+`warnings` に `menu.popup.message` または `menu.popup.body` を記録する。
+もう一方の文言と選択肢は維持する。空文字列を正常に読めた場合はそのまま返す。
+`NVerticalPopup` を特定できずボタンだけを見つけた場合は、従来どおり
+`message: "Popup active."` / `body: null` を返す。この場合も確認の種類は不明と扱う。
+選択肢は表示ラベルを正規化した名前なので、現在の `options` を使う。
+肯定の選択肢を自動で押すことはない。
+
+出典: `NVerticalPopup.EnsureNodesAreSet` は private の `TitleLabel` / `BodyLabel` に
+`Header` / `Description` を設定し、`SetText(LocString, LocString)` は
+`GetFormattedText()` の結果をラベルに設定する。
+終了確認は `NMainMenu.ConfirmAndQuit` → `NGenericPopup.WaitForConfirmation`、
+ラン放棄の確認は `NPauseMenu.OnGiveUpButtonPressed` → `NAbandonRunConfirmPopup._Ready`。
+終了確認の上記文言は `localization/jpn/main_menu_ui.json` の
+`QUIT_CONFIRM_POPUP.header` / `.body`、ボタンは `GENERIC_POPUP.confirm` / `.cancel` に基づく。
+既存の文言欄の取得修正と Markdown への表示追加なので schema は 3 のまま。
 
 #### `multiplayer_join` — Friend list / FastMP
 
