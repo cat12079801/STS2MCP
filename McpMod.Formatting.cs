@@ -126,7 +126,7 @@ public static partial class McpMod
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
                 string used = r.GetValueOrDefault("used_up") is true ? " (used)" : "";
                 string melted = r.GetValueOrDefault("melted") is true ? " (melted)" : "";
-                return $"- **{r["name"]}**{counter}{used}{melted}: {r["description"]}";
+                return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}: {r["description"]}";
             });
             FormatPotionsSection(sb, topPlayer);
             FormatMasterDeckMarkdown(sb, topPlayer);
@@ -406,7 +406,7 @@ public static partial class McpMod
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
                 string used = r.GetValueOrDefault("used_up") is true ? " (used)" : "";
                 string melted = r.GetValueOrDefault("melted") is true ? " (melted)" : "";
-                return $"- **{r["name"]}**{counter}{used}{melted}: {r["description"]}";
+                return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}: {r["description"]}";
             });
             FormatPotionsSection(sb, player);
 

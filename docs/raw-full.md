@@ -194,6 +194,26 @@ from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for exampl
 `LizardTail.WasUsed` sets that status when consumed. These booleans do not claim to
 encode every reason a relic can be disabled.
 
+### レリックの戦闘中状態（追加、schema 3）
+
+`player.relics[]` の対象レリックに `combat_state` を追加する。
+生きた戦闘と PlayerCombatState がある間だけ出し、戦闘外・対象外では省略する。
+単体とマルチのローカル player は共通の実装。例えば百年パズルは
+`"combat_state": {"used_this_combat": false}` が、初回の非ブロックダメージ後に true になる。
+戦闘単位の消費は、ラン単位の `used_up` から独立している。
+
+クラス別の許可リストにある bool / int / decimal だけを読み、false / 0 も出す。
+公開 getter を優先し、private フィールドは名前・型を指定して読む。
+private フィールドが読めなければキーを省略し、`warnings` に
+`player.relics.<ID>.combat_state.<key>` を記録する。欠落は unknown と扱うこと。
+追加項目なので schema は 3 のまま。旧 MOD・旧 dump は項目を持たない。
+Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付ける。
+虹の指輪は各種別の枚数と発動数、肉兵は cooldown、脈打つ亡骸は HP 損失累積を表示する。
+
+全項目名・意味・戻る時機と、出す／出さない判断のソース出典は
+[レリックの戦闘中の内部状態](relic-combat-state.md) を参照。
+解決中のフック間では過渡的な値が見え得るため、行動計画は解決後の snapshot を使う。
+
 ### Card Object (in hand)
 
 ```jsonc

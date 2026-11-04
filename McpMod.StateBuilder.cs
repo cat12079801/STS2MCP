@@ -1565,7 +1565,7 @@ public static partial class McpMod
         var relics = new List<Dictionary<string, object?>>();
         foreach (var relic in player.Relics)
         {
-            relics.Add(new Dictionary<string, object?>
+            var relicState = new Dictionary<string, object?>
             {
                 ["id"] = relic.Id.Entry,
                 ["name"] = SafeGetText(() => relic.Title),
@@ -1574,7 +1574,14 @@ public static partial class McpMod
                 ["used_up"] = relic.IsUsedUp,
                 ["melted"] = relic.IsMelted,
                 ["keywords"] = BuildHoverTips(relic.HoverTipsExcludingRelic)
-            });
+            };
+            if (inCombat)
+            {
+                var relicCombatState = BuildRelicCombatState(relic);
+                if (relicCombatState.Count > 0)
+                    relicState["combat_state"] = relicCombatState;
+            }
+            relics.Add(relicState);
         }
         state["relics"] = relics;
 
