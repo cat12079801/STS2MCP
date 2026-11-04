@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.HoverTips;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
@@ -1575,6 +1576,15 @@ public static partial class McpMod
                 ["melted"] = relic.IsMelted,
                 ["keywords"] = BuildHoverTips(relic.HoverTipsExcludingRelic)
             };
+            try
+            {
+                relicState["vars"] = ReadRelicDynamicVarValues(relic);
+            }
+            catch (Exception ex)
+            {
+                // 読取／初期化／JIT の失敗は、このレリックの vars だけに留める。
+                Warn($"player.relics.{relic.Id.Entry}.vars", ex);
+            }
             if (inCombat)
             {
                 try
@@ -1855,6 +1865,20 @@ public static partial class McpMod
         }
 
         return previews;
+    }
+
+    // カードの対象別 values と同じ名前→数値の形。レリックはプレビューを更新せず、
+    // 現在の BaseValue を小数のまま読む（例: BowlerHat.GoldIncrease = 1.25）。
+    // StringVar の基底値 0 は文字列のダミーなので出さない。
+    private static Dictionary<string, object?> ReadRelicDynamicVarValues(RelicModel relic)
+    {
+        var values = new Dictionary<string, object?>();
+        foreach (var (name, dynamicVar) in relic.DynamicVars)
+        {
+            if (dynamicVar is not StringVar)
+                values[name] = dynamicVar.BaseValue;
+        }
+        return values;
     }
 
     /// <summary>

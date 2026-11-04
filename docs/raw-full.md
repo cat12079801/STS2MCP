@@ -162,6 +162,7 @@ Always present at the top level (except `menu`). Contains everything about the l
       "id": "BURNING_BLOOD",
       "name": "Burning Blood",
       "description": "At the end of combat, heal 6 HP.",
+      "vars": { "Heal": 6 }, // DynamicVar name -> numeric BaseValue (decimals preserved)
       "counter": null,       // Number if relic shows a counter, null otherwise
       "used_up": false,      // RelicModel.IsUsedUp: the relic has been used up
       "melted": false,       // RelicModel.IsMelted: a separate melted-wax state
@@ -193,6 +194,36 @@ notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint co
 from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for example,
 `LizardTail.WasUsed` sets that status when consumed. These booleans do not claim to
 encode every reason a relic can be disabled.
+
+### レリックの数値変数（追加、schema 3）
+
+`player.relics[]` の各所有レリックに `vars`（変数名 → JSON 数値）を追加する。
+戦闘中・戦闘外、単独・マルチのローカル player に共通の `BuildPlayerState` から出す。
+例: 骨付き肉は `"vars": {"HpThreshold": 50, "Heal": 12}`、
+バーニングブラッドは `{"Heal": 6}`、ブラックブラッドは `{"Heal": 12}`。
+変数名はゲームの `DynamicVars` のキーをそのまま使い、ローカライズしない。
+
+カードの `vs_targets[].values` と同じ名前 → 数値のオブジェクトだが、
+レリックではプレビューの整数値ではなく、現在の `DynamicVar.BaseValue`（decimal）を
+丸めずに読む。例えば `BowlerHat` の `GoldIncrease` は `1.25`、
+`UndyingSigil` の `DamageDecrease` は `0.5`。本文では百分率などに整形されることがある。
+残り回数などゲームが更新する値も含み、初期定数だけの一覧ではない
+（例: `WingedBoots.TimesUsed` が更新する `Rooms`）。数値を読むために
+プレビュー更新・ゲームのフック・RNG・setter を呼ばない。
+
+`StringVar` は表示文字列で、継承した `BaseValue` の 0 はダミーのため除く。
+数値変数がない、または文字列だけなら `vars: {}`。
+初期化・列挙・数値読み取りが失敗した場合は、そのレリックの `vars` 全体だけを省略し、
+`warnings` に `player.relics.<ID>.vars` を記録する。部分的な一覧や代用の 0 は返さない。
+欠落は unknown と扱い、空オブジェクトと区別する。旧 MOD にもこの項目はない。
+追加項目なので schema は 3 のまま。Markdown は既存の本文表示を使う。
+
+出典（sts2-9cb4f1ad）: `RelicModel.DynamicVars / CanonicalVars / DynamicDescription`、
+`DynamicVar.BaseValue / IntValue / PreviewValue`、`DynamicVarSet.GetEnumerator / InitializeWithOwner`、
+`StringVar` のコンストラクタと `ToString`、各レリックの `CanonicalVars`。
+回復量と条件は `MeatOnTheBone.WillHealOnCombatFinished / AfterCombatVictoryEarly`、
+`BurningBlood.AfterCombatVictory`、`BlackBlood.AfterCombatVictory`、
+倍率は `BowlerHat.ModifyGoldGained`、`UndyingSigil.ModifyDamageMultiplicative` を参照。
 
 ### レリックの戦闘中状態（追加、schema 3）
 

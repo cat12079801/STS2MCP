@@ -178,6 +178,8 @@ async def get_game_state(format: str = "markdown") -> str:
     """Get the current Slay the Spire 2 game state.
 
     Returns the full game state including player stats, hand, enemies, potions, etc.
+    所有レリックは戦闘中・戦闘外とも vars（変数名→数値の現在の BaseValue）を含む。
+    小数は保持し表示文字列は除外する。取得失敗時は vars を省略して warnings に記録する。
     During combat, allowlisted owned relics also include combat_state (usage flags
     and counters); absent fields are unknown, not false. Markdown adds short notes.
     The state_type field indicates the current screen (combat, map, event, shop,
