@@ -1577,9 +1577,17 @@ public static partial class McpMod
             };
             if (inCombat)
             {
-                var relicCombatState = BuildRelicCombatState(relic);
-                if (relicCombatState.Count > 0)
-                    relicState["combat_state"] = relicCombatState;
+                try
+                {
+                    var relicCombatState = BuildRelicCombatState(relic);
+                    if (relicCombatState.Count > 0)
+                        relicState["combat_state"] = relicCombatState;
+                }
+                catch (Exception ex)
+                {
+                    // 型や公開 getter の変更による呼び出し／JIT の失敗も、この項目に留める。
+                    Warn($"player.relics.{relic.Id.Entry}.combat_state", ex);
+                }
             }
             relics.Add(relicState);
         }

@@ -24,6 +24,9 @@
 private 値の読取失敗・フィールド削除・型変更では該当キーを省略し、既存の
 `warnings` に `player.relics.<ID>.combat_state.<key>` を記録する。
 全キーの読取に失敗した場合は `combat_state` 自体も省略する。
+呼び出し側も例外を捕捉し、型・公開 getter の変更等で読み取り全体が失敗した場合は
+`combat_state` を省略して `warnings` の `player.relics.<ID>.combat_state` に記録する。
+そのレリックの基本情報や player の他の項目の構築は続ける。
 欠落を false / 0 と解釈しないこと。
 
 Markdown は `(used this combat: yes)`、`(used this turn: no)`、
@@ -46,11 +49,11 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | 百年パズル `CentennialPuzzle` | `used_this_combat` ← 公開 `UsedThisCombat` (`_usedThisCombat`) | 初回の非ブロックダメージによるドローの消費。`AfterDamageReceived` で true、`AfterCombatEnd` で false。 |
 | 虹の指輪 `RainbowRing` | `attacks_played_this_turn` ← `_attacksPlayedThisTurn`、`skills_played_this_turn` ← `_skillsPlayedThisTurn`、`powers_played_this_turn` ← `_powersPlayedThisTurn`、`activation_count_this_turn` ← `_activationCountThisTurn` | 未達のカード種別と発動済みかを判別。`AfterCardPlayed` は発動回数が 1 未満の間だけ加算するため、発動後の総プレイ枚数ではない。所有者が参加する `BeforeSideTurnStart` と `AfterCombatEnd` で全値 0。 |
 | 永久氷晶 `Permafrost` | `activated_this_combat` ← `_activatedThisCombat` | 初回パワーの 7 ブロック消費。`AfterCardPlayed` で true。`AfterRoomEntered` の CombatRoom 入室で false（終了時リセットはない）。 |
-| 孫子兵法 `ArtOfWar` | `any_attacks_played_this_turn` ← `_anyAttacksPlayedThisTurn`、`any_attacks_played_last_turn` ← `_anyAttacksPlayedLastTurn` | 次のエナジー加算条件。`AfterCardPlayed`、`AfterSideTurnEnd` で当手番から前手番へ移す。`AfterEnergyReset` は 2 手番目以降に加算判定後、両方 false。`AfterCombatEnd` も両方 false。前手番フラグ true 中の `AfterCardPlayed` は早期 return するので一般的なプレイ履歴として扱わない。 |
+| 孫子兵法 `ArtOfWar` | `any_attacks_played_this_turn` ← `_anyAttacksPlayedThisTurn`、`any_attacks_played_last_turn` ← `_anyAttacksPlayedLastTurn` | エナジー加算判定用の内部フラグ。`AfterCardPlayed`、`AfterSideTurnEnd` で当手番から前手番へ移す。`AfterEnergyReset` は 2 手番目以降に加算判定後、両方 false。`AfterCombatEnd` も両方 false。**所有者が行動を選ぶ時点の `any_attacks_played_last_turn` は常に false**（初手番は初期値、以降は `CombatManager.SetupPlayerTurn` の `AfterEnergyReset` で消費済み）。次の手番のエナジー加算条件には `any_attacks_played_this_turn` を使う。前手番フラグ true 中の `AfterCardPlayed` は早期 return するので一般的なプレイ履歴として扱わない。 |
 | パエルの涙 `PaelsTears` | `had_leftover_energy` ← `_hadLeftoverEnergy` | 前回の所有者手番終了時の余剰エナジー有無。`BeforeSideTurnEnd` で上書き、`AfterSideTurnStart` の加算判定に利用。加算後も true が残り得る（未受領を意味しない）。`AfterCombatEnd` で false。 |
 | ヴァンプレイス `Vambrace` | `block_gained_this_combat` ← `_blockGainedThisCombat` | 初回のカードのブロック倍化が消費されたか。`ModifyBlockMultiplicative`／`AfterModifyingBlockAmount`／`AfterCardPlayed`。`BeforeCombatStart` と `AfterCombatEnd` で false。 |
 | 悪魔の舌 `DemonTongue` | `triggered_this_turn` ← `_triggeredThisTurn` | 所有者側手番中の初回非ブロックダメージの回復が消費されたか。`AfterDamageReceived` で true、所有者が参加する `BeforeSideTurnStart` で false。終了フックによるリセットはない。 |
-| 懐中時計 `Pocketwatch` | `cards_played_last_turn` ← `_cardsPlayedLastTurn` | `ModifyHandDraw` の 3 枚以下判定。所有者が参加する `BeforeSideTurnStart` で当手番数を前手番数に移し、当手番数を 0 にする。`AfterCombatEnd` で両方 0。当手番数は既存 `counter` を使う。 |
+| 懐中時計 `Pocketwatch` | `cards_played_last_turn` ← `_cardsPlayedLastTurn` | `ModifyHandDraw` の 3 枚以下判定。所有者が参加する `BeforeSideTurnStart` で当手番数を前手番数に移し、当手番数を 0 にする。`AfterCombatEnd` で両方 0。**行動を選ぶ時点の `cards_played_last_turn` は、すでに配り終えた今の手札のドロー判定に使われた値**（初手番は判定対象外）。`CombatManager.StartTurn` の `BeforeSideTurnStart` 後、`SetupPlayerTurn` が `AfterEnergyReset` → `BeforeHandDraw` → `ModifyHandDraw` → Draw の順で処理する。次の手番のドロー判定には当手番数の既存 `counter`（`_cardsPlayedThisTurn`）を使う。 |
 | 赤い頭蓋骨 `RedSkull` | `strength_applied` ← `_strengthApplied` | このレリック由来の筋力が付与済みか。総筋力からは分離できない。`ModifyStrengthIfNecessary`（`AfterRoomEntered`／`AfterCurrentHpChanged`）で HP 閾値に応じ加除し、`AfterCombatEnd` で false。 |
 | ベルトの留め具 `BeltBuckle` | `dexterity_applied` ← `_dexterityApplied` | このレリック由来の敏捷が付与済みか。`ApplyDexterity`／`RemoveDexterity`、ポーション取得・破棄・使用フックで変化。`BeforeCombatStart` と `AfterCombatVictory` で false にする。`AfterCombatEnd` は表示更新のみ。 |
 | 護摩木 `BurningSticks` | `used_this_combat` ← `_wasUsedThisCombat` | 初回スキル廃棄のコピー作成が消費されたか。`AfterCardExhausted` で true、CombatRoom への `AfterRoomEntered` と `AfterCombatEnd` で false。 |
@@ -84,6 +87,20 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 
 全レリッククラスの private フィールド宣言と自動プロパティを横断して候補を再確認した。
 上記以外の保存カウンタ、外見、カード選択の保存データ、テスト用コスト上書きは対象外。
-実機での値変化・最新安定版との一致は未確認。実機確認は別途行う。
 解決中（`is_resolving: true`）は各フック間の状態が見え得るため、行動計画には解決後の
 snapshot を使う。これはゲームの全内部状態を復元する契約ではない。
+
+## 実機確認
+
+2026-11-04、調整役が MOD `d1c3a46`（schema 3）の単独プレイで確認した記録に基づく。
+
+- 百年パズル: 初回の HP 損失で `used_this_combat` が false→true、3 枚ドロー。
+  2 回目は true のままで追加ドローなし。Markdown の未使用時の注記も確認。
+- 虹の指輪: アタック→スキル→パワーで 4 値が `(1,0,0,0)` → `(1,1,0,0)` → `(1,1,1,1)`。
+  筋力・敏捷を各 +1。追加プレイ後も値は据え置き、次手番に全値 0。
+- 永久氷晶: 初回パワーで `activated_this_combat` が false→true、ブロック +7。
+  2 枚目では追加ブロックなし。次手番も true。
+- 戦闘終了後は `combat_state` を省略し、次戦闘では百年パズル false、虹の指輪全値 0、
+  永久氷晶 false。次戦闘開始時の `warnings` なし。
+
+今回の例外処理追加後の実機再確認、他のレリック、最新安定版との一致は未確認。
