@@ -65,6 +65,12 @@ same three values as `mod_version`, `mod_commit` and `schema_version`.
 
 If you get "Connection refused", the mod is not loaded — check that mods are enabled in the game's settings.
 
+#### 検証用の開発コンソール API
+
+既定は無効。MOD DLL と同じ場所の `STS2_MCP.conf` に `"dev_console_enabled": true` を
+追加して再起動すると、許可リスト内のコマンドを `dev_console` アクションで送れる。
+[設定・応答・許可リスト](docs/dev-console.md) を参照。検証用のランだけで使用する。
+
 ### 2. Give Your AI Instructions to Interact with the Game
 
 **Clone or download the repository**, then:

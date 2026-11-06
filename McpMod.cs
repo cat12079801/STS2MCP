@@ -167,7 +167,11 @@ public static partial class McpMod
             {
                 try
                 {
-                    var defaultConfig = new Dictionary<string, object> { ["port"] = DefaultPort };
+                    var defaultConfig = new Dictionary<string, object>
+                    {
+                        ["port"] = DefaultPort,
+                        ["dev_console_enabled"] = false
+                    };
                     // The config file is edited by hand, so it stays indented regardless of the API default.
                     string json = JsonSerializer.Serialize(defaultConfig, _jsonOptionsPretty);
                     File.WriteAllText(configPath, json);
@@ -182,6 +186,7 @@ public static partial class McpMod
 
             string content = File.ReadAllText(configPath);
             using var doc = JsonDocument.Parse(content);
+            ConfigureDevConsole(doc.RootElement);
             Recorder.CombatRecorder.Configure(doc.RootElement);
             if (doc.RootElement.TryGetProperty("port", out var portElem)
                 && portElem.TryGetInt32(out int port)
@@ -898,10 +903,15 @@ public static partial class McpMod
     /// </summary>
     private static Dictionary<string, object?> ExecuteWithOptionalWait(
         HttpListenerRequest request, Dictionary<string, JsonElement> parsed,
-        Func<Dictionary<string, object?>> action)
+        Func<Dictionary<string, object?>> action,
+        Action<Dictionary<string, object?>>? completeOnHttpThread = null)
     {
         if (!ReadFlagParam(parsed, request, "wait", false))
-            return EnsureStatus(RunOnMainThreadBlocking(action));
+        {
+            var immediate = RunOnMainThreadBlocking(action);
+            completeOnHttpThread?.Invoke(immediate);
+            return EnsureStatus(immediate);
+        }
 
         int timeoutMs = Math.Clamp(
             ReadOptionalInt(parsed, "wait_timeout_ms")
@@ -917,6 +927,9 @@ public static partial class McpMod
         catch { /* an unreadable pre-state only costs us the no-op shortcut */ }
 
         var result = EnsureStatus(RunOnMainThreadBlocking(action));
+        // Console tasks resume on the game's synchronization context. Only the HTTP worker
+        // may wait for them; completion must precede both the response and the settle polls.
+        completeOnHttpThread?.Invoke(result);
 
         // Waiting on an action the game rejected would just burn the whole timeout.
         if (result.GetValueOrDefault("status") as string == "ok")
@@ -1001,6 +1014,9 @@ public static partial class McpMod
         HttpListenerRequest request, HttpListenerResponse response,
         Dictionary<string, JsonElement> parsed, string action, long apiRequest, bool pretty)
     {
+        if (action == "dev_console")
+            return HandleDevConsole(request, response, parsed, apiRequest, pretty);
+
         // Revealing timeline epochs is a main-menu operation, so it must not require a run.
         if (action == "timeline_reveal_epochs")
         {

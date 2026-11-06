@@ -98,6 +98,19 @@ gameplay actions are refused with an error instead of being applied to the room 
 
 All POST requests use a JSON body with an `"action"` field.
 
+### 検証用の開発コンソール（既定は無効）
+
+`POST /api/v1/singleplayer` に
+`{"action":"dev_console","command":"card BURNING_PACT Draw","wait":true}` を送る。
+MOD DLL と同じ場所の `STS2_MCP.conf` に `"dev_console_enabled": true` を追加して再起動すると有効。
+省略・false・文字列の true は無効。検証用のランで使う。MCP ツールの追加はない。
+応答は `command`、`success`、`message`、`status` を含み、失敗時は `error` も返す。
+ゲームの Task は常に完了まで待ち、`wait: true` はその後に既存の状態安定待ちを行う。
+マルチプレイには提供しない。許可リスト外は実行しない。
+`remove` の実名は `remove_card`。設定・全許可名・拒否条件・出典は
+[開発コンソール API](dev-console.md) を参照。
+
+
 **Response contract — one shape for every POST.** Every POST response body carries a `status` field
 that is either `"ok"` or `"error"`. A client only needs that one key:
 
