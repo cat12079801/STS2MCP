@@ -3,9 +3,14 @@
 HTTP API on `localhost:15526`. No authentication.
 
 ローカルの非ブラウザクライアント向け。`Origin` がある要求は値を問わず 403、
+Origin がなくても `Sec-Fetch-Site` / `Sec-Fetch-Mode` / `Sec-Fetch-Dest` のいずれか、
+または `Referer` があれば空値も含めて 403（`<img>`・no-cors fetch の GET も対象）。
 Host は `127.0.0.1:<port>` / `localhost:<port>` のみ許可（設定ポート以外は 403）。
+macOS（マネージド実装）で確認: 別名・末尾ドット付き Host は HttpListener が先に 404、
+IPv6 や HTTP/1.1 の Host 未指定は 400（HTML 応答）を返す場合がある。
+リスナーを通過するポート省略・別ポート・`127.1:<port>` などは MOD の 403（JSON）になる。
 POST は `Content-Type: application/json`（charset などのパラメーター可）が必須で、
-未指定・他の型は 415。CORS 許可ヘッダーは返さず、OPTIONS は 405（Origin があれば 403）。
+未指定・他の型は 415。CORS 許可ヘッダーは返さず、OPTIONS は 405（上記ブラウザ用ヘッダーがあれば 403）。
 Origin の例外設定はない。[HTTP 契約](raw-full.md#http-要求の制限) を参照。
 
 - `GET /` — health check; returns `{ message, status, version, commit, schema_version }`

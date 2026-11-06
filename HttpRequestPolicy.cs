@@ -7,11 +7,16 @@ namespace STS2_MCP;
 internal static class HttpRequestPolicy
 {
     internal static (int StatusCode, string Message)? Validate(
-        string method, string? host, bool hasOrigin, string? contentType, int port)
+        string method, string? host, bool hasOrigin, bool hasFetchMetadata, bool hasReferer,
+        string? contentType, int port)
     {
         // Presence matters: "null" (file://), empty, and same-origin values all fail closed.
         if (hasOrigin)
             return (403, "Requests with an Origin header are not allowed");
+
+        // Origin のない img / no-cors GET も、状態構築の副作用が起きる前に拒否する。
+        if (hasFetchMetadata || hasReferer)
+            return (403, "Requests with Fetch Metadata or Referer headers are not allowed");
 
         // Compare the raw Host against the configured listener port, not request.Url:
         // parsing/normalizing a URL can hide an untrusted authority (DNS rebinding).

@@ -18,23 +18,28 @@ The endpoints are mutually exclusive: calling singleplayer during a multiplayer 
 
 ## HTTP 要求の制限
 
-全ルート（ヘルスチェック・未知のパスを含む）で、本文の読み取り・ゲーム状態の参照・
+HttpListener を通過した全ルート（ヘルスチェック・未知のパスを含む）で、本文の読み取り・ゲーム状態の参照・
 メインスレッドへの配送より前に次を順番に検査する。
 
 | 条件 | HTTP | エラー |
 |---|---|---|
 | `Origin` ヘッダーが存在する | 403 | `Requests with an Origin header are not allowed` |
+| `Sec-Fetch-Site` / `Sec-Fetch-Mode` / `Sec-Fetch-Dest` のいずれか、または `Referer` が存在する | 403 | `Requests with Fetch Metadata or Referer headers are not allowed` |
 | `Host` が `127.0.0.1:<port>` / `localhost:<port>` 以外 | 403 | `Host must be 127.0.0.1 or localhost with the configured port` |
 | OPTIONS | 405 | `Method not allowed` |
 | POST の Content-Type が `application/json` 以外 | 415 | `POST requests require Content-Type: application/json` |
 
 `<port>` はサーバーの設定ポート（`STS2_MCP.conf` の `port`、既定 15526）。
 Host の名前の大文字小文字は区別しないが、ポート省略・別ポート・別名・IPv6 は許可しない。
+macOS（マネージド実装）で確認: `example.invalid:<port>`・`localhost.:<port>`・
+`127.0.0.1.:<port>` は HttpListener が先に 404、`[::1]:<port>` や HTTP/1.1 の Host 未指定は
+400 を返す。これらは HTML 応答で、MOD の JSON エラー形式ではない。
+リスナーを通過するポート省略・別ポート・`127.1:<port>` などは MOD が 403 で拒否する。
 Content-Type は大文字小文字を区別せず、`; charset=utf-8` などのパラメーターを許可する。
 `application/jsonp` などの類似型、未指定、`text/plain`、フォーム形式は拒否する。
 GET には Content-Type を要求しない。
 
-拒否時も既存の JSON エラー形式（`status: "error"` と `error`）を返し、
+MOD による拒否時は既存の JSON エラー形式（`status: "error"` と `error`）を返し、
 `?pretty=1` に対応する。例:
 
 ```json
@@ -42,10 +47,13 @@ GET には Content-Type を要求しない。
 ```
 
 `Access-Control-Allow-*` は成功・失敗とも一切返さない。Origin は値を問わず拒否するため、
-`Origin: null`（`file://`）、空値、localhost の Origin も 403。OPTIONS を含む複数の
+`Origin: null`（`file://`）、空値、localhost の Origin も 403。
+Fetch Metadata と Referer も値を問わず、空値や same-origin の要求でも拒否する。
+これにより Origin のない `<img>` や no-cors fetch の GET も、これらのヘッダーがあれば
+状態構築より前に 403 となる。OPTIONS を含む複数の
 違反がある場合は先に該当する規則が優先される。ブラウザからの直接利用と CORS preflight は
-サポートしない。Origin の許可リスト設定は設けない。既存の Python MCP サーバーは
-Origin を送らず `json=` で POST するため、そのまま利用できる。
+サポートしない。Origin の許可リスト設定は設けない。既存の urllib・curl・Python MCP サーバーの
+httpx はこれらのブラウザ用ヘッダーを送らず、POST に JSON の Content-Type を付けるため、そのまま利用できる。
 これはブラウザ由来の要求と DNS rebinding への対策であり、ローカルクライアントの認証ではない。
 
 ---

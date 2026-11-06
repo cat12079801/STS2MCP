@@ -70,14 +70,20 @@ If you get "Connection refused", the mod is not loaded — check that mods are e
 API はローカルの非ブラウザクライアント向け。CORS の許可ヘッダーは返さず、
 `Origin` がある要求は GET/POST とも処理前に HTTP 403 で拒否する。
 `Origin: null`（`file://`）、空の Origin、localhost の Origin も例外にしない。
-OPTIONS は HTTP 405（Origin があれば 403）。ブラウザページからの直接利用はできない。
+Origin がなくても `Sec-Fetch-Site` / `Sec-Fetch-Mode` / `Sec-Fetch-Dest` のいずれか、
+または `Referer` があれば、空値も含めて 403。`<img>`・no-cors fetch の GET もこの検査の対象。
+OPTIONS は HTTP 405（上記ヘッダーがあれば 403）。ブラウザページからの直接利用はサポートしない。
 
-`Host` は `127.0.0.1:<port>` または `localhost:<port>` のみ許可し、それ以外は HTTP 403。
+`Host` は `127.0.0.1:<port>` または `localhost:<port>` のみ許可する。
+macOS（マネージド実装）で確認: 別名・末尾ドット付きの Host は HttpListener が先に 404、
+IPv6 や HTTP/1.1 の Host 未指定は 400（HTML 応答）を返す場合がある。
+リスナーを通過するポート省略・別ポート・`127.1:<port>` などは MOD が 403（JSON）で拒否する。
 `<port>` は `STS2_MCP.conf` の設定値（既定 15526）。POST は
 `Content-Type: application/json` が必須で、`charset=utf-8` などのパラメーターも許可する。
 未指定・`text/plain`・フォーム形式は HTTP 415。エラーの詳細は [HTTP 契約](docs/raw-full.md#http-要求の制限) を参照。
 
-Python MCP サーバーは Origin を付けず、httpx の `json=` で POST するため設定変更は不要。
+urllib・curl・Python MCP サーバーの httpx は上記ブラウザ用ヘッダーを付けず、
+POST は JSON の Content-Type（httpx は `json=`）を使うため設定変更は不要。
 Origin の許可リスト設定は設けない。これらの検査は認証の代わりにはならず、
 ローカルプログラムからの操作は引き続き可能。
 

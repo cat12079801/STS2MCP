@@ -383,6 +383,10 @@ public static partial class McpMod
             // Reject before routing, reading a body, or touching/queueing game state.
             var rejection = HttpRequestPolicy.Validate(request.HttpMethod,
                 request.Headers["Host"], request.Headers["Origin"] != null,
+                request.Headers["Sec-Fetch-Site"] != null
+                    || request.Headers["Sec-Fetch-Mode"] != null
+                    || request.Headers["Sec-Fetch-Dest"] != null,
+                request.Headers["Referer"] != null,
                 request.ContentType, _serverPort);
             if (rejection is { } error)
             {
