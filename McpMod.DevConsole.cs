@@ -8,6 +8,7 @@ using Godot;
 using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.DevConsole.ConsoleCommands;
 using MegaCrit.Sts2.Core.Nodes.Debug;
+using MegaCrit.Sts2.Core.Runs;
 
 namespace STS2_MCP;
 
@@ -43,24 +44,37 @@ public static partial class McpMod
         return result;
     }
 
-    // Called only by the main-thread dispatcher. Never create a second console or register
-    // debug commands ourselves: the game's initialized registry is authoritative.
-    private static Dictionary<string, object?> StartDevConsole(string? command, out Task? task)
+    // Pure request checks run on the HTTP worker, before snapshots or main-thread dispatch.
+    private static Dictionary<string, object?>? ValidateDevConsole(string? command, out string name)
     {
-        task = null;
+        name = "";
         if (!_devConsoleEnabled)
             return DevConsoleResult(command, false,
                 "dev_console is disabled. Set dev_console_enabled to true in STS2_MCP.conf and restart the game.");
         if (string.IsNullOrWhiteSpace(command))
             return DevConsoleResult(command, false, "dev_console requires a non-empty string 'command'.");
 
-        // Match DevConsole.ProcessCommand exactly: Trim, Split on ASCII space, then lowercase
-        // the first token. Tabs/newlines inside a token are not command separators.
-        string name = command.Trim().Split(' ')[0].ToLowerInvariant();
-        if (!DevConsoleAllowedCommands.Contains(name))
-            return DevConsoleResult(command, false, $"Console command '{name}' is not allowed by dev_console.");
-        if (IsMultiplayerRun())
-            return DevConsoleResult(command, false, "dev_console is only supported by the singleplayer endpoint outside multiplayer runs.");
+        // Match DevConsole.ProcessCommand exactly. Do not rewrite the dispatched string.
+        name = command.Trim().Split(' ')[0].ToLowerInvariant();
+        return DevConsoleAllowedCommands.Contains(name) ? null
+            : DevConsoleResult(command, false, $"Console command '{name}' is not allowed by dev_console.");
+    }
+
+    // Called only by the main-thread dispatcher after ValidateDevConsole. Never create a
+    // second console or register commands ourselves: the initialized registry is authoritative.
+    private static Dictionary<string, object?> StartDevConsole(string command, string name, out Task? task)
+    {
+        task = null;
+        try
+        {
+            var run = RunManager.Instance;
+            if (run.IsInProgress && !run.IsSingleplayerOrFakeMultiplayer)
+                return DevConsoleResult(command, false, "dev_console is only supported by the singleplayer endpoint outside multiplayer runs.");
+        }
+        catch (Exception)
+        {
+            return DevConsoleResult(command, false, "Cannot verify singleplayer run mode; dev_console execution refused.");
+        }
 
         try
         {
@@ -79,9 +93,13 @@ public static partial class McpMod
             if (typeof(DevConsole).GetField("_commands", flags)?.GetValue(console)
                 is not Dictionary<string, AbstractConsoleCmd> commands)
                 return DevConsoleResult(command, false, "Cannot inspect the game's dev console command registry; execution refused.");
-            if (!commands.ContainsKey(name))
+            if (!commands.TryGetValue(name, out var implementation))
                 return DevConsoleResult(command, false,
                     $"Console command '{name}' is unavailable in the game's registry (debug commands may be disabled).");
+
+            if (implementation == null || implementation.GetType().Assembly != typeof(DevConsole).Assembly)
+                return DevConsoleResult(command, false,
+                    $"Console command '{name}' is not implemented by the game's assembly (possibly overridden by another mod); execution refused.");
 
             CmdResult cmdResult = console.ProcessCommand(command);
             task = cmdResult.task;
@@ -93,18 +111,50 @@ public static partial class McpMod
         }
     }
 
-    private static void CompleteDevConsole(Dictionary<string, object?> result, Task? task)
+    private static void CompleteDevConsole(Dictionary<string, object?> result, Task? task, ActionDeadline deadline)
     {
-        // HTTP worker only. This also observes tasks attached to unsuccessful CmdResults.
-        try { task?.GetAwaiter().GetResult(); }
+        // HTTP worker only; unsuccessful CmdResults can also carry a Task.
+        if (task == null) return;
+        try
+        {
+            bool completed;
+            try { completed = task.Wait(deadline.RemainingMs); }
+            catch (AggregateException)
+            {
+                // Preserve the original exception/cancellation rather than AggregateException.
+                task.GetAwaiter().GetResult();
+                throw;
+            }
+            result["task_completed"] = completed;
+            if (!completed)
+            {
+                result["status"] = "error";
+                result["error"] = $"Console command was dispatched to the game but its task did not finish within {deadline.TimeoutMs} ms; do not resend, re-read state.";
+                // Keep CmdResult.success/message. The game still owns and observes the Task.
+                return;
+            }
+        }
         catch (Exception ex)
         {
             string message = $"Console command task failed: {ex.GetType().Name}: {ex.Message}";
+            result["task_completed"] = true;
             result["success"] = false;
             result["status"] = "error";
             result["message"] = message;
             result["error"] = message;
         }
+    }
+
+    private static Dictionary<string, object?> ExecuteDevConsole(
+        HttpListenerRequest request, Dictionary<string, JsonElement> parsed, string? command, long apiRequest)
+    {
+        var rejected = ValidateDevConsole(command, out var name);
+        if (rejected != null) return rejected;
+
+        Task? commandTask = null;
+        return ExecuteWithOptionalWait(request, parsed,
+            Recorder.CombatRecorder.InHandler(apiRequest, () => StartDevConsole(command!, name, out commandTask)),
+            (dispatched, deadline) => CompleteDevConsole(dispatched, commandTask, deadline));
     }
 
     private static string HandleDevConsole(
@@ -116,10 +166,7 @@ public static partial class McpMod
         Dictionary<string, object?> result;
         try
         {
-            Task? commandTask = null;
-            result = ExecuteWithOptionalWait(request, parsed,
-                Recorder.CombatRecorder.InHandler(apiRequest, () => StartDevConsole(command, out commandTask)),
-                dispatched => CompleteDevConsole(dispatched, commandTask));
+            result = ExecuteDevConsole(request, parsed, command, apiRequest);
         }
         catch (MainThreadUnavailableException ex)
         {
@@ -138,7 +185,9 @@ public static partial class McpMod
         {
             command,
             success = result["success"],
-            message = result["message"]
+            message = result["message"],
+            error = result.GetValueOrDefault("error"),
+            task_completed = result.GetValueOrDefault("task_completed")
         }, _jsonOptions)}");
         SendJson(response, result, pretty);
         return (string)result["status"]!;

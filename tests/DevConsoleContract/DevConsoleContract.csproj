@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.DevConsole.cs" Link="McpMod.DevConsole.cs" />
+    <Compile Include="../../McpMod.ActionWait.cs" Link="McpMod.ActionWait.cs" />
   </ItemGroup>
 </Project>
