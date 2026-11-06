@@ -132,6 +132,7 @@ public static partial class McpMod
         BuildCommit is { Length: > 0 } commit ? $"{Version}+{commit}" : Version;
 
     private static HttpListener? _listener;
+    private static int _serverPort = DefaultPort;
     private static Thread? _serverThread;
     private static readonly ConcurrentQueue<Action> _mainThreadQueue = new();
     // Indentation was ~32% of a typical in-combat state response (12,069 -> 8,178 bytes).
@@ -218,6 +219,7 @@ public static partial class McpMod
             tree.Connect(SceneTree.SignalName.ProcessFrame, Callable.From(ProcessMainThreadQueue));
 
             int port = LoadPort();
+            _serverPort = port;
 
             // Combat recorder (docs/recording.md). After LoadPort, which reads its config keys.
             Recorder.CombatRecorder.StartIfConfigured();
@@ -378,14 +380,13 @@ public static partial class McpMod
             var request = context.Request;
             var response = context.Response;
             bool pretty = WantsPretty(request);
-            response.Headers.Add("Access-Control-Allow-Origin", "*");
-            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-
-            if (request.HttpMethod == "OPTIONS")
+            // Reject before routing, reading a body, or touching/queueing game state.
+            var rejection = HttpRequestPolicy.Validate(request.HttpMethod,
+                request.Headers["Host"], request.Headers["Origin"] != null,
+                request.ContentType, _serverPort);
+            if (rejection is { } error)
             {
-                response.StatusCode = 204;
-                response.Close();
+                SendError(response, error.StatusCode, error.Message, pretty);
                 return;
             }
 

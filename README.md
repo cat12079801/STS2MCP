@@ -65,6 +65,22 @@ same three values as `mod_version`, `mod_commit` and `schema_version`.
 
 If you get "Connection refused", the mod is not loaded — check that mods are enabled in the game's settings.
 
+#### HTTP 要求の制限
+
+API はローカルの非ブラウザクライアント向け。CORS の許可ヘッダーは返さず、
+`Origin` がある要求は GET/POST とも処理前に HTTP 403 で拒否する。
+`Origin: null`（`file://`）、空の Origin、localhost の Origin も例外にしない。
+OPTIONS は HTTP 405（Origin があれば 403）。ブラウザページからの直接利用はできない。
+
+`Host` は `127.0.0.1:<port>` または `localhost:<port>` のみ許可し、それ以外は HTTP 403。
+`<port>` は `STS2_MCP.conf` の設定値（既定 15526）。POST は
+`Content-Type: application/json` が必須で、`charset=utf-8` などのパラメーターも許可する。
+未指定・`text/plain`・フォーム形式は HTTP 415。エラーの詳細は [HTTP 契約](docs/raw-full.md#http-要求の制限) を参照。
+
+Python MCP サーバーは Origin を付けず、httpx の `json=` で POST するため設定変更は不要。
+Origin の許可リスト設定は設けない。これらの検査は認証の代わりにはならず、
+ローカルプログラムからの操作は引き続き可能。
+
 #### 検証用の開発コンソール API
 
 既定は無効。MOD DLL と同じ場所の `STS2_MCP.conf` に `"dev_console_enabled": true` を

@@ -2,6 +2,12 @@
 
 HTTP API on `localhost:15526`. No authentication.
 
+ローカルの非ブラウザクライアント向け。`Origin` がある要求は値を問わず 403、
+Host は `127.0.0.1:<port>` / `localhost:<port>` のみ許可（設定ポート以外は 403）。
+POST は `Content-Type: application/json`（charset などのパラメーター可）が必須で、
+未指定・他の型は 415。CORS 許可ヘッダーは返さず、OPTIONS は 405（Origin があれば 403）。
+Origin の例外設定はない。[HTTP 契約](raw-full.md#http-要求の制限) を参照。
+
 - `GET /` — health check; returns `{ message, status, version, commit, schema_version }`
 - `GET /api/v1/singleplayer` — read game state
 - `POST /api/v1/singleplayer` — perform action
