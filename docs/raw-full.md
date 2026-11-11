@@ -1005,6 +1005,13 @@ Chest is auto-opened on first state query.
 
 Covers deck transforms, upgrades, enchants, removals, and choose-a-card effects. Appears on top of any room.
 
+During a live combat with an available combat state, grid selection rows (`cards[]`) also carry
+`uid`, using the same per-card-instance registry as the combat hand and piles. This includes
+combat-pile selection grids. Markdown displays the uid after the row index, as in the hand.
+Outside combat, `uid` is omitted. Choose-a-card (`screen_type: "choose"`) rows and `preview_cards`
+do not carry uids; the repository code does not establish that a generated choice remains the
+same card instance when it enters the hand. Selection actions still use `index`.
+
 ```jsonc
 {
   "state_type": "card_select",

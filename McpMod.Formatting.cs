@@ -1089,7 +1089,8 @@ public static partial class McpMod
             {
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
                 string selected = card.TryGetValue("selected", out var selObj) && selObj is true ? "[x] " : "";
-                sb.AppendLine($"- {selected}[{card["index"]}] **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]} - {card["description"]}");
+                string uid = card.TryGetValue("uid", out var u) && u != null ? $" `{u}`" : "";
+                sb.AppendLine($"- {selected}[{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]} - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
             }
             sb.AppendLine();

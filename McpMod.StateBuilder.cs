@@ -3255,6 +3255,15 @@ public static partial class McpMod
         if (selection == null)
             Warn("card_select.selected", "screen has no readable _selectedCards field");
 
+        // Overlays can bypass BuildBattleState, so refresh before assigning any uids here.
+        // Outside a live combat, do not register deck/preview cards in the combat registry.
+        var combatManager = CombatManager.Instance;
+        var combatState = combatManager is { IsInProgress: true }
+            ? combatManager.DebugOnlyGetState()
+            : null;
+        if (combatState != null)
+            RefreshCardUidRegistry(combatState);
+
         // Cards in the grid (sorted by visual position - MoveToFront can reorder children)
         var cardHolders = FindAllSortedByPosition<NGridCardHolder>(screen);
         var cards = new List<Dictionary<string, object?>>();
@@ -3267,6 +3276,8 @@ public static partial class McpMod
 
             var cardInfo = BuildCardInfo(card);
             cardInfo["index"] = index;
+            if (combatState != null)
+                cardInfo["uid"] = GetStableCardUid(card);
             if (selection != null)
             {
                 bool isSelected = selection.Contains(card);

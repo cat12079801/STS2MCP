@@ -334,6 +334,11 @@ SACRIFICE の完了、REROLL の継続、中断はそれぞれ別に記録する
 
 ### Card Selection Overlay (`card_select`)
 
+Grid rows (`cards[]`) include a combat-stable `uid` only while combat is in progress and its state
+is available, including combat-pile selections. It uses the same card-instance registry as the
+hand and piles, and is displayed in Markdown after the index. It is absent outside combat,
+on choose-a-card (`screen_type: "choose"`) rows, and on `preview_cards`. Actions still use `index`.
+
 | Action | Parameters | When to Use |
 |---|---|---|
 | `select_card` | `index`: int | Grid screens: toggle card selection. Choose-a-card: pick immediately. |
