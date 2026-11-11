@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Godot;
-using MegaCrit.Sts2.Core.CardSelection;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Models;
@@ -374,40 +373,6 @@ public static partial class McpMod
     internal static NConfirmButton? GetCardSelectMainConfirm(NCardGridSelectionScreen screen)
         => screen.GetNodeOrNull<NConfirmButton>("Confirm")
            ?? screen.GetNodeOrNull<NConfirmButton>("%Confirm");
-
-    /// <summary>
-    /// The cards the screen currently has selected. Every subclass keeps them in its own
-    /// private `_selectedCards` HashSet - the same set OnCardClicked toggles - so this is
-    /// the game's own answer, not a guess reconstructed from highlights.
-    /// Null means the field could not be read (a renamed field in a future game build).
-    /// </summary>
-    internal static HashSet<CardModel>? GetCardSelectSelection(NCardGridSelectionScreen screen)
-    {
-        try
-        {
-            return GetInstanceFieldValue(screen, "_selectedCards") as HashSet<CardModel>;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// How many cards the screen wants: `_prefs` carries MinSelect/MaxSelect, which is what
-    /// the game itself checks before it will complete the selection.
-    /// </summary>
-    internal static CardSelectorPrefs? GetCardSelectPrefs(NCardGridSelectionScreen screen)
-    {
-        try
-        {
-            return GetInstanceFieldValue(screen, "_prefs") as CardSelectorPrefs?;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
 
     internal static List<T> FindAll<T>(Node start) where T : Node
     {

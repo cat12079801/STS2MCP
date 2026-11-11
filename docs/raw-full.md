@@ -80,7 +80,7 @@ Every response — `menu` and error-ish states included — carries the build st
   "state_type": "...",      // Screen identifier (see sections below)
   "mod_version": "0.4.0",   // Mod version
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
-  "schema_version": 3       // Contract version — see below
+  "schema_version": 4       // Contract version — see below
 }
 ```
 
@@ -88,6 +88,8 @@ Every response — `menu` and error-ish states included — carries the build st
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
 
+- **4** — `card_select.cards` and `select_card` indices cover all grid candidates in display order,
+  independent of scrolling. `selected_outside_grid` was removed.
 - **3** — `map.next_encounters` was removed because it exposed future rooms before the player
   could see them. `map.encounters_seen` reports only travelled encounters.
 - **2** — `battle.enemies` is no longer "the living enemies": a corpse the game keeps in the
@@ -212,7 +214,7 @@ UnlockState も札の `Owner.UnlockState` と同じものを使う。
 次の戦闘・別 Player では作り直す。キャッシュされた失敗も state 取得ごとに警告へ載せる。
 Markdown は `Unlocked pools: colorless cards N | character cards N | potions character N, shared N`
 の 1 行のみで、取得不能は該当件数を `unknown` とし、ID 一覧は出さない。
-追加項目なので `schema_version` は 3 のまま。
+schema 3 で追加した項目であり、その追加時には `schema_version` を変更していない。
 
 ### Player Object
 
@@ -392,7 +394,7 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
 `BuildCardSelectState` の戦闘用の行で読む。正常時は false も出し、
 読み取り例外時は既存の `SafeGetBool` により `null` と `warnings` を返す（false と区別）。
 Markdown は手札・パイル・grid の行で true の場合だけ `[exhaust-next]` を付ける。
-false・null・項目なしでは印を付けない。追加項目なので `schema_version` は 3 のまま。
+false・null・項目なしでは印を付けない。schema 3 で追加した項目であり、その追加時には `schema_version` を変更していない。
 
 出典はローカルの `sts2-9cb4f1ad` デコンパイル：
 
@@ -1114,6 +1116,17 @@ Chest is auto-opened on first state query.
 
 Covers deck transforms, upgrades, enchants, removals, and choose-a-card effects. Appears on top of any room.
 
+For grid screens, `cards` contains **all candidates** after the game's filtering and sorting,
+in the full grid's display order (top to bottom, left to right). The zero-based `index` addresses
+that full list, including cards without a generated holder; no scrolling is required. Scrolling
+or hovering does not change indices. Re-read state after candidates change, are reordered, or the
+screen changes; an index is not a persistent card identifier. Same-ID instances stay separate.
+`cards: []` means no candidates. `cards: null` with a `card_select.cards` warning means the candidate
+list could not be read; do not select using a partial or stale list. Schema 4 removes
+`selected_outside_grid`: selection marks now cover the full list. A mismatch with `selected_count`
+produces a `card_select.selected` warning without rewriting the game's selection.
+Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
+
 During a live combat with an available combat state, grid selection rows (`cards[]`) also carry
 `uid`, using the same per-card-instance registry as the combat hand and piles. This includes
 combat-pile selection grids. Markdown displays the uid after the row index, as in the hand.
@@ -1153,9 +1166,6 @@ same card instance when it enters the hand. Selection actions still use `index`.
     "can_confirm": false,        // true when confirm button is available
     "can_cancel": true           // true when close/cancel button is available
 
-    // "selected_outside_grid": only present when the grid is scrolled and a selected card
-    // falls outside the window listed in "cards".
-
     // For "choose" type: picking is immediate (no confirm needed).
     // can_skip indicates if a skip button exists.
   },
@@ -1164,10 +1174,13 @@ same card instance when it enters the hand. Selection actions still use `index`.
 }
 ```
 
-**Grid screens have two steps.** Cards are picked first; then a preview panel opens — by itself once
+**Deck screens with a preview have two steps.** Cards are picked first; then a preview panel opens — by itself once
 `max_select` is reached, or when `confirm_selection` presses the screen's own confirm — and only the
 preview's own confirm applies the selection. `selected` comes from the screen's selection set, not from the
 grid highlight, so it stays `true` during the preview (the game drops the highlight there but keeps the card).
+Simple and combat-pile grid screens instead follow their game preferences: manual confirmation
+applies the selection, or selecting enough cards completes immediately without a preview.
+Choose-a-card picks immediately. Do not assume every grid screen needs two confirmations.
 
 ### `bundle_select` — Card Bundle Selection Overlay
 
@@ -1858,12 +1871,14 @@ Select a card in a card selection overlay.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `index` | int | Yes | 0-based card index in the grid |
+| `index` (alias `card_index`) | int | Yes | 0-based index in the latest full `card_select.cards` candidate list; no scrolling required |
 
 **Behavior varies by screen type:**
-- Grid screens (transform, upgrade, enchant, select): toggles selection through the game's own
-  `OnCardClicked`, so a card that is already selected comes back out. Once `max_select` cards are selected,
-  the screen opens its preview by itself.
+- Grid screens: pass the original model at the full candidate index to the concrete game's
+  `OnCardClicked(CardModel)` once, whether on screen or off screen. Already selected cards toggle off
+  when the game permits it. Deck screens with previews open them at `max_select` or on confirm.
+- Simple / combat-pile grids: honor manual confirmation or immediate completion according to the
+  screen's preferences. Immediate completion returns success without reading the closed screen.
 - Choose-a-card screens (potions, effects): picks the card immediately.
 
 On grid screens the result carries the outcome read back from the screen: `selected` (true when the card is
@@ -1872,7 +1887,10 @@ opened the preview.
 
 Returns `status: error` when the press would not land: while a preview is open (use `confirm_selection` or
 `cancel_selection` — pressing through it corrupts the preview row), and when the screen refuses the press
-because its selection is already full.
+because its selection is already full. A hidden/peeking grid, unavailable candidate list, invalid index,
+or missing click method also returns error. A click exception returns error with its underlying cause;
+the game may already have changed state, so re-read state before another action. There is no retry
+through holders, scrolling, or direct selection-set mutation.
 
 ### `confirm_selection`
 

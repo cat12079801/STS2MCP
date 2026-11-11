@@ -1092,92 +1092,7 @@ public static partial class McpMod
             return MissingIntParam("card index in the grid", "index", "card_index");
 
         if (overlay is NCardGridSelectionScreen gridScreen)
-        {
-            var grid = FindFirst<NCardGrid>(gridScreen);
-            if (grid == null)
-                return Error("Card grid not found in selection screen");
-
-            // While a preview covers the grid the game takes the grid out of the input path
-            // (FocusBehaviorRecursive = Disabled, scrolling off). Firing HolderPressed anyway
-            // still mutates the selection behind the panel, and re-reaching MaxSelect re-runs
-            // PreviewSelection, which appends another copy of every selected card to the
-            // preview row - the "select_card adds instead of toggling" symptom of A-7.
-            if (FindVisibleCardSelectPreview(gridScreen) != null)
-                return Error("A selection preview is open - use confirm_selection to apply it, or cancel_selection to go back to the grid");
-
-            var holders = FindAllSortedByPosition<NGridCardHolder>(gridScreen);
-            if (index < 0 || index >= holders.Count)
-                return Error($"Card index {index} out of range ({holders.Count} cards available)");
-
-            var holder = holders[index];
-            var cardModel = holder.CardModel;
-            string cardName = SafeGetText(() => cardModel?.Title) ?? "unknown";
-
-            // The screen's own selection set, so the outcome is read back from the game
-            // instead of assumed.
-            var selection = GetCardSelectSelection(gridScreen);
-            bool? wasSelected = (selection != null && cardModel != null) ? selection.Contains(cardModel) : null;
-
-            // The game's own toggle path: NGridCardHolder.Pressed -> NCardGrid.OnHolderPressed
-            // -> HolderPressed -> the screen's OnCardClicked(card), which adds the card or,
-            // when it is already in the set, removes it and unhighlights it.
-            grid.EmitSignal(NCardGrid.SignalName.HolderPressed, holder);
-
-            // The screen can complete and close on the press itself (NSimpleCardSelectScreen
-            // with RequireManualConfirmation off), leaving nothing to read back.
-            if (!IsCardSelectScreenStillOpen(gridScreen))
-            {
-                return new Dictionary<string, object?>
-                {
-                    ["status"] = "ok",
-                    ["message"] = $"Selected {cardName} - selection complete, screen closed"
-                };
-            }
-
-            if (selection == null || cardModel == null)
-            {
-                return new Dictionary<string, object?>
-                {
-                    ["status"] = "ok",
-                    ["message"] = $"Toggling card selection: {cardName}"
-                };
-            }
-
-            bool isSelected = selection.Contains(cardModel);
-            if (wasSelected == isSelected)
-            {
-                // The one screen that ignores a press is NSimpleCardSelectScreen once the set
-                // is full; report that instead of a success for a no-op.
-                var limit = GetCardSelectPrefs(gridScreen);
-                return Error(isSelected
-                    ? $"{cardName} is still selected - the screen did not accept the press"
-                    : limit.HasValue
-                        ? $"{cardName} was not selected - at most {limit.Value.MaxSelect} card(s) can be selected, deselect one first"
-                        : $"{cardName} was not selected - the screen did not accept the press");
-            }
-
-            var toggled = new Dictionary<string, object?>
-            {
-                ["status"] = "ok",
-                ["message"] = $"{(isSelected ? "Selected" : "Deselected")} {cardName}",
-                ["selected"] = isSelected,
-                ["selected_count"] = selection.Count
-            };
-
-            var prefs = GetCardSelectPrefs(gridScreen);
-            if (prefs.HasValue)
-            {
-                toggled["min_select"] = prefs.Value.MinSelect;
-                toggled["max_select"] = prefs.Value.MaxSelect;
-            }
-
-            // Reaching MaxSelect opens the preview by itself on these screens; the caller
-            // needs to know the next action is confirm/cancel, not another select_card.
-            if (FindVisibleCardSelectPreview(gridScreen) != null)
-                toggled["preview_showing"] = true;
-
-            return toggled;
-        }
+            return ExecuteSelectGridCard(gridScreen, index);
         else if (overlay is NChooseACardSelectionScreen chooseScreen)
         {
             var holders = FindAllSortedByPosition<NGridCardHolder>(chooseScreen);
@@ -1197,14 +1112,6 @@ public static partial class McpMod
 
         return Error("No card selection screen is open");
     }
-
-    /// <summary>
-    /// Whether a selection screen is still the screen being driven. The screens take
-    /// themselves off the overlay stack (NOverlayStack.Remove) the moment they complete,
-    /// so this going false is the proof that a confirm press actually landed.
-    /// </summary>
-    private static bool IsCardSelectScreenStillOpen(NCardGridSelectionScreen screen)
-        => IsLiveNode(screen) && ReferenceEquals(NOverlayStack.Instance?.Peek(), screen);
 
     private static Dictionary<string, object?> ExecuteConfirmSelection()
     {

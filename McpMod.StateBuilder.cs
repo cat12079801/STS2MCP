@@ -3259,50 +3259,10 @@ public static partial class McpMod
         if (selection == null)
             Warn("card_select.selected", "screen has no readable _selectedCards field");
 
-        // Overlays can bypass BuildBattleState, so refresh before assigning any uids here.
-        // Outside a live combat, do not register deck/preview cards in the combat registry.
-        var combatManager = CombatManager.Instance;
-        var combatState = combatManager is { IsInProgress: true }
-            ? combatManager.DebugOnlyGetState()
-            : null;
-        if (combatState != null)
-            RefreshCardUidRegistry(combatState);
+        state["cards"] = BuildCardSelectCardRows(screen, selection);
 
-        // Cards in the grid (sorted by visual position - MoveToFront can reorder children)
-        var cardHolders = FindAllSortedByPosition<NGridCardHolder>(screen);
-        var cards = new List<Dictionary<string, object?>>();
-        int index = 0;
-        int selectedInGrid = 0;
-        foreach (var holder in cardHolders)
-        {
-            var card = holder.CardModel;
-            if (card == null) continue;
-
-            var cardInfo = BuildCardInfo(card);
-            cardInfo["index"] = index;
-            if (combatState != null)
-            {
-                cardInfo["uid"] = GetStableCardUid(card);
-                cardInfo["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
-            }
-            if (selection != null)
-            {
-                bool isSelected = selection.Contains(card);
-                cardInfo["selected"] = isSelected;
-                if (isSelected) selectedInGrid++;
-            }
-            // Only on the upgrade screen: the transform/remove screens do not upgrade
-            // anything, and every card carrying a preview would bloat the payload.
-            if (screen is NDeckUpgradeSelectScreen) AttachUpgradePreview(cardInfo, card);
-            cards.Add(cardInfo);
-            index++;
-        }
-        state["cards"] = cards;
-
-        // How many are selected and how many the screen wants. `selected_count` is the
-        // screen's own count (it can exceed what the visible grid window shows);
-        // `required_count` is the "select N" of the prompt, null when the screen accepts a
-        // range ("up to N"), where min_select/max_select give the two ends.
+        // Counts come from the game's set; all candidates now appear in cards[].
+        // required_count is null for a range, described by min_select/max_select.
         if (selection != null)
             state["selected_count"] = selection.Count;
         var prefs = GetCardSelectPrefs(screen);
@@ -3318,13 +3278,6 @@ public static partial class McpMod
         {
             state["required_count"] = null;
         }
-        if (selection != null && selection.Count != selectedInGrid)
-        {
-            // Only possible when the grid is scrolled: its holders are a sliding window
-            // over the deck, so a selected card can be outside `cards[]`.
-            state["selected_outside_grid"] = selection.Count - selectedInGrid;
-        }
-
         // Preview container showing? (selection complete, awaiting confirm)
         // The subclasses each name theirs differently; FindCardSelectPreviewContainers
         // knows all the spellings (upgrade, enchant and the generic one).

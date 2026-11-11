@@ -45,12 +45,12 @@ Every JSON response includes:
 - `state_type` — which screen the game is on (see below)
 - `mod_version` — mod version string, e.g. `0.4.0`
 - `mod_commit` — git commit the mod was built from, e.g. `2de67cd` (`2de67cd-dirty` for a build from an edited tree), `null` when the build could not determine one
-- `schema_version` — integer version of this contract, currently `3`. **Bumped only when an existing field or action changes meaning or is removed.** Added fields, actions, parameters and `state_type`s do not bump it, so feature-detect additions by presence and use `schema_version` only to notice a breaking change. `3` removed `map.next_encounters`, which exposed future rooms before the player could see them; `map.encounters_seen` reports only travelled encounters. `2` changed enemy targeting: `battle.enemies` can now contain a dead enemy the game keeps in the fight (`alive: false`), so it is no longer the same thing as "the enemies you can target".
+- `schema_version` — integer version of this contract, currently `4`. **Bumped only when an existing field or action changes meaning or is removed.** Added fields, actions, parameters and `state_type`s do not bump it, so feature-detect additions by presence and use `schema_version` only to notice a breaking change. `4` makes grid `card_select.cards` and `select_card` indices cover all candidates in display order and removes `selected_outside_grid`. `3` removed `map.next_encounters`, which exposed future rooms before the player could see them; `map.encounters_seen` reports only travelled encounters. `2` changed enemy targeting: `battle.enemies` can now contain a dead enemy the game keeps in the fight (`alive: false`), so it is no longer the same thing as "the enemies you can target".
 - `warnings` — **present only when something went wrong.** A list of strings, one per part of the state that could not be built, as `"<field or section>: <ExceptionType>: <message>"` (e.g. `"map.encounters_seen: NullReferenceException: ..."`). The state builders read the live game through reflection and swallow whatever throws, so a member the game renamed simply stops appearing; this list says which one. **A warning naming a field means that field may be absent, partial or stale below** — the rest of the payload is still valid. Duplicates are collapsed, and the list stops at 50 entries plus a final `"... N more warnings suppressed"`. Markdown renders the count and the first three under the `STILL RESOLVING` block. Not every swallowed exception is reported: a few catches are expected to fire during normal play (node-tree churn, probing alternative property names) and are deliberately silent.
 - `run` — `{ act, floor, ascension, player_count, card_multiplayer_constraint }` (absent for `menu`)
 - `player` — full player state: character, HP, gold, relics, potions, `max_potion_slots` (belt capacity, grows with relics), and during combat: energy, hand, piles, orbs (absent for `menu`)
   - `character_id` / `player_id` — 非ローカライズのモデルID / `Player.NetId` の文字列。追加項目。
-  - `generation_pool` — 同じ snapshot のローカル Player 自身の解放済み戦闘生成候補。`{ character_id, player_id, players, multiplayer_constraint, known, cards: [{id,type}], game_assembly_sha256, filter_version: 1, filter_source }`。単独・マルチともに出す。取得失敗は `known:false, cards:[], reason` と warnings。`GetUnlockedCards(Player.UnlockState, run.CardMultiplayerConstraint)` に実人数・`FilterForCombat`・Attack/Skill/Power の filter を適用する。抽選/RNG/カード作成は行わない。SHA256はロードした本体DLLの版、filter出典の正確な文字列と公開範囲の注意は [raw-full.md](raw-full.md#解放済みの戦闘生成-pool追加schema-3) を参照。図鑑の discovered_cards と同一視しない。図鑑は未発見札を NotSeen にし、ラン固有の一覧を直接見せない。年代記の解放画面は解放対象札を表示する。Markdown は件数・人数か unknown と理由だけ。追加なので schema は 3 のまま、旧 MOD は欄を省略。
+  - `generation_pool` — 同じ snapshot のローカル Player 自身の解放済み戦闘生成候補。`{ character_id, player_id, players, multiplayer_constraint, known, cards: [{id,type}], game_assembly_sha256, filter_version: 1, filter_source }`。単独・マルチともに出す。取得失敗は `known:false, cards:[], reason` と warnings。`GetUnlockedCards(Player.UnlockState, run.CardMultiplayerConstraint)` に実人数・`FilterForCombat`・Attack/Skill/Power の filter を適用する。抽選/RNG/カード作成は行わない。SHA256はロードした本体DLLの版、filter出典の正確な文字列と公開範囲の注意は [raw-full.md](raw-full.md#解放済みの戦闘生成-pool追加schema-3) を参照。図鑑の discovered_cards と同一視しない。図鑑は未発見札を NotSeen にし、ラン固有の一覧を直接見せない。年代記の解放画面は解放対象札を表示する。Markdown は件数・人数か unknown と理由だけ。schema 3 での追加項目（その追加時に schema 変更なし）で、旧 MOD は欄を省略。
   - `unlocked_pools` — 戦闘中だけ、単独・マルチのローカル Player に `{ colorless_cards: [ID], character_cards: [ID], potions: { character: [ID], shared: [ID] } }` を追加。カードは何でも屋・ジャックポットと同じ `GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint)`、ポーションは `PotionFactory.GetPotionOptions` と同じ各 pool の `GetUnlockedPotions(player.UnlockState)` を使い、ID (`Id.Entry`) の昇順で返す。solo ではゲームの制約で multiplayer 専用札を除外。解放済み pool のため、自己除外・0 コスト・戦闘生成可否など札の後段の条件は適用しない。最終抽選候補や `generation_pool` と同一視しない。各配列の取得失敗はその配列だけ `null` とし `warnings` に該当パスを記録する（空の `[]` と区別）。戦闘・Player の参照ごとにキャッシュし、失敗の警告も毎回返す。Markdown は件数（取得不能は `unknown`）だけの 1 行。戦闘外・旧 MOD では省略し、schema は 3 のまま。[契約・ゲーム側の出典](raw-full.md#戦闘中の解放済み-pool追加schema-3) を参照。
   - `relics[]` — owned relic entries include boolean `used_up` (`RelicModel.IsUsedUp`) and `melted` (`RelicModel.IsMelted`), including the multiplayer local player. Markdown adds `(used)` / `(melted)` when true in singleplayer outside combat, and during combat. Multiplayer outside combat does not list relics in Markdown. Feature-detect these additive fields; schema stays at 3. Older builds omit them. Melted wax is a separate state, not a synonym for consumed or every disabled relic.
     - `vars` — 戦闘中・戦闘外の全所有レリックに、`DynamicVars` の名前 → 現在の数値 `BaseValue` を出す。例: 骨付き肉 `{"HpThreshold":50,"Heal":12}`。小数も丸めず保持し、表示文字列の `StringVar` は除外。数値なしは `{}`、取得失敗は該当レリックの `vars` 全体を省略して `warnings` に `player.relics.<ID>.vars` を記録。欠落は unknown。Markdown の追加表示はなし、schema は 3 のまま。[契約・出典](raw-full.md#レリックの数値変数追加schema-3) を参照。
@@ -336,6 +336,14 @@ SACRIFICE の完了、REROLL の継続、中断はそれぞれ別に記録する
 
 ### Card Selection Overlay (`card_select`)
 
+Grid `cards` includes **all filtered candidates**, in full display order (top to bottom, left to right).
+`index` is zero-based in this list, even for cards off screen; **no scrolling is required**.
+Scrolling/hover does not change indices. Re-read state after candidate changes, reordering, or screen changes.
+Same-ID instances remain separate. `cards: []` means zero candidates; `cards: null` plus a
+`card_select.cards` warning means the list could not be read. Do not act on an old index then.
+Schema 4 removes `selected_outside_grid`; every candidate has its selection mark. A mismatch
+with `selected_count` produces a warning. Combat-pile `screen_type` retains its game class name.
+
 Grid rows (`cards[]`) include a combat-stable `uid` only while combat is in progress and its state
 is available, including combat-pile selections. It uses the same card-instance registry as the
 hand and piles, and is displayed in Markdown after the index. It is absent outside combat,
@@ -346,8 +354,8 @@ true のときだけ Markdown に `[exhaust-next]` を付ける。戦闘外に�
 
 | Action | Parameters | When to Use |
 |---|---|---|
-| `select_card` | `index`: int | Grid screens: toggle card selection. Choose-a-card: pick immediately. |
-| `confirm_selection` | _(none)_ | Confirm (for grid screens with preview). Not needed for choose-a-card. |
+| `select_card` | `index`: int (alias `card_index`) | Grid: toggle any full-list candidate without scrolling. Choose-a-card: pick immediately. |
+| `confirm_selection` | _(none)_ | Open/apply a deck preview, or apply a grid with manual confirmation. Not needed for immediate completion or choose-a-card. |
 | `cancel_selection` | _(none)_ | Cancel preview, skip (choose-a-card), or close screen. |
 
 On the upgrade screen (`screen_type: "upgrade"`), each card with an upgrade left carries `upgrade_preview` (its upgraded form). The transform/remove screens do not.
@@ -361,17 +369,21 @@ count its own presses:
 | `selected_count` | How many cards the screen has selected. |
 | `required_count` | The `N` of a "select N cards" prompt, or `null` when the screen accepts a range. |
 | `min_select` / `max_select` | The two ends of that range (equal when `required_count` is set). |
-| `selected_outside_grid` | Only present when the grid is scrolled and a selected card is outside the `cards[]` window. |
 
-**These screens have two steps.** Picking cards comes first; then a preview panel opens - by itself once
+**Deck screens with previews have two steps.** Picking cards comes first; then a preview panel opens - by itself once
 `max_select` is reached, or when `confirm_selection` presses the screen's own confirm - and only the preview's
 own confirm applies the selection. `confirm_selection` says which of the two it did
 (`"Selection preview opened … call confirm_selection again to apply it"` vs `"Confirming selection…"`), and
 `preview_showing` says where the screen stands.
+Simple / combat-pile grids follow their preferences: manual confirm applies the selection, or
+selecting enough cards completes immediately. Choose-a-card also picks immediately.
 
 While a preview is open the game takes the grid out of the input path, so `select_card` returns `status: error`
 rather than pressing through it (pressing through appends duplicate cards to the preview row).
 `cancel_selection` closes the preview **and clears the selection**, putting you back on an empty grid.
+A hidden/peeking grid, invalid index, unreadable candidates, missing click method, or rejected toggle
+returns error. If the click throws, re-read state before acting again: it may already have changed.
+The MOD calls the game's model selection path once and does not mutate selection sets itself.
 
 `confirm_selection` returns `status: error` - instead of an `ok` that does nothing - when the selection is
 short of `min_select`, over `max_select`, or when the press was swallowed by the screen.

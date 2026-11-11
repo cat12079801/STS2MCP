@@ -43,8 +43,11 @@ public static partial class McpMod
     ///    until the room is entered, so it let a client route around matchups no player could
     ///    see. map.encounters_seen replaces it with what this act has ALREADY served, which is
     ///    what the map's own hover tips show for travelled nodes.
+    ///
+    /// 4: card_select.cards and select_card indices cover all grid candidates in display
+    ///    order, independent of scrolling; selected_outside_grid is removed.
     /// </summary>
-    public const int StateSchemaVersion = 3;
+    public const int StateSchemaVersion = 4;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";
