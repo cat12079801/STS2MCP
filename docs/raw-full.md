@@ -410,6 +410,20 @@ false・null・項目なしでは印を付けない。追加項目なので `sch
 
 フラグ値そのものを返し、Exhaust keyword の有無や最終的な移動先から値を推定しない。
 
+**true がプレイの合間に残るのは `exhaust_pile[]` だけ。** 荒廃の自動プレイが拒否された札
+（`CardKeyword.Unplayable` の状態異常・呪い、`Hook.ShouldPlay` の拒否〈凡庸・怠惰・苦難など〉、
+攻撃できる敵がいない。`CardCmd.AutoPlay` の `CardCmd.cs:58-96`）は、
+`MoveToResultPileWithoutPlaying` → `CardCmd.Exhaust` で廃棄札に入り、旗は true のまま残る。
+消えるのはプレイヤーの手番の終わりの `PlayerCombatState.EndOfTurnCleanup`
+（`CombatManager.FlushPlayerHand`、`CombatManager.cs:1813`）。これは手番終了の AutoPostPlay の段
+（`AfterAutoPostPlayPhaseEntered`、`CombatManager.cs:1543-1545`）より後なので、
+その段で廃棄札の札が自分をプレイするとき（彼方からの遠吠え）に旗が効く。
+普通にプレイされた札は、`OnPlay` より前の `GetResultLocationForCardPlay` で false に戻る。
+実機（0.4.0+3fd74e0）: 凡庸を手札に持って荒廃を 3 枚目に撃つと、拒否された山札の一番上の防御が
+`exhaust_on_next_play: true` で廃棄札に入り、Markdown に `[exhaust-next]` が出た。
+
+`hand_select.cards[]` には出さない（`uid` と同じ。同じ札は `player.hand[]` で読む）。
+
 ### Orb Object
 
 ```jsonc
