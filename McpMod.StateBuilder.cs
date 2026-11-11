@@ -1765,6 +1765,8 @@ public static partial class McpMod
         var state = BuildCardInfo(card);
         state["index"] = index;
         state["uid"] = GetStableCardUid(card);
+        // Combat-only state: keep it out of BuildCardInfo, which also builds deck/preview rows.
+        state["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
         state["description"] = SafeGetCardDescription(card); // hand cards use default pile
         state["target_type"] = card.TargetType.ToString();
         state["can_play"] = unplayableReason == UnplayableReason.None;
@@ -2029,6 +2031,7 @@ public static partial class McpMod
             list.Add(new Dictionary<string, object?>
             {
                 ["uid"] = GetStableCardUid(card),
+                ["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay),
                 ["name"] = SafeGetText(() => card.Title),
                 ["cost"] = GetCostDisplay(card),
                 ["star_cost"] = GetStarCostDisplay(card),
@@ -3278,7 +3281,10 @@ public static partial class McpMod
             var cardInfo = BuildCardInfo(card);
             cardInfo["index"] = index;
             if (combatState != null)
+            {
                 cardInfo["uid"] = GetStableCardUid(card);
+                cardInfo["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
+            }
             if (selection != null)
             {
                 bool isSelected = selection.Contains(card);

@@ -436,7 +436,8 @@ public static partial class McpMod
                         ? $" [{string.Join(", ", kwList)}]" : "";
                     string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
                     string uid = card.TryGetValue("uid", out var u) && u != null ? $" `{u}`" : "";
-                    sb.AppendLine($"- [{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {playable}{keywords} - {card["description"]} (target: {card["target_type"]})");
+                    string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
+                    sb.AppendLine($"- [{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {playable}{keywords}{exhaustNext} - {card["description"]} (target: {card["target_type"]})");
                     FormatCardTargetPreviews(sb, card);
                     AppendUpgradePreviewLine(sb, card);   // only present while the hand can be upgraded (D-13)
                 }
@@ -636,7 +637,8 @@ public static partial class McpMod
             foreach (var card in pile)
             {
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
-                sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}): {card["description"]}");
+                string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
+                sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}){exhaustNext}: {card["description"]}");
             }
         }
         else
@@ -1100,7 +1102,8 @@ public static partial class McpMod
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
                 string selected = card.TryGetValue("selected", out var selObj) && selObj is true ? "[x] " : "";
                 string uid = card.TryGetValue("uid", out var u) && u != null ? $" `{u}`" : "";
-                sb.AppendLine($"- {selected}[{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]} - {card["description"]}");
+                string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
+                sb.AppendLine($"- {selected}[{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]}{exhaustNext} - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
             }
             sb.AppendLine();

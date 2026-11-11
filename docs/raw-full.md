@@ -363,6 +363,7 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "target_type": "AnyEnemy", // None, Self, AnyEnemy, AllEnemies, etc.
   "can_play": true,
   "unplayable_reason": null, // e.g. "NotEnoughEnergy", "Unplayable", null if playable
+  "exhaust_on_next_play": false, // Combat-only CardModel.ExhaustOnNextPlay; see below
   "is_upgraded": false,
   "keywords": [ /* Keyword Objects */ ]
 }
@@ -375,9 +376,39 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "name": "Strike",
   "cost": "1",               // Energy cost as string ("X" for X-cost)
   "star_cost": null,          // Regent star cost as string, null if N/A
+  "exhaust_on_next_play": false,
   "description": "Deal 6 damage."
 }
 ```
+
+### 次回プレイ時の廃棄フラグ（追加、schema 3）
+
+`exhaust_on_next_play` は `CardModel.ExhaustOnNextPlay` の現在の bool 値。
+戦闘中の `player.hand[]`、`draw_pile[]` / `discard_pile[]` / `exhaust_pile[]`、
+および `card_select.cards[]` の grid 行に出す。grid は `uid` と同じ条件、
+すなわち `CombatManager.IsInProgress` が true で combat state が取得できる場合だけ。
+戦闘外のデッキ・選択画面、choose-a-card 行、`preview_cards` / `upgrade_preview` には出さない。
+共通の `BuildCardInfo` には追加せず、`BuildCardState` / `BuildPileCardList` /
+`BuildCardSelectState` の戦闘用の行で読む。正常時は false も出し、
+読み取り例外時は既存の `SafeGetBool` により `null` と `warnings` を返す（false と区別）。
+Markdown は手札・パイル・grid の行で true の場合だけ `[exhaust-next]` を付ける。
+false・null・項目なしでは印を付けない。追加項目なので `schema_version` は 3 のまま。
+
+出典はローカルの `sts2-9cb4f1ad` デコンパイル：
+
+- `MegaCrit.Sts2.Core.Models/CardModel.cs:560-571` の getter は
+  `_exhaustOnNextPlay` を返すだけで、副作用はない。
+- `MegaCrit.Sts2.Core.Commands/CardPileCmd.cs:1145-1182` の
+  `AutoPlayFromDrawPile` が AutoPlay 直前に `ExhaustOnNextPlay = forceExhaust` を設定する。
+  この版で `forceExhaust: true` を渡す呼び出し元は
+  `MegaCrit.Sts2.Core.Models.Cards/Havoc.cs:19-21` の `Havoc.OnPlay` だけ。
+- `CardModel.EndOfTurnCleanup`（1613 行）は false に戻す。
+  `GetResultLocationForCardPlay`（2090-2093 行）はこのフラグまたは Exhaust keyword を判定し、
+  false に戻して Exhaust pile を返す。ただし、その前に IsDupe / Power の分岐がある。
+  `MoveToResultPileWithoutPlaying`（2112-2114 行）も廃棄判定に使うが、
+  この箇所には false の代入はない。`CreateClone`（2191 行）は複製側を false にする。
+
+フラグ値そのものを返し、Exhaust keyword の有無や最終的な移動先から値を推定しない。
 
 ### Orb Object
 
@@ -1075,6 +1106,9 @@ combat-pile selection grids. Markdown displays the uid after the row index, as i
 Outside combat, `uid` is omitted. Choose-a-card (`screen_type: "choose"`) rows and `preview_cards`
 do not carry uids; the repository code does not establish that a generated choice remains the
 same card instance when it enters the hand. Selection actions still use `index`.
+
+同じ戦闘中の grid 行には `exhaust_on_next_play` も含む。
+意味・例外時の扱い・ゲーム側の出典は [次回プレイ時の廃棄フラグ](#次回プレイ時の廃棄フラグ追加schema-3) を参照。
 
 ```jsonc
 {
