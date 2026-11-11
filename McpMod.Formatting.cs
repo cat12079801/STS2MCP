@@ -83,6 +83,16 @@ public static partial class McpMod
             sb.AppendLine();
         }
 
+        if (state.GetValueOrDefault("player") is Dictionary<string, object?> unlockedPlayer
+            && unlockedPlayer.GetValueOrDefault("unlocked_pools") is Dictionary<string, object?> unlocked)
+        {
+            string CountPool(Dictionary<string, object?>? source, string key)
+                => source?.GetValueOrDefault(key) is List<string> ids ? ids.Count.ToString() : "unknown";
+            var potions = unlocked.GetValueOrDefault("potions") as Dictionary<string, object?>;
+            sb.AppendLine($"Unlocked pools: colorless cards {CountPool(unlocked, "colorless_cards")} | character cards {CountPool(unlocked, "character_cards")} | potions character {CountPool(potions, "character")}, shared {CountPool(potions, "shared")}");
+            sb.AppendLine();
+        }
+
         // Multiplayer players summary (top-level)
         if (isMultiplayer && state.TryGetValue("players", out var playersListObj)
             && playersListObj is List<Dictionary<string, object?>> playersList && playersList.Count > 0)

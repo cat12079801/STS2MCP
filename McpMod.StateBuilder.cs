@@ -1480,6 +1480,7 @@ public static partial class McpMod
         if (combatState != null && CombatManager.Instance.IsInProgress)
         {
             inCombat = true;
+            state["unlocked_pools"] = BuildUnlockedPools(player, creature.CombatState);
             state["energy"] = combatState.Energy;
             state["max_energy"] = combatState.MaxEnergy;
 

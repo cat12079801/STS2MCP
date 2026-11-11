@@ -155,6 +155,65 @@ NotSeen にする。図鑑がこのラン固有の候補ID一覧をそのまま�
 `NUnlockCardsScreen.Open` で表示される。保存ランの `Player.UnlockState` は profile の現在値と
 異なりうる（`UnlockState` の契約、`Player.FromSerializable`）。未来の抽選結果・山札順は含まない。
 
+### 戦闘中の解放済み pool（追加、schema 3）
+
+戦闘中のローカル `player.unlocked_pools` に、解放済みのモデル ID (`Id.Entry`) の一覧を追加する。
+単独・マルチとも同じ Player Object に出し、戦闘外・旧 MOD では省略する。
+
+```jsonc
+"unlocked_pools": {
+  "colorless_cards": [ /* 無色カードの ID */ ],
+  "character_cards": [ /* 所有キャラのカード ID */ ],
+  "potions": {
+    "character": [ /* 所有キャラのポーション ID */ ],
+    "shared": [ /* 共有 pool のポーション ID */ ]
+  }
+}
+```
+
+すべての配列は ID の ordinal 昇順。解放条件や multiplayer の条件は MOD に写さず、
+ゲームの以下の関数の結果を列挙する。出典はデコンパイル `sts2-9cb4f1ad`。
+
+| 項目 | 呼び出すゲーム関数と引数 | 生成処理の出典（デコンパイルのファイル） |
+|---|---|---|
+| `colorless_cards` | `ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint)` | `MegaCrit.Sts2.Core.Models.Cards/JackOfAllTrades.cs` の `OnPlay` |
+| `character_cards` | `player.Character.CardPool.GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint)` | `MegaCrit.Sts2.Core.Models.Cards/Jackpot.cs` の `OnPlay` |
+| `potions.character` | `player.Character.PotionPool.GetUnlockedPotions(player.UnlockState)` | `MegaCrit.Sts2.Core.Factories/PotionFactory.cs` の `GetPotionOptions` |
+| `potions.shared` | `ModelDb.PotionPool<SharedPotionPool>().GetUnlockedPotions(player.UnlockState)` | 同上 |
+
+何でも屋が実際に呼ぶのは `GetUnlockedCards`。この関数
+（`MegaCrit.Sts2.Core.Models/CardPoolModel.cs`）が `AllCards` と `FilterThroughEpochs` を使い、
+無色 pool の `GenerateAllCards` / `FilterThroughEpochs`
+（`MegaCrit.Sts2.Core.Models.CardPools/ColorlessCardPool.cs`）を経由する。
+multiplayer 制約は札の `Owner.RunState.CardMultiplayerConstraint` と同じ取り方で、
+`MegaCrit.Sts2.Core.Runs/IRunState.cs` の getter は人数が 1 以下なら `SingleplayerOnly`、
+それ以外なら `MultiplayerOnly` を返す。solo 固定にはしない。
+UnlockState も札の `Owner.UnlockState` と同じものを使う。
+現在の profile や全プレイヤーの解放状態の和集合で置き換えない。
+`MegaCrit.Sts2.Core.Unlocks/UnlockState.cs` の説明と
+`MegaCrit.Sts2.Core.Entities.Players/Player.cs` の `FromSerializable` によれば、
+保存ランの解放状態は現在の profile と異なる場合がある。
+
+この欄は**解放済み pool**であり、各札の最終的な抽選候補一覧ではない。
+何でも屋の自己除外、ジャックポットの 0 コスト・非 X 条件、後段の
+`CardFactory.GetDistinctForCombat` / `GetForCombat` による戦闘生成 filter は適用しない。
+錬金術は `MegaCrit.Sts2.Core.Models.Cards/Alchemize.cs` の `OnPlay` から
+`PotionFactory.CreateRandomPotionInCombat(Owner, Owner.RunState.Rng.CombatPotionGeneration)`
+を呼び、その関数が `GetPotionOptions` に `CanBeGeneratedInCombat` の条件を追加してから抽選する。
+この欄のポーション一覧には、その追加条件を適用しない。
+抽選・RNG・モデルの mutable 化や戦闘カード作成は行わない。
+既存の `generation_pool` は別の filter を持つため、同一視しない。
+
+各配列の読み取り・遅延列挙中に例外が出た場合、その配列だけを `null` にし、
+`warnings` に `player.unlocked_pools.colorless_cards` / `character_cards` /
+`potions.character` / `potions.shared` の該当パスと例外を記録する。
+他の配列は取得を続ける。`[]` は解放済み項目なし、`null` は取得不能なので区別する。
+戦闘 state のオブジェクト参照と Player の参照ごとに結果と失敗情報をキャッシュし、
+次の戦闘・別 Player では作り直す。キャッシュされた失敗も state 取得ごとに警告へ載せる。
+Markdown は `Unlocked pools: colorless cards N | character cards N | potions character N, shared N`
+の 1 行のみで、取得不能は該当件数を `unknown` とし、ID 一覧は出さない。
+追加項目なので `schema_version` は 3 のまま。
+
 ### Player Object
 
 Always present at the top level (except `menu`). Contains everything about the local player.
@@ -170,6 +229,11 @@ Always present at the top level (except `menu`). Contains everything about the l
   "gold": 99,
 
   // --- Combat-only fields (present only when CombatManager.IsInProgress) ---
+  "unlocked_pools": { // 解放済み pool。最終的な抽選候補ではない。上記の契約を参照
+    "colorless_cards": [ /* IDs */ ],
+    "character_cards": [ /* IDs */ ],
+    "potions": { "character": [ /* IDs */ ], "shared": [ /* IDs */ ] }
+  },
   "energy": 3,
   "max_energy": 3,
   "stars": 2,               // Regent only; omitted if 0 and character doesn't always show stars
