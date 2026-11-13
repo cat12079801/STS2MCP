@@ -653,7 +653,9 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
 - `canonical` は `CardEnergyCost.Canonical` の整数。ゲームが保持する印刷時の開始コスト。
   強化・カスタム基礎値変更の前の値を保持し、X の Canonical はゲームの定義で 0。
 - `captured_x_value` は `costs_x=true` のときだけ `CardEnergyCost.CapturedXValue` を読む。
-  最後にその X 札のプレイに支払ったエナジーで、初期値の 0 も保持する。
+  `SpendEnergy` での支払額、`AutoPlay` 時点のエナジー（`skipXCapture=true` では書き込まない）、
+  `Clone` での元の値の引き継ぎを保持し、0 に戻す処理はない。
+  `AutoPlay` はエナジーを支払わずにその時点の値を保存し、初期値の 0 も保持する。
   X の効果量への補正を含めるときはゲームが別途 `ResolveEnergyXValue` を使う。
   非 X では `null` と理由 `not_x_cost`、X 種別が読めない場合は `null` と
   `costs_x_unavailable`。いずれも CapturedXValue getter を呼ばず、警告を追加しない。
@@ -679,6 +681,7 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
   `no_energy_cost` とする。カードの Curse/Status 種別や Unplayable keyword からは判断しない。
   `costs_x` 自体の読取失敗は `costs_x: null`、数値側は `costs_x_unavailable`。
   基礎値の読取失敗は `base_raw` と固定コストの `base` に例外の理由、修正後の数値は `base_unavailable`。
+  基礎値の失敗は `warnings` の `card.energy_cost.base_raw` に記録する。
   その他の読取・計算失敗も該当値だけ `null` と例外の理由にし、`warnings` に
   `card.energy_cost[.<key>]` を出す。private リストが読めなくても public のコストは読む。
   `EnergyCost` 自体が取得できない場合もオブジェクトを残し、8項目を `null` と理由にする。
@@ -713,6 +716,8 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
   `Enlightenment.cs` の `OnPlay`（16–24行）は通常 `SetThisTurnOrUntilPlayed(1, true)`、
   強化後 `SetThisCombat(1, true)`。
 - `MegaCrit.Sts2.Core.Entities.Players/PlayerCombatState.cs` の `PlayPile` / `AllPiles`（71–85行）。
+- `MegaCrit.Sts2.Core.Models/CardModel.cs` の `SpendEnergy`（1984–1995行）、
+  `MegaCrit.Sts2.Core.Commands/CardCmd.cs` の `AutoPlay`（99–101行）。
 
 契約試験は [`tests/CardEnergyCostContract`](../tests/CardEnergyCostContract/README.md)。
 効果適用・ターン遷移の実機検証とは区別する。
@@ -809,6 +814,8 @@ Pets also share the same builder.
 ジャグリングの `card_to_clone_uid` は private `Data.cardToClone` の参照を既存の
 手札・パイル・grid・履歴共通の uid registry に通した値。3 回目のアタックの
 `BeforeCardPlayed` で予約し、対象の `AfterCardPlayed` で参照を消して複製する。
+解決後の snapshot では通常 `null`。`null` でない値が見えるのはその札の解決中
+（プレイ途中の選択を含む）だけ。
 読取成功は `card_to_clone_readable=true`。待ちがなければ uid は `null` で理由なし。
 読取失敗は `card_to_clone_readable=false`、uid は `null` とキー別理由・warnings。
 Data を初期化せず、アタック数から予約を再構成しない。画面に出たプレイと複製の
@@ -820,6 +827,7 @@ Data を初期化せず、アタック数から予約を再構成しない。画
 トップレベル `warnings` に `status.<POWER_ID>.<key>` を出す。他項目・説明失敗時の
 最小行でも内部状態の読取を続ける。false / 0 と不明を区別する。
 Markdown は既存行に短く追記し、通常の skip=false と空の盗難配列は省略する。
+`card_to_clone_readable=true` も Markdown では省略し、JSON に保持する。false は表示する。
 例は `(facing: Left)`、`(stolen strength: 17: -2.75)`。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
 既存項目の意味を変えない追加のため schema は 4 のまま。

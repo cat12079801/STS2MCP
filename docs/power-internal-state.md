@@ -41,9 +41,12 @@ private Data は `PowerModel._internalData`、対象クラスの private nested 
 `unavailable_reasons.card_to_clone_uid`・`warnings`。カウンターの成否とは独立する。
 Data の初期化や参照の変更は行わず、ゲームのカード参照を文字列 uid に置き換えて返す。
 Markdown の正常な待ちなしは `none`、読取失敗は `null (理由)` と表示する。
+`card_to_clone_readable=true` は Markdown で省略し、JSON に保持する。false は表示する。
 Markdown は情報がある場合だけ既存 status 行に追記する。skip=false と空配列は省略し、
 対象別の 0 / false は表示、失敗時は null と理由を表示する。
 解決中の値はフック間の過渡状態なので、計画には解決後の snapshot を使う。
+ジャグリングの予約参照は解決後の snapshot では通常 `null`。
+`null` でない値が見えるのはその札の解決中（プレイ途中の選択を含む）だけ。
 
 実機の起動・照合は行っていない。契約試験はゲーム境界のダブルに対して
 本番の reader・formatter・warnings を直接実行する。

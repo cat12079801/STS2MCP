@@ -17,6 +17,7 @@ public static partial class McpMod
         {
             if (!state.TryGetValue(key, out var value)) continue;
             if (key == "skip_next_duration_tick" && value is false) continue;
+            if (key == "card_to_clone_readable" && value is true) continue;
             string text;
             if (value is List<Dictionary<string, object?>> amounts)
             {

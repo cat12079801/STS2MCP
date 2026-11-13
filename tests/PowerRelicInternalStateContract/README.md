@@ -24,6 +24,8 @@ null Data・型不一致・フィールド欠落・宣言型変更・getter失�
 他経路の uid と一致することを確認する。Data の null・異型・フィールド欠落／型変更で
 readable=false と null・理由になり、正常な待ちなしの readable=true と区別できることを
 wire と Markdown でも確認する。
+readable=true は待ちなし・予約ありのどちらでも Markdown で省略し、JSON で保持すること、
+readable=false は Markdown に表示することも確認する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

@@ -83,6 +83,7 @@ public static partial class McpMod
         var noPending = Power(juggling);
         Check(noPending["card_to_clone_uid"] == null && noPending["card_to_clone_readable"] is true && !noPending.ContainsKey("unavailable_reasons"), "readable null means no pending clone even at count four");
         Check(FormatPowerInternalState(noPending).Contains("card to clone uid: none"), "known no pending clone has explicit markdown");
+        Check(!FormatPowerInternalState(noPending).Contains("card to clone readable"), "known empty pending omits readable success from markdown");
         Check(!Power(juggling, false).ContainsKey("card_to_clone_uid") && !Power(juggling, false).ContainsKey("card_to_clone_readable"), "hidden power omits clone fields");
         var deckCard = new CardModel("STRIKE_R");
         var owner = new Player();
@@ -94,6 +95,7 @@ public static partial class McpMod
         string uid = GetStableCardUid(pendingCard);
         Check(Equals(pending["card_to_clone_uid"], "STRIKE_R#0") && Equals(pending["card_to_clone_uid"], uid) && pending["card_to_clone_readable"] is true, "pending reference uses real shared deck uid registry");
         Check(FormatPowerInternalState(pending).Contains("card to clone uid: " + uid), "pending uid markdown");
+        Check(!FormatPowerInternalState(pending).Contains("card to clone readable") && pending["card_to_clone_readable"] is true, "pending uid omits readable success from markdown and retains JSON field");
         Check(ReferenceEquals(juggling.PeekPending(), pendingCard), "read keeps game pending reference unchanged");
         var generated = new CardModel("STRIKE_R");
         juggling.SetPending(generated);
@@ -117,6 +119,7 @@ public static partial class McpMod
             var failedClone = Power(juggling);
             Unknown(failedClone, "card_to_clone_uid", "status.JugglingPower");
             Check(failedClone["card_to_clone_readable"] is false && FormatPowerInternalState(failedClone).Contains("card to clone uid: null ("), "unreadable pending clone differs from known null");
+            Check(FormatPowerInternalState(failedClone).Contains("card to clone readable: no"), "unreadable pending keeps readable failure in markdown");
             Check(ReferenceEquals(juggling.PeekData(), invalidData), "failed read never initializes or changes InternalData");
         }
         Unknown(Power(new MissingDataPower()), "attacks_played_this_turn", "status.MissingDataPower");
