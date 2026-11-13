@@ -154,7 +154,9 @@ namespace STS2_MCP
             Check(RefreshCalls == 1 && combatRows.All(row => row.ContainsKey("uid") && row.ContainsKey("exhaust_on_next_play")), "combat registry refresh before all rows");
             Check(combatRows[30]["exhaust_on_next_play"] is true && combatRows[31]["exhaust_on_next_play"] is false, "exhaust flags retain true and false");
             Check(combatRows.All(row => row.ContainsKey("energy_cost")), "combat rows expose energy cost");
-            Check(Markdown(combatRows).Contains("energy cost: base 1; local 1; all 1"), "combat cost markdown wiring");
+            Check(!Markdown(combatRows).Contains("energy cost:"), "grid omits unchanged energy cost markdown");
+            ((Dictionary<string, object?>)combatRows[30]["energy_cost"]!)["with_all_modifiers"] = 0;
+            Check(Markdown(combatRows).Contains("energy cost: base 1; local 1; all 0"), "grid shows changed energy cost markdown");
             Check(!Equals(combatRows[30]["uid"], combatRows[31]["uid"]), "same ID retains distinct uids");
             var combatAgain = BuildCardSelectCardRows(current, [])!;
             Check(Equals(combatRows[30]["uid"], combatAgain[30]["uid"]), "stable instance uid across reads");

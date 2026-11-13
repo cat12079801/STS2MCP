@@ -25,6 +25,12 @@ namespace STS2_MCP
             AppendCardEnergyCostMarkdown(sb, new() { ["energy_cost"] = state });
             return sb.ToString();
         }
+        private static void CheckCostDisplay(Dictionary<string, object?> state, bool expected, string label)
+        {
+            string jsonBefore = JsonSerializer.Serialize(state);
+            Check(Markdown(state).Contains("energy cost:") == expected, label);
+            Check(JsonSerializer.Serialize(state) == jsonBefore, $"{label}: JSON unchanged");
+        }
         public static void RunCardEnergyCostContract()
         {
             BeginStateWarnings();
@@ -34,6 +40,20 @@ namespace STS2_MCP
             Check(plain["costs_x"] is false && Equals(plain["base"], 2), "base and cost kind");
             Check(Modifiers(plain).Count == 0 && Reasons(plain).Count == 0, "empty is known, never null");
             Check(cost.Calls.SequenceEqual(new[] { CostModifiers.None, CostModifiers.Local, CostModifiers.All }), "game calculations requested once each in order");
+            CheckCostDisplay(plain, false, "unchanged fixed cost is omitted");
+            CheckCostDisplay(new(plain) { ["base"] = 0, ["with_local_modifiers"] = 0, ["with_all_modifiers"] = 0 }, false, "unchanged zero cost is omitted");
+            CheckCostDisplay(new(plain) { ["with_local_modifiers"] = 1 }, true, "local-only difference is shown without local list entries");
+            CheckCostDisplay(new(plain) { ["with_all_modifiers"] = 0 }, true, "global-only difference is shown, including zero");
+            var plainX = new CardModel();
+            plainX.Cost.X = true;
+            CheckCostDisplay(BuildCardEnergyCostState(plainX), false, "X without modifiers is omitted");
+            var plainNoCost = new CardModel();
+            plainNoCost.Cost.Values[CostModifiers.None] = -1;
+            CheckCostDisplay(BuildCardEnergyCostState(plainNoCost), false, "no-energy-cost without modifiers is omitted");
+            var unreadableList = new CardModel();
+            unreadableList.Cost.SetModifiers(null);
+            CheckCostDisplay(BuildCardEnergyCostState(unreadableList), true, "unreadable list with unchanged numeric costs is shown");
+            BeginStateWarnings();
 
             var relative = new LocalCostModifier(-1, LocalCostType.Relative, LocalCostModifierExpiration.WhenPlayed, false);
             var turn = new LocalCostModifier(1, LocalCostType.Absolute, LocalCostModifierExpiration.EndOfTurn | LocalCostModifierExpiration.WhenPlayed, true);
@@ -51,6 +71,7 @@ namespace STS2_MCP
             Check(rows[0].SequenceEqual(rows[3]), "order and duplicate modifiers retained");
             Check(local.Count == 4 && relative.Amount == -1, "read does not mutate game list or entries");
             Check(Markdown(state).Contains("Relative -1, WhenPlayed, reduce_only=false") && Markdown(state).Contains("Absolute 1, EndOfTurn, WhenPlayed, reduce_only=true"), "markdown exposes amount, kind, flags and reduceOnly");
+            CheckCostDisplay(new(state) { ["with_local_modifiers"] = 2, ["with_all_modifiers"] = 2 }, true, "nonempty modifiers are shown even when costs are unchanged");
             using (var json = JsonDocument.Parse(JsonSerializer.Serialize(state)))
             {
                 Check(json.RootElement.GetProperty("local_modifiers")[0].GetProperty("amount").GetInt32() == -1, "wire amount is numeric");
@@ -70,10 +91,12 @@ namespace STS2_MCP
             var x = BuildCardEnergyCostState(card);
             Check(new[] { "base", "with_local_modifiers", "with_all_modifiers" }.All(key => x[key] == null && Reasons(x)[key] == "x_cost"), "X has null numeric costs and reasons");
             Check(cost.Calls.Count == 0 && Modifiers(x).Count == 1, "X does not calculate fixed cost, still reports actual modifiers");
+            CheckCostDisplay(x, true, "X with local modifiers is shown");
             cost.X = false;
             cost.Values[CostModifiers.None] = -1;
             var noCost = BuildCardEnergyCostState(card);
             Check(new[] { "base", "with_local_modifiers", "with_all_modifiers" }.All(key => noCost[key] == null && Reasons(noCost)[key] == "no_energy_cost"), "negative sentinel becomes null with reason");
+            CheckCostDisplay(noCost, true, "no-energy-cost with local modifiers is shown");
             Check(_stateWarnings.Count == 0, "normal X/no-cost are not warnings");
             cost.Values[CostModifiers.None] = 0;
             Check(Equals(BuildCardEnergyCostState(card)["base"], 0), "zero base is a cost");
@@ -106,11 +129,37 @@ namespace STS2_MCP
             card.ThrowEnergyCost = true;
             var failedGetter = BuildCardEnergyCostState(card);
             Check(Reasons(failedGetter).Count == 5 && failedGetter["local_modifiers"] == null, "EnergyCost getter failure preserves object contract");
+            CheckCostDisplay(failedGetter, true, "all-null read failure is shown");
+            CheckCostDisplay(new(plain) { ["costs_x"] = null, ["unavailable_reasons"] = new Dictionary<string, string> { ["costs_x"] = "read_failed" } }, true, "cost-kind-only failure is shown");
+            CheckCostDisplay(new(plain) { ["local_modifiers"] = null }, true, "null without reason is shown as unavailable");
             var response = new Dictionary<string, object?> { ["state_type"] = "combat", ["energy_cost"] = failedGetter };
             EndStateWarnings(response);
             Check(response["state_type"]!.Equals("combat") && ((List<string>)response["warnings"]!).Any(w => w.Contains("card.energy_cost.local_modifiers")), "real warning collector attaches failures to surviving state");
             BeginStateWarnings();
             Check(_stateWarnings.Count == 0 && Modifiers(BuildCardEnergyCostState(new CardModel())).Count == 0, "later state recovers without stale errors");
+
+            var player = new Dictionary<string, object?>
+            {
+                ["draw_pile_count"] = 0, ["discard_pile_count"] = 0, ["exhaust_pile_count"] = 0,
+                ["play_pile"] = new List<Dictionary<string, object?>>()
+            };
+            foreach (object? count in new object?[] { null, -1, 0, 1, 2 })
+            {
+                if (count == null) player.Remove("play_pile_count");
+                else player["play_pile_count"] = count;
+                player["play_pile"] = Enumerable.Range(0, count is int n ? Math.Max(0, n) : 0)
+                    .Select(i => new Dictionary<string, object?> { ["name"] = $"Played card {i}", ["cost"] = "1", ["description"] = "In play", ["energy_cost"] = plain }).ToList();
+                string jsonBefore = JsonSerializer.Serialize(player);
+                var sb = new StringBuilder();
+                FormatDeckPilesMarkdown(sb, player);
+                string text = sb.ToString();
+                bool show = count is int cards && cards >= 1;
+                Check(text.Contains("#### Play Pile") == show, $"Play Pile visibility for count {count ?? "missing"}");
+                if (show)
+                    Check(text.Contains($"Play Pile ({count} cards)") && text.Contains("Played card 0"), "nonempty Play Pile keeps heading, count and cards");
+                Check(text.Contains("#### Draw Pile (0 cards") && text.Contains("#### Discard Pile (0 cards)") && text.Contains("#### Exhaust Pile (0 cards)"), "other pile sections remain visible");
+                Check(JsonSerializer.Serialize(player) == jsonBefore, "pile Markdown leaves JSON unchanged");
+            }
 
             string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
             string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));

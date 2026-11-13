@@ -461,8 +461,10 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
 プレイの合間には通常空で、解決中には過渡的な値が見えるため、計画は `is_resolving: false` の
 snapshot を使う。山札は既存どおり表示用のソート順で、内部のドロー順を出さない。
 
-Markdown は手札・各パイル・grid 行の下に base / local / all と、
-非空の修正一覧（値・種別・期限・reduce_only）を適用順で表示する。`null` には理由を添える。
+Markdown は local modifier が非空、修正後のコストが基礎値と異なる、または
+`x_cost` / `no_energy_cost` 以外の理由の `null` がある場合だけ、手札・各パイル・grid 行の下に
+base / local / all と非空の修正一覧（値・種別・期限・reduce_only）を適用順で表示する。
+`null` には理由を添える。Play Pile の節は `play_pile_count` が1以上の場合だけ表示する。
 既存の `cost`（文字列、X は `"X"`、それ以外は `GetAmountToSpend()`）と `star_cost` は変更しない。
 ここで追加するのはエナジーコストだけで、star cost の修正は対象外。
 既存フィールドの意味・削除・action の変更がないため `schema_version` は **4 のまま**。
@@ -471,7 +473,7 @@ Markdown は手札・各パイル・grid 行の下に base / local / all と、
 出典（v0.113.0、ローカルの `sts2-d009478a` デコンパイル）:
 
 - `MegaCrit.Sts2.Core.Entities.Cards/CardEnergyCost.cs`: `_localModifiers`（25行）、
-  `GetWithModifiers`（94–126行）、`SetThisTurnOrUntilPlayed`（197–203行）、
+  `GetWithModifiers`（94–121行）、`SetThisTurnOrUntilPlayed`（197–203行）、
   `SetThisCombat`（238–244行）、`AddUntilPlayed`（258–264行）、
   `EndOfTurnCleanup` / `AfterCardPlayedCleanup`（333–347行）、`UpgradeBy` / `SetCustomBaseCost`。
 - 同ディレクトリの `LocalCostModifier.cs` の各 getter（48–76行）と `Modify`（89行）、

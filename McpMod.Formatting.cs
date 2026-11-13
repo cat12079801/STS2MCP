@@ -598,18 +598,6 @@ public static partial class McpMod
         sb.AppendLine();
     }
 
-    private static void FormatDeckPilesMarkdown(StringBuilder sb, Dictionary<string, object?> player)
-    {
-        sb.AppendLine("### Deck Information");
-        sb.AppendLine();
-
-        FormatPileMarkdown(sb, player, "draw_pile", "draw_pile_count", "Draw Pile", " sorted by rarity");
-        FormatPileMarkdown(sb, player, "discard_pile", "discard_pile_count", "Discard Pile");
-        FormatPileMarkdown(sb, player, "exhaust_pile", "exhaust_pile_count", "Exhaust Pile");
-        if (player.ContainsKey("play_pile_count"))
-            FormatPileMarkdown(sb, player, "play_pile", "play_pile_count", "Play Pile");
-    }
-
     private static void FormatPetsMarkdown(StringBuilder sb, Dictionary<string, object?> player)
     {
         if (!player.TryGetValue("pets", out var petsObj)
@@ -633,25 +621,6 @@ public static partial class McpMod
                     sb.AppendLine($"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}): {p["description"]}");
             }
         }
-        sb.AppendLine();
-    }
-
-    private static void FormatPileMarkdown(StringBuilder sb, Dictionary<string, object?> player,
-        string pileKey, string countKey, string label, string suffix = "")
-    {
-        sb.AppendLine($"#### {label} ({player[countKey]} cards{(suffix.Length > 0 ? "," : "")}{suffix})");
-        if (player.TryGetValue(pileKey, out var pileObj) && pileObj is List<Dictionary<string, object?>> pile && pile.Count > 0)
-        {
-            foreach (var card in pile)
-            {
-                string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
-                string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
-                sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}){exhaustNext}: {card["description"]}");
-                AppendCardEnergyCostMarkdown(sb, card);
-            }
-        }
-        else
-            sb.AppendLine("- *(empty)*");
         sb.AppendLine();
     }
 

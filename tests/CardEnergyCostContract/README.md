@@ -1,7 +1,7 @@
 # カードのエナジーコスト state の契約試験
 
 本番の `McpMod.CardEnergyCost.cs` / `McpMod.CardEnergyCostFormatting.cs` /
-`McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
+`McpMod.PileFormatting.cs` / `McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
 
 ```fish
 env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CardEnergyCostContract -c Release
@@ -12,6 +12,9 @@ Relative −1 / WhenPlayed、Absolute 1 / reduceOnly と複合期限、EndOfComb
 リストの置換・要素の変更後の再読込と snapshot の独立を検証する。
 null／異型／欠落フィールド／壊れた要素、public getter／計算の例外での null・理由・warnings、
 他の値の保持と復旧、JSON の数値・bool 型、Markdown の値・期限・理由も確認する。
+Markdown は修正一覧が非空・コストの差・通常の X/コストなし以外の null で表示し、
+通常の未修正札は省略することを検査する。Play Pile の節は件数が1以上で表示し、
+欠落・負数・0では省略すること、他のパイルの節と JSON は変えないことも確認する。
 巨大な state builder はリンクせず、本番ソースの文字列検査で手札・4パイル・
 マルチの共通経路、非戦闘の除外、schema 4 を確認する。
 grid の戦闘条件・全行への追加と Markdown の配線は `tests/CardSelectContract` で検証する。
