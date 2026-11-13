@@ -454,7 +454,10 @@ Markdown は正の件数・非空の uid 配列・取得失敗があるときだ
 公開 getter を優先し、private フィールドは名前・型を指定して読む。
 private フィールドが読めなければキーを省略し、`warnings` に
 `player.relics.<ID>.combat_state.<key>` を記録する。欠落は unknown と扱うこと。
-追加項目なので schema は 3 のまま。旧 MOD・旧 dump は項目を持たない。
+ペン先 `attacks_played`、冥銭 `cards_exhausted` / `ethereal_count`、毛皮のコート
+`affects_current_room` は、失敗時にキーを `null` にし、`combat_state.unavailable_reasons`
+にもキーごとの理由を出す。成功した他の値は保持する。
+追加項目なので現在の schema は 4 のまま。旧 MOD・旧 dump は追加項目を持たない。
 Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付ける。
 虹の指輪は各種別の枚数と発動数、肉兵は cooldown、脈打つ亡骸は HP 損失累積を表示する。
 
@@ -703,6 +706,7 @@ false・null・項目なしでは印を付けない。schema 3 で追加した�
 ### Power Object (status effects)
 
 Used for both player `status` and enemy `status`.
+Pets also share the same builder.
 
 ```jsonc
 {
@@ -714,6 +718,31 @@ Used for both player `status` and enemy `status`.
   "keywords": [ /* Keyword Objects */ ]
 }
 ```
+
+画面に見えるパワーには次の内部状態を追加する（schema 4）。
+可視性が不明、または `hidden_in_ui` のパワーには追加しない。
+各項目の意味・人間が知りうる根拠・非公開の範囲は
+[パワーの内部状態](power-internal-state.md) を参照。
+
+| 対象 | 追加項目 | JSON の型 |
+|---|---|---|
+| 全可視パワー | `skip_next_duration_tick` | bool |
+| `TORIC_TOUGHNESS_POWER` | `block_base_value` | decimal |
+| `SURROUNDED_POWER` | `facing` | enum 名 `Right` / `Left` |
+| `POSSESS_STRENGTH_POWER` | `stolen_strength` | `[{"player_id":"17","amount":-2.75}]` |
+| `POSSESS_SPEED_POWER` | `stolen_dexterity` | 同上 |
+| `SKITTISH_POWER` | `has_gained_block_this_turn` | bool |
+| `JUGGLING_POWER` | `attacks_played_this_turn` | int |
+
+盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
+文字列 ID。空の配列は盗んだ記録なしを表し、合算・正数化・既定値補完はしない。
+読めない項目は `null`、同じ status 行の `unavailable_reasons.<key>` に理由、
+トップレベル `warnings` に `status.<POWER_ID>.<key>` を出す。他項目・説明失敗時の
+最小行でも内部状態の読取を続ける。false / 0 と不明を区別する。
+Markdown は既存行に短く追記し、通常の skip=false と空の盗難配列は省略する。
+例は `(facing: Left)`、`(stolen strength: 17: -2.75)`。
+失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
+既存項目の意味を変えない追加のため schema は 4 のまま。
 
 ### Keyword Object
 

@@ -421,7 +421,7 @@ public static partial class McpMod
             sb.AppendLine($"**{player["character"]}** - HP: {player["hp"]}/{player["max_hp"]} | Block: {player["block"]} | Energy: {player["energy"]}/{player["max_energy"]}{stars} | Gold: {player["gold"]}");
             sb.AppendLine();
 
-            FormatListSection(sb, "Status", player, "status", p => $"- **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}): {p["description"]}");
+            FormatListSection(sb, "Status", player, "status", p => $"- **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}: {p["description"]}");
             FormatListSection(sb, "Relics", player, "relics", r =>
             {
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
@@ -502,7 +502,7 @@ public static partial class McpMod
                     })));
                 }
 
-                FormatListSection(sb, "Status", enemy, "status", p => $"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}): {p["description"]}");
+                FormatListSection(sb, "Status", enemy, "status", p => $"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}: {p["description"]}");
                 sb.AppendLine();
             }
         }
@@ -620,7 +620,7 @@ public static partial class McpMod
             {
                 sb.AppendLine("  **Status**");
                 foreach (var p in statusList)
-                    sb.AppendLine($"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}): {p["description"]}");
+                    sb.AppendLine($"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}: {p["description"]}");
             }
         }
         sb.AppendLine();

@@ -4,7 +4,7 @@
 単体とマルチのローカル player は共通の `BuildPlayerState` を通る。
 生きた戦闘と PlayerCombatState があるときだけ出し、戦闘外と対象外レリックでは省略する。
 戦闘上のカード選択・ポーズ等でも、同じ player が構築されれば含む。
-既存項目の意味は変えないため、schema は 3 のまま。旧 MOD・旧 dump では省略される。
+既存項目の意味は変えないため、現在の schema は 4 のまま。旧 MOD・旧 dump では追加項目が省略される。
 
 ```json
 {
@@ -23,7 +23,9 @@
 読み取りでゲームを変更する getter、フック、乱数は呼ばない。
 private 値の読取失敗・フィールド削除・型変更では該当キーを省略し、既存の
 `warnings` に `player.relics.<ID>.combat_state.<key>` を記録する。
-全キーの読取に失敗した場合は `combat_state` 自体も省略する。
+この省略契約は既存項目に適用する。下記のペン先・冥銭・毛皮のコートは失敗したキーを
+`null` にし、`combat_state.unavailable_reasons.<key>` に理由も付ける。
+この3種では、全キーの失敗時にも `combat_state` を保持する。
 呼び出し側も例外を捕捉し、型・公開 getter の変更等で読み取り全体が失敗した場合は
 `combat_state` を省略して `warnings` の `player.relics.<ID>.combat_state` に記録する。
 そのレリックの基本情報や player の他の項目の構築は続ける。
@@ -68,18 +70,46 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | 不気味なランプ `UnsettlingLamp` | `used_this_combat` ← `_isFinishedTriggering` | 名前は処理フラグに見えるが、`BeforePowerAmountChanged`／`ModifyPowerAmountGivenMultiplicative` が参照し、最初の対象カードの `AfterCardPlayed` 以降ずっと倍化を禁止する戦闘内消費。`BeforeCombatStart` と `AfterCombatEnd` で false。 |
 | 溶岩のランプ `LavaLamp`（追加） | `took_damage_this_combat` ← 公開 `TookDamageThisCombat` (`_tookDamageThisCombat`) | 無傷を維持して報酬アップグレードを守る戦闘判断に使う。`AfterDamageReceived` は CombatRoom 内の所有者への正の非ブロックダメージを記録するが `Unblockable` は除外。`TryModifyCardRewardOptionsLate` が参照。`AfterRoomEntered` で部屋種別にかかわらず false。 |
 
+## ペン先・冥銭・毛皮のコート（v0.113.0）
+
+以下の出典は `sts2-d009478a` の同名クラス。
+3種は private フィールド／自動プロパティの backing field を名前・宣言型まで確認し、
+読取失敗は `null`・`combat_state.unavailable_reasons.<key>`・トップレベル `warnings` の
+`player.relics.<ID>.combat_state.<key>` にする。他項目の取得は続ける。
+既存の `counter` や古い項目の失敗時省略は変更しない。
+
+| レリック | 出す項目 ← 元の値／意味 | 人間が知りうる根拠 |
+|---|---|---|
+| ペン先 `PenNib` | `attacks_played` ← `_attacksPlayed`（int）。`BeforeCardPlayed` → `NotifyAttackPlayed` で増加し、setter で 10 の剰余。0〜9。戦闘をまたぐ。 | 通常の `DisplayAmount` と同じ画面カウンタ。発動演出中は表示が10になるので、原値を別項目に出す。アタックのプレイからも数えられる。 |
+| 冥銭 `JossPaper` | `cards_exhausted` ← `_cardsExhausted`（int）。非エセリアルの `AfterCardExhausted` で加算、`DrawIfThresholdMet` で閾値の剰余。 | 通常の表示カウンタ。発動中は閾値の表示に変わるが、見えた廃棄とドローから原値を数えられる。 |
+| 冥銭 `JossPaper` | `ethereal_count` ← `_etherealCount`（int）。エセリアル廃棄を蓄積し、所有者参加の `AfterSideTurnEnd` で `CardsExhausted` に移して0。`AfterCombatEnd` も0。 | 手札のエセリアル札の廃棄が画面に出る。手番終了処理中の廃棄を数えた値。通常の次の行動時は0でも、解決中に値を作り替えない。 |
+| 毛皮のコート `FurCoat` | `affects_current_room`（bool）。private `FurCoatCoordsSet`・`FurCoatCoordCols` / `Rows` の backing field と `Owner.RunState.CurrentMapPoint.coord` を比較。未設定はfalse、配列長の不一致や現在座標の欠落はnull。 | 地図の部屋に `AddQuest(this)` の印が付き、入室時はコートの発動と敵HPを1にする演出が見える。現在の部屋だけを示す。 |
+
+毛皮のコートの `FurCoatActIndex`（`_furCoatActIndex`）は `AddMarkedRooms` が
+印を設定する act を限定する値。v0.113.0 の `BeforeCombatStart` と
+`AfterCreatureAddedToCombat` は **act を比較せず** `GetMarkedCoords` と現在座標だけで発動する。
+そのため `affects_current_room` に act の追加条件を入れない。
+別 act で同じ座標があっても、実際の戦闘フックに合わせた値を出す。
+この場合も現在の部屋での発動・HP変化が観測根拠であり、将来の部屋の判定は公開しない。
+`GetMarkedCoords` 自体は呼ばず、マップを生成・変更する処理や乱数も呼ばない。
+
+座標配列・act index・将来の適用先は出さない。
+`_isActivating`、`PenNib._attackToDouble` も出さない。前者は演出用フラグ、後者は
+カードの解決中だけ保持する参照であり、画面の永続状態として公開しない。
+Markdown は `(attacks played: 9)`、`(cards exhausted: 4, ethereal count: 0)`、
+`(affects current room: yes)` のように既存レリック行に付ける。
+失敗時は `null (理由)`、空の `combat_state` は追記しない。
+
 ## 出さない値
 
 | レリック／値 | 理由と出典 |
 |---|---|
 | オリハルコン `Orichalcum._shouldTrigger` | 手番終了中の二つのフック間だけの予約。`BeforeSideTurnEndVeryEarly` がブロック 0 を確認して true、`BeforeSideTurnEnd` が消費して false。所有者の `BeforeSideTurnStart` も false。行動選択時点の条件は現在ブロックで判断できる。 |
 | オリハルコン？ `FakeOrichalcum._shouldTrigger` | 本物と同じ予約・リセット順。`BeforeSideTurnEndVeryEarly`／`BeforeSideTurnEnd`／`BeforeSideTurnStart`。 |
-| 冥銭 `JossPaper._etherealCount` | エセリアル廃棄のドローを手札フラッシュ後まで遅延するための数。`AfterCardExhausted` で蓄積し、同じ手番終了処理の `AfterSideTurnEnd` で `CardsExhausted` に移して 0、`AfterCombatEnd` も 0。次の行動選択まで持ち越す状態ではない。永続廃棄数は `DisplayAmount`／既存 `counter`。 |
 | パエルの肉兵 `PaelsLegion._triggeredBlockLastTurn` | `AfterCardPlayed` で true、`AfterSideTurnStart` で睡眠アニメーションの要否だけを判定して false。`AfterCombatEnd` も false。倍化判定に効くのは出力した `cooldown`。 |
 | Vambrace／UnsettlingLamp の `_triggeringCard`、MusicBox の `_cardBeingPlayed`、PaelsLegion の `_affectedCardPlay`、UnsettlingLamp の `_doubledPowers` | 同じカードの解決中に効果をまとめる参照。各クラスの `BeforeCardPlayed`／`BeforePowerAmountChanged`／`AfterModifyingBlockAmount`／`AfterCardPlayed`、UnsettlingLamp の `HasDoubledTemporaryPowerSource`。次の行動用の消費フラグだけを出す。 |
 | `_isActivating`（JossPaper、PenNib 等） | `DoActivateVisuals` の待機中の表示切替。戦闘能力の未使用／使用済みフラグではない。PenNib の `_attackToDouble` も `BeforeCardPlayed`〜`AfterCardPlayed` の解決中参照。 |
 | 古びたティーセット `VenerableTeaSet._gainEnergyInNextCombat` と偽物 `FakeVenerableTeaSet` | `AfterRoomEntered(RestSiteRoom)` で予約、`AfterEnergyReset` でエナジー付与後 false。最初の行動選択では付与済みで既存 `energy` に反映済み。戦闘外の次戦闘開始条件は今回の戦闘中状態の対象外。公開 `GainEnergyInNextCombat` があることも確認。 |
-| 毛皮のコート `FurCoat._furCoatActIndex` | `AfterObtained`／`AddMarkedRooms` のマップ設定用 act。戦闘では `BeforeCombatStart`／`AfterCreatureAddedToCombat` が別の `GetMarkedCoords` を利用し、act 値自体は参照しない。マップ設定・座標の公開は今回のスカラー状態の対象外。 |
 | 黄金の羅針盤 `GoldenCompass._goldenPathAct` | `AfterObtained`／`ModifyGeneratedMap`／`ModifyUnknownMapPointRoomTypes` のマップ・部屋設定用。戦闘中の行動に応じた消費状態ではない。 |
 | 溶岩石 `LavaRock._hasTriggered` | `TryModifyRewards` の第 1 層ボス報酬を一度だけ追加する保存フラグ。戦闘行動の結果による分岐ではない。 |
 | `BrilliantScarf._cardsPlayedThisTurn`、`VelvetChoker._cardsPlayedThisTurn` 等、既存カウンタに出る数 | `DisplayAmount` で取得済み。BrilliantScarf は `ShowCounter` が 5 枚以降 false になるが、`ShouldModifyCost` は 4 枚のときだけ true なので、隠れた後の正確な枚数に次の効果差がない。重複追加しない。 |

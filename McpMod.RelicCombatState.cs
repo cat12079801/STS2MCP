@@ -86,8 +86,42 @@ public static partial class McpMod
             case LavaLamp lamp:
                 state["took_damage_this_combat"] = lamp.TookDamageThisCombat;
                 break;
+            case PenNib:
+                AddRelicInternalField<int>(relic, state, "attacks_played", "_attacksPlayed");
+                break;
+            case JossPaper:
+                AddRelicInternalField<int>(relic, state, "cards_exhausted", "_cardsExhausted");
+                AddRelicInternalField<int>(relic, state, "ethereal_count", "_etherealCount");
+                break;
+            case FurCoat coat:
+                ReadInternalStateValue(state, "affects_current_room", () => ReadFurCoatCurrentRoom(coat),
+                    $"player.relics.{relic.Id.Entry}.combat_state");
+                break;
         }
         return state;
+    }
+
+    private static void AddRelicInternalField<T>(RelicModel relic,
+        Dictionary<string, object?> state, string key, string field) where T : struct
+        => ReadInternalStateValue(state, key, () => ReadDeclaredStateField<T>(relic, relic.GetType(), field),
+            $"player.relics.{relic.Id.Entry}.combat_state");
+
+    private static bool ReadFurCoatCurrentRoom(FurCoat coat)
+    {
+        // Read saved backing fields only: no map generation, RNG, or GetMarkedCoords.
+        // v0.113.0 combat hooks check coordinates WITHOUT checking FurCoatActIndex.
+        // The act index only gates AddMarkedRooms; adding that gate here would disagree
+        // with BeforeCombatStart / AfterCreatureAddedToCombat on later acts.
+        bool coordsSet = ReadDeclaredStateField<bool>(coat, typeof(FurCoat), "<FurCoatCoordsSet>k__BackingField");
+        if (!coordsSet) return false;
+        var cols = ReadDeclaredStateField<int[]>(coat, typeof(FurCoat), "<FurCoatCoordCols>k__BackingField");
+        var rows = ReadDeclaredStateField<int[]>(coat, typeof(FurCoat), "<FurCoatCoordRows>k__BackingField");
+        if (cols.Length != rows.Length) throw new InvalidOperationException("FurCoat coordinate lengths differ");
+        var point = coat.Owner.RunState.CurrentMapPoint
+            ?? throw new InvalidOperationException("Current map point unavailable");
+        for (int i = 0; i < cols.Length; i++)
+            if (cols[i] == point.coord.col && rows[i] == point.coord.row) return true;
+        return false;
     }
 
     private static void AddRelicCombatField<T>(
@@ -117,7 +151,8 @@ public static partial class McpMod
         if (relic.GetValueOrDefault("combat_state") is not Dictionary<string, object?> state || state.Count == 0)
             return "";
 
-        return " (" + string.Join(", ", state.Select(entry =>
+        var reasons = state.GetValueOrDefault("unavailable_reasons") as Dictionary<string, string>;
+        return " (" + string.Join(", ", state.Where(entry => entry.Key != "unavailable_reasons").Select(entry =>
         {
             string label = entry.Key switch
             {
@@ -132,6 +167,7 @@ public static partial class McpMod
                 _ => entry.Key.Replace('_', ' ')
             };
             string value = entry.Value is bool flag ? (flag ? "yes" : "no")
+                : entry.Value == null ? $"null ({reasons?.GetValueOrDefault(entry.Key) ?? "unavailable"})"
                 : Convert.ToString(entry.Value, CultureInfo.InvariantCulture) ?? "?";
             return $"{label}: {value}";
         })) + ")";

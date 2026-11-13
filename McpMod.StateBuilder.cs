@@ -3611,8 +3611,9 @@ public static partial class McpMod
             // powers from the HUD). A power with a live stack is always reported, even
             // when the HUD would hide it, because callers compute damage from this list.
             bool isVisible;
+            bool visibilityKnown = true;
             try { isVisible = power.IsVisible; }
-            catch (Exception ex) { Warn("status.is_visible", ex); isVisible = true; }
+            catch (Exception ex) { Warn("status.is_visible", ex); isVisible = true; visibilityKnown = false; }
             if (!isVisible && !HasLiveStack(power)) continue;
 
             // Per-power try/catch: HoverTips getter calls into game engine code
@@ -3659,6 +3660,7 @@ public static partial class McpMod
                     entry["display_amount"] = displayAmount;
                 if (!isVisible)
                     entry["hidden_in_ui"] = true;
+                AttachPowerInternalState(entry, power, visibilityKnown && isVisible);
                 powers.Add(entry);
             }
             catch (Exception ex)
@@ -3669,7 +3671,9 @@ public static partial class McpMod
                 // "why did my damage drop?" to be reverse-engineered from card text.
                 // Emit what can be read without the engine instead.
                 Warn("status.description", ex);
-                powers.Add(BuildMinimalPowerState(power));
+                var entry = BuildMinimalPowerState(power);
+                AttachPowerInternalState(entry, power, visibilityKnown && isVisible);
+                powers.Add(entry);
             }
         }
         return powers;
