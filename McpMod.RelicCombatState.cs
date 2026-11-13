@@ -86,11 +86,13 @@ public static partial class McpMod
             case LavaLamp lamp:
                 state["took_damage_this_combat"] = lamp.TookDamageThisCombat;
                 break;
-            case PenNib:
-                AddRelicInternalField<int>(relic, state, "attacks_played", "_attacksPlayed");
+            case PenNib nib:
+                ReadInternalStateValue(state, "attacks_played", () => nib.AttacksPlayed,
+                    $"player.relics.{relic.Id.Entry}.combat_state");
                 break;
-            case JossPaper:
-                AddRelicInternalField<int>(relic, state, "cards_exhausted", "_cardsExhausted");
+            case JossPaper paper:
+                ReadInternalStateValue(state, "cards_exhausted", () => paper.CardsExhausted,
+                    $"player.relics.{relic.Id.Entry}.combat_state");
                 AddRelicInternalField<int>(relic, state, "ethereal_count", "_etherealCount");
                 break;
             case FurCoat coat:
@@ -108,14 +110,17 @@ public static partial class McpMod
 
     private static bool ReadFurCoatCurrentRoom(FurCoat coat)
     {
-        // Read saved backing fields only: no map generation, RNG, or GetMarkedCoords.
+        // These saved properties have no public getters. Read the private properties,
+        // not compiler-generated backing fields. GetMarkedCoords projects the arrays
+        // without validating their lengths; retain our explicit consistency check.
+        // No map generation, RNG, or GetMarkedCoords.
         // v0.113.0 combat hooks check coordinates WITHOUT checking FurCoatActIndex.
         // The act index only gates AddMarkedRooms; adding that gate here would disagree
         // with BeforeCombatStart / AfterCreatureAddedToCombat on later acts.
-        bool coordsSet = ReadDeclaredStateField<bool>(coat, typeof(FurCoat), "<FurCoatCoordsSet>k__BackingField");
+        bool coordsSet = ReadDeclaredStateProperty<bool>(coat, typeof(FurCoat), "FurCoatCoordsSet");
         if (!coordsSet) return false;
-        var cols = ReadDeclaredStateField<int[]>(coat, typeof(FurCoat), "<FurCoatCoordCols>k__BackingField");
-        var rows = ReadDeclaredStateField<int[]>(coat, typeof(FurCoat), "<FurCoatCoordRows>k__BackingField");
+        var cols = ReadDeclaredStateProperty<int[]>(coat, typeof(FurCoat), "FurCoatCoordCols");
+        var rows = ReadDeclaredStateProperty<int[]>(coat, typeof(FurCoat), "FurCoatCoordRows");
         if (cols.Length != rows.Length) throw new InvalidOperationException("FurCoat coordinate lengths differ");
         var point = coat.Owner.RunState.CurrentMapPoint
             ?? throw new InvalidOperationException("Current map point unavailable");

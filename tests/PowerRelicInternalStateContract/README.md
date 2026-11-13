@@ -11,11 +11,13 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
   -p:BuildInParallel=false -p:UseSharedCompilation=false
 ```
 
-公開 getter と private Data／レリックフィールドの読取、false・0・小数・負数、
+公開 getter と private Data／レリックフィールド・プロパティの読取、false・0・小数・負数、
 両方向、対象 player 別の盗難量と文字列 ID、空配列、snapshot の独立、
 ゲーム側の更新・リセット後の再読取を確認する。
 null Data・型不一致・フィールド欠落・宣言型変更・getter失敗・盗難対象異常・
 座標配列不整合・現在地欠落は null・理由・warnings と他項目の保持を確認する。
+ペン先・冥銭の公開 getter の正常値と例外、毛皮のコートの手書き private プロパティ
+（コンパイラの backing field がなくても成功）と各 getter の例外・欠落・型変更も検査する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

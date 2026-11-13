@@ -17,9 +17,9 @@
 
 値は bool / int / decimal のまま出す。false と 0 も省略しない。
 `used_this_combat` は当該戦闘での消費であり、ラン全体の `used_up` とは独立する。
-公開 getter がある CentennialPuzzle と LavaLamp は直接読む。
+公開 getter がある CentennialPuzzle・LavaLamp・PenNib・JossPaper の値は直接読む。
 それ以外は `McpMod.RelicCombatState.cs` のクラス別 switch に列挙した private
-フィールドだけを、名前・型を確認してリフレクションで読む。フィールドの一律列挙はしない。
+フィールドと毛皮のコートの private プロパティだけを、名前・型を確認してリフレクションで読む。フィールドの一律列挙はしない。
 読み取りでゲームを変更する getter、フック、乱数は呼ばない。
 private 値の読取失敗・フィールド削除・型変更では該当キーを省略し、既存の
 `warnings` に `player.relics.<ID>.combat_state.<key>` を記録する。
@@ -73,17 +73,18 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 ## ペン先・冥銭・毛皮のコート（v0.113.0）
 
 以下の出典は `sts2-d009478a` の同名クラス。
-3種は private フィールド／自動プロパティの backing field を名前・宣言型まで確認し、
+ペン先の `AttacksPlayed` と冥銭の `CardsExhausted` は副作用のない公開 getter を直接読む。
+冥銭の `_etherealCount` と毛皮のコートの private プロパティは名前・宣言型まで確認し、
 読取失敗は `null`・`combat_state.unavailable_reasons.<key>`・トップレベル `warnings` の
 `player.relics.<ID>.combat_state.<key>` にする。他項目の取得は続ける。
 既存の `counter` や古い項目の失敗時省略は変更しない。
 
 | レリック | 出す項目 ← 元の値／意味 | 人間が知りうる根拠 |
 |---|---|---|
-| ペン先 `PenNib` | `attacks_played` ← `_attacksPlayed`（int）。`BeforeCardPlayed` → `NotifyAttackPlayed` で増加し、setter で 10 の剰余。0〜9。戦闘をまたぐ。 | 通常の `DisplayAmount` と同じ画面カウンタ。発動演出中は表示が10になるので、原値を別項目に出す。アタックのプレイからも数えられる。 |
-| 冥銭 `JossPaper` | `cards_exhausted` ← `_cardsExhausted`（int）。非エセリアルの `AfterCardExhausted` で加算、`DrawIfThresholdMet` で閾値の剰余。 | 通常の表示カウンタ。発動中は閾値の表示に変わるが、見えた廃棄とドローから原値を数えられる。 |
+| ペン先 `PenNib` | `attacks_played` ← 公開 `AttacksPlayed` (`_attacksPlayed`)（int）。`BeforeCardPlayed` → `NotifyAttackPlayed` で増加し、setter で 10 の剰余。0〜9。戦闘をまたぐ。 | 通常の `DisplayAmount` と同じ画面カウンタ。発動演出中は表示が10になるので、原値を別項目に出す。アタックのプレイからも数えられる。 |
+| 冥銭 `JossPaper` | `cards_exhausted` ← 公開 `CardsExhausted` (`_cardsExhausted`)（int）。非エセリアルの `AfterCardExhausted` で加算、`DrawIfThresholdMet` で閾値の剰余。 | 通常の表示カウンタ。発動中は閾値の表示に変わるが、見えた廃棄とドローから原値を数えられる。 |
 | 冥銭 `JossPaper` | `ethereal_count` ← `_etherealCount`（int）。エセリアル廃棄を蓄積し、所有者参加の `AfterSideTurnEnd` で `CardsExhausted` に移して0。`AfterCombatEnd` も0。 | 手札のエセリアル札の廃棄が画面に出る。手番終了処理中の廃棄を数えた値。通常の次の行動時は0でも、解決中に値を作り替えない。 |
-| 毛皮のコート `FurCoat` | `affects_current_room`（bool）。private `FurCoatCoordsSet`・`FurCoatCoordCols` / `Rows` の backing field と `Owner.RunState.CurrentMapPoint.coord` を比較。未設定はfalse、配列長の不一致や現在座標の欠落はnull。 | 地図の部屋に `AddQuest(this)` の印が付き、入室時はコートの発動と敵HPを1にする演出が見える。現在の部屋だけを示す。 |
+| 毛皮のコート `FurCoat` | `affects_current_room`（bool）。private プロパティ `FurCoatCoordsSet`・`FurCoatCoordCols` / `Rows` と `Owner.RunState.CurrentMapPoint.coord` を比較。未設定はfalse、配列長の不一致や現在座標の欠落はnull。 | 地図の部屋に `AddQuest(this)` の印が付き、入室時はコートの発動と敵HPを1にする演出が見える。現在の部屋だけを示す。 |
 
 毛皮のコートの `FurCoatActIndex`（`_furCoatActIndex`）は `AddMarkedRooms` が
 印を設定する act を限定する値。v0.113.0 の `BeforeCombatStart` と
@@ -91,7 +92,10 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 そのため `affects_current_room` に act の追加条件を入れない。
 別 act で同じ座標があっても、実際の戦闘フックに合わせた値を出す。
 この場合も現在の部屋での発動・HP変化が観測根拠であり、将来の部屋の判定は公開しない。
-`GetMarkedCoords` 自体は呼ばず、マップを生成・変更する処理や乱数も呼ばない。
+座標配列・設定済みフラグには公開 getter がなく、private プロパティをリフレクションで読む。
+コンパイラが生成する backing field 名には依存しない。
+`GetMarkedCoords` は配列長の不整合を検査せずに座標へ変換するため、直接は呼ばず配列長を確認する。
+マップを生成・変更する処理や乱数も呼ばない。
 
 座標配列・act index・将来の適用先は出さない。
 `_isActivating`、`PenNib._attackToDouble` も出さない。前者は演出用フラグ、後者は

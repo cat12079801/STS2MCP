@@ -75,36 +75,45 @@ namespace MegaCrit.Sts2.Core.Models.Relics
     public class LavaLamp : RelicModel { public bool TookDamageThisCombat { get; set; } }
     public class PenNib : RelicModel
     {
-        private int _attacksPlayed;
-        public int Peek() => _attacksPlayed;
-        public void Set(int n) => _attacksPlayed = n;
+        private int _observedAttacks;
+        public bool ThrowAttacks;
+        public int AttacksPlayed => ThrowAttacks ? throw new InvalidOperationException("attacks getter failed") : _observedAttacks;
+        public int Peek() => _observedAttacks;
+        public void Set(int n) => _observedAttacks = n;
     }
     public class JossPaper : RelicModel
     {
-        private int _cardsExhausted;
+        private int _observedCards;
         private int _etherealCount;
-        public void Set(int cards, int ethereal) { _cardsExhausted = cards; _etherealCount = ethereal; }
-        public int Peek() => _cardsExhausted + _etherealCount;
+        public bool ThrowCards;
+        public int CardsExhausted => ThrowCards ? throw new InvalidOperationException("cards getter failed") : _observedCards;
+        public void Set(int cards, int ethereal) { _observedCards = cards; _etherealCount = ethereal; }
+        public int Peek() => _observedCards + _etherealCount;
     }
-    public class MissingPenNibField : PenNib { }
     public class PartialJossPaper : JossPaper
     {
-        private int _cardsExhausted = 4;
-        public int PeekPartial() => _cardsExhausted;
+        public PartialJossPaper() => Set(4, 0);
     }
-    public class WrongPenNibField : PenNib
+    public class WrongJossPaperField : JossPaper
     {
-        private string _attacksPlayed = "wrong";
-        public string PeekWrong() => _attacksPlayed;
+        private string _etherealCount = "wrong";
+        public string PeekWrong() => _etherealCount;
     }
     public class FurCoat : RelicModel
     {
-        private int[] FurCoatCoordCols { get; set; } = [];
-        private int[] FurCoatCoordRows { get; set; } = [];
-        private bool FurCoatCoordsSet { get; set; }
+        // Handwritten properties deliberately have no compiler-generated backing fields.
+        private int[] _cols = [];
+        private int[] _rows = [];
+        private bool _ready;
+        public HashSet<string> ThrowProperties = [];
+        private T Read<T>(string name, T value) => ThrowProperties.Contains(name)
+            ? throw new InvalidOperationException($"{name} getter failed") : value;
+        private int[] FurCoatCoordCols => Read(nameof(FurCoatCoordCols), _cols);
+        private int[] FurCoatCoordRows => Read(nameof(FurCoatCoordRows), _rows);
+        private bool FurCoatCoordsSet => Read(nameof(FurCoatCoordsSet), _ready);
         public int FurCoatActIndex { get; set; }
         public void Set(int[] cols, int[] rows, bool ready = true)
-        { FurCoatCoordCols = cols; FurCoatCoordRows = rows; FurCoatCoordsSet = ready; }
+        { _cols = cols; _rows = rows; _ready = ready; }
     }
     public class RainbowRing : RelicModel { }
     public class Permafrost : RelicModel { }

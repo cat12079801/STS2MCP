@@ -366,8 +366,8 @@ encode every reason a relic can be disabled.
 ジャグリングの実際の判定は private な `Data.attacksPlayedThisTurn` を使う。
 その後は `BeforeCardPlayed` が `cardPlay.Card.Owner == Owner.Player` の条件で加算し、
 `AfterSideTurnEnd` がリセットするため、`CardPlay.Player` で絞る履歴とは
-所有者が変わる札などで一致しない。engine が履歴をジャグリングに使うのは近似の代用に留まる。
-正確な値は sts2 #863（パワーの内部状態）で `Data` を読み、そちらを使う。
+所有者が変わる札などで一致しない。この履歴をジャグリングの内部値の代用にしない。
+正確な値は `JUGGLING_POWER` の `status[].attacks_played_this_turn` を読む。
 
 このターンと前手番の uid 配列はどちらも履歴順で重複を保つ。他 Player のプレイも含む。
 これは札の所有者がプレイ後に変わり得るため、Bolas / ThrummingHatchet が

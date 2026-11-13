@@ -118,7 +118,7 @@ public static partial class McpMod
         foreach (int count in new[] { 0, 9 })
         {
             nib.Set(count);
-            Check(Equals(BuildRelicCombatState(nib)["attacks_played"], count) && nib.Peek() == count, "PenNib raw counter read without mutation");
+            Check(Equals(BuildRelicCombatState(nib)["attacks_played"], count) && nib.Peek() == count, "PenNib public getter read without private field dependency or mutation");
         }
         var paper = new JossPaper();
         paper.Set(4, 2);
@@ -127,12 +127,20 @@ public static partial class McpMod
         paper.Set(1, 0);
         Check(Equals(paperState["ethereal_count"], 2) && Equals(BuildRelicCombatState(paper)["ethereal_count"], 0), "relic snapshots independent across game reset");
         Check(RelicMarkdown(paperState).Contains("cards exhausted: 4, ethereal count: 2"), "relic markdown");
-        foreach (var bad in new PenNib[] { new MissingPenNibField(), new WrongPenNibField() })
-        {
-            var failed = BuildRelicCombatState(bad);
-            Unknown(failed, "attacks_played", $"player.relics.{bad.Id.Entry}.combat_state");
-            Check(RelicMarkdown(failed).Contains("attacks played: null (") && !RelicMarkdown(failed).Contains("unavailable reasons"), "relic markdown reports null and excludes metadata");
-        }
+        nib.ThrowAttacks = true;
+        var failedNib = BuildRelicCombatState(nib);
+        Unknown(failedNib, "attacks_played", "player.relics.PenNib.combat_state");
+        Check(RelicMarkdown(failedNib).Contains("attacks played: null (InvalidOperationException: attacks getter failed)") && !RelicMarkdown(failedNib).Contains("unavailable reasons"), "public getter failure markdown shows reason and excludes metadata");
+        paper.ThrowCards = true;
+        var failedPaper = BuildRelicCombatState(paper);
+        Unknown(failedPaper, "cards_exhausted", "player.relics.JossPaper.combat_state");
+        Check(Equals(failedPaper["ethereal_count"], 0), "failed public getter preserves private field result");
+        nib.ThrowAttacks = false;
+        paper.ThrowCards = false;
+        Check(Equals(BuildRelicCombatState(nib)["attacks_played"], 9) && Equals(BuildRelicCombatState(paper)["cards_exhausted"], 1), "public getters recover after failure");
+        var wrongPaper = BuildRelicCombatState(new WrongJossPaperField());
+        Unknown(wrongPaper, "ethereal_count", "player.relics.WrongJossPaperField.combat_state");
+        Check(Equals(wrongPaper["cards_exhausted"], 0), "wrong private field type preserves public getter result");
         var partialPaper = BuildRelicCombatState(new PartialJossPaper());
         Unknown(partialPaper, "ethereal_count", "player.relics.PartialJossPaper.combat_state");
         Check(Equals(partialPaper["cards_exhausted"], 4), "one missing relic field preserves its successful neighbor");
@@ -148,6 +156,27 @@ public static partial class McpMod
         Check(BuildRelicCombatState(coat)["affects_current_room"] is false, "col and row must match same coordinate pair");
         coat.Set([], []);
         Check(BuildRelicCombatState(coat)["affects_current_room"] is false, "empty marked coords known false");
+        coat.Set([2], [5]);
+        foreach (string name in new[] { "FurCoatCoordsSet", "FurCoatCoordCols", "FurCoatCoordRows" })
+        {
+            coat.ThrowProperties.Add(name);
+            var failedCoat = BuildRelicCombatState(coat);
+            Unknown(failedCoat, "affects_current_room", "player.relics.FurCoat.combat_state");
+            Check(Reasons(failedCoat)["affects_current_room"].Contains($"{name} getter failed"), "private property failure retains underlying reason");
+            coat.ThrowProperties.Clear();
+        }
+        coat.Owner.RunState.CurrentMapPoint.coord.col = 2;
+        Check(BuildRelicCombatState(coat)["affects_current_room"] is true, "private handwritten getters recover without backing fields");
+        foreach (var (name, read) in new (string, Func<object?>)[]
+        {
+            ("missing", () => ReadDeclaredStateProperty<int[]>(coat, typeof(FurCoat), "Removed")),
+            ("wrong_type", () => ReadDeclaredStateProperty<int>(coat, typeof(FurCoat), "FurCoatCoordCols"))
+        })
+        {
+            var row = new Dictionary<string, object?>();
+            ReadInternalStateValue(row, name, read, "property");
+            Unknown(row, name, "property");
+        }
         coat.Set([2], []);
         Unknown(BuildRelicCombatState(coat), "affects_current_room", "player.relics.FurCoat.combat_state");
         coat.Set(null!, []);
