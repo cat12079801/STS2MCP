@@ -12,7 +12,8 @@ public static partial class McpMod
         var parts = new List<string>();
         var reasons = state.GetValueOrDefault("unavailable_reasons") as Dictionary<string, string>;
         foreach (string key in new[] { "skip_next_duration_tick", "block_base_value", "facing",
-            "stolen_strength", "stolen_dexterity", "has_gained_block_this_turn", "attacks_played_this_turn" })
+            "stolen_strength", "stolen_dexterity", "has_gained_block_this_turn", "attacks_played_this_turn",
+            "card_to_clone_uid", "card_to_clone_readable" })
         {
             if (!state.TryGetValue(key, out var value)) continue;
             if (key == "skip_next_duration_tick" && value is false) continue;
@@ -24,6 +25,7 @@ public static partial class McpMod
                     $"{row["player_id"]}: {Convert.ToString(row["amount"], CultureInfo.InvariantCulture)}"));
             }
             else text = value is bool flag ? (flag ? "yes" : "no")
+                : key == "card_to_clone_uid" && value == null && state.GetValueOrDefault("card_to_clone_readable") is true ? "none"
                 : value == null ? $"null ({reasons?.GetValueOrDefault(key) ?? "unavailable"})"
                 : Convert.ToString(value, CultureInfo.InvariantCulture) ?? "?";
             parts.Add($"{key.Replace('_', ' ')}: {text}");

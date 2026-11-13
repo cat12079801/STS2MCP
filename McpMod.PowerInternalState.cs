@@ -37,18 +37,44 @@ public static partial class McpMod
                 break;
             case JugglingPower:
                 Read("attacks_played_this_turn", () => ReadPowerDataField<int>(power, "attacksPlayedThisTurn"));
+                state["card_to_clone_readable"] = false;
+                Read("card_to_clone_uid", () =>
+                {
+                    string? uid = ReadJugglingCardToCloneUid(power);
+                    state["card_to_clone_readable"] = true;
+                    return uid;
+                });
                 break;
         }
     }
 
     private static T ReadPowerDataField<T>(PowerModel power, string field)
     {
+        object data = ReadPowerData(power);
+        return ReadDeclaredStateField<T>(data, data.GetType(), field);
+    }
+
+    private static object ReadPowerData(PowerModel power)
+    {
         var dataType = power.GetType().GetNestedType("Data", BindingFlags.NonPublic)
             ?? throw new MissingMemberException(power.GetType().Name, "Data");
         object data = ReadDeclaredStateField<object>(power, typeof(PowerModel), "_internalData");
         if (data.GetType() != dataType)
             throw new InvalidOperationException($"Expected {power.GetType().Name}.Data");
-        return ReadDeclaredStateField<T>(data, dataType, field);
+        return data;
+    }
+
+    private static string? ReadJugglingCardToCloneUid(PowerModel power)
+    {
+        object data = ReadPowerData(power);
+        var field = data.GetType().GetField("cardToClone",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            ?? throw new MissingFieldException(data.GetType().Name, "cardToClone");
+        if (field.FieldType != typeof(CardModel))
+            throw new InvalidOperationException("Expected CardModel field Data.cardToClone");
+        // A readable null means no pending clone. Never initialize Data or derive
+        // the reference from the attack count. Reuse the hand/pile/history registry.
+        return field.GetValue(data) is CardModel card ? GetStableCardUid(card) : null;
     }
 
     private static List<Dictionary<string, object?>> ReadStolenPowerAmounts(PowerModel power, string field)

@@ -23,9 +23,9 @@
 読み取りでゲームを変更する getter、フック、乱数は呼ばない。
 private 値の読取失敗・フィールド削除・型変更では該当キーを省略し、既存の
 `warnings` に `player.relics.<ID>.combat_state.<key>` を記録する。
-この省略契約は既存項目に適用する。下記のペン先・冥銭・毛皮のコートは失敗したキーを
+この省略契約は既存項目に適用する。下記のペン先・冥銭・毛皮のコート・鮮やかなスカーフは失敗したキーを
 `null` にし、`combat_state.unavailable_reasons.<key>` に理由も付ける。
-この3種では、全キーの失敗時にも `combat_state` を保持する。
+この4種では、全キーの失敗時にも `combat_state` を保持する。
 呼び出し側も例外を捕捉し、型・公開 getter の変更等で読み取り全体が失敗した場合は
 `combat_state` を省略して `warnings` の `player.relics.<ID>.combat_state` に記録する。
 そのレリックの基本情報や player の他の項目の構築は続ける。
@@ -70,11 +70,11 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | 不気味なランプ `UnsettlingLamp` | `used_this_combat` ← `_isFinishedTriggering` | 名前は処理フラグに見えるが、`BeforePowerAmountChanged`／`ModifyPowerAmountGivenMultiplicative` が参照し、最初の対象カードの `AfterCardPlayed` 以降ずっと倍化を禁止する戦闘内消費。`BeforeCombatStart` と `AfterCombatEnd` で false。 |
 | 溶岩のランプ `LavaLamp`（追加） | `took_damage_this_combat` ← 公開 `TookDamageThisCombat` (`_tookDamageThisCombat`) | 無傷を維持して報酬アップグレードを守る戦闘判断に使う。`AfterDamageReceived` は CombatRoom 内の所有者への正の非ブロックダメージを記録するが `Unblockable` は除外。`TryModifyCardRewardOptionsLate` が参照。`AfterRoomEntered` で部屋種別にかかわらず false。 |
 
-## ペン先・冥銭・毛皮のコート（v0.113.0）
+## ペン先・冥銭・毛皮のコート・鮮やかなスカーフ（v0.113.0）
 
 以下の出典は `sts2-d009478a` の同名クラス。
 ペン先の `AttacksPlayed` と冥銭の `CardsExhausted` は副作用のない公開 getter を直接読む。
-冥銭の `_etherealCount` と毛皮のコートの private プロパティは名前・宣言型まで確認し、
+冥銭の `_etherealCount`、スカーフの `_cardsPlayedThisTurn` と毛皮のコートの private プロパティは名前・宣言型まで確認し、
 読取失敗は `null`・`combat_state.unavailable_reasons.<key>`・トップレベル `warnings` の
 `player.relics.<ID>.combat_state.<key>` にする。他項目の取得は続ける。
 既存の `counter` や古い項目の失敗時省略は変更しない。
@@ -85,6 +85,7 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | 冥銭 `JossPaper` | `cards_exhausted` ← 公開 `CardsExhausted` (`_cardsExhausted`)（int）。非エセリアルの `AfterCardExhausted` で加算、`DrawIfThresholdMet` で閾値の剰余。 | 通常の表示カウンタ。発動中は閾値の表示に変わるが、見えた廃棄とドローから原値を数えられる。 |
 | 冥銭 `JossPaper` | `ethereal_count` ← `_etherealCount`（int）。エセリアル廃棄を蓄積し、所有者参加の `AfterSideTurnEnd` で `CardsExhausted` に移して0。`AfterCombatEnd` も0。 | 手札のエセリアル札の廃棄が画面に出る。手番終了処理中の廃棄を数えた値。通常の次の行動時は0でも、解決中に値を作り替えない。 |
 | 毛皮のコート `FurCoat` | `affects_current_room`（bool）。private プロパティ `FurCoatCoordsSet`・`FurCoatCoordCols` / `Rows` と `Owner.RunState.CurrentMapPoint.coord` を比較。未設定はfalse、配列長の不一致や現在座標の欠落はnull。 | 地図の部屋に `AddQuest(this)` の印が付き、入室時はコートの発動と敵HPを1にする演出が見える。現在の部屋だけを示す。 |
+| 鮮やかなスカーフ `BrilliantScarf` | `cards_played_this_turn` ← private `_cardsPlayedThisTurn`（int）。`AfterCardPlayed` が戦闘中の所有者の非 AutoPlay を加算。所有者参加の `BeforeSideTurnStart` と `AfterCombatEnd` で0。 | 画面に出た手動プレイの計数。`ShowCounter` は `Cards`（この版では6）未満で表示、`ShouldModifyCost` は `Cards - 1`（5）で手札・Play の札を無料にする。6以降も実数を保持する。 |
 
 毛皮のコートの `FurCoatActIndex`（`_furCoatActIndex`）は `AddMarkedRooms` が
 印を設定する act を限定する値。v0.113.0 の `BeforeCombatStart` と
@@ -116,7 +117,7 @@ Markdown は `(attacks played: 9)`、`(cards exhausted: 4, ethereal count: 0)`�
 | 古びたティーセット `VenerableTeaSet._gainEnergyInNextCombat` と偽物 `FakeVenerableTeaSet` | `AfterRoomEntered(RestSiteRoom)` で予約、`AfterEnergyReset` でエナジー付与後 false。最初の行動選択では付与済みで既存 `energy` に反映済み。戦闘外の次戦闘開始条件は今回の戦闘中状態の対象外。公開 `GainEnergyInNextCombat` があることも確認。 |
 | 黄金の羅針盤 `GoldenCompass._goldenPathAct` | `AfterObtained`／`ModifyGeneratedMap`／`ModifyUnknownMapPointRoomTypes` のマップ・部屋設定用。戦闘中の行動に応じた消費状態ではない。 |
 | 溶岩石 `LavaRock._hasTriggered` | `TryModifyRewards` の第 1 層ボス報酬を一度だけ追加する保存フラグ。戦闘行動の結果による分岐ではない。 |
-| `BrilliantScarf._cardsPlayedThisTurn`、`VelvetChoker._cardsPlayedThisTurn` 等、既存カウンタに出る数 | `DisplayAmount` で取得済み。BrilliantScarf は `ShowCounter` が 5 枚以降 false になるが、`ShouldModifyCost` は 4 枚のときだけ true なので、隠れた後の正確な枚数に次の効果差がない。重複追加しない。 |
+| `VelvetChoker._cardsPlayedThisTurn` 等、既存カウンタに出る数 | `DisplayAmount` で取得済み。鮮やかなスカーフの非表示後の枚数は上記の専用項目で扱う。 |
 | `SilkenTress._isUsed`、`WongosMysteryTicket._gaveRelic`、`LizardTail._wasUsed` | それぞれの `IsUsedUp` が既存 `used_up` に出るため重複追加しない。 |
 
 全レリッククラスの private フィールド宣言と自動プロパティを横断して候補を再確認した。

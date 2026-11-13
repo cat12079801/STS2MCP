@@ -1,4 +1,14 @@
 // Boundary doubles: fields/getters only; no simulated game calculations.
+namespace MegaCrit.Sts2.Core.Combat
+{
+    public interface ICombatState { IReadOnlyList<Models.Player> Players { get; } }
+    public class CombatState : ICombatState { public IReadOnlyList<Models.Player> Players { get; set; } = []; }
+}
+namespace MegaCrit.Sts2.Core.Entities.Cards
+{
+    public enum PileType { Hand, Draw, Discard, Exhaust, Play }
+    public class CardPile { public List<Models.CardModel> Cards = []; }
+}
 namespace MegaCrit.Sts2.Core.Entities.Creatures
 {
     public class Creature { public MegaCrit.Sts2.Core.Models.Player? Player { get; set; } }
@@ -6,6 +16,13 @@ namespace MegaCrit.Sts2.Core.Entities.Creatures
 namespace MegaCrit.Sts2.Core.Models
 {
     public record ModelId(string Entry);
+    public class CardModel(string id) : IComparable<CardModel>
+    {
+        public ModelId Id { get; } = new(id);
+        public CardModel? DeckVersion;
+        public int Rarity { get; set; }
+        public int CompareTo(CardModel? other) => StringComparer.Ordinal.Compare(Id.Entry, other?.Id.Entry);
+    }
     public class PowerModel
     {
         private object? _internalData;
@@ -20,7 +37,12 @@ namespace MegaCrit.Sts2.Core.Models
         public ModelId Id => new(GetType().Name);
         public Player Owner { get; set; } = new();
     }
-    public class Player { public ulong NetId { get; set; } public RunState RunState { get; set; } = new(); }
+    public class Player
+    {
+        public ulong NetId { get; set; }
+        public RunState RunState { get; set; } = new();
+        public Entities.Cards.CardPile Deck = new();
+    }
     public class RunState { public MapPoint? CurrentMapPoint { get; set; } public int CurrentActIndex { get; set; } }
     public class MapPoint { public Coord coord; }
     public struct Coord { public int col; public int row; }
@@ -63,11 +85,23 @@ namespace MegaCrit.Sts2.Core.Models.Powers
     }
     public class JugglingPower : PowerModel
     {
-        private class Data { public int attacksPlayedThisTurn = 0; }
+        private class Data { public int attacksPlayedThisTurn = 0; public CardModel? cardToClone; }
         public JugglingPower() => SetData(new Data());
         public void Set(int value) => ((Data)PeekData()!).attacksPlayedThisTurn = value;
+        public void SetPending(CardModel? card) => ((Data)PeekData()!).cardToClone = card;
+        public CardModel? PeekPending() => ((Data)PeekData()!).cardToClone;
     }
     public class MissingDataPower : JugglingPower { }
+    public class MissingCloneFieldPower : JugglingPower
+    {
+        private class Data { public int attacksPlayedThisTurn = 3; }
+        public MissingCloneFieldPower() => SetData(new Data());
+    }
+    public class WrongCloneFieldPower : JugglingPower
+    {
+        private class Data { public int attacksPlayedThisTurn = 3; public string cardToClone = "wrong"; }
+        public WrongCloneFieldPower() => SetData(new Data());
+    }
 }
 namespace MegaCrit.Sts2.Core.Models.Relics
 {
@@ -80,6 +114,19 @@ namespace MegaCrit.Sts2.Core.Models.Relics
         public int AttacksPlayed => ThrowAttacks ? throw new InvalidOperationException("attacks getter failed") : _observedAttacks;
         public int Peek() => _observedAttacks;
         public void Set(int n) => _observedAttacks = n;
+    }
+    public class BrilliantScarf : RelicModel
+    {
+        private int _cardsPlayedThisTurn;
+        public bool ShowCounter => _cardsPlayedThisTurn < 6;
+        public void Set(int value) => _cardsPlayedThisTurn = value;
+        public int Peek() => _cardsPlayedThisTurn;
+    }
+    public class MissingScarfField : BrilliantScarf { }
+    public class WrongScarfField : BrilliantScarf
+    {
+        private string _cardsPlayedThisTurn = "wrong";
+        public string PeekWrong() => _cardsPlayedThisTurn;
     }
     public class JossPaper : RelicModel
     {
@@ -139,6 +186,7 @@ namespace STS2_MCP
 {
     public static partial class McpMod
     {
+        private static string? SafeGetText(Func<string?> read) => read();
         private static Dictionary<string, object?> BuildGameStateCore() => new();
         private static Dictionary<string, object?> BuildMultiplayerGameStateCore() => new();
     }

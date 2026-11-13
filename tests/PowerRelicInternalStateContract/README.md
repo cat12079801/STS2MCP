@@ -2,7 +2,7 @@
 
 本番の `McpMod.InternalState.cs`、`McpMod.PowerInternalState.cs`、
 `McpMod.PowerInternalStateFormatting.cs`、`McpMod.RelicCombatState.cs`、
-`McpMod.Warnings.cs` を直接リンクする。ゲーム・Godot・追加パッケージは不要。
+`McpMod.Warnings.cs`、`McpMod.CardIdentity.cs` を直接リンクする。ゲーム・Godot・追加パッケージは不要。
 
 ```fish
 env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
@@ -18,6 +18,12 @@ null Data・型不一致・フィールド欠落・宣言型変更・getter失�
 座標配列不整合・現在地欠落は null・理由・warnings と他項目の保持を確認する。
 ペン先・冥銭の公開 getter の正常値と例外、毛皮のコートの手書き private プロパティ
 （コンパイラの backing field がなくても成功）と各 getter の例外・欠落・型変更も検査する。
+スカーフの0・5・6・7と表示カウンターが消えた後の実数、リセット・snapshot の独立、
+フィールド欠落／型違い時の null・理由・warnings を検査する。
+ジャグリングは待ちなし／予約／解除、デッキ札と同 ID の生成札を本番の uid registry に通し、
+他経路の uid と一致することを確認する。Data の null・異型・フィールド欠落／型変更で
+readable=false と null・理由になり、正常な待ちなしの readable=true と区別できることを
+wire と Markdown でも確認する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

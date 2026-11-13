@@ -90,6 +90,9 @@ public static partial class McpMod
                 ReadInternalStateValue(state, "attacks_played", () => nib.AttacksPlayed,
                     $"player.relics.{relic.Id.Entry}.combat_state");
                 break;
+            case BrilliantScarf:
+                AddRelicInternalField<int>(relic, state, "cards_played_this_turn", "_cardsPlayedThisTurn");
+                break;
             case JossPaper paper:
                 ReadInternalStateValue(state, "cards_exhausted", () => paper.CardsExhausted,
                     $"player.relics.{relic.Id.Entry}.combat_state");

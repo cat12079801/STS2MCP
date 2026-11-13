@@ -190,7 +190,9 @@ namespace STS2_MCP
         private static Dictionary<string, object?> BuildCardEnergyCostState(CardModel card) => new()
         {
             ["base"] = 1, ["with_local_modifiers"] = 1, ["with_all_modifiers"] = 1,
-            ["local_modifiers"] = new List<Dictionary<string, object?>>()
+            ["base_raw"] = 1, ["canonical"] = 1, ["costs_x"] = false, ["captured_x_value"] = null,
+            ["local_modifiers"] = new List<Dictionary<string, object?>>(),
+            ["unavailable_reasons"] = new Dictionary<string, string> { ["captured_x_value"] = "not_x_cost" }
         };
         // Existing card serialization / upgrade preview construction is a boundary;
         // these tests exercise when the linked row builder attaches it, not game upgrades.

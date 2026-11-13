@@ -22,6 +22,21 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
         private object? _localModifiers = new List<LocalCostModifier>();
         public bool X;
         public bool ThrowCostsX;
+        public int Printed = 2;
+        public int Captured;
+        public bool ThrowCanonical;
+        public bool ThrowCaptured;
+        public int CapturedReads;
+        public int Canonical => ThrowCanonical ? throw new InvalidOperationException("canonical failed") : Printed;
+        public int CapturedXValue
+        {
+            get
+            {
+                CapturedReads++;
+                if (!X || ThrowCaptured) throw new InvalidOperationException("captured X failed");
+                return Captured;
+            }
+        }
         public bool CostsX => ThrowCostsX ? throw new InvalidOperationException("cost kind failed") : X;
         public Dictionary<CostModifiers, int> Values = new() { [CostModifiers.None] = 2, [CostModifiers.Local] = 2, [CostModifiers.All] = 2 };
         public HashSet<CostModifiers> ThrowOn = [];

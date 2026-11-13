@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.InternalState.cs" Link="InternalState.cs" />
+    <Compile Include="../../McpMod.CardIdentity.cs" Link="CardIdentity.cs" />
     <Compile Include="../../McpMod.PowerInternalState.cs" Link="PowerInternalState.cs" />
     <Compile Include="../../McpMod.PowerInternalStateFormatting.cs" Link="PowerInternalStateFormatting.cs" />
     <Compile Include="../../McpMod.RelicCombatState.cs" Link="RelicCombatState.cs" />

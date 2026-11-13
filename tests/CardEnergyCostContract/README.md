@@ -8,13 +8,15 @@
 env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CardEnergyCostContract -c Release
 ```
 
-基礎・local・global の取得先の区別、0、負の sentinel、X、修正の順序・重複、
+基礎・local・global の取得先の区別、`base_raw` / `canonical` の独立、0、負の sentinel、X、修正の順序・重複、
 Relative −1 / WhenPlayed、Absolute 1 / reduceOnly と複合期限、EndOfCombat（値0）、
 リストの置換・要素の変更後の再読込と snapshot の独立を検証する。
 null／異型／欠落フィールド／壊れた要素、public getter／計算の例外での null・理由・warnings、
 他の値の保持と復旧、JSON の数値・bool 型、Markdown の値・期限・理由も確認する。
-Markdown は修正一覧が非空・コストの差・通常の X/コストなし以外の null で表示し、
-通常の未修正札は省略することを検査する。Play Pile の節は件数が1以上で表示し、
+Markdown は修正一覧が非空・コストの差・通常の適用対象外以外の null で表示し、
+通常の未修正札は省略することを検査する。X と raw / canonical の差は表示する。
+X の CapturedXValue の0・正数・更新と snapshot の独立、非 X／種別不明では getter を
+呼ばず理由付き null にすること、新規 getter／raw計算の失敗時の独立性・warnings・wire null も確認する。Play Pile の節は件数が1以上で表示し、
 欠落・負数・0では省略すること、他のパイルの節と JSON は変えないことも確認する。
 巨大な state builder はリンクせず、本番ソースの文字列検査で手札・4パイル・
 マルチの共通経路、非戦闘の除外、schema 4 を確認する。

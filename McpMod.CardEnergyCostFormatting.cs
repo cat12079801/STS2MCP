@@ -13,13 +13,17 @@ public static partial class McpMod
         var modifiers = cost.GetValueOrDefault("local_modifiers") as List<Dictionary<string, object?>>;
         bool costChanged = !Equals(cost.GetValueOrDefault("base"), cost.GetValueOrDefault("with_local_modifiers"))
             || !Equals(cost.GetValueOrDefault("base"), cost.GetValueOrDefault("with_all_modifiers"));
+        bool rawDetails = cost.GetValueOrDefault("costs_x") is true
+            || !Equals(cost.GetValueOrDefault("base_raw"), cost.GetValueOrDefault("canonical"));
         bool unexpectedNull = cost.Any(entry => entry.Value == null
-            && reasons?.GetValueOrDefault(entry.Key) is not ("x_cost" or "no_energy_cost"));
-        if (modifiers is not { Count: > 0 } && !costChanged && !unexpectedNull) return;
+            && reasons?.GetValueOrDefault(entry.Key) is not ("x_cost" or "no_energy_cost" or "not_x_cost"));
+        if (modifiers is not { Count: > 0 } && !costChanged && !rawDetails && !unexpectedNull) return;
 
         string Value(string key) => cost.GetValueOrDefault(key)?.ToString()
             ?? $"null ({reasons?.GetValueOrDefault(key) ?? "unavailable"})";
         sb.AppendLine($"  - energy cost: base {Value("base")}; local {Value("with_local_modifiers")}; all {Value("with_all_modifiers")}");
+        if (cost.ContainsKey("base_raw") || cost.ContainsKey("canonical") || cost.ContainsKey("captured_x_value"))
+            sb.AppendLine($"  - energy cost details: raw {Value("base_raw")}; canonical {Value("canonical")}; captured X {Value("captured_x_value")}");
         if (modifiers != null)
         {
             if (modifiers.Count > 0)

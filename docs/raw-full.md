@@ -635,17 +635,30 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
 {
   "costs_x": false,
   "base": 2,
+  "base_raw": 2,
+  "canonical": 2,
+  "captured_x_value": null,
   "with_local_modifiers": 1,
   "with_all_modifiers": 1,
   "local_modifiers": [
     { "amount": -1, "type": "Relative", "expiration": "WhenPlayed", "reduce_only": false }
   ],
-  "unavailable_reasons": {}
+  "unavailable_reasons": { "captured_x_value": "not_x_cost" }
 }
 ```
 
-- `base`: `CardEnergyCost.GetWithModifiers(CostModifiers.None)`。現在の基礎コストであり、
-  強化や `SetCustomBaseCost` を含む。印刷時の値 `Canonical` とは区別する。
+- `base_raw` は `CardEnergyCost.GetWithModifiers(CostModifiers.None)` の整数をそのまま返す。
+  X・負の sentinel・0 も保持し、強化や `SetCustomBaseCost` 後の基礎値を読む。
+  `costs_x` の読取に失敗しても独立して取得する。
+- `canonical` は `CardEnergyCost.Canonical` の整数。ゲームが保持する印刷時の開始コスト。
+  強化・カスタム基礎値変更の前の値を保持し、X の Canonical はゲームの定義で 0。
+- `captured_x_value` は `costs_x=true` のときだけ `CardEnergyCost.CapturedXValue` を読む。
+  最後にその X 札のプレイに支払ったエナジーで、初期値の 0 も保持する。
+  X の効果量への補正を含めるときはゲームが別途 `ResolveEnergyXValue` を使う。
+  非 X では `null` と理由 `not_x_cost`、X 種別が読めない場合は `null` と
+  `costs_x_unavailable`。いずれも CapturedXValue getter を呼ばず、警告を追加しない。
+- `base` は固定コスト用の現在の基礎コスト。通常は `base_raw` と同じ値を使う。
+  X・負コストでは既存契約どおり理由付き `null`。
 - `with_local_modifiers`: `GetWithModifiers(Local)`。local のみ適用した値。
 - `with_all_modifiers`: `GetWithModifiers(All)`。global のフックも含む現在の値。
   この2値は MOD で再計算せず、ゲームの適用順・reduceOnly・最終 clamp に従う。
@@ -661,14 +674,14 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
   `WhenPlayed` だけの修正はターンをまたいで残る。MOD は期限の推測・削除を行わない。
 - `reduce_only: true` は、適用時に現在の値より上げない修正。
   現在は値を変えていない要素も、別の修正が失効すると効く場合があるのでリストに残す。
-- `unavailable_reasons`: `null` のキー名 → 理由の文字列。正常な固定コストでは `{}`。
-  X は3つの数値を `null` にして各理由を `x_cost`、`None` が負（エナジーコストなし）は
+- `unavailable_reasons`: `null` のキー名 → 理由の文字列。正常な固定コストでは `captured_x_value: "not_x_cost"` を含む。
+  X は `base` / `with_local_modifiers` / `with_all_modifiers` を `null` にして各理由を `x_cost`、`None` が負（エナジーコストなし）は
   `no_energy_cost` とする。カードの Curse/Status 種別や Unplayable keyword からは判断しない。
   `costs_x` 自体の読取失敗は `costs_x: null`、数値側は `costs_x_unavailable`。
-  基礎値の読取失敗は `base` に例外の理由、修正後の数値は `base_unavailable`。
+  基礎値の読取失敗は `base_raw` と固定コストの `base` に例外の理由、修正後の数値は `base_unavailable`。
   その他の読取・計算失敗も該当値だけ `null` と例外の理由にし、`warnings` に
   `card.energy_cost[.<key>]` を出す。private リストが読めなくても public のコストは読む。
-  `EnergyCost` 自体が取得できない場合もオブジェクトを残し、5項目を `null` と理由にする。
+  `EnergyCost` 自体が取得できない場合もオブジェクトを残し、8項目を `null` と理由にする。
   通常の X / コストなしには警告を出さない。
 
 `player.play_pile` / `play_pile_count` は戦闘中の一時的な Play pile。
@@ -676,19 +689,21 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
 プレイの合間には通常空で、解決中には過渡的な値が見えるため、計画は `is_resolving: false` の
 snapshot を使う。山札は既存どおり表示用のソート順で、内部のドロー順を出さない。
 
-Markdown は local modifier が非空、修正後のコストが基礎値と異なる、または
-`x_cost` / `no_energy_cost` 以外の理由の `null` がある場合だけ、手札・各パイル・grid 行の下に
-base / local / all と非空の修正一覧（値・種別・期限・reduce_only）を適用順で表示する。
+Markdown は local modifier が非空、修正後のコストが基礎値と異なる、X、
+`base_raw` と `canonical` が異なる、または通常の適用対象外以外の理由で `null` がある場合に、
+手札・各パイル・grid 行の下に base / local / all、raw / canonical / captured X と
+非空の修正一覧（値・種別・期限・reduce_only）を適用順で表示する。
+通常の適用対象外の理由は `x_cost` / `no_energy_cost` / `not_x_cost`。
 `null` には理由を添える。Play Pile の節は `play_pile_count` が1以上の場合だけ表示する。
 既存の `cost`（文字列、X は `"X"`、それ以外は `GetAmountToSpend()`）と `star_cost` は変更しない。
 ここで追加するのはエナジーコストだけで、star cost の修正は対象外。
 既存フィールドの意味・削除・action の変更がないため `schema_version` は **4 のまま**。
-利用側は番号ではなく `energy_cost` の有無で検出する。古い state の欠落は「修正なし」ではなく未観測。
+利用側は `energy_cost` と各追加キーの有無で検出する。古い state の欠落は「修正なし」ではなく未観測。
 
 出典（v0.113.0、ローカルの `sts2-d009478a` デコンパイル）:
 
 - `MegaCrit.Sts2.Core.Entities.Cards/CardEnergyCost.cs`: `_localModifiers`（25行）、
-  `GetWithModifiers`（94–121行）、`SetThisTurnOrUntilPlayed`（197–203行）、
+  `Canonical` / `CapturedXValue`、`Clone`、`GetWithModifiers`（94–121行）、`SetThisTurnOrUntilPlayed`（197–203行）、
   `SetThisCombat`（238–244行）、`AddUntilPlayed`（258–264行）、
   `EndOfTurnCleanup` / `AfterCardPlayedCleanup`（333–347行）、`UpgradeBy` / `SetCustomBaseCost`。
 - 同ディレクトリの `LocalCostModifier.cs` の各 getter（48–76行）と `Modify`（89行）、
@@ -788,6 +803,16 @@ Pets also share the same builder.
 | `POSSESS_SPEED_POWER` | `stolen_dexterity` | 同上 |
 | `SKITTISH_POWER` | `has_gained_block_this_turn` | bool |
 | `JUGGLING_POWER` | `attacks_played_this_turn` | int |
+| `JUGGLING_POWER` | `card_to_clone_uid` | string / null |
+| `JUGGLING_POWER` | `card_to_clone_readable` | bool |
+
+ジャグリングの `card_to_clone_uid` は private `Data.cardToClone` の参照を既存の
+手札・パイル・grid・履歴共通の uid registry に通した値。3 回目のアタックの
+`BeforeCardPlayed` で予約し、対象の `AfterCardPlayed` で参照を消して複製する。
+読取成功は `card_to_clone_readable=true`。待ちがなければ uid は `null` で理由なし。
+読取失敗は `card_to_clone_readable=false`、uid は `null` とキー別理由・warnings。
+Data を初期化せず、アタック数から予約を再構成しない。画面に出たプレイと複製の
+出来事に対応する過渡状態で、解決後の snapshot を計画に使う。
 
 盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
 文字列 ID。空の配列は盗んだ記録なしを表し、合算・正数化・既定値補完はしない。

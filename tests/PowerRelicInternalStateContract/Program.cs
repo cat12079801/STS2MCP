@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Encodings.Web;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -79,6 +80,33 @@ public static partial class McpMod
             juggling.Set(value);
             Check(Equals(Power(juggling)["attacks_played_this_turn"], value), "juggling count is not capped");
         }
+        var noPending = Power(juggling);
+        Check(noPending["card_to_clone_uid"] == null && noPending["card_to_clone_readable"] is true && !noPending.ContainsKey("unavailable_reasons"), "readable null means no pending clone even at count four");
+        Check(FormatPowerInternalState(noPending).Contains("card to clone uid: none"), "known no pending clone has explicit markdown");
+        Check(!Power(juggling, false).ContainsKey("card_to_clone_uid") && !Power(juggling, false).ContainsKey("card_to_clone_readable"), "hidden power omits clone fields");
+        var deckCard = new CardModel("STRIKE_R");
+        var owner = new Player();
+        owner.Deck.Cards.Add(deckCard);
+        RefreshCardUidRegistry(new CombatState { Players = [owner] });
+        var pendingCard = new CardModel("STRIKE_R") { DeckVersion = deckCard };
+        juggling.SetPending(pendingCard);
+        var pending = Power(juggling);
+        string uid = GetStableCardUid(pendingCard);
+        Check(Equals(pending["card_to_clone_uid"], "STRIKE_R#0") && Equals(pending["card_to_clone_uid"], uid) && pending["card_to_clone_readable"] is true, "pending reference uses real shared deck uid registry");
+        Check(FormatPowerInternalState(pending).Contains("card to clone uid: " + uid), "pending uid markdown");
+        Check(ReferenceEquals(juggling.PeekPending(), pendingCard), "read keeps game pending reference unchanged");
+        var generated = new CardModel("STRIKE_R");
+        juggling.SetPending(generated);
+        var generatedPending = Power(juggling);
+        Check(Equals(generatedPending["card_to_clone_uid"], GetStableCardUid(generated)) && !Equals(generatedPending["card_to_clone_uid"], uid), "generated same-ID card gets its own shared uid");
+        juggling.SetPending(null);
+        Check(Power(juggling)["card_to_clone_uid"] == null && Equals(pending["card_to_clone_uid"], uid), "clear is observed and old pending snapshot detached");
+        foreach (var invalidClone in new JugglingPower[] { new MissingCloneFieldPower(), new WrongCloneFieldPower() })
+        {
+            var invalidRow = Power(invalidClone);
+            Unknown(invalidRow, "card_to_clone_uid", "status." + invalidClone.GetType().Name);
+            Check(invalidRow["card_to_clone_readable"] is false && Equals(invalidRow["attacks_played_this_turn"], 3), "clone field failure keeps independently readable count");
+        }
         var snapshot = Power(juggling);
         juggling.Set(0);
         Check(Equals(snapshot["attacks_played_this_turn"], 4) && Equals(Power(juggling)["attacks_played_this_turn"], 0), "new state observes game reset; old snapshot independent");
@@ -86,6 +114,9 @@ public static partial class McpMod
         {
             juggling.SetData(invalidData);
             Unknown(Power(juggling), "attacks_played_this_turn", "status.JugglingPower");
+            var failedClone = Power(juggling);
+            Unknown(failedClone, "card_to_clone_uid", "status.JugglingPower");
+            Check(failedClone["card_to_clone_readable"] is false && FormatPowerInternalState(failedClone).Contains("card to clone uid: null ("), "unreadable pending clone differs from known null");
             Check(ReferenceEquals(juggling.PeekData(), invalidData), "failed read never initializes or changes InternalData");
         }
         Unknown(Power(new MissingDataPower()), "attacks_played_this_turn", "status.MissingDataPower");
@@ -115,6 +146,19 @@ public static partial class McpMod
         Unknown(Power(strength), "stolen_strength", "status.PossessStrengthPower");
 
         var nib = new PenNib();
+        var scarf = new BrilliantScarf();
+        foreach (int count in new[] { 0, 5, 6, 7 })
+        {
+            scarf.Set(count);
+            var scarfState = BuildRelicCombatState(scarf);
+            Check(Equals(scarfState["cards_played_this_turn"], count) && scarf.Peek() == count, "scarf raw count survives hidden counter and read is pure");
+            Check(scarf.ShowCounter == (count < 6) && RelicMarkdown(scarfState).Contains("cards played this turn: " + count), "scarf 5 to 6 display boundary and markdown");
+        }
+        var scarfSnapshot = BuildRelicCombatState(scarf);
+        scarf.Set(0);
+        Check(Equals(scarfSnapshot["cards_played_this_turn"], 7) && Equals(BuildRelicCombatState(scarf)["cards_played_this_turn"], 0), "scarf reset keeps previous snapshot detached");
+        foreach (var badScarf in new BrilliantScarf[] { new MissingScarfField(), new WrongScarfField() })
+            Unknown(BuildRelicCombatState(badScarf), "cards_played_this_turn", "player.relics." + badScarf.GetType().Name + ".combat_state");
         foreach (int count in new[] { 0, 9 })
         {
             nib.Set(count);
@@ -204,6 +248,12 @@ public static partial class McpMod
             Check(json.RootElement.GetProperty("skip_next_duration_tick").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("skip_next_duration_tick", out _), "power null and reason survive wire");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(partialPaper, wireOptions)))
             Check(json.RootElement.GetProperty("cards_exhausted").GetInt32() == 4 && json.RootElement.GetProperty("ethereal_count").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("ethereal_count", out _), "relic partial values and null reason survive wire");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noPending, wireOptions)))
+            Check(json.RootElement.GetProperty("card_to_clone_uid").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("card_to_clone_readable").GetBoolean() && !json.RootElement.TryGetProperty("unavailable_reasons", out _), "known empty pending survives production wire as null with success flag");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(Power(new WrongCloneFieldPower()), wireOptions)))
+            Check(json.RootElement.GetProperty("card_to_clone_uid").ValueKind == JsonValueKind.Null && !json.RootElement.GetProperty("card_to_clone_readable").GetBoolean() && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("card_to_clone_uid", out _), "failed pending survives production wire as null, false and reason");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(BuildRelicCombatState(new WrongScarfField()), wireOptions)))
+            Check(json.RootElement.GetProperty("cards_played_this_turn").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("cards_played_this_turn", out _), "failed scarf survives production wire as null and reason");
         var response = new Dictionary<string, object?>();
         EndStateWarnings(response);
         Check(response.ContainsKey("warnings"), "warnings attached to surviving response");

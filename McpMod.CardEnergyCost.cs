@@ -18,6 +18,9 @@ public static partial class McpMod
         {
             ["costs_x"] = null,
             ["base"] = null,
+            ["base_raw"] = null,
+            ["canonical"] = null,
+            ["captured_x_value"] = null,
             ["with_local_modifiers"] = null,
             ["with_all_modifiers"] = null,
             ["local_modifiers"] = null,
@@ -35,6 +38,12 @@ public static partial class McpMod
         }
 
         ReadEnergyCostValue(state, reasons, "costs_x", () => cost.CostsX);
+        ReadEnergyCostValue(state, reasons, "base_raw", () => cost.GetWithModifiers(CostModifiers.None));
+        ReadEnergyCostValue(state, reasons, "canonical", () => cost.Canonical);
+        if (state["costs_x"] is true)
+            ReadEnergyCostValue(state, reasons, "captured_x_value", () => cost.CapturedXValue);
+        else
+            reasons["captured_x_value"] = state["costs_x"] is false ? "not_x_cost" : "costs_x_unavailable";
         ReadEnergyCostValue(state, reasons, "local_modifiers", () => ReadLocalEnergyCostModifiers(cost));
 
         string? unavailable = state["costs_x"] switch
@@ -47,7 +56,8 @@ public static partial class McpMod
         {
             // None reads the current base, including upgrades/custom base changes.
             // Canonical is the printed starting cost and is not a substitute for it.
-            ReadEnergyCostValue(state, reasons, "base", () => cost.GetWithModifiers(CostModifiers.None));
+            state["base"] = state["base_raw"];
+            if (reasons.TryGetValue("base_raw", out string? baseReason)) reasons["base"] = baseReason;
             if (state["base"] is not int baseCost) unavailable = "base_unavailable";
             else if (baseCost < 0) unavailable = "no_energy_cost";
         }

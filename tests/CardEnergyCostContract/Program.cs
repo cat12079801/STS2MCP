@@ -38,17 +38,29 @@ namespace STS2_MCP
             var cost = card.Cost;
             var plain = BuildCardEnergyCostState(card);
             Check(plain["costs_x"] is false && Equals(plain["base"], 2), "base and cost kind");
-            Check(Modifiers(plain).Count == 0 && Reasons(plain).Count == 0, "empty is known, never null");
+            Check(Modifiers(plain).Count == 0 && Reasons(plain).Count == 1 && Reasons(plain)["captured_x_value"] == "not_x_cost", "empty modifiers and non-X captured reason");
+            Check(Equals(plain["base_raw"], 2) && Equals(plain["canonical"], 2) && plain["captured_x_value"] == null && cost.CapturedReads == 0, "raw, printed and inapplicable captured fields");
             Check(cost.Calls.SequenceEqual(new[] { CostModifiers.None, CostModifiers.Local, CostModifiers.All }), "game calculations requested once each in order");
             CheckCostDisplay(plain, false, "unchanged fixed cost is omitted");
             CheckCostDisplay(new(plain) { ["base"] = 0, ["with_local_modifiers"] = 0, ["with_all_modifiers"] = 0 }, false, "unchanged zero cost is omitted");
             CheckCostDisplay(new(plain) { ["with_local_modifiers"] = 1 }, true, "local-only difference is shown without local list entries");
             CheckCostDisplay(new(plain) { ["with_all_modifiers"] = 0 }, true, "global-only difference is shown, including zero");
+            var legacy = new Dictionary<string, object?>
+            {
+                ["costs_x"] = false, ["base"] = 2, ["with_local_modifiers"] = 2,
+                ["with_all_modifiers"] = 0, ["local_modifiers"] = new List<Dictionary<string, object?>>()
+            };
+            Check(Markdown(legacy).Contains("energy cost: base 2") && !Markdown(legacy).Contains("energy cost details:"), "legacy fields keep existing markdown without new unavailable fields");
             var plainX = new CardModel();
             plainX.Cost.X = true;
-            CheckCostDisplay(BuildCardEnergyCostState(plainX), false, "X without modifiers is omitted");
+            plainX.Cost.Printed = 0;
+            plainX.Cost.Values[CostModifiers.None] = 0;
+            var initialX = BuildCardEnergyCostState(plainX);
+            Check(Equals(initialX["captured_x_value"], 0) && Equals(initialX["base_raw"], 0) && Equals(initialX["canonical"], 0), "X zero raw, canonical and captured values retained");
+            CheckCostDisplay(initialX, true, "X captured details are shown");
             var plainNoCost = new CardModel();
             plainNoCost.Cost.Values[CostModifiers.None] = -1;
+            plainNoCost.Cost.Printed = -1;
             CheckCostDisplay(BuildCardEnergyCostState(plainNoCost), false, "no-energy-cost without modifiers is omitted");
             var unreadableList = new CardModel();
             unreadableList.Cost.SetModifiers(null);
@@ -90,12 +102,14 @@ namespace STS2_MCP
             cost.X = true;
             var x = BuildCardEnergyCostState(card);
             Check(new[] { "base", "with_local_modifiers", "with_all_modifiers" }.All(key => x[key] == null && Reasons(x)[key] == "x_cost"), "X has null numeric costs and reasons");
-            Check(cost.Calls.Count == 0 && Modifiers(x).Count == 1, "X does not calculate fixed cost, still reports actual modifiers");
+            Check(cost.Calls.SequenceEqual(new[] { CostModifiers.None }) && Modifiers(x).Count == 1, "X reads raw once and reports actual modifiers");
+            Check(Equals(x["base_raw"], 2) && Equals(x["captured_x_value"], 0), "X raw is retained separately from fixed-cost null");
             CheckCostDisplay(x, true, "X with local modifiers is shown");
             cost.X = false;
             cost.Values[CostModifiers.None] = -1;
             var noCost = BuildCardEnergyCostState(card);
             Check(new[] { "base", "with_local_modifiers", "with_all_modifiers" }.All(key => noCost[key] == null && Reasons(noCost)[key] == "no_energy_cost"), "negative sentinel becomes null with reason");
+            Check(Equals(noCost["base_raw"], -1) && Equals(noCost["canonical"], 2), "negative raw preserved independently of printed cost");
             CheckCostDisplay(noCost, true, "no-energy-cost with local modifiers is shown");
             Check(_stateWarnings.Count == 0, "normal X/no-cost are not warnings");
             cost.Values[CostModifiers.None] = 0;
@@ -128,7 +142,7 @@ namespace STS2_MCP
             Check(failedKind["costs_x"] == null && Reasons(failedKind)["base"] == "costs_x_unavailable", "cost kind failure is unknown");
             card.ThrowEnergyCost = true;
             var failedGetter = BuildCardEnergyCostState(card);
-            Check(Reasons(failedGetter).Count == 5 && failedGetter["local_modifiers"] == null, "EnergyCost getter failure preserves object contract");
+            Check(Reasons(failedGetter).Count == 8 && failedGetter.Where(entry => entry.Key != "unavailable_reasons").All(entry => entry.Value == null), "EnergyCost getter failure preserves all eight fields");
             CheckCostDisplay(failedGetter, true, "all-null read failure is shown");
             CheckCostDisplay(new(plain) { ["costs_x"] = null, ["unavailable_reasons"] = new Dictionary<string, string> { ["costs_x"] = "read_failed" } }, true, "cost-kind-only failure is shown");
             CheckCostDisplay(new(plain) { ["local_modifiers"] = null }, true, "null without reason is shown as unavailable");
@@ -137,6 +151,37 @@ namespace STS2_MCP
             Check(response["state_type"]!.Equals("combat") && ((List<string>)response["warnings"]!).Any(w => w.Contains("card.energy_cost.local_modifiers")), "real warning collector attaches failures to surviving state");
             BeginStateWarnings();
             Check(_stateWarnings.Count == 0 && Modifiers(BuildCardEnergyCostState(new CardModel())).Count == 0, "later state recovers without stale errors");
+
+            var rawCard = new CardModel();
+            rawCard.Cost.Printed = 3;
+            rawCard.Cost.Values[CostModifiers.None] = 1;
+            rawCard.Cost.Values[CostModifiers.Local] = 0;
+            rawCard.Cost.Values[CostModifiers.All] = 0;
+            var rawState = BuildCardEnergyCostState(rawCard);
+            Check(Equals(rawState["base_raw"], 1) && Equals(rawState["canonical"], 3) && Equals(rawState["with_all_modifiers"], 0), "upgraded/custom raw cost remains visible through free cost");
+            Check(Markdown(rawState).Contains("raw 1; canonical 3; captured X null (not_x_cost)"), "markdown exposes new values and inapplicable reason");
+            rawCard.Cost.X = true;
+            rawCard.Cost.Captured = 7;
+            var captured = BuildCardEnergyCostState(rawCard);
+            rawCard.Cost.Captured = 4;
+            Check(Equals(captured["captured_x_value"], 7) && Equals(BuildCardEnergyCostState(rawCard)["captured_x_value"], 4), "captured X is live and snapshot is detached");
+            rawCard.Cost.ThrowCaptured = true;
+            var failedCaptured = BuildCardEnergyCostState(rawCard);
+            Check(failedCaptured["captured_x_value"] == null && Reasons(failedCaptured)["captured_x_value"].Contains("captured X failed") && Equals(failedCaptured["base_raw"], 1), "captured failure preserves raw cost");
+            rawCard.Cost.ThrowCanonical = true;
+            var failedCanonical = BuildCardEnergyCostState(rawCard);
+            Check(failedCanonical["canonical"] == null && Reasons(failedCanonical)["canonical"].Contains("canonical failed") && Equals(failedCanonical["base_raw"], 1), "canonical failure preserves raw cost");
+            rawCard.Cost.ThrowCostsX = true;
+            int capturedReads = rawCard.Cost.CapturedReads;
+            var unknownKind = BuildCardEnergyCostState(rawCard);
+            Check(Equals(unknownKind["base_raw"], 1) && Reasons(unknownKind)["captured_x_value"] == "costs_x_unavailable" && rawCard.Cost.CapturedReads == capturedReads, "raw independent of unavailable kind; captured getter gated");
+            rawCard.Cost.ThrowOn.Add(CostModifiers.None);
+            var unknownRaw = BuildCardEnergyCostState(rawCard);
+            Check(unknownRaw["base_raw"] == null && Reasons(unknownRaw)["base_raw"].Contains("calculation failed"), "raw failure is explicit null with reason even for unknown kind");
+            var wireOptions = new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failedCaptured, wireOptions)))
+                Check(json.RootElement.GetProperty("captured_x_value").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("base_raw").GetInt32() == 1 && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("captured_x_value", out _), "new fields retain wire null, number and reason");
+            Check(_stateWarnings.Any(w => w.StartsWith("card.energy_cost.base_raw:")) && _stateWarnings.Any(w => w.StartsWith("card.energy_cost.canonical:")) && _stateWarnings.Any(w => w.StartsWith("card.energy_cost.captured_x_value:")), "new getter failures have path warnings");
 
             var player = new Dictionary<string, object?>
             {

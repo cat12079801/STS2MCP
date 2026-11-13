@@ -158,6 +158,7 @@ namespace STS2_MCP
             Check(!Markdown(combatRows).Contains("energy cost:"), "grid omits unchanged energy cost markdown");
             ((Dictionary<string, object?>)combatRows[30]["energy_cost"]!)["with_all_modifiers"] = 0;
             Check(Markdown(combatRows).Contains("energy cost: base 1; local 1; all 0"), "grid shows changed energy cost markdown");
+            Check(Markdown(combatRows).Contains("raw 1; canonical 1; captured X null (not_x_cost)"), "grid shows new cost details");
             Check(!Equals(combatRows[30]["uid"], combatRows[31]["uid"]), "same ID retains distinct uids");
             var combatAgain = BuildCardSelectCardRows(current, [])!;
             Check(Equals(combatRows[30]["uid"], combatAgain[30]["uid"]), "stable instance uid across reads");
