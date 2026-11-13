@@ -244,6 +244,7 @@ Always present at the top level (except `menu`). Contains everything about the l
     "character_cards": [ /* IDs */ ],
     "potions": { "character": [ /* IDs */ ], "shared": [ /* IDs */ ] }
   },
+  "combat_history": { /* Combat History Object below; unavailable values are null */ },
   "energy": 3,
   "max_energy": 3,
   "stars": 2,               // Regent only; omitted if 0 and character doesn't always show stars
@@ -310,6 +311,86 @@ notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint co
 from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for example,
 `LizardTail.WasUsed` sets that status when consumed. These booleans do not claim to
 encode every reason a relic can be disabled.
+
+### 戦闘履歴の要約（追加・schema 4）
+
+戦闘中の単独・マルチのローカル `player` に `combat_history` を出す。
+条件は既存の戦闘用フィールドと同じ `PlayerCombatState != null && CombatManager.IsInProgress`。
+戦闘外・旧 MOD では省略し、欠落は未観測として扱う。
+各 snapshot で `CombatManager.Instance.History` を読み直す。`turn_number` だけは
+`PlayerCombatState.TurnNumber` を直接読む。操作ログ・パイルの差分・レリックの表示値から復元せず、
+未発生の出来事や山札の順序は含めない。公開された戦闘中の出来事の要約である。
+
+```json
+{
+  "turn_number": 2,
+  "card_plays_started_this_turn": {
+    "total": 3,
+    "by_type": { "None": 0, "Attack": 2, "Skill": 1, "Power": 0, "Status": 0, "Curse": 0, "Quest": 0 }
+  },
+  "card_plays_finished_this_turn": {
+    "total": 2,
+    "by_type": { "None": 0, "Attack": 1, "Skill": 1, "Power": 0, "Status": 0, "Curse": 0, "Quest": 0 }
+  },
+  "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
+  "cards_exhausted_this_turn": 1,
+  "unblocked_damage_events_this_turn": 1,
+  "unblocked_damage_events_this_combat": 3,
+  "block_gains_this_turn": 2,
+  "unavailable_reasons": {}
+}
+```
+
+`owner` はローカル Player、`creature` は `owner.Creature`、`combat` は
+`creature.CombatState`。以下は v0.113.0 のデコンパイル `sts2-d009478a` を出典とする。
+件数は entry の数であり、札の個体数・ダメージ量・ブロック量ではない。
+
+| 項目 | 絞り込みとゲーム側の出典（クラス・メソッド／getter） |
+|---|---|
+| `turn_number` | `owner.PlayerCombatState.TurnNumber`。`StoneCalendar.DisplayAmount` / `AfterSideTurnStart` / `BeforeSideTurnEnd`、`MrStruggles.AfterPlayerTurnStart`。追加ターンでは `battle.round` と一致しない。 |
+| `card_plays_started_this_turn` | `History.CardPlaysStarted` で `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner`。型は `e.CardPlay.Card.Type`。`NostalgiaPower.ModifyCardPlayResultLocation` の Attack + Skill、`JugglingPower.AfterApplied` の Attack、`VelvetChoker.GetCardsPlayedThisTurn` の全型と同じ。 |
+| `card_plays_finished_this_turn` | `History.CardPlaysFinished` で同じターン・Player 条件。`RippleBasin.BeforeSideTurnEnd` の Attack、`LunarBlast.CanonicalVars` の Skill と同じ。 |
+| `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
+| `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
+| `unblocked_damage_events_this_turn` | `History.Entries.OfType<DamageReceivedEntry>()` で `e.HappenedThisTurn(combat) && e.Receiver == creature && e.Result.UnblockedDamage > 0`。`Spite.LostHpThisTurn` の Any と同じ集合の件数。 |
+| `unblocked_damage_events_this_combat` | 同じ DamageReceivedEntry の Receiver・UnblockedDamage 条件で、ターン条件なし。`TearAsunder.CanonicalVars` の CalculatedHits の `1 + Count(...)` の Count 部分。 |
+| `block_gains_this_turn` | `History.Entries.OfType<BlockGainedEntry>()` で `e.HappenedThisTurn(combat) && e.CardPlay != null && e.CardPlay.Player.Creature == creature && e.Props.IsCardOrMonsterMove()`。`UnmovablePower.ModifyBlockMultiplicative` を **`cardPlay = null`（次のプレイを評価する文脈）** とした式そのもの。 |
+
+開始・完了は独立に読むため、解決中には差が出る。`by_type` は `CardType` の全 enum 名をキーにし、
+未発生の型も 0。`total` は全型の合計。リプレイ・自動プレイも entry の数だけ数え、
+重複を除かない。本体と同じく現在の `CardPlay.Card.Type` を読み、過去の型の snapshot は作らない。
+
+前手番の uid 配列は履歴順で重複を保つ。他 Player のプレイも含む。
+これは札の所有者がプレイ後に変わり得るため、Bolas / ThrummingHatchet が
+`CardPlay.Player` ではなく札の個体を調べる式に合わせている。
+`CardPlay` の注釈もプレイ時の Player と現在の `Card.Owner` の違いを明記している。
+uid は手札・各パイル・grid と共通の戦闘単位の registry を使い、履歴にしか残らない札にも
+同じ `<card_id>#<n>` を割り当てる。`HappenedLastPlayerTurn` は Player の TurnNumber が
+現在値−1である entry を返すため、単純な前ラウンドや前の player side の意味に置き換えない。
+`HappenedThisTurn` もラウンド・side・記録された全 Player の TurnNumber を検査する本体の関数を使う
+（`CombatHistoryEntry.HappenedThisTurn` / `HappenedLastPlayerTurn`）。
+
+`block_gains_this_turn` は不動用のカード由来の獲得回数で、レリックなどを含む全獲得回数ではない。
+本体の式には Receiver・Amount の条件も distinct もないため追加しない。
+同一 CardPlay が複数回ブロックを得たら複数件、別 Player のカードが自分に与えたブロックは除外し、
+自分のカードが別の対象に与えたブロックは含める。
+本体は実行中の `cardPlay` が非 null の場合、その CardPlay と同一の entry を除く。
+この要約はその実行中の文脈を再現する値ではなく、次のプレイ用の null 文脈の件数である。
+計画には既存の契約どおり `is_resolving: false` の snapshot を使う。
+
+正常な空履歴は 0 と `[]` と空の `unavailable_reasons`。
+読取・列挙・型や getter の変更等で取得できない項目は、その**項目全体を `null`** にし、
+`unavailable_reasons[項目名]` に `ExceptionType: message`、state の `warnings` に
+`player.combat_history.<項目名>: ...` を出す。部分的な合計・配列や代用の 0 は返さない。
+他の取得可能な値と state は保持する。特に combat state が無ければターン判定を false として扱わず
+該当項目を null にする。private フィールドは不要であり、本体の public API を使う。
+
+Markdown は正の件数・非空の uid 配列・取得失敗があるときだけ短い History 行を出す。
+既知の 0 と空配列だけなら省略し、TurnNumber 単独では行を増やさない。
+失敗時は null と理由を表示する。既存の意味の変更・削除を伴わない追加なので
+`schema_version` は **4 のまま**。利用側は `combat_history` の有無で検出する。
+
+契約試験と実機確認の観点は [`tests/CombatHistoryContract`](../tests/CombatHistoryContract/README.md)。
 
 ### レリックの数値変数（追加、schema 3）
 

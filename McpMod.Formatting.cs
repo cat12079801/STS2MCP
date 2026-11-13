@@ -430,6 +430,7 @@ public static partial class McpMod
                 return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}: {r["description"]}";
             });
             FormatPotionsSection(sb, player);
+            AppendCombatHistoryMarkdown(sb, player);
 
             if (player.TryGetValue("hand", out var handObj) && handObj is List<Dictionary<string, object?>> hand && hand.Count > 0)
             {

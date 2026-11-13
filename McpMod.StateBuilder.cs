@@ -1464,6 +1464,7 @@ public static partial class McpMod
         if (combatState != null && CombatManager.Instance.IsInProgress)
         {
             inCombat = true;
+            if (creature.CombatState != null) RefreshCardUidRegistry(creature.CombatState);
             state["unlocked_pools"] = BuildUnlockedPools(player, creature.CombatState);
             state["energy"] = combatState.Energy;
             state["max_energy"] = combatState.MaxEnergy;
@@ -1503,6 +1504,7 @@ public static partial class McpMod
             state["discard_pile"] = BuildPileCardList(combatState.DiscardPile.Cards, PileType.Discard);
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
             state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
+            state["combat_history"] = BuildCombatHistoryState(player);
 
             // Orbs
             var orbQueue = combatState.OrbQueue;
