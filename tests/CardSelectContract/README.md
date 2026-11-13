@@ -22,6 +22,12 @@ action は画面外の index 30、具体 override への一回のモデル引き
 候補更新後は state/action が新しい一覧を再取得する。強化画面だけのプレビュー付与、
 戦闘条件下だけの uid / exhaust フラグ、全行の Markdown・選択印・null 表示も対象。
 
+山札から選ぶ画面では、CompareTo と Title が等しい連続区間を uid 順に正規化する。
+行の uid・選択印と index のクリック先が同じ個体に対応すること、選択と解除、
+元の grid の保持、格納順を反転した後の対応、異なる比較値・Title と区間境界、
+捨て札・廃棄札の候補順、生成札の `#g` 接尾辞を検査する。
+比較や元パイルの取得に失敗した場合の候補一覧の null・warning とクリックの拒否も検査する。
+
 ゲームのモデル・ノード・combat registry・カード情報作成・強化プレビュー作成は境界ダブル。
 実ゲームのソート、描画、ハイライト、シグナル、効果適用、uid の registry 本体を動かした証拠にはならない。
 schema 4、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、

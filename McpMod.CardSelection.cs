@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.CardSelection;
@@ -57,6 +58,7 @@ public static partial class McpMod
                 }
                 snapshot[i] = card;
             }
+            OrderDrawPileSelectionTies(screen, snapshot);
             candidates = snapshot;
             return true;
         }
@@ -64,6 +66,33 @@ public static partial class McpMod
         {
             reason = $"{ex.GetType().Name}: {ex.Message}";
             return false;
+        }
+    }
+
+    private static void OrderDrawPileSelectionTies(NCardGridSelectionScreen screen, CardModel[] cards)
+    {
+        if (screen is not NCombatPileCardSelectScreen) return;
+        var pile = GetInstanceFieldValue(screen, "_pile") as CardPile
+            ?? throw new InvalidOperationException("combat selection pile is unavailable");
+        if (pile.Type != PileType.Draw) return;
+        var manager = CombatManager.Instance;
+        var combatState = manager is { IsInProgress: true } ? manager.DebugOnlyGetState() : null;
+        if (combatState == null) return;
+        RefreshCardUidRegistry(combatState);
+
+        // The UI leaves visually identical draw-pile cards in hidden pile order.
+        // Normalize each consecutive tie in our snapshot. Both rows and clicks
+        // consume this mapping, including selection flags for the original models.
+        var uidOrder = Comparer<CardModel>.Create((a, b) =>
+            StringComparer.Ordinal.Compare(GetStableCardUid(a), GetStableCardUid(b)));
+        for (int start = 0; start < cards.Length;)
+        {
+            int end = start + 1;
+            while (end < cards.Length && cards[start].CompareTo(cards[end]) == 0
+                && string.Equals(cards[start].Title, cards[end].Title, StringComparison.Ordinal))
+                end++;
+            if (end - start > 1) Array.Sort(cards, start, end - start, uidOrder);
+            start = end;
         }
     }
 

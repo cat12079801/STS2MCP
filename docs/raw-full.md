@@ -374,7 +374,7 @@ encode every reason a relic can be disabled.
 `CardPlay.Player` ではなく札の個体を調べる式に合わせている。
 `CardPlay` の注釈もプレイ時の Player と現在の `Card.Owner` の違いを明記している。
 uid は手札・各パイル・grid と共通の戦闘単位の registry を使い、履歴にしか残らない札にも
-同じ `<card_id>#<n>` を割り当てる。`HappenedLastPlayerTurn` は Player の TurnNumber が
+同じ uid を割り当てる。`HappenedLastPlayerTurn` は Player の TurnNumber が
 現在値−1である entry を返すため、単純な前ラウンドや前の player side の意味に置き換えない。
 `HappenedThisTurn` もラウンド・side・記録された全 Player の TurnNumber を検査する本体の関数を使う
 （`CombatHistoryEntry.HappenedThisTurn` / `HappenedLastPlayerTurn`）。
@@ -551,11 +551,13 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 項目の欠落がある旧 snapshot は未観測として扱う。
 
 山札の表示順は `Rarity` → `CardModel.CompareTo` → `uid`（ordinal 文字列比較）。
-ゲームの `NCardPileScreen.OnPileContentsChanged` と同じ `OrderBy(Rarity).ThenBy(card => card)`
-を使い、同順位だけ引く順と無関係な固定 uid で並べる。`CardModel.CompareTo` は
+一次・二次比較にゲームの `NCardPileScreen.OnPileContentsChanged` の
+`OrderBy(Rarity).ThenBy(card => card)` を使う。同順位は uid 順にして引く順を意図して隠す。
+ゲームの安定ソートが同順位に残す格納順を、MOD はこの区間で正規化する。`CardModel.CompareTo` は
 ID → 強化段階 → エンチャント ID → 災禍 ID → 解決後のエネルギーコスト →
 BaseReplayCount → キーの ordinal 順で各 DynamicVar.BaseValue を比較する。
-ゲームの山札自体は変更しない。山札の配列の先頭は、次に引く札を表さない。
+比較中の例外は `draw_pile.order` の warning とし、`Rarity` → `Id.Entry`（ordinal）→
+`uid`（ordinal）の順に並べて返す。通常・例外時とも同順位の引く順を隠す。
 捨て札・廃棄札は、ゲームと同じ格納順を保つ（`NCardGrid.SetCards` の `Ascending` は
 入力順を保つ）。`play_pile` も格納順を保つ。
 Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型・対象を付ける。
@@ -576,31 +578,45 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 
 ### 戦闘カードの uid とパイル順序
 
-`uid` は `<card_id>#<n>` 形式の戦闘内の個体識別子。`n` は OS の暗号学的乱数から選ぶ
-0 以上 `Int32.MaxValue` 未満の10進整数で、連番ではない。番号の大小には、
-初回観測順・作成順・デッキ内の位置・引く順という意味はない。
-ゲームの乱数生成器・シード・ネットワークのカード番号は使用しない。
-同じ戦闘で完全に同じ uid が再発行されないよう衝突時に引き直し、
-消えた札の uid も戦闘終了まで予約する。
+`uid` は `<card_id>#<suffix>` 形式の戦闘内の個体識別子。
+デッキ由来の札は `CardModel.DeckVersion` で元の札を照合し、`Player.Deck.Cards` の
+0 始まりの位置を suffix にする（例 `STRIKE_IRONCLAD#2`）。位置はカード ID ごとでなく
+デッキ全体で数える。マルチは Player の NetId を添えた `<位置>p<NetId>`
+（例 `STRIKE_IRONCLAD#2p17`）を使う。
+戦闘の最初の registry 更新時に全 Player のデッキから対応を作る。
+デッキ位置は、ゲームのデッキ画面の初期表示・入手順の昇順で見える情報である。
+
+生成札・複製札（DeckVersion が無い札）の suffix は `g<乱数>`
+（例 `STRIKE_IRONCLAD#g900`）。乱数は OS の暗号学的乱数から選ぶ
+0 以上 `Int32.MaxValue` 未満の10進整数で、衝突時に引き直す。
+発行済みの uid は消えた札も含めて戦闘終了まで予約する。
 
 各 CardModel インスタンスの uid は初回参照時に一度だけ付け、手札・山札・捨て札・
 廃棄札・プレイ中・grid・戦闘履歴・`play_card.card_uid` で共有する。
 強化・コスト変更・所有者変更・パイル移動や同じ戦闘内の state 再取得では変わらない。
-戦闘中に生成された札、手札に直接入る札、複製された札も同じ乱数方式で新しい uid を得る。
-同じ ID の札や複製元の番号を継承せず、既存の札を振り直すこともない。
+戦闘中に生成された札、手札に直接入る札、複製された札も `#g<乱数>` で個別に識別する。
 registry は combat state のインスタンスが変わったときに初期化する。
-戦闘のやり直し・再ロード・MOD の再起動をまたぐ同一番号は保証しない。
+保存して終了 → continue で新しい combat state とカードを作り直しても、
+デッキ由来の札は同じデッキ位置から同じ uid を再現する。
+生成・複製札の乱数番号は再ロード時に再発行される。戦闘開始時の生成札が手札にある局面では、
+旧 MOD と同様に再ロード前後の手札 uid 集合が一致しないことがある。
 
-利用側は uid を不透明な文字列として照合する。fixture・dump を新しく取得したときの番号は
-既存データと一致せず、同じシードの取り直しでも一致しない。旧データの uid を新しい実機の
-札に結び付けたり、番号から観測順を復元したりしない。既存の fixture・dump の値を
-新仕様に合わせて手で書き換えず、必要な観測は新しい MOD で取り直す。
-JSON の形と戦闘内固定の契約は維持し、`schema_version` は **4**。
+engine の `tools/turnplan/cli.py` の `turn_sig` は手札 uid の集合を署名に含める。
+round 1 の途中から保存して終了 → continue したとき、初手の署名への復帰を
+外からのやり直しとして検出するため、デッキ由来の uid の再現が必要である。
+デッキ由来の札だけの初手では、その前提をデッキ位置による採番で満たす。
+
+利用側は uid を不透明な文字列として照合する。旧 fixture・dump の具体的な番号は
+新しい MOD と異なる場合があるため、必要な観測は新しい MOD で取り直す。
+`schema_version` は **4**。
 
 出典は v0.113.0（`sts2-d009478a`）の `NCardPileScreen.OnPileContentsChanged`、
 `CardModel.CompareTo`、`NCardGrid.SetCards`。戦闘開始時は
 `CombatManager.SetUpCombat` → `Player.PopulateCombatState` がデッキ順に複製した後で
-`DrawPile.RandomizeOrderInternal` を呼ぶ。MOD の uid はこの並びにもシャッフルにも依存しない。
+`DrawPile.RandomizeOrderInternal` を呼ぶ。
+`NDeckViewScreen` は `PileType.Deck.GetPile(_player)` の `Cards` を表示し、
+初期状態と `OnObtainedSort` の昇順で `SortingOrders.Ascending` を使う。
+`Player.ToSerializable` / `SyncWithSerializedPlayer` はデッキの順序を保存・復元する。
 契約試験は `tests/CardIdentityContract`、共有 registry と履歴の照合は
 `tests/CombatHistoryContract` で確認する。
 
@@ -1444,7 +1460,7 @@ Chest is auto-opened on first state query.
 Covers deck transforms, upgrades, enchants, removals, and choose-a-card effects. Appears on top of any room.
 
 For grid screens, `cards` contains **all candidates** after the game's filtering and sorting,
-in the full grid's display order (top to bottom, left to right). The zero-based `index` addresses
+in the full grid's display order (top to bottom, left to right), with the draw-pile tie normalization below. The zero-based `index` addresses
 that full list, including cards without a generated holder; no scrolling is required. Scrolling
 or hovering does not change indices. Re-read state after candidates change, are reordered, or the
 screen changes; an index is not a persistent card identifier. Same-ID instances stay separate.
@@ -1453,6 +1469,11 @@ list could not be read; do not select using a partial or stale list. Schema 4 re
 `selected_outside_grid`: selection marks now cover the full list. A mismatch with `selected_count`
 produces a `card_select.selected` warning without rewriting the game's selection.
 Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
+
+山札由来の `NCombatPileCardSelectScreen` は、`CardModel.CompareTo == 0` かつ Title が
+等しい札の連続区間を uid の ordinal 順に正規化し、引く順を意図して隠す。
+行の uid・選択印と `select_card.index` のクリック先は、同じ正規化した候補一覧で対応する。
+比較・Title の取得に失敗した場合は `cards: null` と `card_select.cards` の warning を返す。
 
 During a live combat with an available combat state, grid selection rows (`cards[]`) also carry
 `uid`, using the same per-card-instance registry as the combat hand and piles. This includes

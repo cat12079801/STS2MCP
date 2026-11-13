@@ -10,7 +10,7 @@ public static partial class McpMod
         sb.AppendLine("### Deck Information");
         sb.AppendLine();
 
-        FormatPileMarkdown(sb, player, "draw_pile", "draw_pile_count", "Draw Pile", " sorted by rarity");
+        FormatPileMarkdown(sb, player, "draw_pile", "draw_pile_count", "Draw Pile", " display order, ties hide draw order");
         FormatPileMarkdown(sb, player, "discard_pile", "discard_pile_count", "Discard Pile");
         FormatPileMarkdown(sb, player, "exhaust_pile", "exhaust_pile_count", "Exhaust Pile");
         if (player.GetValueOrDefault("play_pile_count") is int count && count >= 1)

@@ -10,12 +10,27 @@ namespace MegaCrit.Sts2.Core.Models
     public class CardModel(string id)
     {
         public string Id = id;
-        public string Title => Id;
+        public string? TitleOverride;
+        public string Title => TitleOverride ?? Id;
+        public int DisplayRank;
+        public bool ThrowCompare;
+        public int CompareTo(CardModel other)
+        {
+            if (ThrowCompare || other.ThrowCompare) throw new InvalidOperationException("comparison unavailable");
+            int idOrder = StringComparer.Ordinal.Compare(Id, other.Id);
+            return idOrder != 0 ? idOrder : DisplayRank.CompareTo(other.DisplayRank);
+        }
         public bool ExhaustOnNextPlay;
         public bool IsUpgradable = true;
         public int CurrentUpgradeLevel;
         public int MaxUpgradeLevel = 1;
     }
+}
+
+namespace MegaCrit.Sts2.Core.Entities.Cards
+{
+    public enum PileType { Deck, Draw, Discard, Exhaust, Play }
+    public class CardPile(PileType type) { public PileType Type = type; }
 }
 
 namespace MegaCrit.Sts2.Core.CardSelection
@@ -112,6 +127,12 @@ namespace MegaCrit.Sts2.Core.Nodes.Screens.CardSelection
 
     // No declared override here: resolution must walk to the concrete parent.
     public class NDeckUpgradeSelectScreen(NCardGrid? grid) : TestSelectScreen(grid);
+
+    public sealed class NCombatPileCardSelectScreen(NCardGrid? grid, MegaCrit.Sts2.Core.Entities.Cards.CardPile? pile) : TestSelectScreen(grid)
+    {
+        private readonly MegaCrit.Sts2.Core.Entities.Cards.CardPile? _pile = pile;
+        public MegaCrit.Sts2.Core.Entities.Cards.CardPile? Pile => _pile;
+    }
 
     public abstract class WrongSignatureScreen(NCardGrid? grid) : NCardGridSelectionScreen(grid)
     {

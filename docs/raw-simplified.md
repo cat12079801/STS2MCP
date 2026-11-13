@@ -68,17 +68,20 @@ Every JSON response includes:
     EnchantedValue / PreviewValue ではない。CalculatedVar は計算前の基底値。
     数値変数なしは `{}`。読取失敗は該当値を null とし、行の `unavailable_reasons` に
     `enchantment.status` / `dynamic_vars.Damage` 等のパス別理由を入れ、`warnings` に記録する。
-    山札はゲームと同じ `Rarity` → `CardModel.CompareTo` の表示順で、同順位だけ
-    引く順と無関係な固定 uid の ordinal 順にする。次に引く順は表さない。
+    山札は一次・二次比較にゲームの `Rarity` → `CardModel.CompareTo` を使い、
+    同順位は固定 uid の ordinal 順にして引く順を意図して隠す。
+    比較の例外は `draw_pile.order` の warning を出し、`Rarity` → `Id.Entry` → uid で返す。
     捨て札・廃棄札・プレイ中の札は格納順。Markdown はパイルの本行末尾に `[Attack/AnyEnemy]`、
     `Disabled` のエンチャントにだけ `(disabled)` を付ける。
     基底値は `base Damage 6, Vulnerable 2` の形で札ごとに1行にまとめる。
     追加項目のため schema 4。詳細と出典は [契約](raw-full.md#戦闘カードの詳細追加schema-4) を参照。
-  - 戦闘中の `uid` は `<card_id>#<n>`。`n` は OS の暗号学的乱数で選ぶ非負の整数で、
-    初回観測順・作成順・引く順と無関係。衝突は再採番し、同じ戦闘の同じ個体では固定。
-    生成札・手札に直接入る札・複製札も同じ方式で新しい uid を得て、元の札は振り直さない。
-    ゲームの乱数は使わない。戦闘の再ロードや同じシードの取り直しでは番号を再現しないため、
-    fixture・dump の uid は新しい実機と照合せず、必要なら取り直す。形式・schema 4 は維持。
+  - 戦闘中の `uid` は `<card_id>#<suffix>`。デッキ由来は `DeckVersion` で元の札を照合し、
+    `Player.Deck.Cards` の0始まりの位置を使う。マルチは `<位置>p<NetId>`。
+    デッキ位置はゲームのデッキ画面で見られ、保存して終了 → continue 後も同じ uid を再現する。
+    生成札・手札に直接入る札・複製札は `g<OSの乱数>` を使い、衝突時に再採番する。
+    同じ戦闘の同じ個体では固定。開始時の生成札が手札にあると、旧 MOD と同様に再ロードで
+    手札 uid の集合が一致しないことがある。engine の `turn_sig` が再ロード検出に使う
+    uid の再現は、デッキ由来の初手で満たす。旧 fixture・dump の番号は異なる場合があり、必要なら取り直す。
     [uid とパイル順序の契約](raw-full.md#戦闘カードの-uid-とパイル順序) を参照。
   - `play_pile` / `play_pile_count` — 戦闘中の `PlayerCombatState.PlayPile`。
     他のパイルと同じ行（`uid`・`exhaust_on_next_play`・`energy_cost`・上記の詳細を含む）。
@@ -364,13 +367,16 @@ SACRIFICE の完了、REROLL の継続、中断はそれぞれ別に記録する
 
 ### Card Selection Overlay (`card_select`)
 
-Grid `cards` includes **all filtered candidates**, in full display order (top to bottom, left to right).
+Grid `cards` includes **all filtered candidates**, in full display order (top to bottom, left to right), with draw-pile ties normalized as described below.
 `index` is zero-based in this list, even for cards off screen; **no scrolling is required**.
 Scrolling/hover does not change indices. Re-read state after candidate changes, reordering, or screen changes.
 Same-ID instances remain separate. `cards: []` means zero candidates; `cards: null` plus a
 `card_select.cards` warning means the list could not be read. Do not act on an old index then.
 Schema 4 removes `selected_outside_grid`; every candidate has its selection mark. A mismatch
 with `selected_count` produces a warning. Combat-pile `screen_type` retains its game class name.
+
+山札から選ぶ画面は、`CardModel.CompareTo == 0` かつ Title が等しい札の連続区間を
+uid の ordinal 順にし、引く順を意図して隠す。行と index のクリック先は同じ対応を使う。
 
 Grid rows (`cards[]`) include a combat-stable `uid` only while combat is in progress and its state
 is available, including combat-pile selections. It uses the same card-instance registry as the

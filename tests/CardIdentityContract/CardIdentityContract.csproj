@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.CardIdentity.cs" Link="CardIdentity.cs" />
+    <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
     <None Include="../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs;../../McpMod.CardSelection.cs;../../McpMod.CombatHistory.cs;../../McpMod.MultiplayerState.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

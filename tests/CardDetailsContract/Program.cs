@@ -199,6 +199,7 @@ namespace STS2_MCP
                 var sb = new StringBuilder();
                 string before = JsonSerializer.Serialize(player, options);
                 FormatDeckPilesMarkdown(sb, player);
+                Check(sb.ToString().Contains("display order, ties hide draw order"), "draw pile heading explains intentional tie concealment");
                 Check(sb.ToString().Split('\n').Any(line => line.TrimEnd('\r') == "- Test (1): Description [Attack/AnyEnemy]") && sb.ToString().Contains("base Damage 12.75, Zero 0, Negative -2"), $"{pile} pile puts shape at row end and consolidates base values");
                 Check(!sb.ToString().Contains("  - type ") && sb.ToString().Split('\n').Count(line => line.StartsWith("  - base ")) == 1, "pile details add one base line and no shape child line");
                 Check(JsonSerializer.Serialize(player, options) == before, "formatting does not modify JSON");

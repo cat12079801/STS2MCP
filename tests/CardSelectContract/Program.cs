@@ -1,5 +1,6 @@
 using System.Text;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
@@ -180,6 +181,64 @@ namespace STS2_MCP
             Open(current);
             current.SetPrefs(1, 2);
             Check(Ok(ExecuteSelectGridCard(current, 1)) && ReferenceEquals(current.LastCard, cards[30]), "action fetches current ordering without cached snapshot");
+
+            CombatManager.Instance = new() { IsInProgress = true, State = new() };
+            var tieCards = new[] { new CardModel("STRIKE"), new CardModel("STRIKE"), new CardModel("STRIKE") };
+            Uids[tieCards[0]] = "STRIKE#2";
+            Uids[tieCards[1]] = "STRIKE#0";
+            Uids[tieCards[2]] = "STRIKE#1";
+            var drawGrid = new NCardGrid(tieCards);
+            var drawScreen = new NCombatPileCardSelectScreen(drawGrid, new CardPile(PileType.Draw));
+            drawScreen.SetSelection([tieCards[0]]);
+            drawScreen.SetPrefs(0, 3);
+            Open(drawScreen);
+            var drawRows = BuildCardSelectCardRows(drawScreen, GetCardSelectSelection(drawScreen))!;
+            Check(drawRows.Select(row => (string)row["uid"]!).SequenceEqual(new[] { "STRIKE#0", "STRIKE#1", "STRIKE#2" }), "draw selector conceals identical-card order using UID");
+            Check(drawRows.Select(row => (int)row["index"]!).SequenceEqual(new[] { 0, 1, 2 }), "normalized selection indices stay contiguous");
+            Check(drawRows[2]["selected"] is true && drawRows[0]["selected"] is false, "selection flags follow normalized original instances");
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 0)) && ReferenceEquals(drawScreen.LastCard, tieCards[1]), "normalized row UID and clicked model agree");
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 0)) && !GetCardSelectSelection(drawScreen)!.Contains(tieCards[1]), "normalized index toggles same original model");
+            Check(tieCards[0] != drawScreen.LastCard && ReferenceEquals(GetInstanceFieldValue(drawGrid, "_cards"), tieCards)
+                && tieCards[0] == GetCardSelectSelection(drawScreen)!.Single(), "normalization leaves the game's grid list intact");
+            drawGrid.SetCards(tieCards.Reverse().ToArray());
+            var reorderedRows = BuildCardSelectCardRows(drawScreen, GetCardSelectSelection(drawScreen))!;
+            Check(reorderedRows.Select(row => row["uid"]).SequenceEqual(drawRows.Select(row => row["uid"])), "hidden tie permutation yields same exposed UID order");
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 1)) && ReferenceEquals(drawScreen.LastCard, tieCards[2]), "click recomputes same mapping after grid permutation");
+            Check(Markdown(reorderedRows).Contains("STRIKE#0"), "normalized UIDs reach selection Markdown");
+
+            var differentRank = new CardModel("STRIKE") { DisplayRank = 1 };
+            var differentTitle = new CardModel("STRIKE") { TitleOverride = "Strike+" };
+            Uids[differentRank] = "STRIKE#9";
+            Uids[differentTitle] = "STRIKE#8";
+            var separated = new[] { tieCards[0], differentRank, tieCards[1], differentTitle, tieCards[2] };
+            drawGrid.SetCards(separated);
+            Check(TryGetCardSelectCandidates(drawScreen, out _, out var separatedCandidates, out _)
+                && separatedCandidates.SequenceEqual(separated), "only consecutive equal-comparison and equal-title runs may reorder");
+            foreach (var pile in new[] { PileType.Discard, PileType.Exhaust, PileType.Play })
+            {
+                var otherPileScreen = new NCombatPileCardSelectScreen(new NCardGrid(tieCards), new CardPile(pile));
+                Check(TryGetCardSelectCandidates(otherPileScreen, out _, out var otherCandidates, out _)
+                    && otherCandidates.SequenceEqual(tieCards), $"{pile} selection preserves grid order even for identical cards");
+            }
+            var ordinary = new TestSelectScreen(new NCardGrid(tieCards));
+            Check(TryGetCardSelectCandidates(ordinary, out _, out var ordinaryCandidates, out _)
+                && ordinaryCandidates.SequenceEqual(tieCards), "other grid screens retain original candidates");
+            var generated = new CardModel("STRIKE");
+            Uids[generated] = "STRIKE#g100";
+            drawGrid.SetCards(new[] { generated, tieCards[0], tieCards[1] });
+            Check(BuildCardSelectCardRows(drawScreen, null)!.Select(row => (string)row["uid"]!)
+                .SequenceEqual(new[] { "STRIKE#0", "STRIKE#2", "STRIKE#g100" }), "generated and deck UIDs share ordinal tie ordering");
+            tieCards[0].ThrowCompare = true;
+            drawGrid.SetCards(new[] { tieCards[0], tieCards[1] });
+            Warnings.Clear();
+            int drawCalls = drawScreen.Calls;
+            Check(BuildCardSelectCardRows(drawScreen, null) == null && Warnings.Single().StartsWith("card_select.cards:"), "failed tie comparison yields unavailable candidates and warning");
+            Check(!Ok(ExecuteSelectGridCard(drawScreen, 0)) && drawScreen.Calls == drawCalls, "failed normalization cannot click with an uncertain mapping");
+            var unknownPile = new NCombatPileCardSelectScreen(new NCardGrid(tieCards), null);
+            Open(unknownPile);
+            Warnings.Clear();
+            Check(BuildCardSelectCardRows(unknownPile, null) == null && Warnings.Single().StartsWith("card_select.cards:"), "unknown source pile cannot expose unnormalized UIDs");
+            Check(!Ok(ExecuteSelectGridCard(unknownPile, 0)) && unknownPile.Calls == 0, "unknown source pile cannot select with an uncertain mapping");
 
             // Lightweight integration assertions for entry points not linked into this
             // small boundary project (the entire state/action builders depend on Godot).

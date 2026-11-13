@@ -2,8 +2,11 @@
 // turn logic. Tests verify that the production builder delegates to these methods.
 namespace MegaCrit.Sts2.Core.Combat
 {
-    public interface ICombatState { }
-    public class CombatState : ICombatState { }
+    public interface ICombatState { IReadOnlyList<Entities.Players.Player> Players { get; } }
+    public class CombatState : ICombatState
+    {
+        public IReadOnlyList<Entities.Players.Player> Players => Array.Empty<Entities.Players.Player>();
+    }
     public class CombatManager
     {
         public static CombatManager Instance { get; } = new();
@@ -24,6 +27,8 @@ namespace MegaCrit.Sts2.Core.Entities.Players
 {
     public class Player
     {
+        public ulong NetId => 0;
+        public Cards.CardPile Deck = new();
         public Creatures.Creature Creature = new();
         public PlayerCombatState? PlayerCombatState = new();
     }
@@ -38,6 +43,7 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
 {
     public enum CardType { None, Attack, Skill, Power, Status, Curse, Quest }
     public enum PileType { Hand, Draw, Discard, Exhaust, Play }
+    public class CardPile { public List<Models.CardModel> Cards = new(); }
     public class CardPlay(Models.CardModel card, Players.Player player)
     {
         public Models.CardModel Card = card;
@@ -50,6 +56,7 @@ namespace MegaCrit.Sts2.Core.Models
     public class CardModel(Entities.Cards.CardType type)
     {
         public ModelId Id = new("TEST");
+        public CardModel? DeckVersion;
         public int Rarity => 0;
         public Entities.Cards.CardType Value = type;
         public bool ThrowType;
