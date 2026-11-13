@@ -29,7 +29,7 @@ public static partial class McpMod
                 parts.Add($"{label}={count}");
             }
             else if (value is List<string> uids && uids.Count > 0)
-                parts.Add($"last turn=[{string.Join(", ", uids)}]");
+                parts.Add($"{(key == "card_plays_finished_this_turn_card_uids" ? "this turn" : "last turn")}=[{string.Join(", ", uids)}]");
             else if (value is Dictionary<string, object?> plays && plays.GetValueOrDefault("total") is int total && total > 0)
             {
                 var byType = plays["by_type"] as Dictionary<string, int>;

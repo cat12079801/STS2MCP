@@ -332,6 +332,7 @@ encode every reason a relic can be disabled.
     "total": 2,
     "by_type": { "None": 0, "Attack": 1, "Skill": 1, "Power": 0, "Status": 0, "Curse": 0, "Quest": 0 }
   },
+  "card_plays_finished_this_turn_card_uids": ["THRUMMING_HATCHET#0", "THRUMMING_HATCHET#0"],
   "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
   "cards_exhausted_this_turn": 1,
   "unblocked_damage_events_this_turn": 1,
@@ -350,6 +351,7 @@ encode every reason a relic can be disabled.
 | `turn_number` | `owner.PlayerCombatState.TurnNumber`。`StoneCalendar.DisplayAmount` / `AfterSideTurnStart` / `BeforeSideTurnEnd`、`MrStruggles.AfterPlayerTurnStart`。追加ターンでは `battle.round` と一致しない。 |
 | `card_plays_started_this_turn` | `History.CardPlaysStarted` で `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner`。型は `e.CardPlay.Card.Type`。`NostalgiaPower.ModifyCardPlayResultLocation` の Attack + Skill、`JugglingPower.AfterApplied` の Attack、`VelvetChoker.GetCardsPlayedThisTurn` の全型と同じ。 |
 | `card_plays_finished_this_turn` | `History.CardPlaysFinished` で同じターン・Player 条件。`RippleBasin.BeforeSideTurnEnd` の Attack、`LunarBlast.CanonicalVars` の Skill と同じ。 |
+| `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
 | `unblocked_damage_events_this_turn` | `History.Entries.OfType<DamageReceivedEntry>()` で `e.HappenedThisTurn(combat) && e.Receiver == creature && e.Result.UnblockedDamage > 0`。`Spite.LostHpThisTurn` の Any と同じ集合の件数。 |
@@ -360,7 +362,14 @@ encode every reason a relic can be disabled.
 未発生の型も 0。`total` は全型の合計。リプレイ・自動プレイも entry の数だけ数え、
 重複を除かない。本体と同じく現在の `CardPlay.Card.Type` を読み、過去の型の snapshot は作らない。
 
-前手番の uid 配列は履歴順で重複を保つ。他 Player のプレイも含む。
+開始数の Attack は `JugglingPower.AfterApplied` の初期化式とは一致するが、
+ジャグリングの実際の判定は private な `Data.attacksPlayedThisTurn` を使う。
+その後は `BeforeCardPlayed` が `cardPlay.Card.Owner == Owner.Player` の条件で加算し、
+`AfterSideTurnEnd` がリセットするため、`CardPlay.Player` で絞る履歴とは
+所有者が変わる札などで一致しない。engine が履歴をジャグリングに使うのは近似の代用に留まる。
+正確な値は sts2 #863（パワーの内部状態）で `Data` を読み、そちらを使う。
+
+このターンと前手番の uid 配列はどちらも履歴順で重複を保つ。他 Player のプレイも含む。
 これは札の所有者がプレイ後に変わり得るため、Bolas / ThrummingHatchet が
 `CardPlay.Player` ではなく札の個体を調べる式に合わせている。
 `CardPlay` の注釈もプレイ時の Player と現在の `Card.Owner` の違いを明記している。
@@ -369,6 +378,16 @@ uid は手札・各パイル・grid と共通の戦闘単位の registry を使�
 現在値−1である entry を返すため、単純な前ラウンドや前の player side の意味に置き換えない。
 `HappenedThisTurn` もラウンド・side・記録された全 Player の TurnNumber を検査する本体の関数を使う
 （`CombatHistoryEntry.HappenedThisTurn` / `HappenedLastPlayerTurn`）。
+`*_this_turn` は state を読んだ時点の side の手番を指すため、敵の手番の snapshot では
+敵の手番の出来事を数え、Player の手番の件数は含めない。計画は Player の play phase の snapshot で読む。
+
+Player 側の play phase で読む `card_plays_finished_this_turn_card_uids` は、
+次手番の `BeforeHandDraw` で `HappenedLastPlayerTurn(owner)` が見る集合のうち、
+これまでに起きた分と一致する。このターンに手斧などを撃ったあと観測が途切れても、
+次手番で回収する個体をこの配列から判定できる。前手番の配列だけでは、現在の手番に
+完了した個体は分からない。`PaelsEye` による追加ターンも Player の TurnNumber で区別する
+（`CombatManager.SwitchSides` の `IncrementTurnNumber` 呼出し、`PlayerCombatState.IncrementTurnNumber`）。
+敵の手番の snapshot のこの配列は、次の Player 手番の回収の判定には使わない。
 
 `block_gains_this_turn` は不動用のカード由来の獲得回数で、レリックなどを含む全獲得回数ではない。
 本体の式には Receiver・Amount の条件も distinct もないため追加しない。
@@ -386,6 +405,7 @@ uid は手札・各パイル・grid と共通の戦闘単位の registry を使�
 該当項目を null にする。private フィールドは不要であり、本体の public API を使う。
 
 Markdown は正の件数・非空の uid 配列・取得失敗があるときだけ短い History 行を出す。
+このターンの非空 uid は `this turn=[...]`、前手番の非空 uid は `last turn=[...]` と区別する。
 既知の 0 と空配列だけなら省略し、TurnNumber 単独では行を増やさない。
 失敗時は null と理由を表示する。既存の意味の変更・削除を伴わない追加なので
 `schema_version` は **4 のまま**。利用側は `combat_history` の有無で検出する。

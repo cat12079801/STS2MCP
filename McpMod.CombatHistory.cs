@@ -13,6 +13,7 @@ public static partial class McpMod
 {
     // sts2-d009478a: sources and exact predicates are documented in raw-full.md.
     // Read engine history on every snapshot; never accumulate counts in the MOD.
+    // BuildPlayerState refreshes the shared UID registry before serializing any cards.
     private static Dictionary<string, object?> BuildCombatHistoryState(Player owner)
     {
         var reasons = new Dictionary<string, string>();
@@ -35,10 +36,18 @@ public static partial class McpMod
             return SummarizeCardPlays(CombatManager.Instance.History.CardPlaysFinished
                 .Where(e => e.HappenedThisTurn(combat) && e.CardPlay.Player == owner).Select(e => e.CardPlay));
         });
+        Read("card_plays_finished_this_turn_card_uids", () =>
+        {
+            var combat = CurrentCombat();
+            // Like Bolas/ThrummingHatchet, match card identity, not the playing Player.
+            return CombatManager.Instance.History.CardPlaysFinished
+                .Where(e => e.HappenedThisTurn(combat))
+                .Select(e => GetStableCardUid(e.CardPlay.Card)).ToList();
+        });
         Read("last_player_turn_card_uids", () =>
         {
             _ = owner.PlayerCombatState ?? throw new InvalidOperationException("PlayerCombatState is unavailable");
-            RefreshCardUidRegistry(CurrentCombat());
+            _ = CurrentCombat();
             // Bolas/ThrummingHatchet test card identity, not CardPlay.Player. Keep
             // other players' plays too: ownership can change after a card is played.
             return CombatManager.Instance.History.CardPlaysFinished
