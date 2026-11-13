@@ -80,6 +80,8 @@ Every response — `menu` and error-ish states included — carries the build st
   "state_type": "...",      // Screen identifier (see sections below)
   "mod_version": "0.4.0",   // Mod version
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
+  "game_version": "v0.113.0", // release_info.json version; null if unavailable
+  "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
   "schema_version": 4       // Contract version — see below
 }
 ```
@@ -87,6 +89,12 @@ Every response — `menu` and error-ish states included — carries the build st
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
+
+`game_version` and `game_commit` come from the game's `ReleaseInfoManager`, which reads
+`release_info.json` (`.app/Contents/Resources/release_info.json` on macOS). They identify the
+running game's release, independently of the mod build. Singleplayer, multiplayer and menu
+states carry them; markdown also shows the game stamp. Dump consumers should copy these
+fields into their own `meta.json` (dump metadata is not written by this mod).
 
 - **4** — `card_select.cards` and `select_card` indices cover all grid candidates in display order,
   independent of scrolling. `selected_outside_grid` was removed.
@@ -370,6 +378,13 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "keywords": [ /* Keyword Objects */ ]
 }
 ```
+
+Combat attack previews in `vs_targets[]` use the target's previewed `values` to report
+`damage`, `hits`, `total_damage` and optional `damage_cap`. Hit count is read in the order
+`HitCount`, `CalculatedHits`, `Repeat`; explicit 0 and 1 counts are also reported.
+`total_damage` is `damage * hits`, and per-hit caps use that same count. Without a count
+variable the cap calculation assumes one hit. For random-target attacks, the total is
+the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
 ### Pile Card Object (draw/discard/exhaust piles)
 
@@ -1848,6 +1863,16 @@ Purchase a shop item.
 | `index` | int | Yes | 0-based index in the flat items list |
 
 **Errors:** Not in shop, item sold out, not enough gold, inventory not ready.
+
+As of v0.113 the purchase goes through `MerchantSynchronizer.PurchaseLocalEntry`, including
+at the fake merchant. This is a network-synchronized **async** `Task<bool>`, not a synchronous
+success flag. A completed false/faulted/cancelled task returns an error. A completed successful
+purchase adds `purchase_completed: true` and `purchase_success: true`. These fields describe
+the task at dispatch, not after an optional settle wait. While the task is pending,
+`status: ok` means the purchase was submitted, with `purchase_completed: false` and no
+`purchase_success`. Re-read state for stock/gold changes or a card selection; never assume
+the purchase has completed from `status` or `settled` alone. Later failures/cancellation are
+logged. The main thread is never blocked waiting for a removal/relic selection.
 
 ### `choose_map_node`
 

@@ -63,25 +63,6 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    /// <summary>
-    /// A top-level state dictionary already carrying the build stamp every payload must report.
-    ///
-    /// Seeded at creation rather than stamped on the way out because the state builders have
-    /// ~20 return paths (menu, unknown, error, FTUE); anything added at the end is missed by the
-    /// early ones. `state_type` is seeded first so it keeps its leading position when a caller
-    /// overwrites it, and "unknown" is the right answer for a path that never sets one.
-    /// </summary>
-    internal static Dictionary<string, object?> NewStateResult(string stateType = "unknown")
-    {
-        return new Dictionary<string, object?>
-        {
-            ["state_type"] = stateType,
-            ["mod_version"] = Version,
-            ["mod_commit"] = BuildCommit,
-            ["schema_version"] = StateSchemaVersion
-        };
-    }
-
     /// <summary>Called through BuildGameState(), which brackets it with the warning collector.</summary>
     private static Dictionary<string, object?> BuildGameStateCore()
     {
@@ -1826,28 +1807,7 @@ public static partial class McpMod
                     // and the typed accessors throw when a card has no var of that name,
                     // so read whatever the card actually carries.
                     var values = ReadDynamicVarValues(card);
-                    int? damage = PickDynamicVar(values, "CalculatedDamage", "Damage");
-                    if (damage != null)
-                        preview["damage"] = damage;
-
-                    int? hits = PickDynamicVar(values, "Repeat");
-                    if (hits != null && hits > 1)
-                    {
-                        preview["hits"] = hits;
-                        if (damage != null)
-                            preview["total_damage"] = damage * hits;
-                    }
-
-                    int? block = PickDynamicVar(values, "CalculatedBlock", "Block");
-                    if (block != null)
-                        preview["block"] = block;
-
-                    if (damage != null)
-                    {
-                        var cap = BuildDamageCap(enemy, damage.Value, hits ?? 1);
-                        if (cap != null)
-                            preview["damage_cap"] = cap;
-                    }
+                    AddCardPreviewValues(preview, values, enemy);
 
                     if (values.Count > 0)
                         preview["values"] = values;
@@ -1910,77 +1870,6 @@ public static partial class McpMod
         }
         catch (Exception ex) { Warn("card.values", ex); }
         return values;
-    }
-
-    /// <summary>
-    /// Powers that cap how much HP a creature can lose, per hit. Damage modifiers do not
-    /// see these — they are applied when the damage lands — so a 18-damage card against
-    /// Slippery takes the enemy down by 1, and reporting 18 sends the caller into a
-    /// fight it cannot win. Keyed by power type because that survives an id rename.
-    /// </summary>
-    private static readonly Dictionary<string, string> _perHitDamageCaps = new()
-    {
-        ["SlipperyPower"] = "next hit reduced to 1",
-        ["IntangiblePower"] = "all damage reduced to 1",
-        ["HardToKillPower"] = "all damage reduced to the power's amount"
-    };
-
-    private const string HardenedShellPowerName = "HardenedShellPower";
-
-    /// <summary>
-    /// Describes any cap on what this target can actually lose from one hit, and the
-    /// resulting effective damage. Returns null when nothing caps it.
-    /// </summary>
-    private static Dictionary<string, object?>? BuildDamageCap(Creature target, int damage, int hits)
-    {
-        try
-        {
-            foreach (var power in target.Powers)
-            {
-                string typeName = power.GetType().Name;
-
-                if (_perHitDamageCaps.TryGetValue(typeName, out var note))
-                {
-                    int perHit = typeName == "HardToKillPower" ? System.Math.Max(power.Amount, 0) : 1;
-                    int capped = System.Math.Min(damage, perHit);
-                    int remaining = typeName == "SlipperyPower" ? System.Math.Max(power.Amount, 0) : int.MaxValue;
-                    int cappedHits = System.Math.Min(hits, remaining);
-
-                    return new Dictionary<string, object?>
-                    {
-                        ["capped_by"] = SafeGetText(() => power.Title) ?? typeName,
-                        ["power_id"] = SafeGetText(() => power.Id.Entry),
-                        ["per_hit_max"] = perHit,
-                        ["note"] = note,
-                        ["effective_damage"] = capped * cappedHits + System.Math.Max(hits - cappedHits, 0) * damage
-                    };
-                }
-
-                if (typeName == HardenedShellPowerName)
-                {
-                    return new Dictionary<string, object?>
-                    {
-                        ["capped_by"] = SafeGetText(() => power.Title) ?? typeName,
-                        ["power_id"] = SafeGetText(() => power.Id.Entry),
-                        ["per_turn_max"] = power.Amount,
-                        ["note"] = "total HP lost this turn is capped, not per hit"
-                    };
-                }
-            }
-        }
-        catch (Exception ex) { Warn("card.damage_cap", ex); }
-
-        return null;
-    }
-
-    private static int? PickDynamicVar(Dictionary<string, object?> values, params string[] names)
-    {
-        foreach (var name in names)
-        {
-            if (values.TryGetValue(name, out var value) && value is int i)
-                return i;
-        }
-        return null;
     }
 
     private static string? SafeGetTargetedCardDescription(CardModel card, Creature target)
@@ -2577,7 +2466,7 @@ public static partial class McpMod
     {
         var state = new Dictionary<string, object?>();
 
-        var inventory = merchantRoom.GetLocalInventory();
+        var inventory = RunManager.Instance.MerchantSynchronizer.GetLocalInventory();
         if (inventory == null)
         {
             state["items"] = new List<Dictionary<string, object?>>();

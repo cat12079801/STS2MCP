@@ -23,6 +23,11 @@ public static partial class McpMod
         string modCommit = state.TryGetValue("mod_commit", out var mc) ? mc?.ToString() ?? "" : "";
         string schema = state.TryGetValue("schema_version", out var sv) ? sv?.ToString() ?? "" : "";
         sb.AppendLine($"mod {modVersion}{(modCommit.Length > 0 ? "+" + modCommit : "")}{(schema.Length > 0 ? " · schema " + schema : "")}");
+        if (state.GetValueOrDefault("game_version") is string gameVersion)
+        {
+            string gameCommit = state.GetValueOrDefault("game_commit") as string ?? "";
+            sb.AppendLine($"game {gameVersion}{(gameCommit.Length > 0 ? "+" + gameCommit : "")}");
+        }
         sb.AppendLine();
 
         if (state.TryGetValue("run", out var runObj) && runObj is Dictionary<string, object?> run)

@@ -62,6 +62,8 @@ A successful response looks like:
 quote it when reporting a bug. `schema_version` changes only when an existing state field or action
 changes meaning or is removed; new fields and actions do not bump it. Every state payload carries the
 same three values as `mod_version`, `mod_commit` and `schema_version`.
+State also reports `game_version` and `game_commit` from the game's `release_info.json`
+(`null` when unavailable), so reports can identify the game separately from the mod build.
 
 If you get "Connection refused", the mod is not loaded — check that mods are enabled in the game's settings.
 
