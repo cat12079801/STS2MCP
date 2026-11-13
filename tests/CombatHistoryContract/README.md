@@ -1,6 +1,6 @@
 # 戦闘履歴 state の契約試験
 
-本番の `McpMod.CombatHistory.cs` / `McpMod.CombatHistoryFormatting.cs` /
+本番の `McpMod.CombatHistory.cs` / `McpMod.CombatHistoryFormatting.cs` / `McpMod.CardIdentity.cs` /
 `McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
 
 ```fish
@@ -22,8 +22,9 @@ Markdown の `this turn=[...]` / `last turn=[...]`、非空・空・失敗表示
 巨大な state builder はリンクせず、ソースの文字列検査で戦闘限定・共通の Player builder・
 UID registry の更新・マルチ・Markdown の配線と schema 4 を確認する。
 
-ターン判定と uid registry は境界ダブル。判定結果を設定し、本体メソッドへの委譲を確かめる。
-本体のターン進行・履歴記録や実際の registry の実行を再現した証拠ではない。
+ターン判定は境界ダブル。判定結果を設定し、本体メソッドへの委譲を確かめる。
+uid registry は本番を実行し、パイルとこのターン・前手番の履歴が同じ個体を同じ uid で参照することを確認する。
+本体のターン進行・履歴記録を再現した証拠ではない。
 現行 DLL へのビルドとは別に、実機確認は調整役が v0.113.0 の検証用ランで行う。
 
 1. 開始直後の 0／空配列と、Attack・Skill・Power の開始／完了数を照合する。

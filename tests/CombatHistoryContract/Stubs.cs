@@ -37,6 +37,7 @@ namespace MegaCrit.Sts2.Core.Entities.Players
 namespace MegaCrit.Sts2.Core.Entities.Cards
 {
     public enum CardType { None, Attack, Skill, Power, Status, Curse, Quest }
+    public enum PileType { Hand, Draw, Discard, Exhaust, Play }
     public class CardPlay(Models.CardModel card, Players.Player player)
     {
         public Models.CardModel Card = card;
@@ -45,8 +46,11 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
 }
 namespace MegaCrit.Sts2.Core.Models
 {
+    public class ModelId(string entry) { public string Entry = entry; }
     public class CardModel(Entities.Cards.CardType type)
     {
+        public ModelId Id = new("TEST");
+        public int Rarity => 0;
         public Entities.Cards.CardType Value = type;
         public bool ThrowType;
         public Entities.Cards.CardType Type => ThrowType ? throw new MissingMemberException("Type renamed") : Value;
@@ -104,20 +108,6 @@ namespace STS2_MCP
     {
         private static Dictionary<string, object?> BuildGameStateCore() => new();
         private static Dictionary<string, object?> BuildMultiplayerGameStateCore() => new();
-        // UID registry is a boundary. Wiring assertions check production uses the
-        // existing shared registry, not a second per-history naming algorithm.
-        private static readonly Dictionary<MegaCrit.Sts2.Core.Models.CardModel, string> Uids = new();
-        private static object? CombatToken;
-        private static void RefreshCardUidRegistry(MegaCrit.Sts2.Core.Combat.ICombatState combat)
-        {
-            if (ReferenceEquals(CombatToken, combat)) return;
-            Uids.Clear();
-            CombatToken = combat;
-        }
-        private static string GetStableCardUid(MegaCrit.Sts2.Core.Models.CardModel card)
-        {
-            if (!Uids.TryGetValue(card, out var uid)) Uids[card] = uid = $"TEST#{Uids.Count}";
-            return uid;
-        }
+        private static string? SafeGetText(Func<string?> read) => read();
     }
 }

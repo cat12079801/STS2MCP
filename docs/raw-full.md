@@ -253,7 +253,7 @@ Always present at the top level (except `menu`). Contains everything about the l
   "discard_pile_count": 3,
   "exhaust_pile_count": 1,
   "play_pile_count": 0,
-  "draw_pile": [ /* Pile Card Objects (sorted by rarity, matching in-game display) */ ],
+  "draw_pile": [ /* Pile Card Objects (Rarity, CardModel.CompareTo, opaque uid) */ ],
   "discard_pile": [ /* Pile Card Objects */ ],
   "exhaust_pile": [ /* Pile Card Objects */ ],
   "play_pile": [ /* Pile Card Objects; temporary, during play resolution */ ],
@@ -550,7 +550,14 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 `can_play` / `unplayable_reason` を null と理由にする。
 項目の欠落がある旧 snapshot は未観測として扱う。
 
-山札はコピーを rarity → card ID の順にソートして表示する。
+山札の表示順は `Rarity` → `CardModel.CompareTo` → `uid`（ordinal 文字列比較）。
+ゲームの `NCardPileScreen.OnPileContentsChanged` と同じ `OrderBy(Rarity).ThenBy(card => card)`
+を使い、同順位だけ引く順と無関係な固定 uid で並べる。`CardModel.CompareTo` は
+ID → 強化段階 → エンチャント ID → 災禍 ID → 解決後のエネルギーコスト →
+BaseReplayCount → キーの ordinal 順で各 DynamicVar.BaseValue を比較する。
+ゲームの山札自体は変更しない。山札の配列の先頭は、次に引く札を表さない。
+捨て札・廃棄札は、ゲームと同じ格納順を保つ（`NCardGrid.SetCards` の `Ascending` は
+入力順を保つ）。`play_pile` も格納順を保つ。
 Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型・対象を付ける。
 存在する災禍・エンチャントと読取失敗の理由は短い子行で表示する。
 エンチャントは `status` が `Disabled` のときだけ `(disabled)` を付ける。
@@ -566,6 +573,36 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `EnchantmentModel.Amount` / `Status`、`EnchantmentStatus`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
 `StringVar`。契約試験は詳細の取得・失敗・表示を検査する。
 [CardDetailsContract](../tests/CardDetailsContract/README.md)
+
+### 戦闘カードの uid とパイル順序
+
+`uid` は `<card_id>#<n>` 形式の戦闘内の個体識別子。`n` は OS の暗号学的乱数から選ぶ
+0 以上 `Int32.MaxValue` 未満の10進整数で、連番ではない。番号の大小には、
+初回観測順・作成順・デッキ内の位置・引く順という意味はない。
+ゲームの乱数生成器・シード・ネットワークのカード番号は使用しない。
+同じ戦闘で完全に同じ uid が再発行されないよう衝突時に引き直し、
+消えた札の uid も戦闘終了まで予約する。
+
+各 CardModel インスタンスの uid は初回参照時に一度だけ付け、手札・山札・捨て札・
+廃棄札・プレイ中・grid・戦闘履歴・`play_card.card_uid` で共有する。
+強化・コスト変更・所有者変更・パイル移動や同じ戦闘内の state 再取得では変わらない。
+戦闘中に生成された札、手札に直接入る札、複製された札も同じ乱数方式で新しい uid を得る。
+同じ ID の札や複製元の番号を継承せず、既存の札を振り直すこともない。
+registry は combat state のインスタンスが変わったときに初期化する。
+戦闘のやり直し・再ロード・MOD の再起動をまたぐ同一番号は保証しない。
+
+利用側は uid を不透明な文字列として照合する。fixture・dump を新しく取得したときの番号は
+既存データと一致せず、同じシードの取り直しでも一致しない。旧データの uid を新しい実機の
+札に結び付けたり、番号から観測順を復元したりしない。既存の fixture・dump の値を
+新仕様に合わせて手で書き換えず、必要な観測は新しい MOD で取り直す。
+JSON の形と戦闘内固定の契約は維持し、`schema_version` は **4**。
+
+出典は v0.113.0（`sts2-d009478a`）の `NCardPileScreen.OnPileContentsChanged`、
+`CardModel.CompareTo`、`NCardGrid.SetCards`。戦闘開始時は
+`CombatManager.SetUpCombat` → `Player.PopulateCombatState` がデッキ順に複製した後で
+`DrawPile.RandomizeOrderInternal` を呼ぶ。MOD の uid はこの並びにもシャッフルにも依存しない。
+契約試験は `tests/CardIdentityContract`、共有 registry と履歴の照合は
+`tests/CombatHistoryContract` で確認する。
 
 ### Energy Cost Object（追加、schema 4）
 

@@ -167,7 +167,7 @@ namespace STS2_MCP
             Check(Slice("private static Dictionary<string, object?> BuildCardState", "private static List<Dictionary<string, object?>> BuildCardTargetPreviews").Contains("state[\"energy_cost\"] = BuildCardEnergyCostState(card)"), "hand wiring");
             Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry").Contains("[\"energy_cost\"] = BuildCardEnergyCostState(card)"), "shared pile wiring");
             foreach (string pile in new[] { "Draw", "Discard", "Exhaust", "Play" })
-                Check(builder.Contains($"BuildPileCardList({(pile == "Draw" ? "drawCards" : $"combatState.{pile}Pile.Cards")}, PileType.{pile})"), $"{pile} pile uses shared builder");
+                Check(builder.Contains($"BuildPileCardList(combatState.{pile}Pile.Cards, PileType.{pile})"), $"{pile} pile uses shared builder");
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("energy_cost"), "common deck/preview card builder omits combat-only data");
             Check(!Slice("private static Dictionary<string, object?> BuildHandSelectState", "// Confirm button state").Contains("energy_cost"), "hand selection reads same card from hand, no extra field");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 4;"), "additive change preserves schema 4");

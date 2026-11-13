@@ -27,7 +27,7 @@ Markdown は4パイルの本行末尾の `[Attack/AnyEnemy]` と、
 札ごとに1行にまとめた `base Damage 6, …`、Disabled のときだけ付く `(disabled)`、
 正常な未付与・空辞書の省略、失敗時の理由、旧形式の行も表示できることを確認する。
 巨大な state builder はリンクせず、ソースの文字列検査で手札と4パイルの共通経路、
-山札のコピー上での rarity → card ID ソート、非戦闘の対象範囲、マルチの共通経路、
+パイルの共通の表示順ヘルパー（動作の検査は `CardIdentityContract`）、非戦闘の対象範囲、マルチの共通経路、
 Markdown の配線、schema 4 を確認する。
 
 ゲームの getter は境界ダブルで、返却値・例外・列挙失敗を設定する。

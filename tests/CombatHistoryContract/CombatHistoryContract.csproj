@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.CombatHistory.cs" Link="CombatHistory.cs" />
+    <Compile Include="../../McpMod.CardIdentity.cs" Link="CardIdentity.cs" />
     <Compile Include="../../McpMod.CombatHistoryFormatting.cs" Link="CombatHistoryFormatting.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
     <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs"

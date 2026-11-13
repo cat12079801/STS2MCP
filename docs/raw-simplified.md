@@ -68,10 +68,18 @@ Every JSON response includes:
     EnchantedValue / PreviewValue ではない。CalculatedVar は計算前の基底値。
     数値変数なしは `{}`。読取失敗は該当値を null とし、行の `unavailable_reasons` に
     `enchantment.status` / `dynamic_vars.Damage` 等のパス別理由を入れ、`warnings` に記録する。
-    山札は rarity → card ID の表示順。Markdown はパイルの本行末尾に `[Attack/AnyEnemy]`、
+    山札はゲームと同じ `Rarity` → `CardModel.CompareTo` の表示順で、同順位だけ
+    引く順と無関係な固定 uid の ordinal 順にする。次に引く順は表さない。
+    捨て札・廃棄札・プレイ中の札は格納順。Markdown はパイルの本行末尾に `[Attack/AnyEnemy]`、
     `Disabled` のエンチャントにだけ `(disabled)` を付ける。
     基底値は `base Damage 6, Vulnerable 2` の形で札ごとに1行にまとめる。
     追加項目のため schema 4。詳細と出典は [契約](raw-full.md#戦闘カードの詳細追加schema-4) を参照。
+  - 戦闘中の `uid` は `<card_id>#<n>`。`n` は OS の暗号学的乱数で選ぶ非負の整数で、
+    初回観測順・作成順・引く順と無関係。衝突は再採番し、同じ戦闘の同じ個体では固定。
+    生成札・手札に直接入る札・複製札も同じ方式で新しい uid を得て、元の札は振り直さない。
+    ゲームの乱数は使わない。戦闘の再ロードや同じシードの取り直しでは番号を再現しないため、
+    fixture・dump の uid は新しい実機と照合せず、必要なら取り直す。形式・schema 4 は維持。
+    [uid とパイル順序の契約](raw-full.md#戦闘カードの-uid-とパイル順序) を参照。
   - `play_pile` / `play_pile_count` — 戦闘中の `PlayerCombatState.PlayPile`。
     他のパイルと同じ行（`uid`・`exhaust_on_next_play`・`energy_cost`・上記の詳細を含む）。
     解決中に一時的に入る札で、通常は空。Markdown の Play Pile の節は件数が1以上の場合だけ表示。

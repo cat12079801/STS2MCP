@@ -1495,12 +1495,8 @@ public static partial class McpMod
             state["exhaust_pile_count"] = combatState.ExhaustPile.Cards.Count;
             state["play_pile_count"] = combatState.PlayPile.Cards.Count;
 
-            // Pile contents (draw pile sorted by rarity then card ID, matching in-game display)
-            var drawCards = combatState.DrawPile.Cards.ToList();
-            drawCards.Sort((c1, c2) => c1.Rarity != c2.Rarity
-                ? c1.Rarity.CompareTo(c2.Rarity)
-                : string.Compare(c1.Id.Entry, c2.Id.Entry, StringComparison.Ordinal));
-            state["draw_pile"] = BuildPileCardList(drawCards, PileType.Draw);
+            // BuildPileCardList applies the pile screen's display order, hiding draw order.
+            state["draw_pile"] = BuildPileCardList(combatState.DrawPile.Cards, PileType.Draw);
             state["discard_pile"] = BuildPileCardList(combatState.DiscardPile.Cards, PileType.Discard);
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
             state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
@@ -1933,7 +1929,7 @@ public static partial class McpMod
     private static List<Dictionary<string, object?>> BuildPileCardList(IEnumerable<CardModel> cards, PileType pile)
     {
         var list = new List<Dictionary<string, object?>>();
-        foreach (var card in cards)
+        foreach (var card in OrderPileCardsForDisplay(cards, pile))
         {
             var state = new Dictionary<string, object?>
             {
@@ -1963,49 +1959,6 @@ public static partial class McpMod
     private static readonly Dictionary<uint, string> _entityIdByCombatId = new();
     private static readonly Dictionary<string, int> _entityIdNextIndex = new();
     private static ICombatState? _entityIdCombatToken;
-
-    // card uid registry
-    //
-    // card_index is a position in the hand, so playing one card renumbers every card
-    // behind it. A plan built from one state read ("play 4, then 2, then 0") therefore
-    // has to be recomputed after every single play, and getting the arithmetic wrong
-    // plays the wrong card without any error.
-    //
-    // Each card instance gets a uid on first sight that stays with it for the whole
-    // combat, wherever it moves between hand, draw, discard and exhaust.
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CardModel, string> _cardUids = new();
-    private static readonly Dictionary<string, int> _cardUidNextIndex = new();
-    private static object? _cardUidCombatToken;
-
-    /// <summary>
-    /// Returns this card instance's uid, assigning one on first sight.
-    /// Format is "<card_id>#<n>", counting instances of that card in the order first seen.
-    /// </summary>
-    internal static string GetStableCardUid(CardModel card)
-    {
-        if (_cardUids.TryGetValue(card, out var existing))
-            return existing;
-
-        string baseId = SafeGetText(() => card.Id.Entry) ?? "unknown";
-        if (!_cardUidNextIndex.TryGetValue(baseId, out int next))
-            next = 0;
-        _cardUidNextIndex[baseId] = next + 1;
-
-        string uid = $"{baseId}#{next}";
-        _cardUids.Add(card, uid);
-        return uid;
-    }
-
-    /// <summary>Clears card uids when a new combat starts.</summary>
-    internal static void RefreshCardUidRegistry(ICombatState combatState)
-    {
-        if (ReferenceEquals(_cardUidCombatToken, combatState))
-            return;
-
-        _cardUidCombatToken = combatState;
-        _cardUids.Clear();
-        _cardUidNextIndex.Clear();
-    }
 
     /// <summary>
     /// Assigns stable entity_ids for every enemy in the given combat, clearing the
