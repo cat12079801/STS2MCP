@@ -24,7 +24,7 @@ namespace STS2_MCP
         public static async Task RunCompatContract()
         {
             static Dictionary<string, object?> Preview(int damage, int? hits, string key = "HitCount", Power? power = null,
-                bool repeat = false)
+                bool repeat = false, string? cardId = null, bool vulnerable = false, bool lostHp = false)
             {
                 var values = new Dictionary<string, object?> { ["Damage"] = damage };
                 if (hits != null) values[key] = hits.Value;
@@ -32,7 +32,7 @@ namespace STS2_MCP
                 var target = new Creature();
                 if (power != null) target.Powers.Add(power);
                 var preview = new Dictionary<string, object?>();
-                AddCardPreviewValues(preview, values, target);
+                AddCardPreviewValues(preview, values, target, cardId, vulnerable, lostHp);
                 return preview;
             }
             static int Effective(Dictionary<string, object?> preview)
@@ -47,8 +47,7 @@ namespace STS2_MCP
                 (5, 4, "CalculatedHits", 20, "TearAsunder with Repeat=1"),
                 (5, 3, "CalculatedHits", 15, "Flechettes"),
                 (5, 0, "CalculatedHits", 0, "Flechettes with no skills"),
-                (5, 1, "CalculatedHits", 5, "one computed hit"),
-                (5, 2, "Repeat", 10, "legacy Repeat")
+                (5, 1, "CalculatedHits", 5, "one computed hit")
             })
             {
                 var preview = Preview(damage, hits, key, repeat: key == "CalculatedHits");
@@ -57,6 +56,37 @@ namespace STS2_MCP
                 Check(Effective(Preview(damage, hits, key, new IntangiblePower(), key == "CalculatedHits")) == hits,
                     label + " intangible");
             }
+            foreach (int repeat in new[] { 1, 3 })
+            {
+                var preview = Preview(19, repeat, "Repeat", new SlipperyPower(1));
+                Check(!preview.ContainsKey("hits") && !preview.ContainsKey("total_damage"), "Repeat alone is not a hit count");
+                Check(Effective(preview) == 1, "Repeat alone does not inflate capped damage");
+            }
+            foreach (string cardId in new[] { "DISMANTLE", "SPITE" })
+            foreach (bool condition in new[] { false, true })
+            foreach (int previewHits in new[] { 2, 3, 4 }) // base, Thumbscrew / Spite+, Spite+ with Thumbscrew
+            {
+                bool vulnerable = cardId == "DISMANTLE" && condition;
+                bool lostHp = cardId == "SPITE" && condition;
+                int expectedHits = condition ? previewHits : 1;
+                var values = new Dictionary<string, object?> { ["HitCount"] = previewHits };
+                Check(ResolveCardPreviewHitCount(values, cardId, vulnerable, lostHp) == expectedHits,
+                    $"{cardId}: pure conditional hit count, preview={previewHits}, condition={condition}");
+                int damage = cardId == "DISMANTLE" ? 8 : 5;
+                var preview = Preview(damage, previewHits, cardId: cardId, vulnerable: vulnerable, lostHp: lostHp);
+                Check(Equals(preview["hits"], expectedHits) && Equals(preview["total_damage"], damage * expectedHits),
+                    $"{cardId}: corrected count drives total damage");
+                Check(Effective(Preview(damage, previewHits, power: new SlipperyPower(1), cardId: cardId,
+                    vulnerable: vulnerable, lostHp: lostHp)) == 1 + damage * (expectedHits - 1),
+                    $"{cardId}: corrected count drives Slippery cap");
+                Check(Effective(Preview(damage, previewHits, power: new IntangiblePower(), cardId: cardId,
+                    vulnerable: vulnerable, lostHp: lostHp)) == expectedHits,
+                    $"{cardId}: corrected count drives Intangible cap");
+            }
+            Check(Equals(Preview(8, 2, cardId: "DISMANTLE", lostHp: true)["hits"], 1), "Dismantle ignores owner HP loss");
+            Check(Equals(Preview(5, 2, cardId: "SPITE", vulnerable: true)["hits"], 1), "Spite ignores target Vulnerable");
+            Check(ResolveCardPreviewHitCount(new() { ["Repeat"] = 3 }, "DISMANTLE", false, false) == null,
+                "conditional correction does not invent a missing attack count");
             Check(Effective(Preview(5, 4, "CalculatedHits", new SlipperyPower(2), true)) == 12, "first two hits capped");
             Check(Effective(Preview(5, 4, "CalculatedHits", new HardToKillPower(3), true)) == 12, "all four hits capped");
             Check(Effective(Preview(5, null, power: new IntangiblePower())) == 1, "no hit var defaults to one for caps");
@@ -79,6 +109,20 @@ namespace STS2_MCP
             ReleaseInfoManager.Instance.ReleaseInfo = null;
             Check(NewStateResult()["game_version"] == null && NewStateResult()["game_commit"] == null, "missing release info");
 
+            foreach (bool failInstance in new[] { true, false })
+            {
+                ReleaseInfoManager.FailInstance = failInstance;
+                ReleaseInfoManager.FailReleaseInfo = !failInstance;
+                var state = NewStateResult("menu");
+                Check(state["game_version"] == null && state["game_commit"] == null,
+                    "release exception leaves nullable metadata");
+                Check(Equals(state["state_type"], "menu") && Equals(state["mod_version"], Version)
+                    && Equals(state["schema_version"], 4), "release exception preserves state response");
+                ReleaseInfoManager.FailInstance = ReleaseInfoManager.FailReleaseInfo = false;
+            }
+            ReleaseInfoManager.Instance.ReleaseInfo = new("v0.113.0", "16ac0fe3");
+            Check(Equals(NewStateResult()["game_version"], "v0.113.0"), "release metadata recovers after failure");
+
             var success = BuildShopPurchaseResult(Task.FromResult(true), 75);
             Check(Equals(success["purchase_success"], true) && Equals(success["purchase_completed"], true), "purchase completed");
             Check(Equals(BuildShopPurchaseResult(Task.FromResult(false), 75)["status"], "error"), "purchase refused");
@@ -97,7 +141,7 @@ namespace STS2_MCP
             var sources = Path.Combine(AppContext.BaseDirectory, "Sources");
             var stateSource = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             var actionSource = File.ReadAllText(Path.Combine(sources, "McpMod.Actions.cs"));
-            Check(stateSource.Contains("AddCardPreviewValues(preview, values, enemy);"), "production previews use linked calculation");
+            Check(stateSource.Contains("AddCardPreviewValues(preview, values, enemy, card.Id.Entry,"), "production previews use linked calculation");
             Check(stateSource.Contains("RunManager.Instance.MerchantSynchronizer.GetLocalInventory()")
                 && actionSource.Contains("RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry)"), "new merchant API wired");
             Check(stateSource.Contains("var result = NewStateResult();") &&

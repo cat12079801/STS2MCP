@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
@@ -12,6 +13,8 @@ using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Entities.Merchant;
@@ -1782,13 +1785,23 @@ public static partial class McpMod
             return previews;
 
         ICombatState? combatState;
-        try { combatState = card.Owner?.Creature?.CombatState; }
+        Creature? ownerCreature;
+        try
+        {
+            ownerCreature = card.Owner?.Creature;
+            combatState = ownerCreature?.CombatState;
+        }
         catch (Exception ex) { Warn("card.vs_targets.combat_state", ex); return previews; }
         if (combatState == null)
             return previews;
 
         try
         {
+            // Match Spite.LostHpThisTurn, not ShouldGlowGold (enchantments also glow).
+            bool ownerLostHpThisTurn = card is Spite && CombatManager.Instance.History.Entries
+                .OfType<DamageReceivedEntry>().Any(e => e.HappenedThisTurn(combatState)
+                    && e.Receiver == ownerCreature && e.Result.UnblockedDamage > 0);
+
             foreach (var enemy in combatState.Enemies)
             {
                 if (!enemy.IsAlive) continue;
@@ -1807,7 +1820,8 @@ public static partial class McpMod
                     // and the typed accessors throw when a card has no var of that name,
                     // so read whatever the card actually carries.
                     var values = ReadDynamicVarValues(card);
-                    AddCardPreviewValues(preview, values, enemy);
+                    AddCardPreviewValues(preview, values, enemy, card.Id.Entry,
+                        card is Dismantle && enemy.HasPower<VulnerablePower>(), ownerLostHpThisTurn);
 
                     if (values.Count > 0)
                         preview["values"] = values;

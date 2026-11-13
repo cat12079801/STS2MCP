@@ -381,8 +381,13 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
 
 Combat attack previews in `vs_targets[]` use the target's previewed `values` to report
 `damage`, `hits`, `total_damage` and optional `damage_cap`. Hit count is read in the order
-`HitCount`, `CalculatedHits`, `Repeat`; explicit 0 and 1 counts are also reported.
-`total_damage` is `damage * hits`, and per-hit caps use that same count. Without a count
+`HitCount`, `CalculatedHits`; `Repeat` is not an attack count. Explicit 0 and 1 counts are also reported.
+Conditional attacks are corrected for the target and current situation before reporting
+`hits`, `total_damage` or `damage_cap`: Dismantle hits once without Vulnerable on the target;
+Spite hits once unless its owner lost HP this turn. When the condition is met, the previewed
+multi-hit count (including upgrades and Thumbscrew) is retained. Thumbscrew does not increase
+the single hit on a failed condition.
+`total_damage` is `damage * hits`, and per-hit caps use that same corrected count. Without a count
 variable the cap calculation assumes one hit. For random-target attacks, the total is
 the whole attack's damage, not a guarantee that every hit lands on this enemy.
 

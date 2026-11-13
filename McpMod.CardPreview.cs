@@ -7,15 +7,14 @@ namespace STS2_MCP;
 public static partial class McpMod
 {
     private static void AddCardPreviewValues(Dictionary<string, object?> preview,
-        Dictionary<string, object?> values, Creature target)
+        Dictionary<string, object?> values, Creature target, string? cardId = null,
+        bool targetHasVulnerable = false, bool ownerLostHpThisTurn = false)
     {
         int? damage = PickDynamicVar(values, "CalculatedDamage", "Damage");
         if (damage != null)
             preview["damage"] = damage;
 
-        // v0.113 uses HitCount for fixed attacks and CalculatedHits for computed ones.
-        // TearAsunder also has Repeat=1: it is not the attack count.
-        int? hits = PickDynamicVar(values, "HitCount", "CalculatedHits", "Repeat");
+        int? hits = ResolveCardPreviewHitCount(values, cardId, targetHasVulnerable, ownerLostHpThisTurn);
         if (hits != null)
         {
             preview["hits"] = hits;
@@ -33,6 +32,23 @@ public static partial class McpMod
             if (cap != null)
                 preview["damage_cap"] = cap;
         }
+    }
+
+    // Pure correction of already-previewed values. Repeat describes non-attack effects in
+    // v0.113. Dismantle/Spite choose a single hit in OnPlay when their condition is false;
+    // even Thumbscrew leaves that single hit alone. On the multi-hit branch, keep the
+    // preview value (including Thumbscrew and upgrades) without applying hooks twice.
+    private static int? ResolveCardPreviewHitCount(Dictionary<string, object?> values,
+        string? cardId, bool targetHasVulnerable, bool ownerLostHpThisTurn)
+    {
+        int? hits = PickDynamicVar(values, "HitCount", "CalculatedHits");
+        if (hits == null) return null;
+        return cardId switch
+        {
+            "DISMANTLE" when !targetHasVulnerable => 1,
+            "SPITE" when !ownerLostHpThisTurn => 1,
+            _ => hits
+        };
     }
 
     /// <summary>

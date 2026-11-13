@@ -16,7 +16,9 @@ public static partial class McpMod
     {
         // The game loads release_info.json (Contents/Resources on macOS) once.
         // Use the same source as its version UI, not the DLL/assembly version.
-        var release = MegaCrit.Sts2.Core.Debug.ReleaseInfoManager.Instance.ReleaseInfo;
+        MegaCrit.Sts2.Core.Debug.ReleaseInfo? release = null;
+        try { release = MegaCrit.Sts2.Core.Debug.ReleaseInfoManager.Instance.ReleaseInfo; }
+        catch { /* Version metadata is optional, including singleton/Godot initialization failure. */ }
         return new Dictionary<string, object?>
         {
             ["state_type"] = stateType,

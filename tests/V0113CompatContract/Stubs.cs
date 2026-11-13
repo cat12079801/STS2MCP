@@ -3,8 +3,17 @@ namespace MegaCrit.Sts2.Core.Debug
     public sealed record ReleaseInfo(string Version, string Commit);
     public sealed class ReleaseInfoManager
     {
-        public static ReleaseInfoManager Instance { get; } = new();
-        public ReleaseInfo? ReleaseInfo { get; set; }
+        private static readonly ReleaseInfoManager Singleton = new();
+        public static bool FailInstance { get; set; }
+        public static bool FailReleaseInfo { get; set; }
+        public static ReleaseInfoManager Instance => FailInstance
+            ? throw new InvalidOperationException("Godot initialization failed") : Singleton;
+        private ReleaseInfo? _releaseInfo;
+        public ReleaseInfo? ReleaseInfo
+        {
+            get => FailReleaseInfo ? throw new InvalidOperationException("release info unavailable") : _releaseInfo;
+            set => _releaseInfo = value;
+        }
     }
 }
 
