@@ -467,6 +467,7 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
 ```jsonc
 {
   "index": 0,
+  "uid": "card_1",
   "id": "STRIKE_R",
   "name": "Strike",
   "type": "Attack",          // Attack, Skill, Power, Status, Curse
@@ -474,6 +475,10 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "star_cost": null,         // Regent star cost as string, null if N/A
   "description": "Deal 6 damage.",
   "target_type": "AnyEnemy", // None, Self, AnyEnemy, AllEnemies, etc.
+  "affliction": null,
+  "enchantment": null,
+  "dynamic_vars": { "Damage": 6 }, // Current decimal BaseValue, by game variable name
+  "unavailable_reasons": {}, // Card detail read failures, by field path
   "can_play": true,
   "unplayable_reason": null, // e.g. "NotEnoughEnergy", "Unplayable", null if playable
   "exhaust_on_next_play": false, // Combat-only CardModel.ExhaustOnNextPlay; see below
@@ -499,7 +504,14 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
 ```jsonc
 {
+  "uid": "card_1",
   "name": "Strike",
+  "type": "Attack",
+  "target_type": "AnyEnemy",
+  "affliction": null,
+  "enchantment": null,
+  "dynamic_vars": { "Damage": 6 },
+  "unavailable_reasons": {},
   "cost": "1",               // Energy cost as string ("X" for X-cost)
   "star_cost": null,          // Regent star cost as string, null if N/A
   "exhaust_on_next_play": false,
@@ -507,6 +519,45 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   "description": "Deal 6 damage."
 }
 ```
+
+### 戦闘カードの詳細（追加、schema 4）
+
+`player.hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` /
+`play_pile[]` は同じ読取処理で次の項目を出す。
+単体・マルチのローカル player は共通の `BuildPlayerState` を通る。
+対象は戦闘中の手札と4パイルで、各行は既存の `uid` で照合できる。
+
+- `type` / `target_type` は `CardModel.Type` / `TargetType` の enum 名。
+- `affliction` は `CardModel.Affliction` の `{ id, amount }`。
+  `id` は `Id.Entry`、`amount` は現在の `Amount`（整数）。
+- `enchantment` は `CardModel.Enchantment` の同じ形の `{ id, amount }`。
+- `dynamic_vars` は `CardModel.DynamicVars` の変数名から現在の `BaseValue` への辞書。
+  小数・0・負数をそのまま JSON 数値で出す。`StringVar` は文字列用のため除外する。
+  数値変数が0件なら `{}`。成長・強化を反映した現在値を毎回読む。
+- `unavailable_reasons` は読取失敗のパスから理由への辞書。正常時は `{}`。
+
+災禍・エンチャントの getter が正常に null を返したときは、その項目を null とし、
+理由の辞書は空。読取例外が出たときは該当値を null にし、理由と `warnings` を付ける。
+例として `affliction.amount`、`enchantment.id`、`dynamic_vars.Damage` の失敗では、
+同じオブジェクト内の読めた項目を保持する。変数一覧の取得・列挙の失敗は
+`dynamic_vars` 全体を null にする。手札の `CanPlay` の例外も局所化し、
+`can_play` / `unplayable_reason` を null と理由にする。
+項目の欠落がある旧 snapshot は未観測として扱う。
+
+山札はコピーを rarity → card ID の順にソートして表示する。
+Markdown は既存の札の行に続く短い子行で、パイルの型・対象、存在する災禍・
+エンチャント、変数ごとの基底値、読取失敗の理由を表示する。
+手札の型・対象は既存の行に表示し、プレイ可否が読めなければ `?` を付ける。
+`energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
+
+追加項目で、既存の項目・action の意味を保つため `schema_version` は **4**。
+利用側は項目の有無で追加機能を検出する。
+
+出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
+`Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
+`EnchantmentModel.Amount`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
+`StringVar`。契約試験は詳細の取得・失敗・表示を検査する。
+[CardDetailsContract](../tests/CardDetailsContract/README.md)
 
 ### Energy Cost Object（追加、schema 4）
 

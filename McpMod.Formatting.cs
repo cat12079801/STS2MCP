@@ -437,7 +437,7 @@ public static partial class McpMod
                 sb.AppendLine("### Hand");
                 foreach (var card in hand)
                 {
-                    string playable = card["can_play"] is true ? "✓" : "✗";
+                    string playable = card["can_play"] is bool canPlay ? (canPlay ? "✓" : "✗") : "?";
                     string keywords = card.TryGetValue("keywords", out var kw) && kw is List<string> kwList && kwList.Count > 0
                         ? $" [{string.Join(", ", kwList)}]" : "";
                     string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
@@ -447,6 +447,7 @@ public static partial class McpMod
                     FormatCardTargetPreviews(sb, card);
                     AppendUpgradePreviewLine(sb, card);   // only present while the hand can be upgraded (D-13)
                     AppendCardEnergyCostMarkdown(sb, card);
+                    AppendCardDetailsMarkdown(sb, card);
                 }
                 sb.AppendLine();
             }

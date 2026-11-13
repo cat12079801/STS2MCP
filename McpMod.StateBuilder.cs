@@ -1668,13 +1668,13 @@ public static partial class McpMod
     /// Builds the common card display fields shared across all card serialization contexts.
     /// Callers merge context-specific fields (e.g. index, can_play, target_type) on top.
     /// </summary>
-    private static Dictionary<string, object?> BuildCardInfo(CardModel card, PileType pile = PileType.None)
+    private static Dictionary<string, object?> BuildCardInfo(CardModel card, PileType pile = PileType.None,
+        bool includeType = true)
     {
-        return new Dictionary<string, object?>
+        var state = new Dictionary<string, object?>
         {
             ["id"] = card.Id.Entry,
             ["name"] = SafeGetText(() => card.Title),
-            ["type"] = card.Type.ToString(),
             ["cost"] = GetCostDisplay(card),
             ["star_cost"] = GetStarCostDisplay(card),
             ["description"] = SafeGetCardDescription(card, pile),
@@ -1685,6 +1685,9 @@ public static partial class McpMod
             ["max_upgrade_level"] = card.MaxUpgradeLevel,
             ["keywords"] = BuildHoverTips(card.HoverTips)
         };
+        // Combat rows read type with the other details, including failure reasons.
+        if (includeType) state["type"] = card.Type.ToString();
+        return state;
     }
 
     /// <summary>
@@ -1748,20 +1751,17 @@ public static partial class McpMod
 
     private static Dictionary<string, object?> BuildCardState(CardModel card, int index)
     {
-        card.CanPlay(out var unplayableReason, out _);
-
-        var state = BuildCardInfo(card);
+        var state = BuildCardInfo(card, includeType: false);
+        AttachCardDetails(state, card);
         state["index"] = index;
         state["uid"] = GetStableCardUid(card);
         // Combat-only state: keep it out of BuildCardInfo, which also builds deck/preview rows.
         state["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
         state["energy_cost"] = BuildCardEnergyCostState(card);
         state["description"] = SafeGetCardDescription(card); // hand cards use default pile
-        state["target_type"] = card.TargetType.ToString();
-        state["can_play"] = unplayableReason == UnplayableReason.None;
-        state["unplayable_reason"] = unplayableReason != UnplayableReason.None ? unplayableReason.ToString() : null;
+        AttachCardPlayability(state, card);
 
-        var vsTargets = BuildCardTargetPreviews(card);
+        var vsTargets = state["target_type"] != null ? BuildCardTargetPreviews(card) : [];
         if (vsTargets.Count > 0)
             state["vs_targets"] = vsTargets;
 
@@ -1935,8 +1935,7 @@ public static partial class McpMod
         var list = new List<Dictionary<string, object?>>();
         foreach (var card in cards)
         {
-            // Pile cards only need a subset - keep it lightweight
-            list.Add(new Dictionary<string, object?>
+            var state = new Dictionary<string, object?>
             {
                 ["uid"] = GetStableCardUid(card),
                 ["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay),
@@ -1945,7 +1944,9 @@ public static partial class McpMod
                 ["cost"] = GetCostDisplay(card),
                 ["star_cost"] = GetStarCostDisplay(card),
                 ["description"] = SafeGetCardDescription(card, pile)
-            });
+            };
+            AttachCardDetails(state, card);
+            list.Add(state);
         }
         return list;
     }

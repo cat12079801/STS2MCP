@@ -1,7 +1,8 @@
 # カードのエナジーコスト state の契約試験
 
 本番の `McpMod.CardEnergyCost.cs` / `McpMod.CardEnergyCostFormatting.cs` /
-`McpMod.PileFormatting.cs` / `McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
+`McpMod.PileFormatting.cs` / `McpMod.CardDetailsFormatting.cs` /
+`McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
 
 ```fish
 env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CardEnergyCostContract -c Release
