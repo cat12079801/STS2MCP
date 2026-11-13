@@ -1,38 +1,40 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    private static void AppendCardDetailsMarkdown(StringBuilder sb, Dictionary<string, object?> card,
-        bool includeShape = false)
+    private static void AppendCardDetailsMarkdown(StringBuilder sb, Dictionary<string, object?> card)
     {
         var reasons = card.GetValueOrDefault("unavailable_reasons") as Dictionary<string, string>;
         string Value(object? value, string path) => value?.ToString()
             ?? $"null ({reasons?.GetValueOrDefault(path) ?? "unavailable"})";
 
-        if (includeShape && card.ContainsKey("type"))
-            sb.AppendLine($"  - type {Value(card.GetValueOrDefault("type"), "type")}, target {Value(card.GetValueOrDefault("target_type"), "target_type")}");
         foreach (string field in new[] { "affliction", "enchantment" })
         {
             if (card.GetValueOrDefault(field) is Dictionary<string, object?> attachment)
             {
-                sb.AppendLine($"  - {field} {Value(attachment.GetValueOrDefault("id"), $"{field}.id")} (amount {Value(attachment.GetValueOrDefault("amount"), $"{field}.amount")})");
+                string disabled = attachment.GetValueOrDefault("status") is "Disabled" ? " (disabled)" : "";
+                sb.AppendLine($"  - {field} {Value(attachment.GetValueOrDefault("id"), $"{field}.id")} (amount {Value(attachment.GetValueOrDefault("amount"), $"{field}.amount")}){disabled}");
+                if (attachment.TryGetValue("status", out var status) && status == null)
+                    sb.AppendLine($"  - {field} status {Value(null, $"{field}.status")}");
             }
             else if (reasons?.ContainsKey(field) == true)
                 sb.AppendLine($"  - {field} {Value(null, field)}");
         }
         if (card.GetValueOrDefault("dynamic_vars") is Dictionary<string, object?> values)
         {
-            foreach (var (name, value) in values)
-                sb.AppendLine($"  - dynamic_vars.{name} {Value(value, $"dynamic_vars.{name}")}");
+            if (values.Count > 0)
+                sb.AppendLine("  - base " + string.Join(", ", values.Select(entry =>
+                    $"{entry.Key} {Value(entry.Value, $"dynamic_vars.{entry.Key}")}")));
         }
         else if (reasons?.ContainsKey("dynamic_vars") == true)
-            sb.AppendLine($"  - dynamic_vars {Value(null, "dynamic_vars")}");
+            sb.AppendLine($"  - base {Value(null, "dynamic_vars")}");
 
-        // The hand already prints these fields in its main line. Show read failures here.
-        if (!includeShape && reasons != null)
+        // Shape is already in the main card line. Keep its failure reasons visible.
+        if (reasons != null)
         {
             foreach (string field in new[] { "type", "target_type", "can_play", "unplayable_reason" })
                 if (reasons.ContainsKey(field)) sb.AppendLine($"  - {field} {Value(null, field)}");

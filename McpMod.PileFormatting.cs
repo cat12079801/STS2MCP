@@ -27,9 +27,11 @@ public static partial class McpMod
             {
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
                 string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
-                sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}){exhaustNext}: {card["description"]}");
+                string shape = card.ContainsKey("type")
+                    ? $" [{card["type"] ?? "null"}/{card.GetValueOrDefault("target_type") ?? "null"}]" : "";
+                sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}){exhaustNext}: {card["description"]}{shape}");
                 AppendCardEnergyCostMarkdown(sb, card);
-                AppendCardDetailsMarkdown(sb, card, includeShape: true);
+                AppendCardDetailsMarkdown(sb, card);
             }
         }
         else

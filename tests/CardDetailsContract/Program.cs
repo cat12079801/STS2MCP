@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Enchantments;
 
 STS2_MCP.McpMod.RunCardDetailsContract();
 
@@ -28,10 +29,10 @@ namespace STS2_MCP
             => (Dictionary<string, object?>)row[key]!;
         private static Dictionary<string, string> Reasons(Dictionary<string, object?> row)
             => (Dictionary<string, string>)row["unavailable_reasons"]!;
-        private static string Markdown(Dictionary<string, object?> row, bool shape = true)
+        private static string Markdown(Dictionary<string, object?> row)
         {
             var sb = new StringBuilder();
-            AppendCardDetailsMarkdown(sb, row, includeShape: shape);
+            AppendCardDetailsMarkdown(sb, row);
             return sb.ToString();
         }
         private static IEnumerable<KeyValuePair<string, DynamicVar>> BrokenEnumeration()
@@ -46,8 +47,7 @@ namespace STS2_MCP
             var plain = Details(card);
             Check(plain["affliction"] == null && plain["enchantment"] == null, "known absence is null");
             Check(Object(plain, "dynamic_vars").Count == 0 && Reasons(plain).Count == 0 && _stateWarnings.Count == 0, "known empty values have no failure reasons or warnings");
-            Check(Markdown(plain).Trim() == "- type Attack, target AnyEnemy", "plain pile adds a short shape line");
-            Check(Markdown(plain, false) == "", "plain hand shape already present in heading");
+            Check(Markdown(plain) == "", "plain details omit empty values and leave shape in main row");
             foreach (var type in Enum.GetValues<CardType>())
             {
                 card.CardType = type;
@@ -70,12 +70,13 @@ namespace STS2_MCP
             var snapshot = Details(card);
             Check(Equals(Object(snapshot, "affliction")["id"], "WEAK") && Equals(Object(snapshot, "affliction")["amount"], 0), "affliction ID and real zero amount");
             Check(Equals(Object(snapshot, "enchantment")["id"], "SHARP") && Equals(Object(snapshot, "enchantment")["amount"], 3), "enchantment ID and amount");
+            Check(Equals(Object(snapshot, "enchantment")["status"], "Normal") && !Object(snapshot, "affliction").ContainsKey("status"), "status is the game enum name on enchantments only");
             var values = Object(snapshot, "dynamic_vars");
             Check(Equals(values["Damage"], 12.75m) && Equals(values["Zero"], 0m) && Equals(values["Negative"], -2m), "BaseValue decimals, zero and negative retained");
             Check(values.Count == 3 && !values.ContainsKey("Text"), "StringVar dummy numeric value omitted");
             Check(damage.PreviewValue == 999m && damage.EnchantedValue == 888m, "reading base does not change preview or enchanted values");
             Check(Markdown(snapshot).Contains("affliction WEAK (amount 0)") && Markdown(snapshot).Contains("enchantment SHARP (amount 3)"), "markdown attachments");
-            Check(Markdown(snapshot).Contains("dynamic_vars.Damage 12.75") && Markdown(snapshot).Contains("dynamic_vars.Zero 0"), "markdown base values on separate lines");
+            Check(Markdown(snapshot).Contains("  - base Damage 12.75, Zero 0, Negative -2") && Markdown(snapshot).Split('\n').Count(line => line.StartsWith("  - base ")) == 1, "all base values share one labeled line");
 
             var options = new JsonSerializerOptions
             {
@@ -87,9 +88,37 @@ namespace STS2_MCP
             {
                 Check(json.RootElement.GetProperty("dynamic_vars").GetProperty("Damage").GetDecimal() == 12.75m, "wire retains decimal and game variable key casing");
                 Check(json.RootElement.GetProperty("affliction").GetProperty("amount").GetInt32() == 0, "wire amount is numeric zero");
+                Check(json.RootElement.GetProperty("enchantment").GetProperty("status").GetString() == "Normal", "wire status is an enum name string");
             }
             using (var json = JsonDocument.Parse(JsonSerializer.Serialize(plain, options)))
                 Check(json.RootElement.GetProperty("affliction").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("dynamic_vars").EnumerateObject().Count() == 0, "dictionary null survives production JSON settings");
+
+            foreach (var status in Enum.GetValues<EnchantmentStatus>())
+            {
+                card.Enchanted.StatusValue = status;
+                var statusRow = Details(card);
+                Check(Equals(Object(statusRow, "enchantment")["status"], status.ToString()) && Reasons(statusRow).Count == 0, $"status {status} is read from game");
+                Check(Markdown(statusRow).Contains("(disabled)") == (status == EnchantmentStatus.Disabled), "only Disabled adds a markdown marker");
+                using var json = JsonDocument.Parse(JsonSerializer.Serialize(statusRow, options));
+                Check(json.RootElement.GetProperty("enchantment").GetProperty("status").GetString() == status.ToString(), "status wire name follows game value");
+            }
+            Check(Equals(Object(snapshot, "enchantment")["status"], "Normal"), "status snapshot independent of game-owned status changes");
+            BeginStateWarnings();
+            card.Enchanted.ThrowStatus = true;
+            var failedStatus = Details(card);
+            var failedEnchantment = Object(failedStatus, "enchantment");
+            Check(failedEnchantment["status"] == null && Reasons(failedStatus).Count == 1 && Reasons(failedStatus)["enchantment.status"].Contains("status failed"), "status read failure is null with its own reason");
+            Check(Equals(failedEnchantment["id"], "SHARP") && Equals(failedEnchantment["amount"], 3) && Equals(Object(failedStatus, "dynamic_vars")["Damage"], 12.75m), "status failure preserves attachment and other card values");
+            Check(Markdown(failedStatus).Contains("enchantment status null (InvalidOperationException: status failed)") && !Markdown(failedStatus).Contains("(disabled)"), "unknown status shows its reason");
+            var statusResponse = new Dictionary<string, object?> { ["enchantment"] = failedEnchantment };
+            EndStateWarnings(statusResponse);
+            Check(statusResponse["warnings"] is List<string> statusWarnings && statusWarnings.Any(warning => warning.StartsWith("card.enchantment.status:")), "status read failure is attached to surviving state warnings");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failedStatus, options)))
+                Check(json.RootElement.GetProperty("enchantment").GetProperty("status").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("enchantment.status", out _), "status null and reason survive wire serialization");
+            BeginStateWarnings();
+            card.Enchanted.ThrowStatus = false;
+            card.Enchanted.StatusValue = EnchantmentStatus.Normal;
+            Check(Equals(Object(Details(card), "enchantment")["status"], "Normal") && _stateWarnings.Count == 0, "status recovers without stale warnings");
 
             // Model changes are game-owned. Each state reads them again, irrespective of pile/history.
             damage.Value = 20m;
@@ -113,7 +142,7 @@ namespace STS2_MCP
                 var failedPlayable = Details(card);
                 AttachCardPlayability(failedPlayable, card);
                 Check(failedPlayable["can_play"] == null && failedPlayable["unplayable_reason"] == null && Reasons(failedPlayable).ContainsKey("can_play") && Reasons(failedPlayable).ContainsKey("unplayable_reason"), "CanPlay failure caused by target/card logic is unknown and preserves row");
-                Check(Markdown(failedPlayable, false).Contains("can_play null (InvalidOperationException"), "playability failure reason shown in hand markdown");
+                Check(Markdown(failedPlayable).Contains("can_play null (InvalidOperationException"), "playability failure reason shown in hand markdown");
                 card.ThrowOn.Clear();
             }
 
@@ -124,7 +153,7 @@ namespace STS2_MCP
                 var broken = Details(card);
                 Check(broken[field] == null && Reasons(broken)[field].Contains($"{field} failed"), $"{field} failure is null with reason");
                 Check(Equals(broken["uid"], "card-1") && Equals(broken["name"], "Test"), "failure preserves other row fields");
-                Check(Markdown(broken).Contains("null (InvalidOperationException") && (field != "type" && field != "target_type" || Markdown(broken, false).Contains("null (InvalidOperationException")), "markdown read failure and hand shape failure reason");
+                Check(Markdown(broken).Contains("null (InvalidOperationException"), "markdown read failure remains visible");
                 var response = new Dictionary<string, object?> { ["state_type"] = "combat", ["hand"] = new[] { broken } };
                 EndStateWarnings(response);
                 Check(response["warnings"] is List<string> warnings && warnings.Any(w => w.Contains($"card.{field}:")), "warning collector attaches surviving field failure");
@@ -140,7 +169,7 @@ namespace STS2_MCP
             Check(Object(partial, "affliction")["amount"] == null && Equals(Object(partial, "affliction")["id"], "WEAK") && Reasons(partial).ContainsKey("affliction.amount"), "affliction amount failure preserves ID");
             Check(Object(partial, "enchantment")["id"] == null && Equals(Object(partial, "enchantment")["amount"], 4) && Reasons(partial).ContainsKey("enchantment.id"), "enchantment ID failure preserves amount");
             Check(Object(partial, "dynamic_vars")["Damage"] == null && Equals(Object(partial, "dynamic_vars")["Zero"], 0m) && Reasons(partial).ContainsKey("dynamic_vars.Damage"), "single variable failure preserves other values");
-            Check(Markdown(partial).Contains("amount null (InvalidOperationException: amount failed)") && Markdown(partial).Contains("dynamic_vars.Damage null (InvalidOperationException: base failed)"), "nested markdown reasons");
+            Check(Markdown(partial).Contains("amount null (InvalidOperationException: amount failed)") && Markdown(partial).Contains("base Damage null (InvalidOperationException: base failed), Zero 0"), "nested markdown reasons remain on a single base line");
             card.Afflicted.ThrowAmount = false;
             card.Afflicted.ThrowId = true;
             card.Enchanted.ThrowId = false;
@@ -170,7 +199,8 @@ namespace STS2_MCP
                 var sb = new StringBuilder();
                 string before = JsonSerializer.Serialize(player, options);
                 FormatDeckPilesMarkdown(sb, player);
-                Check(sb.ToString().Contains("- Test (1): Description") && sb.ToString().Contains("dynamic_vars.Damage 12.75"), $"{pile} pile keeps existing row and appends details");
+                Check(sb.ToString().Split('\n').Any(line => line.TrimEnd('\r') == "- Test (1): Description [Attack/AnyEnemy]") && sb.ToString().Contains("base Damage 12.75, Zero 0, Negative -2"), $"{pile} pile puts shape at row end and consolidates base values");
+                Check(!sb.ToString().Contains("  - type ") && sb.ToString().Split('\n').Count(line => line.StartsWith("  - base ")) == 1, "pile details add one base line and no shape child line");
                 Check(JsonSerializer.Serialize(player, options) == before, "formatting does not modify JSON");
             }
 

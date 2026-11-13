@@ -467,8 +467,8 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
 ```jsonc
 {
   "index": 0,
-  "uid": "card_1",
-  "id": "STRIKE_R",
+  "uid": "STRIKE_IRONCLAD#0",
+  "id": "STRIKE_IRONCLAD",
   "name": "Strike",
   "type": "Attack",          // Attack, Skill, Power, Status, Curse
   "cost": "1",               // Energy cost as string ("X" for X-cost)
@@ -504,7 +504,7 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
 ```jsonc
 {
-  "uid": "card_1",
+  "uid": "STRIKE_IRONCLAD#0",
   "name": "Strike",
   "type": "Attack",
   "target_type": "AnyEnemy",
@@ -530,23 +530,28 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 - `type` / `target_type` は `CardModel.Type` / `TargetType` の enum 名。
 - `affliction` は `CardModel.Affliction` の `{ id, amount }`。
   `id` は `Id.Entry`、`amount` は現在の `Amount`（整数）。
-- `enchantment` は `CardModel.Enchantment` の同じ形の `{ id, amount }`。
+- `enchantment` は `CardModel.Enchantment` の `{ id, amount, status }`。
+  `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
+  例は `{ "id": "VIGOROUS", "amount": 3, "status": "Disabled" }`。
 - `dynamic_vars` は `CardModel.DynamicVars` の変数名から現在の `BaseValue` への辞書。
   小数・0・負数をそのまま JSON 数値で出す。`StringVar` は文字列用のため除外する。
   数値変数が0件なら `{}`。成長・強化を反映した現在値を毎回読む。
+  EnchantedValue / PreviewValue ではない。CalculatedVar は計算前の基底値。
 - `unavailable_reasons` は読取失敗のパスから理由への辞書。正常時は `{}`。
 
 災禍・エンチャントの getter が正常に null を返したときは、その項目を null とし、
 理由の辞書は空。読取例外が出たときは該当値を null にし、理由と `warnings` を付ける。
-例として `affliction.amount`、`enchantment.id`、`dynamic_vars.Damage` の失敗では、
+例として `affliction.amount`、`enchantment.status`、`dynamic_vars.Damage` の失敗では、
 同じオブジェクト内の読めた項目を保持する。変数一覧の取得・列挙の失敗は
 `dynamic_vars` 全体を null にする。手札の `CanPlay` の例外も局所化し、
 `can_play` / `unplayable_reason` を null と理由にする。
 項目の欠落がある旧 snapshot は未観測として扱う。
 
 山札はコピーを rarity → card ID の順にソートして表示する。
-Markdown は既存の札の行に続く短い子行で、パイルの型・対象、存在する災禍・
-エンチャント、変数ごとの基底値、読取失敗の理由を表示する。
+Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型・対象を付ける。
+存在する災禍・エンチャントと読取失敗の理由は短い子行で表示する。
+エンチャントは `status` が `Disabled` のときだけ `(disabled)` を付ける。
+基底値は `base Damage 6, Vulnerable 2` の形で札ごとに1行にまとめる。
 手札の型・対象は既存の行に表示し、プレイ可否が読めなければ `?` を付ける。
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
@@ -555,7 +560,7 @@ Markdown は既存の札の行に続く短い子行で、パイルの型・対�
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
-`EnchantmentModel.Amount`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
+`EnchantmentModel.Amount` / `Status`、`EnchantmentStatus`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
 `StringVar`。契約試験は詳細の取得・失敗・表示を検査する。
 [CardDetailsContract](../tests/CardDetailsContract/README.md)
 

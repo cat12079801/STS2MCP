@@ -12,6 +12,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
 ```
 
 型・対象の enum 名、災禍・エンチャントの ID / Amount、正常な未付与の null、
+エンチャントの Status の Normal / Disabled と、読取失敗時の null・理由・他項目の保持、
 変数の BaseValue の小数・0・負数、数値変数なしの空辞書を検査する。
 StringVar の除外、PreviewValue / EnchantedValue と区別した値の取得と状態の保持、
 ゲーム側の成長・付与解除後の再読取と snapshot の独立を確認する。
@@ -22,7 +23,8 @@ CanPlay 内の対象 getter・カードロジックの失敗も手札の行に�
 JSON は本番と同じ WhenWritingNull・SnakeCaseLower・Encoder 設定で確認し、
 辞書の null、ゲームの変数名の大文字小文字、小数・整数の型を検査する。
 
-Markdown は既存の行と4パイルの節を保ち、詳細を短い子行に出すこと、
+Markdown は4パイルの本行末尾の `[Attack/AnyEnemy]` と、
+札ごとに1行にまとめた `base Damage 6, …`、Disabled のときだけ付く `(disabled)`、
 正常な未付与・空辞書の省略、失敗時の理由、旧形式の行も表示できることを確認する。
 巨大な state builder はリンクせず、ソースの文字列検査で手札と4パイルの共通経路、
 山札のコピー上での rarity → card ID ソート、非戦闘の対象範囲、マルチの共通経路、

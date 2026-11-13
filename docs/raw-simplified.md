@@ -60,12 +60,16 @@ Every JSON response includes:
   - `hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` の `exhaust_on_next_play` — 戦闘中だけ、`CardModel.ExhaustOnNextPlay` の現在の bool 値を返す（false も出す）。戦闘中の `card_select.cards[]` の grid 行にも `uid` と同じ条件で出す。戦闘外のデッキ・選択画面、choose-a-card、`hand_select.cards[]`（同じ札は `hand[]` で読む）、各 preview には出さない。true がプレイの合間に残るのは `exhaust_pile[]` だけ（荒廃の自動プレイが拒否された札。手番終了の `EndOfTurnCleanup` で消える）。getter は backing field を返すだけで副作用なし。`CardPileCmd.AutoPlayFromDrawPile` が `forceExhaust` を設定し、このデコンパイル版で true を渡すのは `Havoc.OnPlay` だけ。Exhaust keyword から推定しない。既存の `SafeGetBool` で読取失敗は `null` と warnings にし、state 全体を落とさない。Markdown は手札・パイル・grid 行で true のときだけ `[exhaust-next]`。追加なので schema は 3 のまま。[契約・各メソッドと行番号](raw-full.md#次回プレイ時の廃棄フラグ追加schema-3) を参照。
   - `hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]` の `energy_cost` — 戦闘中だけ `{ costs_x, base, with_local_modifiers, with_all_modifiers, local_modifiers, unavailable_reasons }`。基礎（強化を含む）・local 適用後・global 込みのコストはゲームの `GetWithModifiers(None/Local/All)`。private の `_localModifiers` を適用順に読み、各 `{ amount, type, expiration, reduce_only }` をそのまま出す。`Relative` / `Absolute`、`WhenPlayed` / `EndOfTurn` / `EndOfCombat`（値0）と複合の `"EndOfTurn, WhenPlayed"` は enum 名。X は数値を null と `x_cost`、基礎値が負のコストなしは null と `no_energy_cost` にする。修正なしは `[]`、読取失敗は null と `unavailable_reasons` のキー別理由・warnings。X/コストなしでも実際の修正一覧は読む。戦闘中の grid 選択行にも `uid` と同じ条件で出し、戦闘外・choose・hand_select・preview には出さない。Markdown は修正一覧が非空・修正後のコストが基礎値と異なる・通常の X/コストなし以外の理由で null がある場合だけ、数値・修正一覧・null の理由を表示。既存の `cost` / `star_cost` は変更せず、追加のみなので schema 4 を維持。[契約・出典](raw-full.md#energy-cost-object追加schema-4) を参照。
   - `hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]` の詳細は共通。
-    `type` / `target_type` はゲームの enum 名、`affliction` / `enchantment` は
-    現在の `{ id, amount }`（正常に未付与と確認できた場合は null）。
+    `type` / `target_type` はゲームの enum 名、`affliction` は現在の `{ id, amount }`、
+    `enchantment` は `{ id, amount, status }`（正常に未付与と確認できた場合は null）。
+    `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
     `dynamic_vars` は変数名 → 現在の `BaseValue`（小数を含む数値、`StringVar` を除く）。
+    EnchantedValue / PreviewValue ではない。CalculatedVar は計算前の基底値。
     数値変数なしは `{}`。読取失敗は該当値を null とし、行の `unavailable_reasons` に
-    `dynamic_vars.Damage` 等のパス別理由を入れ、`warnings` に記録する。
-    山札は rarity → card ID の表示順。Markdown は既存の札の行に短い子行を追加する。
+    `enchantment.status` / `dynamic_vars.Damage` 等のパス別理由を入れ、`warnings` に記録する。
+    山札は rarity → card ID の表示順。Markdown はパイルの本行末尾に `[Attack/AnyEnemy]`、
+    `Disabled` のエンチャントにだけ `(disabled)` を付ける。
+    基底値は `base Damage 6, Vulnerable 2` の形で札ごとに1行にまとめる。
     追加項目のため schema 4。詳細と出典は [契約](raw-full.md#戦闘カードの詳細追加schema-4) を参照。
   - `play_pile` / `play_pile_count` — 戦闘中の `PlayerCombatState.PlayPile`。
     他のパイルと同じ行（`uid`・`exhaust_on_next_play`・`energy_cost`・上記の詳細を含む）。

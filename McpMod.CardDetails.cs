@@ -60,6 +60,8 @@ public static partial class McpMod
         var state = new Dictionary<string, object?>();
         ReadCardDetailValue(state, reasons, "id", () => model.Id.Entry, $"{field}.id");
         ReadCardDetailValue(state, reasons, "amount", () => readAmount(), $"{field}.amount");
+        if (model is EnchantmentModel enchantment)
+            ReadCardDetailValue(state, reasons, "status", () => enchantment.Status.ToString(), "enchantment.status");
         return state;
     }
 

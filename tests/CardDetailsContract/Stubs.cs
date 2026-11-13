@@ -1,5 +1,11 @@
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Enchantments;
+
+namespace MegaCrit.Sts2.Core.Entities.Enchantments
+{
+    public enum EnchantmentStatus { Normal, Disabled }
+}
 
 namespace MegaCrit.Sts2.Core.Entities.Cards
 {
@@ -29,6 +35,9 @@ namespace MegaCrit.Sts2.Core.Models
         public int Value;
         public bool ThrowAmount;
         public int Amount => ThrowAmount ? throw new InvalidOperationException("amount failed") : Value;
+        public EnchantmentStatus StatusValue;
+        public bool ThrowStatus;
+        public EnchantmentStatus Status => ThrowStatus ? throw new InvalidOperationException("status failed") : StatusValue;
     }
     public class CardModel
     {
