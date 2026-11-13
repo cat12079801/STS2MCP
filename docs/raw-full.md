@@ -598,8 +598,10 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 registry は combat state のインスタンスが変わったときに初期化する。
 保存して終了 → continue で新しい combat state とカードを作り直しても、
 デッキ由来の札は同じデッキ位置から同じ uid を再現する。
-生成・複製札の乱数番号は再ロード時に再発行される。戦闘開始時の生成札が手札にある局面では、
-旧 MOD と同様に再ロード前後の手札 uid 集合が一致しないことがある。
+旧 MOD は初回観測順の連番で採番していたため、戦闘開始時に生成される札の uid も
+再ロード後に同じ番号を再現していた。この版では、その札の乱数 uid は再ロードで変わる。
+開始時の生成札が手札にある場合のやり直し検出は後退している。
+engine 側は sts2 #873 で、uid に依らないやり直し検出に修正する。
 
 engine の `tools/turnplan/cli.py` の `turn_sig` は手札 uid の集合を署名に含める。
 round 1 の途中から保存して終了 → continue したとき、初手の署名への復帰を
@@ -1470,10 +1472,11 @@ list could not be read; do not select using a partial or stale list. Schema 4 re
 produces a `card_select.selected` warning without rewriting the game's selection.
 Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
 
-山札由来の `NCombatPileCardSelectScreen` は、`CardModel.CompareTo == 0` かつ Title が
-等しい札の連続区間を uid の ordinal 順に正規化し、引く順を意図して隠す。
+山札由来の `NCombatPileCardSelectScreen` は、grid の比較キー（Rarity・Title・Id）が
+等しい極大区間ごとに `CardModel.CompareTo == 0` の同値類に分ける。
+各同値類が占める位置へ uid の ordinal 順で配り直し、離れた同値札の引く順も意図して隠す。
 行の uid・選択印と `select_card.index` のクリック先は、同じ正規化した候補一覧で対応する。
-比較・Title の取得に失敗した場合は `cards: null` と `card_select.cards` の warning を返す。
+比較キーの取得・比較に失敗した場合は `cards: null` と `card_select.cards` の warning を返す。
 
 During a live combat with an available combat state, grid selection rows (`cards[]`) also carry
 `uid`, using the same per-card-instance registry as the combat hand and piles. This includes

@@ -213,7 +213,43 @@ namespace STS2_MCP
             var separated = new[] { tieCards[0], differentRank, tieCards[1], differentTitle, tieCards[2] };
             drawGrid.SetCards(separated);
             Check(TryGetCardSelectCandidates(drawScreen, out _, out var separatedCandidates, out _)
-                && separatedCandidates.SequenceEqual(separated), "only consecutive equal-comparison and equal-title runs may reorder");
+                && separatedCandidates.SequenceEqual(new[] { tieCards[1], differentRank, tieCards[0], differentTitle, tieCards[2] }),
+                "separated equivalent cards use UID order within a maximal grid-key interval");
+
+            var secondRank = new CardModel("STRIKE") { DisplayRank = 1 };
+            Uids[secondRank] = "STRIKE#3";
+            var interleaved = new[] { tieCards[0], differentRank, tieCards[1], secondRank, tieCards[2] };
+            var originalInterleaved = interleaved.ToArray();
+            var expectedInterleaved = new[] { tieCards[1], secondRank, tieCards[2], differentRank, tieCards[0] };
+            drawGrid.SetCards(interleaved);
+            drawScreen.SetSelection([tieCards[0], secondRank]);
+            Open(drawScreen);
+            var interleavedRows = BuildCardSelectCardRows(drawScreen, GetCardSelectSelection(drawScreen))!;
+            Check(interleavedRows.Select(row => (string)row["uid"]!).SequenceEqual(expectedInterleaved.Select(GetStableCardUid)),
+                "each separated equivalence class is independently ordered by ordinal UID");
+            Check(TryGetCardSelectCandidates(drawScreen, out _, out var interleavedCandidates, out _)
+                && interleavedCandidates.Select(c => c.DisplayRank).SequenceEqual(originalInterleaved.Select(c => c.DisplayRank)),
+                "equivalence classes keep their original occupied positions");
+            Check(interleavedRows[1]["selected"] is true && interleavedRows[4]["selected"] is true
+                && interleavedRows.Count(row => row["selected"] is true) == 2, "selection flags follow separated normalized instances");
+            Check(interleaved.SequenceEqual(originalInterleaved) && ReferenceEquals(GetInstanceFieldValue(drawGrid, "_cards"), interleaved),
+                "normalizing separated members preserves the game's grid list");
+            for (int index = 0; index < expectedInterleaved.Length; index++)
+            {
+                Check(Ok(ExecuteSelectGridCard(drawScreen, index)) && ReferenceEquals(drawScreen.LastCard, expectedInterleaved[index]),
+                    $"separated normalized row {index} clicks its exposed UID's original model");
+                Check(Ok(ExecuteSelectGridCard(drawScreen, index)), "same normalized index toggles the original instance back");
+            }
+            drawGrid.SetCards(new[] { tieCards[2], secondRank, tieCards[1], differentRank, tieCards[0] });
+            Check(BuildCardSelectCardRows(drawScreen, null)!.Select(row => row["uid"])
+                .SequenceEqual(interleavedRows.Select(row => row["uid"])), "independent permutations of interleaved classes expose the same UIDs");
+            foreach (var boundary in new[] { new CardModel("STRIKE") { Rarity = 1 }, new CardModel("OTHER") { TitleOverride = "STRIKE" } })
+            {
+                var split = new[] { tieCards[0], boundary, tieCards[1] };
+                drawGrid.SetCards(split);
+                Check(TryGetCardSelectCandidates(drawScreen, out _, out var splitCandidates, out _)
+                    && splitCandidates.SequenceEqual(split), "different rarity or ID ends the maximal grid-key interval");
+            }
             foreach (var pile in new[] { PileType.Discard, PileType.Exhaust, PileType.Play })
             {
                 var otherPileScreen = new NCombatPileCardSelectScreen(new NCardGrid(tieCards), new CardPile(pile));

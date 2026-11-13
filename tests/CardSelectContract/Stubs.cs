@@ -10,6 +10,7 @@ namespace MegaCrit.Sts2.Core.Models
     public class CardModel(string id)
     {
         public string Id = id;
+        public int Rarity;
         public string? TitleOverride;
         public string Title => TitleOverride ?? Id;
         public int DisplayRank;

@@ -79,8 +79,10 @@ Every JSON response includes:
     `Player.Deck.Cards` の0始まりの位置を使う。マルチは `<位置>p<NetId>`。
     デッキ位置はゲームのデッキ画面で見られ、保存して終了 → continue 後も同じ uid を再現する。
     生成札・手札に直接入る札・複製札は `g<OSの乱数>` を使い、衝突時に再採番する。
-    同じ戦闘の同じ個体では固定。開始時の生成札が手札にあると、旧 MOD と同様に再ロードで
-    手札 uid の集合が一致しないことがある。engine の `turn_sig` が再ロード検出に使う
+    同じ戦闘の同じ個体では固定。旧 MOD は初回観測順の連番で、戦闘開始時に生成される札の
+    uid も再ロード後に同じ番号を再現していた。この版ではその札の乱数 uid は再ロードで変わり、
+    開始時の生成札を含む初手のやり直し検出は後退する。engine 側は sts2 #873 で
+    uid に依らない検出に修正する。engine の `turn_sig` が再ロード検出に使う
     uid の再現は、デッキ由来の初手で満たす。旧 fixture・dump の番号は異なる場合があり、必要なら取り直す。
     [uid とパイル順序の契約](raw-full.md#戦闘カードの-uid-とパイル順序) を参照。
   - `play_pile` / `play_pile_count` — 戦闘中の `PlayerCombatState.PlayPile`。
@@ -375,8 +377,9 @@ Same-ID instances remain separate. `cards: []` means zero candidates; `cards: nu
 Schema 4 removes `selected_outside_grid`; every candidate has its selection mark. A mismatch
 with `selected_count` produces a warning. Combat-pile `screen_type` retains its game class name.
 
-山札から選ぶ画面は、`CardModel.CompareTo == 0` かつ Title が等しい札の連続区間を
-uid の ordinal 順にし、引く順を意図して隠す。行と index のクリック先は同じ対応を使う。
+山札から選ぶ画面は、Rarity・Title・Id が等しい極大区間を `CompareTo == 0` の同値類に分け、
+各類が占める位置へ uid の ordinal 順で配り直す。離れた同値札の引く順も意図して隠し、
+行と index のクリック先は同じ対応を使う。
 
 Grid rows (`cards[]`) include a combat-stable `uid` only while combat is in progress and its state
 is available, including combat-pile selections. It uses the same card-instance registry as the

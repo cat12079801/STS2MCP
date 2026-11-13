@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Combat;
@@ -81,17 +82,35 @@ public static partial class McpMod
         RefreshCardUidRegistry(combatState);
 
         // The UI leaves visually identical draw-pile cards in hidden pile order.
-        // Normalize each consecutive tie in our snapshot. Both rows and clicks
-        // consume this mapping, including selection flags for the original models.
-        var uidOrder = Comparer<CardModel>.Create((a, b) =>
-            StringComparer.Ordinal.Compare(GetStableCardUid(a), GetStableCardUid(b)));
+        // Within each maximal grid-key tie, normalize every CompareTo equivalence
+        // class, including separated members. Keep each class's occupied positions.
+        // Both rows and clicks consume this snapshot of the original models.
+        var cardOrder = Comparer<CardModel>.Create((a, b) => a.CompareTo(b));
         for (int start = 0; start < cards.Length;)
         {
             int end = start + 1;
-            while (end < cards.Length && cards[start].CompareTo(cards[end]) == 0
+            while (end < cards.Length && cards[start].Rarity == cards[end].Rarity
+                && cards[start].Id.CompareTo(cards[end].Id) == 0
                 && string.Equals(cards[start].Title, cards[end].Title, StringComparison.Ordinal))
                 end++;
-            if (end - start > 1) Array.Sort(cards, start, end - start, uidOrder);
+
+            var positionsByClass = new SortedDictionary<CardModel, List<int>>(cardOrder);
+            for (int index = start; index < end; index++)
+            {
+                if (!positionsByClass.TryGetValue(cards[index], out var positions))
+                {
+                    positions = new List<int>();
+                    positionsByClass.Add(cards[index], positions);
+                }
+                positions.Add(index);
+            }
+            foreach (var positions in positionsByClass.Values)
+            {
+                var ordered = positions.Select(index => cards[index])
+                    .OrderBy(GetStableCardUid, StringComparer.Ordinal).ToArray();
+                for (int index = 0; index < positions.Count; index++)
+                    cards[positions[index]] = ordered[index];
+            }
             start = end;
         }
     }
