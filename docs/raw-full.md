@@ -251,9 +251,11 @@ Always present at the top level (except `menu`). Contains everything about the l
   "draw_pile_count": 15,
   "discard_pile_count": 3,
   "exhaust_pile_count": 1,
+  "play_pile_count": 0,
   "draw_pile": [ /* Pile Card Objects (sorted by rarity, matching in-game display) */ ],
   "discard_pile": [ /* Pile Card Objects */ ],
   "exhaust_pile": [ /* Pile Card Objects */ ],
+  "play_pile": [ /* Pile Card Objects; temporary, during play resolution */ ],
   "orbs": [ /* Orb Objects */ ],   // Defect only; omitted if orb capacity is 0
   "orb_slots": 3,
   "orb_empty_slots": 1,
@@ -374,6 +376,7 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "can_play": true,
   "unplayable_reason": null, // e.g. "NotEnoughEnergy", "Unplayable", null if playable
   "exhaust_on_next_play": false, // Combat-only CardModel.ExhaustOnNextPlay; see below
+  "energy_cost": { /* Energy Cost Object below; combat only */ },
   "is_upgraded": false,
   "keywords": [ /* Keyword Objects */ ]
 }
@@ -391,7 +394,7 @@ the single hit on a failed condition.
 variable the cap calculation assumes one hit. For random-target attacks, the total is
 the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
-### Pile Card Object (draw/discard/exhaust piles)
+### Pile Card Object (draw/discard/exhaust/play piles)
 
 ```jsonc
 {
@@ -399,14 +402,93 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   "cost": "1",               // Energy cost as string ("X" for X-cost)
   "star_cost": null,          // Regent star cost as string, null if N/A
   "exhaust_on_next_play": false,
+  "energy_cost": { /* Energy Cost Object below */ },
   "description": "Deal 6 damage."
 }
 ```
 
+### Energy Cost Object（追加、schema 4）
+
+戦闘中の `player.hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` /
+`play_pile[]` と、戦闘中の `card_select.cards[]` の grid 行に `energy_cost` を出す。
+grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な combat state）。
+単独・マルチのローカル player は共通の `BuildPlayerState` を通る。
+戦闘外のデッキ・選択、choose-a-card、`hand_select.cards[]`、各 preview には出さない。
+手札選択中も同じ札は `player.hand[]` で読む。
+
+```jsonc
+{
+  "costs_x": false,
+  "base": 2,
+  "with_local_modifiers": 1,
+  "with_all_modifiers": 1,
+  "local_modifiers": [
+    { "amount": -1, "type": "Relative", "expiration": "WhenPlayed", "reduce_only": false }
+  ],
+  "unavailable_reasons": {}
+}
+```
+
+- `base`: `CardEnergyCost.GetWithModifiers(CostModifiers.None)`。現在の基礎コストであり、
+  強化や `SetCustomBaseCost` を含む。印刷時の値 `Canonical` とは区別する。
+- `with_local_modifiers`: `GetWithModifiers(Local)`。local のみ適用した値。
+- `with_all_modifiers`: `GetWithModifiers(All)`。global のフックも含む現在の値。
+  この2値は MOD で再計算せず、ゲームの適用順・reduceOnly・最終 clamp に従う。
+- `local_modifiers`: private の `CardEnergyCost._localModifiers` をリフレクションで読む。
+  各要素は public の `Amount` / `Type` / `Expiration` / `IsReduceOnly`。
+  `amount` は整数、`reduce_only` は bool、`type` / `expiration` はゲームの enum の
+  `ToString()`。リストの適用順・重複を保持し、効果名やプレイ履歴から補完しない。
+  空リスト `[]` は「修正なし」、`null` は「読取失敗」。X やコストなしの札でも
+  実リストは読む（修正が保持されていても固定コスト計算に適用されるとは限らない）。
+- `expiration` は `EndOfCombat`（enum 値 0）、`EndOfTurn`、`WhenPlayed`、または
+  `"EndOfTurn, WhenPlayed"`。複合はどちらか先に到来した時点で消える。
+  `EndOfTurnCleanup` は EndOfTurn の旗だけ、`AfterCardPlayedCleanup` は WhenPlayed の旗だけを除去する。
+  `WhenPlayed` だけの修正はターンをまたいで残る。MOD は期限の推測・削除を行わない。
+- `reduce_only: true` は、適用時に現在の値より上げない修正。
+  現在は値を変えていない要素も、別の修正が失効すると効く場合があるのでリストに残す。
+- `unavailable_reasons`: `null` のキー名 → 理由の文字列。正常な固定コストでは `{}`。
+  X は3つの数値を `null` にして各理由を `x_cost`、`None` が負（エナジーコストなし）は
+  `no_energy_cost` とする。カードの Curse/Status 種別や Unplayable keyword からは判断しない。
+  `costs_x` 自体の読取失敗は `costs_x: null`、数値側は `costs_x_unavailable`。
+  基礎値の読取失敗は `base` に例外の理由、修正後の数値は `base_unavailable`。
+  その他の読取・計算失敗も該当値だけ `null` と例外の理由にし、`warnings` に
+  `card.energy_cost[.<key>]` を出す。private リストが読めなくても public のコストは読む。
+  `EnergyCost` 自体が取得できない場合もオブジェクトを残し、5項目を `null` と理由にする。
+  通常の X / コストなしには警告を出さない。
+
+`player.play_pile` / `play_pile_count` は戦闘中の一時的な Play pile。
+行は他のパイルと同じ形（`uid`、`exhaust_on_next_play` も含む）。
+プレイの合間には通常空で、解決中には過渡的な値が見えるため、計画は `is_resolving: false` の
+snapshot を使う。山札は既存どおり表示用のソート順で、内部のドロー順を出さない。
+
+Markdown は手札・各パイル・grid 行の下に base / local / all と、
+非空の修正一覧（値・種別・期限・reduce_only）を適用順で表示する。`null` には理由を添える。
+既存の `cost`（文字列、X は `"X"`、それ以外は `GetAmountToSpend()`）と `star_cost` は変更しない。
+ここで追加するのはエナジーコストだけで、star cost の修正は対象外。
+既存フィールドの意味・削除・action の変更がないため `schema_version` は **4 のまま**。
+利用側は番号ではなく `energy_cost` の有無で検出する。古い state の欠落は「修正なし」ではなく未観測。
+
+出典（v0.113.0、ローカルの `sts2-d009478a` デコンパイル）:
+
+- `MegaCrit.Sts2.Core.Entities.Cards/CardEnergyCost.cs`: `_localModifiers`（25行）、
+  `GetWithModifiers`（94–126行）、`SetThisTurnOrUntilPlayed`（197–203行）、
+  `SetThisCombat`（238–244行）、`AddUntilPlayed`（258–264行）、
+  `EndOfTurnCleanup` / `AfterCardPlayedCleanup`（333–347行）、`UpgradeBy` / `SetCustomBaseCost`。
+- 同ディレクトリの `LocalCostModifier.cs` の各 getter（48–76行）と `Modify`（89行）、
+  `LocalCostType.cs` / `LocalCostModifierExpiration.cs` / `CostModifiers.cs` の enum。
+- `MegaCrit.Sts2.Core.Models.Cards/ExpectAFight.cs` の `OnPlay`（31–36行）は
+  X 以外の手札アタックへ `AddUntilPlayed(-Energy.IntValue)`。
+  `Enlightenment.cs` の `OnPlay`（16–24行）は通常 `SetThisTurnOrUntilPlayed(1, true)`、
+  強化後 `SetThisCombat(1, true)`。
+- `MegaCrit.Sts2.Core.Entities.Players/PlayerCombatState.cs` の `PlayPile` / `AllPiles`（71–85行）。
+
+契約試験は [`tests/CardEnergyCostContract`](../tests/CardEnergyCostContract/README.md)。
+効果適用・ターン遷移の実機検証とは区別する。
+
 ### 次回プレイ時の廃棄フラグ（追加、schema 3）
 
 `exhaust_on_next_play` は `CardModel.ExhaustOnNextPlay` の現在の bool 値。
-戦闘中の `player.hand[]`、`draw_pile[]` / `discard_pile[]` / `exhaust_pile[]`、
+戦闘中の `player.hand[]`、`draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]`、
 および `card_select.cards[]` の grid 行に出す。grid は `uid` と同じ条件、
 すなわち `CombatManager.IsInProgress` が true で combat state が取得できる場合だけ。
 戦闘外のデッキ・選択画面、choose-a-card 行、`preview_cards` / `upgrade_preview` には出さない。
@@ -1156,6 +1238,8 @@ same card instance when it enters the hand. Selection actions still use `index`.
 
 同じ戦闘中の grid 行には `exhaust_on_next_play` も含む。
 意味・例外時の扱い・ゲーム側の出典は [次回プレイ時の廃棄フラグ](#次回プレイ時の廃棄フラグ追加schema-3) を参照。
+`energy_cost` も同じ条件で含む。値・修正一覧・読取失敗の契約は
+[Energy Cost Object](#energy-cost-object追加schema-4) を参照。
 
 ```jsonc
 {

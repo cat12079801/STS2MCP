@@ -3,6 +3,9 @@
 .NET 9 の実行プロジェクト。ゲーム DLL・Godot 実行環境・外部パッケージを使わず、
 本番の `McpMod.CardSelection.cs` / `McpMod.CardSelectionFormatting.cs` を直接リンクする。
 強化プレビューの Markdown 行も本番 `McpMod.RewardFormatting.cs` を共有する。
+エナジーコストの Markdown 行は本番 `McpMod.CardEnergyCostFormatting.cs` を共有し、
+戦闘時だけ全 grid 行へ `energy_cost` を付ける配線を検査する。
+コストの取得自体は境界ダブルであり、取得内容は `tests/CardEnergyCostContract` で検証する。
 
 ```fish
 dotnet run --project tests/CardSelectContract/CardSelectContract.csproj -c Release

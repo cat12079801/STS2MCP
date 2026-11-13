@@ -1492,6 +1492,7 @@ public static partial class McpMod
             state["draw_pile_count"] = combatState.DrawPile.Cards.Count;
             state["discard_pile_count"] = combatState.DiscardPile.Cards.Count;
             state["exhaust_pile_count"] = combatState.ExhaustPile.Cards.Count;
+            state["play_pile_count"] = combatState.PlayPile.Cards.Count;
 
             // Pile contents (draw pile sorted by rarity then card ID, matching in-game display)
             var drawCards = combatState.DrawPile.Cards.ToList();
@@ -1501,6 +1502,7 @@ public static partial class McpMod
             state["draw_pile"] = BuildPileCardList(drawCards, PileType.Draw);
             state["discard_pile"] = BuildPileCardList(combatState.DiscardPile.Cards, PileType.Discard);
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
+            state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
 
             // Orbs
             var orbQueue = combatState.OrbQueue;
@@ -1751,6 +1753,7 @@ public static partial class McpMod
         state["uid"] = GetStableCardUid(card);
         // Combat-only state: keep it out of BuildCardInfo, which also builds deck/preview rows.
         state["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
+        state["energy_cost"] = BuildCardEnergyCostState(card);
         state["description"] = SafeGetCardDescription(card); // hand cards use default pile
         state["target_type"] = card.TargetType.ToString();
         state["can_play"] = unplayableReason == UnplayableReason.None;
@@ -1935,6 +1938,7 @@ public static partial class McpMod
             {
                 ["uid"] = GetStableCardUid(card),
                 ["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay),
+                ["energy_cost"] = BuildCardEnergyCostState(card),
                 ["name"] = SafeGetText(() => card.Title),
                 ["cost"] = GetCostDisplay(card),
                 ["star_cost"] = GetStarCostDisplay(card),

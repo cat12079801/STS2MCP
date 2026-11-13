@@ -51,6 +51,7 @@ public static partial class McpMod
                 string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
                 sb.AppendLine($"- {selected}[{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]}{exhaustNext} - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
+                AppendCardEnergyCostMarkdown(sb, card);
             }
             sb.AppendLine();
         }

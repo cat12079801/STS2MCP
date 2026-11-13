@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="../../McpMod.CardSelection.cs" Link="CardSelection.cs" />
     <Compile Include="../../McpMod.CardSelectionFormatting.cs" Link="CardSelectionFormatting.cs" />
+    <Compile Include="../../McpMod.CardEnergyCostFormatting.cs" Link="CardEnergyCostFormatting.cs" />
     <Compile Include="../../McpMod.RewardFormatting.cs" Link="RewardFormatting.cs" />
     <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

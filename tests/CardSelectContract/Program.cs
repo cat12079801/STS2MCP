@@ -42,7 +42,7 @@ namespace STS2_MCP
                 var rows = BuildCardSelectCardRows(screen, GetCardSelectSelection(screen))!;
                 Check(rows.Count == count, $"full rows {count}");
                 Check(rows.Select(row => (int)row["index"]!).SequenceEqual(Enumerable.Range(0, count)), "contiguous indices");
-                Check(rows.All(row => !row.ContainsKey("uid") && !row.ContainsKey("exhaust_on_next_play") && !row.ContainsKey("upgrade_preview")), "noncombat nonupgrade fields");
+                Check(rows.All(row => !row.ContainsKey("uid") && !row.ContainsKey("exhaust_on_next_play") && !row.ContainsKey("energy_cost") && !row.ContainsKey("upgrade_preview")), "noncombat nonupgrade fields");
                 Check(Markdown(rows).Contains($"Cards ({count} candidates)"), "candidate count including empty list");
                 grid.Holders.Reverse();
                 grid.Holders.Add((new CardModel("STALE_HOLDER"), false));
@@ -153,6 +153,8 @@ namespace STS2_MCP
             var combatRows = BuildCardSelectCardRows(current, GetCardSelectSelection(current))!;
             Check(RefreshCalls == 1 && combatRows.All(row => row.ContainsKey("uid") && row.ContainsKey("exhaust_on_next_play")), "combat registry refresh before all rows");
             Check(combatRows[30]["exhaust_on_next_play"] is true && combatRows[31]["exhaust_on_next_play"] is false, "exhaust flags retain true and false");
+            Check(combatRows.All(row => row.ContainsKey("energy_cost")), "combat rows expose energy cost");
+            Check(Markdown(combatRows).Contains("energy cost: base 1; local 1; all 1"), "combat cost markdown wiring");
             Check(!Equals(combatRows[30]["uid"], combatRows[31]["uid"]), "same ID retains distinct uids");
             var combatAgain = BuildCardSelectCardRows(current, [])!;
             Check(Equals(combatRows[30]["uid"], combatAgain[30]["uid"]), "stable instance uid across reads");
@@ -161,7 +163,7 @@ namespace STS2_MCP
             Check(BuildCardSelectCardRows(current, [])!.All(row => !row.ContainsKey("uid")), "live combat missing state omits uid");
             CombatManager.Instance.IsInProgress = false;
             CombatManager.Instance.State = new();
-            Check(BuildCardSelectCardRows(current, [])!.All(row => !row.ContainsKey("exhaust_on_next_play")), "inactive combat omits exhaust");
+            Check(BuildCardSelectCardRows(current, [])!.All(row => !row.ContainsKey("exhaust_on_next_play") && !row.ContainsKey("energy_cost")), "inactive combat omits combat fields");
             CombatManager.Instance = null;
             Warnings.Clear();
             BuildCardSelectCardRows(current, [new("OUTSIDE_CANDIDATES")]);

@@ -93,6 +93,7 @@ public static partial class McpMod
             {
                 row["uid"] = GetStableCardUid(card);
                 row["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
+                row["energy_cost"] = BuildCardEnergyCostState(card);
             }
             if (selection != null)
             {

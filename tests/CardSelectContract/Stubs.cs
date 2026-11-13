@@ -165,6 +165,11 @@ namespace STS2_MCP
             ["id"] = card.Id, ["name"] = card.Title, ["cost"] = "1", ["type"] = "Attack",
             ["rarity"] = "Common", ["description"] = "Test card"
         };
+        private static Dictionary<string, object?> BuildCardEnergyCostState(CardModel card) => new()
+        {
+            ["base"] = 1, ["with_local_modifiers"] = 1, ["with_all_modifiers"] = 1,
+            ["local_modifiers"] = new List<Dictionary<string, object?>>()
+        };
         // Existing card serialization / upgrade preview construction is a boundary;
         // these tests exercise when the linked row builder attaches it, not game upgrades.
         private static void AttachUpgradePreview(Dictionary<string, object?> row, CardModel card)

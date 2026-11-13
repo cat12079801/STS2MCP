@@ -445,6 +445,7 @@ public static partial class McpMod
                     sb.AppendLine($"- [{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {playable}{keywords}{exhaustNext} - {card["description"]} (target: {card["target_type"]})");
                     FormatCardTargetPreviews(sb, card);
                     AppendUpgradePreviewLine(sb, card);   // only present while the hand can be upgraded (D-13)
+                    AppendCardEnergyCostMarkdown(sb, card);
                 }
                 sb.AppendLine();
             }
@@ -605,6 +606,8 @@ public static partial class McpMod
         FormatPileMarkdown(sb, player, "draw_pile", "draw_pile_count", "Draw Pile", " sorted by rarity");
         FormatPileMarkdown(sb, player, "discard_pile", "discard_pile_count", "Discard Pile");
         FormatPileMarkdown(sb, player, "exhaust_pile", "exhaust_pile_count", "Exhaust Pile");
+        if (player.ContainsKey("play_pile_count"))
+            FormatPileMarkdown(sb, player, "play_pile", "play_pile_count", "Play Pile");
     }
 
     private static void FormatPetsMarkdown(StringBuilder sb, Dictionary<string, object?> player)
@@ -644,6 +647,7 @@ public static partial class McpMod
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
                 string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
                 sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}){exhaustNext}: {card["description"]}");
+                AppendCardEnergyCostMarkdown(sb, card);
             }
         }
         else
