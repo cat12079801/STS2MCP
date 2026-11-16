@@ -19,7 +19,7 @@ public static partial class McpMod
     /// <c>StartCombatInternal</c> (the turn loop, started by <c>AfterCombatRoomLoaded</c>) sets
     /// <c>IsInProgress = true</c> and <c>IsStarting = false</c> together. Both windows are the start.</item>
     /// <item><b>Ending.</b> <c>EndCombatInternal</c> (a win) sets <c>IsInProgress = false</c> and, after the
-    /// combat-end hooks and the save, <c>CombatRoom.MarkPreFinished</c>; <c>NCombatUi.OnCombatWon</c> then
+    /// combat-end hooks and just before the save, <c>CombatRoom.MarkPreFinished</c>; <c>NCombatUi.OnCombatWon</c> then
     /// waits for the death animations (<c>ShowRewards</c>) and pushes <c>NRewardsScreen</c>
     /// (<c>CombatRoom.OfferRoomEndRewards</c> → <c>RewardsSet.Offer</c>), or, for an encounter without
     /// rewards, <c>ProceedWithoutRewards</c> waits a second and leaves the fight

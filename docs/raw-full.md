@@ -170,7 +170,7 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 部屋を出るとき〔`RunManager.ExitCurrentRoom` が部屋を降ろした後〕だけ）。負けたとき（`ProcessPendingLoss`）は、
 `CreatureCmd.Kill` が先にゲームオーバーの画面を積むので `game_over`（入力待ち）が返る。
 行き先（報酬・カード報酬・マップ・元のイベント・ゲームオーバー）はどれも入力待ちの画面で、この分岐より前で判定するので、
-理由がそのまま残って待つ側が行き詰まることはない。
+ゲーム側の遷移が例外で止まった場合（ゲーム自体が進まない）を除き、理由がそのまま残って待つ側が行き詰まることはない。読み手は待ちに時間の上限を持つ。
 戦闘中（`IsInProgress` が true）の判定に `IsStarting` は使わない（`StartCombatInternal` が `IsInProgress` と同時に `IsStarting` を false にするので立たない）。
 `message` は協力プレイの state でも同じ文言を返す（協力プレイの state は `is_resolving` を持たない）。
 

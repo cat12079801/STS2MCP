@@ -31,7 +31,7 @@ namespace STS2_MCP
             Check(CombatBoundaryReason(false, true, false, true) == CombatEndingReason, "won, after MarkPreFinished");
             // 終了（負け）: ProcessPendingLoss は IsInProgress を下ろすだけで、部屋は終わった扱いにしない。
             // ゲームオーバーの画面は CreatureCmd.Kill が先に積むので、この state の前に game_over が返る。
-            Check(CombatBoundaryReason(false, true, false, false) == CombatEndingReason, "lost, pending loss processed");
+            // 入力は勝ちの MarkPreFinished 前と同じ。負けを守るのは、game_over を戦闘の部屋より前で拾う配線の検査（下）。
             // 保存から再開した終わった戦闘（CombatRoom.StartPreFinishedCombat）はターンの状態を作らず、報酬を出し直す。
             Check(CombatBoundaryReason(false, false, false, true) == CombatEndingReason, "loaded pre-finished room");
 
