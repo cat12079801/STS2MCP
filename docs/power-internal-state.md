@@ -60,7 +60,7 @@ Markdown は追跡なしを `played card uid: none`、読取失敗を `null (理
 uid は既存 registry の `GetStableCardUid` で、デッキの札は `CARD_ID#<デッキ位置>`、
 デッキに無い札（生成札・複製）は `CARD_ID#g<番号>` を新たに割り当てる。
 uid が付かない札は無いので、札が分からないことによる null は起きない。
-記録は `CardModel.OnPlayWrapper` の各プレイの `OnPlay` 中の被弾で付き、同じプレイの
+記録は `CardModel.OnPlayWrapper` の各プレイの `OnPlay`（とエンチャント・affliction の `OnPlay`）中の被弾で付き、同じプレイの
 `Hook.AfterCardPlayed` で消える。このため解決後の snapshot では通常 `null` で、
 `null` でない値が見えるのはその札の解決中（プレイ途中の選択を含む）か、
 プレイを経ない `cardSource` 付きの被弾があった場合（該当する札は未確認）だけ。
