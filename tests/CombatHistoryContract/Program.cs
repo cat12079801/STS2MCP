@@ -75,7 +75,7 @@ public static partial class McpMod
         Check(Equals(empty["bound_afflictions_this_turn"], 0), "no Bound affliction events is explicit zero without requiring the power");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(empty, WireOptions)))
             Check(json.RootElement.GetProperty("bound_afflictions_this_turn").GetInt32() == 0, "known zero Bound count survives production wire settings");
-        Check(Markdown(empty) == "" && Markdown(null) == "", "empty history and missing field stay quiet");
+        Check(Markdown(empty).Contains("manual card played=no") && Markdown(null) == "", "empty history shows known manual-play false and missing history stays quiet");
 
         Current(new CardPlayStartedEntry(attackPlay));
         Current(new CardPlayStartedEntry(attackPlay)); // Replay is a second event, not a distinct card.
@@ -200,22 +200,22 @@ public static partial class McpMod
         history.ThrowStarted = false;
         history.ThrowFinished = true;
         var failedFinished = BuildCombatHistoryState(owner);
-        Check(failedFinished["card_plays_finished_this_turn"] == null && failedFinished["last_player_turn_card_uids"] == null && failedFinished[currentUidKey] == null && Equals(failedFinished["cards_exhausted_this_turn"], 0), "finished getter failure affects only dependencies");
+        Check(failedFinished["card_plays_finished_this_turn"] == null && failedFinished["any_manual_cards_played_this_turn"] == null && failedFinished["last_player_turn_card_uids"] == null && failedFinished[currentUidKey] == null && Equals(failedFinished["cards_exhausted_this_turn"], 0), "finished getter failure affects only dependencies");
         history.ThrowFinished = false;
         history.ThrowEntries = true;
         var failedEntries = BuildCombatHistoryState(owner);
-        Check(Reasons(failedEntries).Count == 9 && failedEntries[boundKey] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
+        Check(Reasons(failedEntries).Count == 10 && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
         history.ThrowEntries = false;
         CombatManager.Instance.ThrowHistory = true;
         var failedHistory = BuildCombatHistoryState(owner);
-        Check(Reasons(failedHistory).Count == 9 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
+        Check(Reasons(failedHistory).Count == 10 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
         CombatManager.Instance.ThrowHistory = false;
         CombatManager.Instance.Value = null;
-        Check(Reasons(BuildCombatHistoryState(owner)).Count == 9, "null history is unavailable");
+        Check(Reasons(BuildCombatHistoryState(owner)).Count == 10, "null history is unavailable");
         CombatManager.Instance.Value = history;
         owner.Creature.CombatState = null;
         var failedCombat = BuildCombatHistoryState(owner);
-        Check(Reasons(failedCombat).Count == 8 && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
+        Check(Reasons(failedCombat).Count == 9 && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
         owner.Creature.CombatState = combat;
         owner.PlayerCombatState!.ThrowTurn = true;
         var failedTurn = BuildCombatHistoryState(owner);
@@ -235,10 +235,12 @@ public static partial class McpMod
         owner.PlayerCombatState = new();
         owner.Creature.CombatState = new CombatState();
         var recovered = BuildCombatHistoryState(owner);
-        Check(Reasons(recovered).Count == 0 && _stateWarnings.Count == 0 && Markdown(recovered) == "", "new combat recovers without cached errors");
+        Check(Reasons(recovered).Count == 0 && _stateWarnings.Count == 0 && Markdown(recovered).Contains("manual card played=no"), "new combat recovers without cached errors");
         var recoveredResponse = new Dictionary<string, object?>();
         EndStateWarnings(recoveredResponse);
         Check(!recoveredResponse.ContainsKey("warnings"), "recovery has no stale warnings");
+
+        CheckManualCardPlayHistory();
 
         string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
         string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));

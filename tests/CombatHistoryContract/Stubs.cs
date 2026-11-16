@@ -48,6 +48,9 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
     {
         public Models.CardModel Card = card;
         public Players.Player Player = player;
+        public bool AutoPlay;
+        public bool ThrowAutoPlay;
+        public bool IsAutoPlay => ThrowAutoPlay ? throw new MissingMemberException("IsAutoPlay renamed") : AutoPlay;
     }
 }
 namespace MegaCrit.Sts2.Core.Models
@@ -102,7 +105,15 @@ namespace MegaCrit.Sts2.Core.Combat.History
 namespace MegaCrit.Sts2.Core.Combat.History.Entries
 {
     public class CardPlayStartedEntry(Entities.Cards.CardPlay play) : CombatHistoryEntry { public Entities.Cards.CardPlay CardPlay = play; }
-    public class CardPlayFinishedEntry(Entities.Cards.CardPlay play) : CombatHistoryEntry { public Entities.Cards.CardPlay CardPlay = play; }
+    public class CardPlayFinishedEntry : CombatHistoryEntry
+    {
+        public Entities.Cards.CardPlay CardPlay;
+        public CardPlayFinishedEntry(Entities.Cards.CardPlay play)
+        {
+            CardPlay = play;
+            Actor = play.Player.Creature;
+        }
+    }
     public class CardExhaustedEntry : CombatHistoryEntry { }
     public class CardAfflictedEntry(Models.CardModel card, Models.AfflictionModel affliction) : CombatHistoryEntry
     {

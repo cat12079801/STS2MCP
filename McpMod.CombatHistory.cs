@@ -12,7 +12,7 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    // sts2-d009478a: sources and exact predicates are documented in raw-full.md.
+    // 各項目の式・ゲーム側の出典と参照版は docs/raw-full.md に記載。
     // Read engine history on every snapshot; never accumulate counts in the MOD.
     // BuildPlayerState refreshes the shared UID registry before serializing any cards.
     private static Dictionary<string, object?> BuildCombatHistoryState(Player owner)
@@ -36,6 +36,14 @@ public static partial class McpMod
             var combat = CurrentCombat();
             return SummarizeCardPlays(CombatManager.Instance.History.CardPlaysFinished
                 .Where(e => e.HappenedThisTurn(combat) && e.CardPlay.Player == owner).Select(e => e.CardPlay));
+        });
+        Read("any_manual_cards_played_this_turn", () =>
+        {
+            var combat = CurrentCombat();
+            // v0.113.1 PaelsEye.AnyCardsPlayedThisTurn の履歴条件をそのまま読む。
+            // WhisperingEarring 所持時の初手番の例外はレリック側の条件。
+            return CombatManager.Instance.History.CardPlaysFinished
+                .Any(e => e.Actor == owner.Creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay);
         });
         Read("card_plays_finished_this_turn_card_uids", () =>
         {

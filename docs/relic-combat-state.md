@@ -60,7 +60,7 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | ベルトの留め具 `BeltBuckle` | `dexterity_applied` ← `_dexterityApplied` | このレリック由来の敏捷が付与済みか。`ApplyDexterity`／`RemoveDexterity`、ポーション取得・破棄・使用フックで変化。`BeforeCombatStart` と `AfterCombatVictory` で false にする。`AfterCombatEnd` は表示更新のみ。 |
 | 護摩木 `BurningSticks` | `used_this_combat` ← `_wasUsedThisCombat` | 初回スキル廃棄のコピー作成が消費されたか。`AfterCardExhausted` で true、CombatRoom への `AfterRoomEntered` と `AfterCombatEnd` で false。 |
 | オルゴール `MusicBox` | `used_this_turn` ← `_wasUsedThisTurn` | 初回アタックのコピー作成が消費されたか。`BeforeCardPlayed`／`AfterCardPlayed`。所有者が参加する `BeforeSideTurnStart` と `AfterCombatEnd` で false。 |
-| パエルの眼 `PaelsEye` | `used_this_combat` ← `_usedThisCombat`、`was_owner_part_of_last_player_turn` ← `_wasOwnerPartOfLastPlayerTurn` | `ShouldTakeExtraTurn`／`BeforeSideTurnEndEarly` の追加手番条件。使用は `AfterTakingExtraTurn` で true、`AfterCombatEnd` で false。参加フラグは `AfterObtained` と未使用時の `AfterSideTurnStart` で更新する。後者は他プレイヤーのみの追加手番を区別し、終了時に戻さない。 |
+| パエルの眼 `PaelsEye` | `used_this_combat` ← `_usedThisCombat`、`was_owner_part_of_last_player_turn` ← `_wasOwnerPartOfLastPlayerTurn` | v0.113.1 `sts2-a671e9ef` の `ShouldTakeExtraTurnEarly`／`BeforeSideTurnEndEarly` の追加手番条件。使用は `AfterTakingExtraTurn` で true、`AfterCombatEnd` で false。参加フラグは `AfterObtained` と未使用時の `AfterSideTurnStart` で更新する。後者は他プレイヤーのみの追加手番を区別し、終了時に戻さない。 |
 | 手投げ斧 `ThrowingAxe` | `used_this_combat` ← `_usedThisCombat` | 初回カードの追加プレイを消費したか。`ModifyCardPlayCount`／`AfterModifyingCardPlayCount`。CombatRoom への `AfterRoomEntered` と `AfterCombatEnd` で false。 |
 | パエルの肉兵 `PaelsLegion` | `cooldown` ← `_cooldown` | `ModifyBlockMultiplicative` は 0 以下なら倍化可能。`AfterCardPlayed` で 2、所有者が参加する `AfterSideTurnStart` で毎回 1 減算、`AfterCombatEnd` で 0。負値も原値のまま（0 に丸めない）。正数は `DisplayAmount` にも出るが、非正数は既存 `counter` が null となるため明示する。 |
 | 脈打つ亡骸 `BeatingRemnant` | `damage_received_this_turn` ← `_damageReceivedThisTurn` | `ModifyHpLostAfterOsty` の残り HP 損失上限を決める decimal。`AfterDamageReceived` で `UnblockedDamage` を累積、所有者が参加する `BeforeSideTurnStart` で 0。敵側の手番開始では戻らない。 |
@@ -69,6 +69,23 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | 朽ちた兜 `RuinedHelmet` | `used_this_combat` ← `_usedThisCombat` | 初回の正の筋力付与の倍化が消費されたか。`TryModifyPowerAmountReceived`／`AfterModifyingPowerAmountReceived`。`AfterCombatEnd` で false。 |
 | 不気味なランプ `UnsettlingLamp` | `used_this_combat` ← `_isFinishedTriggering` | 名前は処理フラグに見えるが、`BeforePowerAmountChanged`／`ModifyPowerAmountGivenMultiplicative` が参照し、最初の対象カードの `AfterCardPlayed` 以降ずっと倍化を禁止する戦闘内消費。`BeforeCombatStart` と `AfterCombatEnd` で false。 |
 | 溶岩のランプ `LavaLamp`（追加） | `took_damage_this_combat` ← 公開 `TookDamageThisCombat` (`_tookDamageThisCombat`) | 無傷を維持して報酬アップグレードを守る戦闘判断に使う。`AfterDamageReceived` は CombatRoom 内の所有者への正の非ブロックダメージを記録するが `Unblockable` は除外。`TryModifyCardRewardOptionsLate` が参照。`AfterRoomEntered` で部屋種別にかかわらず false。 |
+
+## パエルの眼の手動プレイ判定（v0.113.1）
+
+`PaelsEye.AnyCardsPlayedThisTurn` は本体の `CombatHistory.CardPlaysFinished` を読み、
+`e.Actor == Owner.Creature && e.HappenedThisTurn(Owner.Creature.CombatState) && !e.CardPlay.IsAutoPlay`
+を満たす完了 entry の有無を調べる。履歴側にこの値の元データがあるため、
+`player.combat_history.any_manual_cards_played_this_turn`（bool）として公開する。
+既存のレリック側の2フラグと併用する。false も明示し、読取失敗は null・キー別の理由・warnings を出す。
+
+`AnyCardsPlayedThisTurn` は `PlayerCombatState.TurnNumber == 1` かつ `WhisperingEarring` 所持時に
+履歴を調べる前に true を返す。この初手番は手動プレイが0件でも追加手番の条件を満たさない。
+公開する履歴値はその場合も手動プレイの実際の有無を示す。
+`ShouldTakeExtraTurnEarly` は未使用・この判定 false・前回参加・対象 Player が所有者の条件、
+`BeforeSideTurnEndEarly` は所有者が participants に含まれる条件も検査する。
+出典は `sts2-a671e9ef` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye` の上記3メソッド。
+式・履歴 entry の Actor・評価時点・失敗契約は
+[戦闘履歴の要約](raw-full.md#戦闘履歴の要約追加schema-4) を参照。
 
 ## ペン先・冥銭・毛皮のコート・鮮やかなスカーフ（v0.113.0）
 

@@ -4,7 +4,7 @@
 `McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
 
 ```fish
-env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CombatHistoryContract -c Release -p:BuildInParallel=false
+env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CombatHistoryContract -c Release -p:BuildInParallel=false -p:UseSharedCompilation=false
 ```
 
 開始／完了の区別、全 CardType と 0、リプレイの重複、所有者の絞り込み、
@@ -17,6 +17,16 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 同じ札への複数回付与と現在の Affliction 解除後の履歴保持、明示的な 0、
 履歴の再読取、途中の判定失敗による部分件数の破棄、wire の整数／null と理由・warnings、
 Markdown の正の付与件数／失敗を検査する。既知の 0 は既存の Markdown 規約どおり省略する。
+
+`any_manual_cards_played_this_turn` は `PaelsEyeHistoryChecks.cs` で空履歴の false、
+開始だけの札、自動プレイ・他 Actor・null Actor・別手番の除外、
+Actor と CardPlay.Player の食い違い、全 CardType・リプレイ、履歴リセットを検査する。
+取得時に本体の `HappenedThisTurn` へ所有者の CombatState を渡すこと、
+履歴とプレイ情報を変更しないこと、snapshot の独立も確認する。
+本体 History／CardPlaysFinished／IsAutoPlay getter と手番判定の失敗・CombatState 欠落で
+null・キー別理由・warnings と独立した値を保持し、復旧することを確認する。
+wire の bool true／false／null と理由、Markdown の yes／no／null を確認する。
+手動プレイの false は Markdown にも明示するため、空履歴でも History 行を表示する。
 
 履歴のリセット後の再読取と snapshot の独立、History／Entries／開始・完了 getter／
 型 getter／ターン判定の失敗、combat state／PlayerCombatState の欠落での
@@ -49,5 +59,14 @@ uid registry は本番を実行し、パイルとこのターン・前手番の�
    Amount 到達時にその件数となることを `ChainsOfBindingPower.AfterCardDrawn` と照合する。
    Bound 札を使用・移動して手札の Bound 枚数が減っても履歴件数は減らないこと、
    次手番ではその手番の新規付与だけを数えることも確認する。
+8. v0.113.1 の検証戦闘で `relic add PAELS_EYE` を使い、
+   手動プレイ前 false → 完了後 true、次手番の新規履歴で false を照合する。
+   未使用のまま札を撃たずに手番を終えると手札廃棄・追加手番・`used_this_combat=true`、
+   手動で札を撃ってから終えると通常の敵手番へ進み `used_this_combat=false` を確認する。
+   自動プレイだけなら履歴値 false のまま、手動プレイを加えると true。
+   `WhisperingEarring` 所持の初手番は履歴値 false でもパエルの眼の判定は true となり、
+   追加手番を得ないことも確認する。
+   マルチでは別 Player だけの手動プレイはローカルの履歴値を変えず、
+   所有者の不参加フラグと消費済みフラグが追加手番を抑止することを確認する。
 
 ゲーム build・MOD commit・schema・前後の state を記録する。

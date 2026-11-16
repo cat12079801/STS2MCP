@@ -182,6 +182,10 @@ async def get_game_state(format: str = "markdown") -> str:
     小数は保持し表示文字列は除外する。取得失敗時は vars を省略して warnings に記録する。
     During combat, allowlisted owned relics also include combat_state (usage flags
     and counters); absent fields are unknown, not false. Markdown adds short notes.
+    戦闘中の player.combat_history.any_manual_cards_played_this_turn は所有者の
+    この手番の手動プレイ完了の有無（bool）。取得失敗は null・理由・warnings。
+    パエルの眼はレリック側の使用・参加フラグも使い、WhisperingEarring 所持の
+    turn_number == 1 をプレイ済み扱いにする。旧 MOD の欠落は unknown と扱う。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 

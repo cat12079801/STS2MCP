@@ -84,6 +84,7 @@
 - `used_up`（`RelicModel.IsUsedUp`）と `melted`（#62）
 - `vars`: 所有レリックの `DynamicVars` の名前 → 現在の値（戦闘中・戦闘外）（#66）
 - `combat_state`: 戦闘中の内部状態（使用フラグ・カウンタ）をクラス別の許可リストで出す。詳細は [`relic-combat-state.md`](relic-combat-state.md)（#65・#78）
+- **パエルの眼の手動プレイ判定**は `player.combat_history.any_manual_cards_played_this_turn`（bool）に出す。v0.113.1 の `PaelsEye.AnyCardsPlayedThisTurn` と同じ Actor・手番・非 AutoPlay の完了履歴条件を読み、false も保持する。取得失敗は null・理由・warnings。`WhisperingEarring` 所持時の初手番の例外は所持レリック・`turn_number` と合わせて評価する。schema 4 を維持する（#TBD、`cat12079801/sts2#911`）
 
 ## 報酬
 

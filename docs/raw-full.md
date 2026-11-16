@@ -424,6 +424,7 @@ encode every reason a relic can be disabled.
     "total": 2,
     "by_type": { "None": 0, "Attack": 1, "Skill": 1, "Power": 0, "Status": 0, "Curse": 0, "Quest": 0 }
   },
+  "any_manual_cards_played_this_turn": true,
   "card_plays_finished_this_turn_card_uids": ["THRUMMING_HATCHET#0", "THRUMMING_HATCHET#0"],
   "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
   "cards_exhausted_this_turn": 1,
@@ -444,6 +445,7 @@ encode every reason a relic can be disabled.
 | `turn_number` | `owner.PlayerCombatState.TurnNumber`。`StoneCalendar.DisplayAmount` / `AfterSideTurnStart` / `BeforeSideTurnEnd`、`MrStruggles.AfterPlayerTurnStart`。追加ターンでは `battle.round` と一致しない。 |
 | `card_plays_started_this_turn` | `History.CardPlaysStarted` で `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner`。型は `e.CardPlay.Card.Type`。`NostalgiaPower.ModifyCardPlayResultLocation` の Attack + Skill、`JugglingPower.AfterApplied` の Attack、`VelvetChoker.GetCardsPlayedThisTurn` の全型と同じ。 |
 | `card_plays_finished_this_turn` | `History.CardPlaysFinished` で同じターン・Player 条件。`RippleBasin.BeforeSideTurnEnd` の Attack、`LunarBlast.CanonicalVars` の Skill と同じ。 |
+| `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
@@ -455,6 +457,27 @@ encode every reason a relic can be disabled.
 開始・完了は独立に読むため、解決中には差が出る。`by_type` は `CardType` の全 enum 名をキーにし、
 未発生の型も 0。`total` は全型の合計。リプレイ・自動プレイも entry の数だけ数え、
 重複を除かない。本体と同じく現在の `CardPlay.Card.Type` を読み、過去の型の snapshot は作らない。
+
+`any_manual_cards_played_this_turn` は記録済み Actor が所有者である手動プレイ完了の有無を公開する。
+各 snapshot で本体の履歴を再読取する。札の開始だけでは false のまま、手動プレイ完了後は true。
+履歴の持ち主である `CombatHistory` に合わせて `combat_history` に置く。
+`CardPlayFinishedEntry` のコンストラクタは `cardPlay.Card.Owner.Creature` を Actor に記録するため、
+MOD も記録済み Actor と `CardPlay.IsAutoPlay` を読む。
+`HappenedThisTurn` は本体のラウンド・side・全 Player の TurnNumber 判定に委譲する。
+
+パエルの眼の `AnyCardsPlayedThisTurn()` は、先に
+`owner.PlayerCombatState?.TurnNumber == 1` かつ `owner.Relics` に `WhisperingEarring` がある場合に true を返す。
+その局面では手動プレイがなくてもこの履歴値は false を保ち、レリックの判定値は true になる。
+利用側は公開された `turn_number`・所持レリックとこの履歴値からその条件を評価できる。
+`PaelsEye.ShouldTakeExtraTurnEarly` は未使用・判定値 false・所有者の前回参加・対象 Player が所有者の条件を使い、
+`BeforeSideTurnEndEarly` は所有者が participants に含まれる条件も検査して手札を廃棄する。
+既存の `PAELS_EYE.combat_state.used_this_combat` と `was_owner_part_of_last_player_turn` も合わせて読む。
+参照元は v0.113.1 `sts2-a671e9ef` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye`、
+`MegaCrit.Sts2.Core.Combat.History.CombatHistory.CardPlaysFinished`、
+`CardPlayFinishedEntry` のコンストラクタ、`CombatHistoryEntry.HappenedThisTurn`、`CardPlay.IsAutoPlay`。
+副作用のあるフックを呼ばず、trace の履歴の保持期間にも依存しない。
+追加手番の開始後も本体の手番判定に従う。行動計画には Player の play phase かつ
+`is_resolving: false` の snapshot を使う。
 
 開始数の Attack は `JugglingPower.AfterApplied` の初期化式とは一致するが、
 ジャグリングの実際の判定は private な `Data.attacksPlayedThisTurn` を使う。
@@ -504,13 +527,17 @@ Player 側の play phase で読む `card_plays_finished_this_turn_card_uids` は
 他の取得可能な値と state は保持する。特に combat state が無ければターン判定を false として扱わず
 該当項目を null にする。private フィールドは不要であり、本体の public API を使う。
 
-Markdown は正の件数・非空の uid 配列・取得失敗があるときだけ短い History 行を出す。
+Markdown は手動プレイの bool・正の件数・非空の uid 配列・取得失敗を短い History 行に出す。
+手動プレイは false も `manual card played=no`、true は `manual card played=yes` と表示する。
 このターンの非空 uid は `this turn=[...]`、前手番の非空 uid は `last turn=[...]` と区別する。
 `Bound` の正の付与件数は `bound afflictions=2` のように表示する。
-既知の 0 と空配列だけなら省略し、TurnNumber 単独では行を増やさない。
+既知の 0 と空配列は省略し、TurnNumber 単独では行を増やさない。
 失敗時は null と理由を表示する。既存の意味の変更・削除を伴わない追加なので
 `schema_version` は **4 のまま**。利用側は `combat_history` と必要な各項目の有無で検出する。
 `Bound` の付与件数を出さない旧 MOD の欠落を 0 と解釈しない。
+手動プレイの項目も旧 MOD では欠落し、欠落・null は unknown として扱う。
+読取不能時は `any_manual_cards_played_this_turn: null` と同名の `unavailable_reasons`、
+`player.combat_history.any_manual_cards_played_this_turn` の warning を出す。
 
 契約試験と実機確認の観点は [`tests/CombatHistoryContract`](../tests/CombatHistoryContract/README.md)。
 

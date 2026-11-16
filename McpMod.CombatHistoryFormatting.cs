@@ -16,6 +16,8 @@ public static partial class McpMod
             if (key is "turn_number" or "unavailable_reasons") continue;
             if (value == null)
                 parts.Add($"{key}=null ({reasons?.GetValueOrDefault(key) ?? "unavailable"})");
+            else if (key == "any_manual_cards_played_this_turn" && value is bool manual)
+                parts.Add($"manual card played={(manual ? "yes" : "no")}");
             else if (value is int count && count > 0)
             {
                 string label = key switch
