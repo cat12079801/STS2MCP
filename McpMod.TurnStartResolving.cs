@@ -21,7 +21,8 @@ public static partial class McpMod
     /// turn-start choice was answered.</item>
     /// <item><c>ActionQueueSynchronizer.CombatState</c> stays <c>NotPlayPhase</c> ("the enemy
     /// turn and the draw phase of the player's turn") until the last step of
-    /// <c>StartTurn</c>, after every player's AutoPrePlay hooks and <c>CheckWinCondition</c>.
+    /// <c>StartTurn</c> (after every player's AutoPrePlay hooks and <c>CheckWinCondition</c>,
+    /// unless a turn-start choice paused the setup).
     /// It covers the frames between the phase becoming Play and the queues reopening.</item>
     /// </list>
     /// AutoPostPlay / End (and the synchronizer's NotPlayPhase while the player's turn is
@@ -33,8 +34,9 @@ public static partial class McpMod
     /// </summary>
     /// <param name="side">The combat's <c>CurrentSide</c>.</param>
     /// <param name="localPlayerAlive">
-    /// False for a dead local player (co-op): <c>StartTurn</c> skips their setup and AutoPrePlay,
+    /// False for a dead local player: <c>StartTurn</c> skips their setup and AutoPrePlay,
     /// so their phase stays Start for the whole turn and must not be read as "still starting".
+    /// Single-player state only; co-op (e.g. an extra turn the local player does not take) is not handled.
     /// </param>
     /// <param name="localPhase">The local player's <c>PlayerCombatState.Phase</c>; null when unreadable.</param>
     /// <param name="queueState">The run's <c>ActionQueueSynchronizer.CombatState</c>.</param>

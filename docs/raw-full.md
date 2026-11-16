@@ -133,7 +133,8 @@ markdown では先頭に `STILL RESOLVING (理由)` の警告が出る。理由�
 |---|---|
 | `action_queue_not_empty` | `ActionQueueSet` が空でない。ただし選択待ちで止まっている action だけなら立てない |
 | `player_actions_disabled` | `CombatManager.PlayerActionsDisabled`。手番の終了（`PlayerCmd.EndTurn` → `OnEndedTurnLocally`）から、次の手番の `Phase` が `Start` になるまで |
-| `combat_starting` / `combat_ending` | `CombatManager.IsStarting` / `IsOverOrEnding` |
+| `combat_ending` | `CombatManager.IsOverOrEnding` |
+| `combat_starting` | `CombatManager.IsStarting`。ただし判定は `IsInProgress` の内側にあり、`StartCombatInternal` は `IsInProgress` と `IsStarting=false` を同時に立てるので、現状は立たない（開始中の state は `battle` の無い `monster` になり、`wait: true` は落ち着いたとみなさない） |
 | `player_turn_starting` | 戦闘の画面（`monster` / `elite` / `boss`）で、手番の初め（ブロックの消去・エナジーの再設定・手札のドロー・手番開始時のフック）が終わっていない |
 | `card_still_being_played` | `NPlayerHand.InCardPlay` |
 | `reward_selection_resolving` | 報酬・カード報酬の選択を送った後、完了の合図が出るまで |
@@ -147,10 +148,10 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 - ローカルの Player（生きている）の `PlayerCombatState.Phase` が `None` / `Start` / `AutoPrePlay`。
   `RunAutoPrePlayPhase` の最後で `Play` になるまでで、手番の初めの選択に答えた後に残りのドローやフックが続く間も含む
 - `ActionQueueSynchronizer.CombatState` が `NotPlayPhase`（ゲームの定義で「敵の手番と、Player の手番のドローの局面」）。
-  `StartTurn` の最後、全員の `AutoPrePlay` と `CheckWinCondition` の後に `PlayPhase` へ戻るので、`Phase` が `Play` になってから列が開くまでの間も覆う
+  `PlayPhase` へ戻るのは `StartTurn` の最後（選択で止まらなければ、全員の `AutoPrePlay` と `CheckWinCondition` の後）なので、`Phase` が `Play` になってから列が開くまでの間も覆う
 
 `Phase` が `AutoPostPlay` / `End`（手番の終わり）のときは立てない（`player_actions_disabled` が受け持つ）。
-死んだローカルの Player（協力プレイ）は `Phase` が `Start` のまま手番を過ごすので、`Phase` では判定せず同期器だけを見る。
+死んだローカルの Player は `Phase` が `Start` のまま手番を過ごすので、`Phase` では判定せず同期器だけを見る。この判定は単独プレイの state 専用で、協力プレイ（自分が参加しない追加の手番など）は扱わない。
 手番の初めのフックが開いた選択画面（`hand_select` / `card_select` など）は、下の規則で入力待ちとして false になる。
 未対応のオーバーレイ（`overlay`）にはこの理由を付けない。
 
