@@ -12,7 +12,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 廃棄は entry の数、被ダメは正の UnblockedDamage の件数をターン／戦闘で区別する。
 不動のブロックは CardPlay・プレイした Player・Move を検査し、Receiver で絞らず、
 同じ CardPlay の複数件をそのまま数える。
-束縛は `CardAfflictedEntry` のこの手番・記録済み Actor が所有者・Affliction が Bound
+`Bound` は `CardAfflictedEntry` のこの手番・記録済み Actor が所有者・Affliction が Bound
 という条件を検査し、別 Actor・null Actor・別手番・別 Affliction を除外する。
 同じ札への複数回付与と現在の Affliction 解除後の履歴保持、明示的な 0、
 履歴の再読取、途中の判定失敗による部分件数の破棄、wire の整数／null と理由・warnings、
@@ -45,7 +45,7 @@ uid registry は本番を実行し、パイルとこのターン・前手番の�
    `block_gains_this_turn` は次のプレイの null 文脈の件数なので、落ち着いた state を使う。
 6. 非戦闘で省略、新しい戦闘でリセット、マルチのローカル Player のみの集計を確認する
    （このターン／前手番の uid 集合は他 Player の札も含む）。
-7. 束縛の鎖の作用中、`bound_afflictions_this_turn` が付与前 0、付与ごとに +1、
+7. 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の作用中、`bound_afflictions_this_turn` が付与前 0、付与ごとに +1、
    Amount 到達時にその件数となることを `ChainsOfBindingPower.AfterCardDrawn` と照合する。
    Bound 札を使用・移動して手札の Bound 枚数が減っても履歴件数は減らないこと、
    次手番ではその手番の新規付与だけを数えることも確認する。
