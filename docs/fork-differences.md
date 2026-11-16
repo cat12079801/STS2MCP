@@ -28,7 +28,7 @@
 - **`is_resolving` / `resolving_reasons`**: アクションの解決中かを state で示す。呼び出し側の入力を待っている画面では false（#39・#41）。
   手番の初めのドローと手番開始時のフックの間も、戦闘の画面では `player_turn_starting` で解決中と返す（ゲームはこの間 `PlayerActionsDisabled` を戻し、action の列の外でドローする）（#87）
   戦闘の部屋に入ってから戦闘が始まるまでと、戦闘が終わってから報酬画面などが出るまでの `battle` の無い state も、`combat_starting` / `combat_ending` で解決中と返し、
-  `message` を局面に合わせる（開始中は `Combat is starting...`。本家は開始中も `Combat ended. Waiting for rewards...` と返す）（#TBD）
+  `message` を局面に合わせる（開始中は `Combat is starting...`。本家は開始中も `Combat ended. Waiting for rewards...` と返す）（#88）
 - **`warnings`**: state の一部を組めなかったとき、その箇所と例外を一覧で返す（黙って欠かさない）（#54）
 - **JSON は既定でコンパクト**。`?pretty=1` で字下げ（#45）
 - **`GET /api/v1/singleplayer?passive=1`**: 読むだけで UI に触らない（ショップの在庫を開き直す・偽商人や宝箱のボタンを押す、をしない）（#59）
