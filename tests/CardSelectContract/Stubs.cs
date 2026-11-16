@@ -88,6 +88,8 @@ namespace MegaCrit.Sts2.Core.Nodes.Screens.CardSelection
     public abstract class NCardGridSelectionScreen(NCardGrid? grid) : TestNode
     {
         protected NCardGrid? _grid = grid;
+        protected MegaCrit.Sts2.Core.Nodes.Combat.NPeekButton? _peekButton;
+        public void SetPeekButton(MegaCrit.Sts2.Core.Nodes.Combat.NPeekButton? peek) => _peekButton = peek;
         // Combat pile: this remains empty while the grid has all candidates.
         protected IReadOnlyList<CardModel> _cards = Array.Empty<CardModel>();
         protected abstract void OnCardClicked(CardModel card);
@@ -135,9 +137,78 @@ namespace MegaCrit.Sts2.Core.Nodes.Screens.CardSelection
         public MegaCrit.Sts2.Core.Entities.Cards.CardPile? Pile => _pile;
     }
 
+    public class NChooseACardSelectionScreen : TestNode
+    {
+        private MegaCrit.Sts2.Core.Nodes.Combat.NPeekButton? _peekButton;
+        public void SetPeekButton(MegaCrit.Sts2.Core.Nodes.Combat.NPeekButton? peek) => _peekButton = peek;
+    }
+
     public abstract class WrongSignatureScreen(NCardGrid? grid) : NCardGridSelectionScreen(grid)
     {
         protected void OnCardClicked(object card) => throw new Exception("wrong overload");
+    }
+}
+
+// The covers of the overlay stack: the map (closed by its back button), capstones, and the
+// peek button. Each double records the presses; the reveal effects mirror the game wiring
+// (NMapScreen.Close -> Closed -> NOverlayStack.ShowOverlays -> AfterOverlayShown, and
+// NPeekButton.SetPeeking(false) restoring its hidden targets).
+namespace MegaCrit.Sts2.Core.Nodes.CommonUi
+{
+    public class NBackButton
+    {
+        public bool IsEnabled = true;
+        public int Clicks;
+        public Action? OnReleased;
+        public void ForceClick()
+        {
+            Clicks++;
+            OnReleased?.Invoke();
+        }
+    }
+}
+
+namespace MegaCrit.Sts2.Core.Nodes.Screens.Map
+{
+    public class NMapScreen
+    {
+        public static NMapScreen? Instance;
+        public bool IsOpen;
+        public bool IsTraveling;
+        private readonly MegaCrit.Sts2.Core.Nodes.CommonUi.NBackButton _backButton = new();
+        public MegaCrit.Sts2.Core.Nodes.CommonUi.NBackButton Back => _backButton;
+        public Action? Closed;
+        public NMapScreen() => _backButton.OnReleased = () =>
+        {
+            IsOpen = false;
+            Closed?.Invoke();
+        };
+    }
+}
+
+namespace MegaCrit.Sts2.Core.Nodes.Screens.Capstones
+{
+    public class NCapstoneContainer
+    {
+        public static NCapstoneContainer? Instance;
+        public bool InUse;
+    }
+}
+
+namespace MegaCrit.Sts2.Core.Nodes.Combat
+{
+    public class NPeekButton
+    {
+        public bool IsPeeking { get; private set; }
+        public int SetCalls;
+        public List<MegaCrit.Sts2.Core.Nodes.Cards.TestNode> Targets = [];
+        public void SetPeeking(bool isPeeking)
+        {
+            SetCalls++;
+            if (IsPeeking == isPeeking) return;
+            IsPeeking = isPeeking;
+            foreach (var target in Targets) target.Visible = !isPeeking;
+        }
     }
 }
 

@@ -5,6 +5,9 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.Nodes.Screens.Capstones;
+using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
 STS2_MCP.McpMod.RunCardSelectContract();
 
@@ -277,13 +280,137 @@ namespace STS2_MCP
             Check(BuildCardSelectCardRows(unknownPile, null) == null && Warnings.Single().StartsWith("card_select.cards:"), "unknown source pile cannot expose unnormalized UIDs");
             Check(!Ok(ExecuteSelectGridCard(unknownPile, 0)) && unknownPile.Calls == 0, "unknown source pile cannot select with an uncertain mapping");
 
+            // A-12: a selection pushed while the map is open is hidden (AfterOverlayHidden), and
+            // the map's back button brings it back. Actions press that button, never anything else.
+            {
+                var hiddenCards = Cards(6);
+                var hiddenGrid = new NCardGrid(hiddenCards);
+                var hidden = new TestSelectScreen(hiddenGrid);
+                hidden.SetPrefs(1, 1);
+                var map = new NMapScreen { IsOpen = true };
+                map.Closed = () => hidden.Visible = true; // NOverlayStack.ShowOverlays -> AfterOverlayShown
+                NMapScreen.Instance = map;
+                hidden.Visible = false;
+                Open(hidden);
+
+                var mapVisibility = GetCardSelectVisibility(hidden);
+                Check(mapVisibility is { Visible: false, HiddenBy: "map", CanReveal: true }, "map-covered screen is classified as hidden by the map");
+                var fields = new Dictionary<string, object?>();
+                AddCardSelectVisibilityFields(fields, mapVisibility);
+                Check(fields["screen_visible"] is false && Equals(fields["hidden_by"], "map") && fields["reveal_on_action"] is true, "state fields for a map-covered screen");
+                fields["screen_type"] = "enchant";
+                fields["cards"] = BuildCardSelectCardRows(hidden, GetCardSelectSelection(hidden));
+                var hiddenMarkdown = new StringBuilder();
+                FormatCardSelectMarkdown(hiddenMarkdown, fields);
+                Check(hiddenMarkdown.ToString().Contains("hidden behind the map") && hiddenMarkdown.ToString().Contains("back button"), "markdown says the screen is behind the map");
+
+                Check(!Ok(ExecuteSelectGridCard(hidden, 6)) && map.Back.Clicks == 0 && map.IsOpen && hidden.Calls == 0, "invalid index is rejected before the map is closed");
+                map.Back.IsEnabled = false;
+                var disabled = ExecuteSelectGridCard(hidden, 0);
+                Check(!Ok(disabled) && map.Back.Clicks == 0 && map.IsOpen && hidden.Calls == 0 && !disabled.ContainsKey("revealed"), "disabled back button: no press, no selection");
+                Check(GetCardSelectVisibility(hidden) is { HiddenBy: "map", CanReveal: false }, "disabled back button is not revealable");
+                map.Back.IsEnabled = true;
+                map.IsTraveling = true;
+                Check(!Ok(ExecuteSelectGridCard(hidden, 0)) && map.Back.Clicks == 0 && hidden.Calls == 0, "traveling map is never closed");
+                map.IsTraveling = false;
+                NCapstoneContainer.Instance = new() { InUse = true };
+                Check(GetCardSelectVisibility(hidden) is { HiddenBy: "capstone", CanReveal: false }, "capstone cover outranks the map");
+                Check(!Ok(ExecuteSelectGridCard(hidden, 0)) && map.Back.Clicks == 0 && hidden.Calls == 0, "capstone cover: map is not closed");
+                NCapstoneContainer.Instance = null;
+
+                var revealedResult = ExecuteSelectGridCard(hidden, 2);
+                Check(Ok(revealedResult) && map.Back.Clicks == 1 && !map.IsOpen && hidden.Calls == 1 && ReferenceEquals(hidden.LastCard, hiddenCards[2]),
+                    "select_card closes the map with its back button once, then selects the requested card");
+                Check(revealedResult["revealed"] is string[] r1 && r1.SequenceEqual(new[] { "map" }), "result reports the map was closed");
+                Check(GetCardSelectVisibility(hidden) is { Visible: true, HiddenBy: null }, "screen visible after the reveal");
+                var visibleFields = new Dictionary<string, object?>();
+                AddCardSelectVisibilityFields(visibleFields, GetCardSelectVisibility(hidden));
+                Check(visibleFields["screen_visible"] is true && visibleFields["hidden_by"] == null && visibleFields["reveal_on_action"] is false, "state fields for a visible screen");
+                var again = ExecuteSelectGridCard(hidden, 2);
+                Check(Ok(again) && map.Back.Clicks == 1 && !again.ContainsKey("revealed") && hidden.Calls == 2, "visible screen is selected without pressing the map again");
+
+                // A hidden preview must be revealed before the preview guard can see it.
+                var previewHidden = new TestSelectScreen(hiddenGrid) { Preview = true };
+                map.IsOpen = true;
+                map.Closed = () => previewHidden.Visible = true;
+                previewHidden.Visible = false;
+                Open(previewHidden);
+                var previewBlocked = ExecuteSelectGridCard(previewHidden, 0);
+                Check(!Ok(previewBlocked) && previewBlocked["message"]!.ToString()!.Contains("preview is open") && previewHidden.Calls == 0
+                    && previewBlocked["revealed"] is string[] r2 && r2.SequenceEqual(new[] { "map" }), "revealed preview still blocks the click and reports the reveal");
+
+                // A back button that does not uncover the screen is pressed once, then reported.
+                var stuck = new TestSelectScreen(hiddenGrid);
+                map.IsOpen = true;
+                map.Closed = () => map.IsOpen = true;
+                stuck.Visible = false;
+                Open(stuck);
+                int before = map.Back.Clicks;
+                var stuckResult = ExecuteSelectGridCard(stuck, 0);
+                Check(!Ok(stuckResult) && map.Back.Clicks == before + 1 && stuck.Calls == 0 && stuckResult["message"]!.ToString()!.Contains("stayed hidden"), "no repeated presses when the reveal fails");
+                map.IsOpen = false;
+                map.Closed = null;
+
+                // Peek (combat): the screen's own peek button is turned off with SetPeeking(false).
+                var peekGrid = new NCardGrid(hiddenCards);
+                var peeking = new TestSelectScreen(peekGrid);
+                var peekButton = new NPeekButton();
+                peekButton.Targets.Add(peekGrid);
+                peeking.SetPeekButton(peekButton);
+                peekButton.SetPeeking(true);
+                Open(peeking);
+                Check(GetCardSelectVisibility(peeking) is { Visible: false, HiddenBy: "peek", CanReveal: true }, "peeking grid is classified as peek");
+                var peekResult = ExecuteSelectGridCard(peeking, 1);
+                Check(Ok(peekResult) && !peekButton.IsPeeking && peeking.Calls == 1 && peekResult["revealed"] is string[] r3 && r3.SequenceEqual(new[] { "peek" }), "select_card ends the peek, then selects");
+
+                // Map over a peeking screen: map first, then the peek.
+                peekButton.SetPeeking(true);
+                peeking.Visible = false;
+                map.IsOpen = true;
+                map.Closed = () => peeking.Visible = true;
+                int clicks = map.Back.Clicks;
+                var both = ExecuteSelectGridCard(peeking, 1);
+                Check(Ok(both) && map.Back.Clicks == clicks + 1 && !peekButton.IsPeeking && both["revealed"] is string[] r4 && r4.SequenceEqual(new[] { "map", "peek" }), "map then peek are undone in order");
+                map.Closed = null;
+
+                // Unknown cause: nothing is pressed.
+                hiddenGrid.Visible = false;
+                Open(hidden);
+                int calls2 = hidden.Calls;
+                Check(GetCardSelectVisibility(hidden) is { HiddenBy: "unknown", CanReveal: false } && !Ok(ExecuteSelectGridCard(hidden, 0)) && hidden.Calls == calls2, "unknown hidden cause is reported, not guessed");
+                hiddenGrid.Visible = true;
+
+                // Choose-a-card screens share the classification.
+                var choose = new NChooseACardSelectionScreen();
+                var choosePeek = new NPeekButton();
+                choose.SetPeekButton(choosePeek);
+                Check(GetCardSelectVisibility(choose) is { Visible: true }, "visible choose screen");
+                choosePeek.SetPeeking(true);
+                Check(GetCardSelectVisibility(choose) is { Visible: false, HiddenBy: "peek", CanReveal: true }, "peeking choose screen");
+                choosePeek.SetPeeking(false);
+                choose.Visible = false;
+                map.IsOpen = true;
+                Check(GetCardSelectVisibility(choose) is { Visible: false, HiddenBy: "map", CanReveal: true }, "map-covered choose screen");
+                var chooseRevealed = new List<string>();
+                map.Closed = () => choose.Visible = true;
+                Check(RevealCardSelectScreen(choose, chooseRevealed) == null && chooseRevealed.SequenceEqual(new[] { "map" }) && choose.Visible, "choose screen revealed through the map's back button");
+                map.Closed = null;
+                map.IsOpen = false;
+                NMapScreen.Instance = null;
+            }
+
             // Lightweight integration assertions for entry points not linked into this
             // small boundary project (the entire state/action builders depend on Godot).
             var sources = Path.Combine(AppContext.BaseDirectory, "Sources");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 4;"), "published schema is 4");
             var stateSource = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             Check(stateSource.Contains("state[\"cards\"] = BuildCardSelectCardRows(screen, selection);") && !stateSource.Contains("selected_outside_grid"), "state uses linked rows and removes old field");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.Actions.cs")).Contains("return ExecuteSelectGridCard(gridScreen, index);"), "action dispatches linked implementation");
+            var actionSource = File.ReadAllText(Path.Combine(sources, "McpMod.Actions.cs"));
+            Check(actionSource.Contains("return ExecuteSelectGridCard(gridScreen, index);"), "action dispatches linked implementation");
+            Check(actionSource.Contains("RevealCardSelectScreen(chooseScreen, revealed)")
+                && actionSource.Contains("return WithRevealed(ConfirmVisibleCardSelection(screen), revealed);")
+                && actionSource.Contains("return WithRevealed(CancelVisibleCardSelection(overlay), revealed);"), "choose select, confirm and cancel reveal a hidden screen first");
+            Check(System.Text.RegularExpressions.Regex.Matches(stateSource, @"AddCardSelectVisibilityFields\(state, GetCardSelectVisibility\(screen\)\);").Count == 2, "grid and choose state expose visibility");
             Console.WriteLine($"CardSelectContract: {Checks} checks passed");
         }
     }

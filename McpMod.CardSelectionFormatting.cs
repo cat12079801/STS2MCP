@@ -36,6 +36,16 @@ public static partial class McpMod
                 wanted = $" ({min}-{max} accepted)";
             sb.AppendLine($"**Selected: {selCount}{wanted}**");
         }
+        // The screen can be the live overlay and still be hidden (under the map, or peeking).
+        if (cardSelect.TryGetValue("screen_visible", out var visibleObj) && visibleObj is false)
+        {
+            string hiddenBy = cardSelect.GetValueOrDefault("hidden_by")?.ToString() ?? "unknown";
+            sb.AppendLine(cardSelect.GetValueOrDefault("reveal_on_action") is true
+                ? hiddenBy == "map"
+                    ? "**Selection screen is hidden behind the map** - `select_card` / `confirm_selection` / `cancel_selection` first close the map with its back button, as a player would."
+                    : $"**Selection screen is hidden (hidden_by: {hiddenBy})** - `select_card` / `confirm_selection` / `cancel_selection` reveal it first, as a player would."
+                : $"**Selection screen is hidden (hidden_by: {hiddenBy})** - the API cannot reveal it; selection actions return an error.");
+        }
         sb.AppendLine();
 
         if (cardSelect.TryGetValue("cards", out var cardsObj) && cardsObj is List<Dictionary<string, object?>> cards)

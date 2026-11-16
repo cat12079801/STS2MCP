@@ -1581,6 +1581,47 @@ list could not be read; do not select using a partial or stale list. Schema 4 re
 produces a `card_select.selected` warning without rewriting the game's selection.
 Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
 
+#### 隠れている選択画面（`screen_visible` / `hidden_by` / `reveal_on_action`、追加。schema 4 のまま）
+
+選択画面は overlay stack の一番上にあっても見えていないことがある。`state_type` は `card_select` のまま、
+grid と choose の両方に次を出す。
+
+| 項目 | 型 | 意味 |
+|---|---|---|
+| `screen_visible` | bool | 画面（grid 画面は `_grid` も）が表示されているか（`Visible` と `IsVisibleInTree`） |
+| `hidden_by` | string \| null | 見えていない理由。`map`・`peek`・`capstone`・`unknown`。見えていれば `null` |
+| `reveal_on_action` | bool | `select_card` / `confirm_selection` / `cancel_selection` が、押す前に覆いを外すか |
+
+ゲーム側の仕組み（v0.113.1 のデコンパイル）:
+
+- `NOverlayStack.Push` は、`StackIsCovered`（`NMapScreen.Instance.IsOpen` か `NCapstoneContainer.InUse`）のときに
+  積んだ画面の `AfterOverlayHidden` を呼び、画面を `Visible = false` にする。マップの `Opened` シグナルは
+  `NOverlayStack.HideOverlays` につながっていて、開いている選択画面も同じく隠れる
+- マップの左下の戻る矢印は `NMapScreen._backButton`（`NBackButton`）。押すと `OnBackButtonPressed` → `NMapScreen.Close`
+  → `Closed` シグナル → `NOverlayStack.ShowOverlays` → `AfterOverlayShown` で画面が戻る。この矢印は `NMapScreen.Open` で
+  `ActFloor > 0` のときだけ有効になる
+- 戦闘中は画面の `NPeekButton`（`_peekButton`）の覗き見で grid（choose は札の列）が隠れる。戻すのは `SetPeeking(false)`
+- `NCapstoneContainer.Open`（デッキの一覧など）も `HideOverlays` を呼ぶ
+
+`hidden_by` の判定の順は `capstone` → `map` → `peek` → `unknown`。`reveal_on_action` が true になるのは、
+`map` でマップの戻る矢印が有効かつ `IsTraveling` でないとき、または `peek` のとき。
+
+`reveal_on_action` が true のとき、選択の 3 つの action は先に覆いを外してから続ける。マップは戻る矢印の
+`ForceClick`（人がクリックしたのと同じ `Released` → `OnBackButtonPressed` の経路）、覗き見は `SetPeeking(false)`。
+それぞれ 1 回までで、外したものを結果の `revealed`（`["map"]`・`["peek"]`・`["map", "peek"]`）に出す。
+外しても見えなければ、もう押さずに error を返す。`select_card` は index と候補一覧を先に確かめ、
+誤った index ではマップを閉じない。`confirm_selection` / `cancel_selection` は覆いを外してから押すので、押下が
+失敗してもマップは閉じたままになる。`reveal_on_action` が false の隠れた画面では、何も押さずに error を返す。
+
+マップを閉じると、その下の部屋（イベント・ショップなど）が見える。選択を終えたら、ふだんどおりその部屋を
+出る（`proceed` など）とマップがまた開く。
+
+この状態は、マップを開いたまま開発コンソールで `relic add`（取得時に選択画面を開くレリック）を送ると起きる
+（2026-11-16 の検証用ランで観測）。人がトップバーのマップ（`NTopBarMapButton.OnRelease` → `NMapScreen.Open`）を
+開いても、開いている選択画面は隠れる。API だけで操作するふだんのランでこの状態になるかは未確認
+（`RelicCmd.Obtain` は `AfterObtained` まで await を挟まず、`CardSelectCmd` → `ShowScreen` が `Push` するので、
+部屋で取ったレリックの選択画面はマップを開く前に積まれる。ただし全経路は確かめていない）。
+
 山札由来の `NCombatPileCardSelectScreen` は、grid の比較キー（Rarity・Title・Id）が
 等しい極大区間ごとに `CardModel.CompareTo == 0` の同値類に分ける。
 各同値類が占める位置へ uid の ordinal 順で配り直し、離れた同値札の引く順も意図して隠す。
@@ -1626,7 +1667,10 @@ same card instance when it enters the hand. Selection actions still use `index`.
     "max_select": 2,
     "preview_showing": false,    // true when the preview panel is up (step two, see below)
     "can_confirm": false,        // true when confirm button is available
-    "can_cancel": true           // true when close/cancel button is available
+    "can_cancel": true,          // true when close/cancel button is available
+    "screen_visible": true,      // false when the screen is hidden (under the map, peeking, ...)
+    "hidden_by": null,           // "map" | "peek" | "capstone" | "unknown" | null
+    "reveal_on_action": false    // selection actions first undo the cover (map back button / peek)
 
     // For "choose" type: picking is immediate (no confirm needed).
     // can_skip indicates if a skip button exists.
@@ -2359,8 +2403,11 @@ opened the preview.
 
 Returns `status: error` when the press would not land: while a preview is open (use `confirm_selection` or
 `cancel_selection` — pressing through it corrupts the preview row), and when the screen refuses the press
-because its selection is already full. A hidden/peeking grid, unavailable candidate list, invalid index,
-or missing click method also returns error. A click exception returns error with its underlying cause;
+because its selection is already full. A hidden screen is first revealed when `reveal_on_action` is true
+(see [隠れている選択画面](#隠れている選択画面screen_visible--hidden_by--reveal_on_action追加schema-4-のまま));
+the result then carries `revealed`. A screen that cannot be revealed or stays hidden, an unavailable candidate
+list, invalid index, or missing click method also returns error. The index and candidates are checked before
+the map is closed. A click exception returns error with its underlying cause;
 the game may already have changed state, so re-read state before another action. There is no retry
 through holders, scrolling, or direct selection-set mutation.
 
@@ -2381,6 +2428,9 @@ Returns `status: error` rather than an `ok` that does nothing when fewer than `m
 `max_select` cards are selected, when no confirm button is enabled, or when the press was swallowed (the
 screen is still open and no preview appeared).
 
+A hidden screen (`reveal_on_action: true`) is revealed first, and the result carries `revealed`; one that cannot
+be revealed returns error without pressing anything.
+
 ### `cancel_selection`
 
 Cancel or close the card selection overlay.
@@ -2394,6 +2444,8 @@ Cancel or close the card selection overlay.
   own cancel empties the set, so the grid comes back with nothing selected.
 - For choose-a-card screens: clicks the skip button (if available).
 - Otherwise: closes the selection screen (if cancellation is allowed).
+- A hidden screen (`reveal_on_action: true`) is revealed first (its skip and preview buttons are disabled or
+  invisible while hidden), and the result carries `revealed`; one that cannot be revealed returns error.
 
 ### `select_bundle`
 

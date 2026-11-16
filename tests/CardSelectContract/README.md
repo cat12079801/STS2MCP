@@ -29,6 +29,13 @@ action は画面外の index 30、具体 override への一回のモデル引き
 捨て札・廃棄札の候補順、生成札の `#g` 接尾辞を検査する。
 比較や元パイルの取得に失敗した場合の候補一覧の null・warning とクリックの拒否も検査する。
 
+隠れた選択画面（MCP_ISSUES A-12）は本番 `McpMod.CardSelectVisibility.cs` をリンクして検査する。
+マップに覆われた画面の `hidden_by: map`・state の 3 項目・Markdown の案内、`select_card` がマップの戻る矢印を
+1 回だけ押してから選ぶこと、誤った index・矢印の無効・移動中・capstone・原因不明では何も押さないこと、
+隠れたプレビューは戻したあとにプレビューの拒否が効くこと、戻らない矢印を二度押さないこと、覗き見の解除、
+マップと覗き見の順の解除、choose 画面の判定と解除を見る。confirm / cancel と state の配線は本番ソースの文字列検査。
+マップ・戻る矢印・capstone・覗き見ボタンは境界ダブルで、`Close` → `ShowOverlays` の実際の配線は動かさない。
+
 ゲームのモデル・ノード・combat registry・カード情報作成・強化プレビュー作成は境界ダブル。
 実ゲームのソート、描画、ハイライト、シグナル、効果適用、uid の registry 本体を動かした証拠にはならない。
 schema 4、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
@@ -48,6 +55,8 @@ choose は formatter の即時選択案内・見出しを検査し、choose acti
    同名別個体の uid と exhaust フラグ、pile 更新後の state 再取得を確認する。
 5. 25 枚以下、simple の手動確認／即時完了、choose、bundle、手札選択、負数／Count index の回帰。
    172 枚は追加の欠落・処理時間・応答サイズ試験とする。
+6. A-12: マップ上で開発コンソールの `relic add PUNCH_DAGGER` を送り、`screen_visible: false`・`hidden_by: map`・
+   `reveal_on_action: true` を確認。`select_card index 0` が `revealed: ["map"]` で成功し、マップが閉じて選択画面が前に出ること。
 
 各試験でゲーム build、MOD commit（未コミット版は dirty）、schema、言語、画面寸法、
 デッキ枚数と実候補数、前後の state/action、確定前後のデッキを記録する。

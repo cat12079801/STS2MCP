@@ -423,7 +423,15 @@ selecting enough cards completes immediately. Choose-a-card also picks immediate
 While a preview is open the game takes the grid out of the input path, so `select_card` returns `status: error`
 rather than pressing through it (pressing through appends duplicate cards to the preview row).
 `cancel_selection` closes the preview **and clears the selection**, putting you back on an empty grid.
-A hidden/peeking grid, invalid index, unreadable candidates, missing click method, or rejected toggle
+**A screen can be on top and still hidden.** A selection opened while the map is open (for example by
+the dev console's `relic add` on the map) is pushed hidden under the map, and in combat the peek button hides
+the grid. `state_type` still says `card_select`; `screen_visible: false` and `hidden_by` (`map`, `peek`,
+`capstone`, `unknown`) say so. When `reveal_on_action` is true, `select_card`, `confirm_selection` and
+`cancel_selection` first undo the cover the player's way — the map's own back button (only while it is
+enabled and the map is not traveling), or the peek button's `SetPeeking(false)` — and report it in
+`revealed` (`["map"]`, `["peek"]`). Closing the map shows the room underneath again; after the selection,
+leave that room as usual (e.g. `proceed`). Otherwise the action returns error without pressing anything.
+An invalid index, unreadable candidates, missing click method, a screen that stays hidden, or a rejected toggle
 returns error. If the click throws, re-read state before acting again: it may already have changed.
 The MOD calls the game's model selection path once and does not mutate selection sets itself.
 

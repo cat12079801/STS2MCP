@@ -1095,15 +1095,20 @@ public static partial class McpMod
             if (index < 0 || index >= holders.Count)
                 return Error($"Card index {index} out of range ({holders.Count} cards available)");
 
+            // Bring a screen hidden under the map / by a peek back first, as the player would.
+            var revealed = new List<string>();
+            if (RevealCardSelectScreen(chooseScreen, revealed) is { } revealError)
+                return WithRevealed(revealError, revealed);
+
             var holder = holders[index];
             string cardName = SafeGetText(() => holder.CardModel?.Title) ?? "unknown";
             holder.EmitSignal(NCardHolder.SignalName.Pressed, holder);
 
-            return new Dictionary<string, object?>
+            return WithRevealed(new Dictionary<string, object?>
             {
                 ["status"] = "ok",
                 ["message"] = $"Choosing card: {cardName}"
-            };
+            }, revealed);
         }
 
         return Error("No card selection screen is open");
@@ -1116,7 +1121,15 @@ public static partial class McpMod
             return Error("Choose-a-card screen requires no confirmation - use select_card(index) to pick directly");
         if (overlay is not NCardGridSelectionScreen screen)
             return Error("No card selection screen is open");
+        // A hidden screen hides its preview too; reveal it before deciding which confirm to press.
+        var revealed = new List<string>();
+        if (RevealCardSelectScreen(screen, revealed) is { } revealError)
+            return WithRevealed(revealError, revealed);
+        return WithRevealed(ConfirmVisibleCardSelection(screen), revealed);
+    }
 
+    private static Dictionary<string, object?> ConfirmVisibleCardSelection(NCardGridSelectionScreen screen)
+    {
         // The count the screen itself holds, and the min/max it will accept. The game's
         // completion check is `count >= MinSelect && count <= MaxSelect`; when it fails the
         // click is simply swallowed, which is how confirm_selection used to return ok and
@@ -1217,6 +1230,17 @@ public static partial class McpMod
     {
         var overlay = NOverlayStack.Instance?.Peek();
 
+        // A hidden screen has its skip / preview buttons disabled or invisible; reveal it first.
+        var revealed = new List<string>();
+        if (overlay is NChooseACardSelectionScreen hiddenChoose && RevealCardSelectScreen(hiddenChoose, revealed) is { } chooseRevealError)
+            return WithRevealed(chooseRevealError, revealed);
+        if (overlay is NCardGridSelectionScreen hiddenGrid && RevealCardSelectScreen(hiddenGrid, revealed) is { } gridRevealError)
+            return WithRevealed(gridRevealError, revealed);
+        return WithRevealed(CancelVisibleCardSelection(overlay), revealed);
+    }
+
+    private static Dictionary<string, object?> CancelVisibleCardSelection(object? overlay)
+    {
         // Handle choose-a-card screen (skip button)
         if (overlay is NChooseACardSelectionScreen chooseScreen)
         {

@@ -3105,6 +3105,9 @@ public static partial class McpMod
             _ => screen.GetType().Name
         };
 
+        // The screen can be on top of the overlay stack yet hidden (under the map, or peeking).
+        AddCardSelectVisibilityFields(state, GetCardSelectVisibility(screen));
+
         // Player summary
         // Prompt text from UI label
         var bottomLabel = screen.GetNodeOrNull("%BottomLabel");
@@ -3199,6 +3202,7 @@ public static partial class McpMod
     {
         var state = new Dictionary<string, object?>();
         state["screen_type"] = "choose";
+        AddCardSelectVisibilityFields(state, GetCardSelectVisibility(screen));
 
         state["prompt"] = "Choose a card.";
 

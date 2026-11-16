@@ -179,10 +179,9 @@ public static partial class McpMod
         // Inspect only the owning grid before checking preview/candidates.
         if (!TryGetCardSelectGrid(screen, out var grid, out var reason))
             return Error($"Cannot read card selection grid: {reason}");
-        if (!IsNodeVisible(grid) || !grid!.IsInsideTree())
-            return Error("Card selection grid is not initialized or visible (it may be peeking)");
-        if (FindVisibleCardSelectPreview(screen) != null)
-            return Error("A selection preview is open - use confirm_selection to apply it, or cancel_selection to go back to the grid");
+        if (!grid!.IsInsideTree())
+            return Error("Card selection grid is not initialized");
+        // Validate the request before changing what is on screen.
         if (!TryGetCardSelectCandidates(screen, out _, out var candidates, out reason))
             return Error($"Cannot read card selection candidates: {reason}");
         if (index < 0 || index >= candidates.Length)
@@ -190,6 +189,24 @@ public static partial class McpMod
         var method = FindCardSelectClickMethod(screen.GetType());
         if (method == null)
             return Error("No concrete OnCardClicked(CardModel) method on selection screen");
+
+        // A screen hidden under the map (or a peek) is brought back the player's way first:
+        // a hidden preview would otherwise be invisible to the check below.
+        var revealed = new List<string>();
+        if (RevealCardSelectScreen(screen, revealed) is { } revealError)
+            return WithRevealed(revealError, revealed);
+        if (!IsCardSelectScreenStillOpen(screen) || !IsNodeVisible(screen) || !IsNodeVisible(grid))
+            return WithRevealed(Error("Card selection grid is not visible after revealing the screen - re-read state"), revealed);
+        if (FindVisibleCardSelectPreview(screen) != null)
+            return WithRevealed(Error("A selection preview is open - use confirm_selection to apply it, or cancel_selection to go back to the grid"), revealed);
+        if (revealed.Count > 0)
+        {
+            // Revealing does not touch the grid's list, but click what the screen holds now.
+            if (!TryGetCardSelectCandidates(screen, out _, out candidates, out reason))
+                return WithRevealed(Error($"Cannot read card selection candidates: {reason}"), revealed);
+            if (index >= candidates.Length)
+                return WithRevealed(Error($"Card index {index} out of range ({candidates.Length} cards available)"), revealed);
+        }
 
         var card = candidates[index];
         string cardName = SafeGetText(() => card.Title) ?? "unknown";
@@ -204,29 +221,29 @@ public static partial class McpMod
         catch (Exception ex)
         {
             var cause = ex is TargetInvocationException { InnerException: { } inner } ? inner : ex;
-            return Error($"OnCardClicked failed: {cause.GetType().Name}: {cause.Message}. Re-read state before another action");
+            return WithRevealed(Error($"OnCardClicked failed: {cause.GetType().Name}: {cause.Message}. Re-read state before another action"), revealed);
         }
 
         // Immediate completion can dispose the screen; do not read its fields again.
         if (!IsCardSelectScreenStillOpen(screen))
-            return new Dictionary<string, object?>
+            return WithRevealed(new Dictionary<string, object?>
             {
                 ["status"] = "ok",
                 ["message"] = $"Selected {cardName} - selection complete, screen closed"
-            };
+            }, revealed);
 
         // Combat-pile updates can replace the HashSet during the call.
         var after = GetCardSelectSelection(screen);
         if (!wasSelected.HasValue || after == null)
-            return new Dictionary<string, object?> { ["status"] = "ok", ["message"] = $"Toggling card selection: {cardName}" };
+            return WithRevealed(new Dictionary<string, object?> { ["status"] = "ok", ["message"] = $"Toggling card selection: {cardName}" }, revealed);
         bool isSelected = after.Contains(card);
         var prefs = GetCardSelectPrefs(screen);
         if (wasSelected.Value == isSelected)
-            return Error(isSelected
+            return WithRevealed(Error(isSelected
                 ? $"{cardName} is still selected - the screen did not accept the press"
                 : prefs.HasValue
                     ? $"{cardName} was not selected - at most {prefs.Value.MaxSelect} card(s) can be selected, deselect one first"
-                    : $"{cardName} was not selected - the screen did not accept the press");
+                    : $"{cardName} was not selected - the screen did not accept the press"), revealed);
 
         var result = new Dictionary<string, object?>
         {
@@ -241,7 +258,7 @@ public static partial class McpMod
             result["max_select"] = prefs.Value.MaxSelect;
         }
         if (FindVisibleCardSelectPreview(screen) != null) result["preview_showing"] = true;
-        return result;
+        return WithRevealed(result, revealed);
     }
 
     /// <summary>
