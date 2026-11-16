@@ -86,6 +86,7 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 出典は `sts2-a671e9ef` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye` の上記3メソッド。
 式・履歴 entry の Actor・評価時点・失敗契約は
 [戦闘履歴の要約](raw-full.md#戦闘履歴の要約追加schema-4) を参照。
+所持の判定は `player.relics` に `WHISPERING_EARRING` があるかで行い、`melted` は見ない（本体は `Relics.Any(r => r is WhisperingEarring)` で、溶けたレリックも `_relics` に残る）。
 
 ## ペン先・冥銭・毛皮のコート・鮮やかなスカーフ（v0.113.0）
 

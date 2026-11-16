@@ -478,6 +478,7 @@ MOD も記録済み Actor と `CardPlay.IsAutoPlay` を読む。
 副作用のあるフックを呼ばず、trace の履歴の保持期間にも依存しない。
 追加手番の開始後も本体の手番判定に従う。行動計画には Player の play phase かつ
 `is_resolving: false` の snapshot を使う。
+所持の判定は `player.relics` に `WHISPERING_EARRING` があるかで行い、`melted` は見ない（本体は `Relics.Any(r => r is WhisperingEarring)` で、溶けたレリックも `_relics` に残る）。
 
 開始数の Attack は `JugglingPower.AfterApplied` の初期化式とは一致するが、
 ジャグリングの実際の判定は private な `Data.attacksPlayedThisTurn` を使う。
