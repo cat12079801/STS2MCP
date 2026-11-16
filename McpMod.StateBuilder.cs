@@ -2228,6 +2228,7 @@ public static partial class McpMod
             ["hp"] = creature.CurrentHp,
             ["max_hp"] = creature.MaxHp,
             ["block"] = creature.Block,
+            ["move_state"] = BuildEnemyMoveState(monster, entityId),
             ["status"] = BuildPowersState(creature)
         };
 

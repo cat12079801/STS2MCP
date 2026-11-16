@@ -1312,6 +1312,69 @@ fight by something that never revives it (`DieForYouPower`, `IllusionPower`) has
 and no `revive`, and neither does the last segment of a Decimillipede — with no living peer
 left to reattach to, the fight is over rather than about to restart.
 
+#### 敵の行動状態（追加、schema 4）
+
+`battle.enemies[].move_state` は全モンスターに出す。生存敵・戦闘に残る死亡敵、
+単独・協力プレイで共通。追加契約なので schema は 4 のまま。旧 MOD の欠落は unknown。
+意図の type・label・round や MOD 独自の履歴から値を補完しない。
+
+```json
+{
+  "readable": true,
+  "id": "WEB_CANNON_MOVE",
+  "follow_up_id": "CURL_AND_GROW_MOVE",
+  "last_logged_id": "WEB_CANNON_MOVE",
+  "can_transition_away": true
+}
+```
+
+| 項目 | 読取元・意味 |
+| --- | --- |
+| `readable` | 四値すべてが取得できたときだけ true。失敗が一つでもあれば false |
+| `id` | `MonsterModel.NextMove.Id`。スタン中は `STUNNED` などゲームの実値 |
+| `follow_up_id` | `NextMove.FollowUpState?.Id ?? NextMove.FollowUpStateId`。スタン時も実際の復帰先。通常時には次の分岐状態の ID の場合もある |
+| `last_logged_id` | `MonsterModel.MoveStateMachine.StateLog` の実際の末尾の `Id`。MOD の観測履歴でも「最後に実行した行動」の再構築でもない |
+| `can_transition_away` | `NextMove.CanTransitionAway` の bool。false も必ず出す |
+
+参照・ログ末尾がない場合や読取例外では、該当項目だけ `null` とし、
+`move_state.unavailable_reasons.<key>` に `ExceptionType: message`、トップレベルの
+`warnings` に `battle.enemies.<entity_id>.move_state.<key>` を付ける。成功した項目は保持する。
+復帰先の両参照が null の場合も取得不能で、通常行動に置き換えない。
+空文字列の follow-up はゲームが初期状態に戻る指定として扱う実値なので、そのまま出す。
+`unavailable_reasons` は失敗がなければ省略する。
+
+```json
+{
+  "readable": false,
+  "id": "STUNNED",
+  "follow_up_id": "POUNCE_MOVE",
+  "last_logged_id": null,
+  "can_transition_away": false,
+  "unavailable_reasons": {
+    "last_logged_id": "InvalidOperationException: MoveStateMachine.StateLog が空です"
+  }
+}
+```
+
+Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` のように短く表示する。
+取得不能は `unknown` と `unreadable (項目: 理由)` を添える。
+これは次行動の事前抽選ではない。公開 getter のみを読み、`RollMove`・`GetNextState`・
+`PerformMove`・遷移メソッドを呼ばず、乱数・行動ロック・ゲームのログを変更しない。
+
+根拠（v0.113.1、逆コンパイル `sts2-a671e9ef`）:
+
+- `MonsterModel.NextMove/MoveStateMachine` は現在の参照を返す getter。
+- `MoveState.Id/FollowUpState/FollowUpStateId` と `CanTransitionAway` は ID・参照・
+  `MustPerformOnceBeforeTransitioning` と実行済みフラグを読む。`GetNextState` は上記と同じ
+  follow-up 式を使うが、MOD は呼ばない。`MonsterMoveStateMachine.FindNextMoveState` は
+  分岐を解決してログを追加するので、これも呼ばない。
+- `Creature.StunInternal` は `STUNNED`、復帰先、実行までの遷移ロックを設定する。
+  明示復帰先がなければ実際の `StateLog.Last().Id` を使う。
+  `MonsterModel.SetMoveImmediate` → `MonsterMoveStateMachine.ForceCurrentState/SetCurrentState`
+  はログへ追加しないため、スタンの ID・復帰先・ログ末尾は同一とは限らない。
+- `LouseProgenitor.GenerateMoveStateMachine` は `WEB_CANNON_MOVE` → `CURL_AND_GROW_MOVE`
+  → `POUNCE_MOVE` → WEB の参照を設定する。`Curled` は今回の公開対象に含めない。
+
 ### `hand_select` — In-Combat Card Selection
 
 Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". **Not** an overlay — happens within the combat hand.

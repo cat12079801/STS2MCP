@@ -486,6 +486,9 @@ public static partial class McpMod
                 string deadTag = alive ? "" : " — DEAD";
                 sb.AppendLine($"### {enemy["name"]} (`{enemy["entity_id"]}`{combatIdTag}){deadTag}");
                 sb.AppendLine($"HP: {enemy["hp"]}/{enemy["max_hp"]} | Block: {enemy["block"]}");
+                string moveLine = FormatEnemyMoveState(enemy);
+                if (moveLine.Length > 0)
+                    sb.AppendLine(moveLine);
                 if (!alive)
                     sb.AppendLine(FormatReviveLine(enemy));
 
