@@ -878,6 +878,8 @@ Pets also share the same builder.
 | `JUGGLING_POWER` | `attacks_played_this_turn` | int |
 | `JUGGLING_POWER` | `card_to_clone_uid` | string / null |
 | `JUGGLING_POWER` | `card_to_clone_readable` | bool |
+| `CURL_UP_POWER` | `played_card_uid` | string / null |
+| `CURL_UP_POWER` | `played_card_readable` | bool |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -896,13 +898,21 @@ Pets also share the same builder.
 Data を初期化せず、アタック数から予約を再構成しない。画面に出たプレイと複製の
 出来事に対応する過渡状態で、解決後の snapshot を計画に使う。
 
+まるくなる（`CURL_UP_POWER`）の `played_card_uid` は private `CurlUpPower.Data.playedCard` の参照を
+同じ uid registry に通した値。`AfterDamageReceived` が所有者への `IsPoweredAttack` かつ
+`cardSource` ありの被弾で、未記録か同じ札なら記録し（別の札が記録済みなら無視）、
+`AfterCardPlayed` が `cardPlay.Card` と一致したときに参照を消して Amount のブロックを得、パワーを外す。
+解決後の snapshot では通常 `null`。読取成功・失敗と Markdown の扱いは
+`card_to_clone_uid` / `card_to_clone_readable` と同じ（`played_card_readable`）。
+デッキに無い札も registry が `CARD_ID#g<番号>` を割り当てるので、札が分からない null は無い。
+
 盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
 文字列 ID。空の配列は盗んだ記録なしを表し、合算・正数化・既定値補完はしない。
 読めない項目は `null`、同じ status 行の `unavailable_reasons.<key>` に理由、
 トップレベル `warnings` に `status.<POWER_ID>.<key>` を出す。他項目・説明失敗時の
 最小行でも内部状態の読取を続ける。false / 0 と不明を区別する。
 Markdown は既存行に短く追記し、通常の skip=false と空の盗難配列は省略する。
-`card_to_clone_readable=true` も Markdown では省略し、JSON に保持する。false は表示する。
+`card_to_clone_readable=true` / `played_card_readable=true` も Markdown では省略し、JSON に保持する。false は表示する。
 例は `(facing: Left)`、`(stolen strength: 17: -2.75)`。
 拘束の鎖の使用済みフラグは false も `(bound card played: no)`、true は `yes` と表示する。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。

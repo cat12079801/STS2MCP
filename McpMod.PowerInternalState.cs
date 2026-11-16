@@ -40,14 +40,24 @@ public static partial class McpMod
                 break;
             case JugglingPower:
                 Read("attacks_played_this_turn", () => ReadPowerDataField<int>(power, "attacksPlayedThisTurn"));
-                state["card_to_clone_readable"] = false;
-                Read("card_to_clone_uid", () =>
-                {
-                    string? uid = ReadJugglingCardToCloneUid(power);
-                    state["card_to_clone_readable"] = true;
-                    return uid;
-                });
+                ReadCardUid("card_to_clone_uid", "card_to_clone_readable", "cardToClone");
                 break;
+            case CurlUpPower:
+                ReadCardUid("played_card_uid", "played_card_readable", "playedCard");
+                break;
+        }
+
+        // A nullable card reference needs a separate success flag: a readable null
+        // (nothing pending/tracked) must stay distinguishable from a failed read.
+        void ReadCardUid(string uidKey, string readableKey, string field)
+        {
+            state[readableKey] = false;
+            Read(uidKey, () =>
+            {
+                string? uid = ReadPowerDataCardUid(power, field);
+                state[readableKey] = true;
+                return uid;
+            });
         }
     }
 
@@ -67,16 +77,17 @@ public static partial class McpMod
         return data;
     }
 
-    private static string? ReadJugglingCardToCloneUid(PowerModel power)
+    private static string? ReadPowerDataCardUid(PowerModel power, string name)
     {
         object data = ReadPowerData(power);
-        var field = data.GetType().GetField("cardToClone",
+        var field = data.GetType().GetField(name,
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
-            ?? throw new MissingFieldException(data.GetType().Name, "cardToClone");
+            ?? throw new MissingFieldException(data.GetType().Name, name);
         if (field.FieldType != typeof(CardModel))
-            throw new InvalidOperationException("Expected CardModel field Data.cardToClone");
-        // A readable null means no pending clone. Never initialize Data or derive
-        // the reference from the attack count. Reuse the hand/pile/history registry.
+            throw new InvalidOperationException($"Expected CardModel field Data.{name}");
+        // A readable null means no reference (Juggling: no pending clone; CurlUp: no
+        // tracked attack). Never initialize Data or derive the reference from counts
+        // or history. Reuse the hand/pile/history registry.
         return field.GetValue(data) is CardModel card ? GetStableCardUid(card) : null;
     }
 

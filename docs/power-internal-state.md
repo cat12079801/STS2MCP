@@ -19,6 +19,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 拘束の鎖（`CHAINS_OF_BINDING_POWER`） `bound_card_played` | private `ChainsOfBindingPower.Data.boundCardPlayed`。`BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札で true（自動プレイも対象）。`ShouldPlay` が参照し、所有者が participants に含まれる `BeforeSideTurnEnd` で false。 | 表示された所有者の Bound 札のプレイを手番内で数えられる。複製札は除外し、現在の手札枚数からは推測しない。 |
 | ジャグリング `attacks_played_this_turn` | private `Data.attacksPlayedThisTurn`。`AfterApplied` で当手番の開始済みアタック数に設定、`BeforeCardPlayed` で増加、所有者参加の `AfterSideTurnEnd` で 0。3 で複製を予約。3 に丸めない。 | 表示されたアタックのプレイを、付与前も含め手番内で数えられる。 |
 | ジャグリング `card_to_clone_uid` / `card_to_clone_readable` | private `Data.cardToClone` を手札・パイル・履歴と同じ uid registry に通す。3回目の `BeforeCardPlayed` で対象を記録し、対象の `AfterCardPlayed` で参照を消して複製。 | 表示された3回目のアタックと複製の出来事から分かる予約状態。uid はその公開された札の個体を照合する。 |
+| まるくなる（`CURL_UP_POWER`） `played_card_uid` / `played_card_readable` | private `CurlUpPower.Data.playedCard` を同じ uid registry に通す（出典は v0.113.1 `sts2-a671e9ef`。v0.113.0 `sts2-d009478a` と同一）。`AfterDamageReceived` は所有者への `IsPoweredAttack` かつ `cardSource` ありの被弾で、未記録または同じ札なら記録（別の札が記録済みなら無視）。`AfterCardPlayed` は `cardPlay.Card` が記録の札と同じときに参照を消し、Amount のブロックを得てパワーを外す。 | 画面に出た、その敵へのアタック札の命中から分かる追跡状態。uid はその公開された札の個体を照合する。 |
 
 盗難の配列の各行は `{player_id, amount}`。`player_id` は `player.player_id` と同じ文字列。
 マルチでも受取人を失わないよう合算しない。辞書が空なら空配列を出す。
@@ -50,11 +51,26 @@ private Data は `PowerModel._internalData`、対象クラスの private nested 
 Data の初期化や参照の変更は行わず、ゲームのカード参照を文字列 uid に置き換えて返す。
 Markdown の正常な待ちなしは `none`、読取失敗は `null (理由)` と表示する。
 `card_to_clone_readable=true` は Markdown で省略し、JSON に保持する。false は表示する。
+
+まるくなる（`CURL_UP_POWER`）の追跡も同じ規則で、読み取れた場合に `played_card_readable=true`、追跡なしは
+`played_card_uid=null`（理由・警告なし）。読取失敗は `played_card_readable=false`、
+uid は `null` と `unavailable_reasons.played_card_uid`・`warnings`。
+Markdown は追跡なしを `played card uid: none`、読取失敗を `null (理由)` と表示し、
+`played_card_readable=true` は省略、false は表示する。
+uid は既存 registry の `GetStableCardUid` で、デッキの札は `CARD_ID#<デッキ位置>`、
+デッキに無い札（生成札・複製）は `CARD_ID#g<番号>` を新たに割り当てる。
+uid が付かない札は無いので、札が分からないことによる null は起きない。
+記録は `CardModel.OnPlayWrapper` の各プレイの `OnPlay` 中の被弾で付き、同じプレイの
+`Hook.AfterCardPlayed` で消える。このため解決後の snapshot では通常 `null` で、
+`null` でない値が見えるのはその札の解決中（プレイ途中の選択を含む）か、
+プレイを経ない `cardSource` 付きの被弾があった場合（該当する札は未確認）だけ。
+消えると同時にブロックを得てパワーが外れるので、発動した後は status の行ごと無くなる。
+
 Markdown は情報がある場合だけ既存 status 行に追記する。skip=false と空配列は省略し、
 対象別の 0 / false は表示、失敗時は null と理由を表示する。
 解決中の値はフック間の過渡状態なので、計画には解決後の snapshot を使う。
-ジャグリングの予約参照は解決後の snapshot では通常 `null`。
-`null` でない値が見えるのはその札の解決中（プレイ途中の選択を含む）だけ。
+ジャグリングの予約参照とまるくなるの追跡は、解決後の snapshot では通常 `null`。
+ジャグリングで `null` でない値が見えるのはその札の解決中（プレイ途中の選択を含む）だけ。
 
 実機の起動・照合は行っていない。契約試験はゲーム境界のダブルに対して
 本番の reader・formatter・warnings を直接実行する。

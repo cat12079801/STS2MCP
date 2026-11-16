@@ -30,6 +30,10 @@ readable=false と null・理由になり、正常な待ちなしの readable=tr
 wire と Markdown でも確認する。
 readable=true は待ちなし・予約ありのどちらでも Markdown で省略し、JSON で保持すること、
 readable=false は Markdown に表示することも確認する。
+まるくなる（`CURL_UP_POWER`）の `played_card_uid` / `played_card_readable` も同じ読取関数で、
+追跡なし（readable=true の null と Markdown の `none`）／デッキ札と生成札の uid／解除後の再読取と
+snapshot の独立、Data の null・異型・Data 欠落・フィールド欠落／型変更での readable=false と
+null・理由・warnings、Data を初期化・書換えしないこと、非表示時の省略、wire での string／null を確認する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。
@@ -46,3 +50,6 @@ JSON の本番設定でも null と理由が残ること、Markdown の空・通
 `ChainsOfBindingPower.BeforeCardPlayed` と照合する。`AfterCardDrawnEarly` で Bound 付与前に
 自動使用された札はフラグを立てず、その後の付与は履歴件数に入る境界も対象とする
 （`ChainsOfBindingPower.AfterCardDrawn`）。付与件数の確認手順は CombatHistoryContract を参照。
+まるくなる（`CURL_UP_POWER`）は、始祖虫（`LouseProgenitor.AfterAddedToRoom` が付与）にアタック札を撃つ前後と、
+プレイ途中の選択で止まる局面の state で、`played_card_uid` が none → 撃った札の uid（解決中）→
+行ごと消える（発動でパワーが外れる）と変わることを照合する（`CurlUpPower.AfterDamageReceived` / `AfterCardPlayed`）。

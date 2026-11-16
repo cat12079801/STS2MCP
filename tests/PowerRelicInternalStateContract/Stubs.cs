@@ -109,6 +109,24 @@ namespace MegaCrit.Sts2.Core.Models.Powers
         private class Data { public int boundCardPlayed = 1; }
         public WrongBoundFieldPower() => SetData(new Data());
     }
+    public class CurlUpPower : PowerModel
+    {
+        private class Data { public CardModel? playedCard; }
+        public CurlUpPower() => SetData(new Data());
+        public void SetPlayed(CardModel? card) => ((Data)PeekData()!).playedCard = card;
+        public CardModel? PeekPlayed() => ((Data)PeekData()!).playedCard;
+    }
+    public class MissingCurlUpDataPower : CurlUpPower { }
+    public class MissingPlayedCardFieldPower : CurlUpPower
+    {
+        private class Data { }
+        public MissingPlayedCardFieldPower() => SetData(new Data());
+    }
+    public class WrongPlayedCardFieldPower : CurlUpPower
+    {
+        private class Data { public string playedCard = "wrong"; }
+        public WrongPlayedCardFieldPower() => SetData(new Data());
+    }
     public class MissingDataPower : JugglingPower { }
     public class MissingCloneFieldPower : JugglingPower
     {

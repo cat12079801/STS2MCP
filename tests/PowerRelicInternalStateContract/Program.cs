@@ -139,6 +139,37 @@ public static partial class McpMod
             Unknown(invalidRow, "card_to_clone_uid", "status." + invalidClone.GetType().Name);
             Check(invalidRow["card_to_clone_readable"] is false && Equals(invalidRow["attacks_played_this_turn"], 3), "clone field failure keeps independently readable count");
         }
+        var curl = new CurlUpPower();
+        var noTracked = Power(curl);
+        Check(noTracked["played_card_uid"] == null && noTracked["played_card_readable"] is true && !noTracked.ContainsKey("unavailable_reasons"), "CurlUp readable null means no tracked attack");
+        Check(FormatPowerInternalState(noTracked).Contains("played card uid: none") && !FormatPowerInternalState(noTracked).Contains("played card readable"), "CurlUp known none markdown omits readable success");
+        Check(!Power(curl, false).ContainsKey("played_card_uid") && !Power(curl, false).ContainsKey("played_card_readable"), "hidden CurlUp omits played card fields");
+        Check(!noTracked.ContainsKey("card_to_clone_uid") && !Power(juggling).ContainsKey("played_card_uid"), "CurlUp and Juggling fields stay on their own power");
+        curl.SetPlayed(pendingCard);
+        var tracked = Power(curl);
+        Check(Equals(tracked["played_card_uid"], uid) && Equals(tracked["played_card_uid"], "STRIKE_R#0") && tracked["played_card_readable"] is true, "CurlUp tracked card uses shared deck uid registry");
+        Check(FormatPowerInternalState(tracked).Contains("played card uid: " + uid) && !FormatPowerInternalState(tracked).Contains("played card readable"), "CurlUp tracked uid markdown");
+        Check(ReferenceEquals(curl.PeekPlayed(), pendingCard), "CurlUp read keeps game reference unchanged");
+        curl.SetPlayed(generated);
+        Check(Equals(Power(curl)["played_card_uid"], GetStableCardUid(generated)) && !Equals(Power(curl)["played_card_uid"], uid), "CurlUp generated card gets its own shared uid");
+        curl.SetPlayed(null);
+        Check(Power(curl)["played_card_uid"] == null && Equals(tracked["played_card_uid"], uid), "CurlUp clear observed and old snapshot detached");
+        foreach (object? invalidData in new object?[] { null, new object() })
+        {
+            curl.SetData(invalidData);
+            var failedCurl = Power(curl);
+            Unknown(failedCurl, "played_card_uid", "status.CurlUpPower");
+            Check(failedCurl["played_card_readable"] is false && failedCurl["skip_next_duration_tick"] is false && Equals(failedCurl["amount"], 1), "CurlUp Data failure keeps other fields");
+            Check(FormatPowerInternalState(failedCurl).Contains("played card uid: null (") && FormatPowerInternalState(failedCurl).Contains("played card readable: no"), "unreadable CurlUp differs from known none in markdown");
+            Check(ReferenceEquals(curl.PeekData(), invalidData), "failed CurlUp read never initializes Data");
+        }
+        foreach (var invalidCurl in new CurlUpPower[] { new MissingCurlUpDataPower(), new MissingPlayedCardFieldPower(), new WrongPlayedCardFieldPower() })
+        {
+            object? data = invalidCurl.PeekData();
+            var invalidRow = Power(invalidCurl);
+            Unknown(invalidRow, "played_card_uid", "status." + invalidCurl.GetType().Name);
+            Check(invalidRow["played_card_readable"] is false && ReferenceEquals(invalidCurl.PeekData(), data), "missing or wrong CurlUp field leaves Data unchanged");
+        }
         var snapshot = Power(juggling);
         juggling.Set(0);
         Check(Equals(snapshot["attacks_played_this_turn"], 4) && Equals(Power(juggling)["attacks_played_this_turn"], 0), "new state observes game reset; old snapshot independent");
@@ -294,6 +325,12 @@ public static partial class McpMod
             Check(json.RootElement.GetProperty("card_to_clone_uid").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("card_to_clone_readable").GetBoolean() && !json.RootElement.TryGetProperty("unavailable_reasons", out _), "known empty pending survives production wire as null with success flag");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(Power(new WrongCloneFieldPower()), wireOptions)))
             Check(json.RootElement.GetProperty("card_to_clone_uid").ValueKind == JsonValueKind.Null && !json.RootElement.GetProperty("card_to_clone_readable").GetBoolean() && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("card_to_clone_uid", out _), "failed pending survives production wire as null, false and reason");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noTracked, wireOptions)))
+            Check(json.RootElement.GetProperty("played_card_uid").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("played_card_readable").GetBoolean() && !json.RootElement.TryGetProperty("unavailable_reasons", out _), "CurlUp known none survives production wire as null with success flag");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(tracked, wireOptions)))
+            Check(json.RootElement.GetProperty("played_card_uid").GetString() == uid, "CurlUp tracked uid survives production wire as string");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(Power(new WrongPlayedCardFieldPower()), wireOptions)))
+            Check(json.RootElement.GetProperty("played_card_uid").ValueKind == JsonValueKind.Null && !json.RootElement.GetProperty("played_card_readable").GetBoolean() && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("played_card_uid", out _), "failed CurlUp survives production wire as null, false and reason");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(BuildRelicCombatState(new WrongScarfField()), wireOptions)))
             Check(json.RootElement.GetProperty("cards_played_this_turn").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("cards_played_this_turn", out _), "failed scarf survives production wire as null and reason");
         var response = new Dictionary<string, object?>();
