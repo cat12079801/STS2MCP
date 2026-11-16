@@ -17,7 +17,9 @@ public static partial class McpMod
             if (card.GetValueOrDefault(field) is Dictionary<string, object?> attachment)
             {
                 string disabled = attachment.GetValueOrDefault("status") is "Disabled" ? " (disabled)" : "";
-                sb.AppendLine($"  - {field} {Value(attachment.GetValueOrDefault("id"), $"{field}.id")} (amount {Value(attachment.GetValueOrDefault("amount"), $"{field}.amount")}){disabled}");
+                string extra = attachment.TryGetValue("extra_damage", out var extraDamage)
+                    ? $", extra damage {Value(extraDamage, $"{field}.extra_damage")}" : "";
+                sb.AppendLine($"  - {field} {Value(attachment.GetValueOrDefault("id"), $"{field}.id")} (amount {Value(attachment.GetValueOrDefault("amount"), $"{field}.amount")}{extra}){disabled}");
                 if (attachment.TryGetValue("status", out var status) && status == null)
                     sb.AppendLine($"  - {field} status {Value(null, $"{field}.status")}");
             }

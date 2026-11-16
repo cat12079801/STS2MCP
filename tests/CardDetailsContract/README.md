@@ -2,7 +2,7 @@
 
 本番の `McpMod.CardDetails.cs` / `McpMod.CardDetailsFormatting.cs` /
 `McpMod.PileFormatting.cs` / `McpMod.CardEnergyCostFormatting.cs` /
-`McpMod.Warnings.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
+`McpMod.Warnings.cs` / `McpMod.InternalState.cs` を直接リンクする。追加パッケージ・ゲーム・Godot は不要。
 
 ```fish
 env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
@@ -20,6 +20,11 @@ StringVar の除外、PreviewValue / EnchantedValue と区別した値の取得�
 `is_upgraded` / `is_upgradable` の未強化・最大段階・多段階の途中、`tags` の enum 名と数値順・
 タグなしの `[]`・列挙途中の失敗、`UnplayableReason` の複数フラグの名前（ゲームの Flags の値を写した境界ダブル）、
 パイルの Markdown の `can_play false (…)` 子行（出せる札には付かない）と `tags` の1行を検査する。
+
+モメンタムの `extra_damage`（private の `_extraDamage`）は、未プレイの 0・プレイ後の伸び・
+`amount` と別の値であること・読取で値が変わらないこと・前の snapshot の独立・Disabled でも表示されること、
+フィールドの欠落・型違いで null・`enchantment.extra_damage` の理由・warnings と他項目の保持を検査する。
+他のエンチャントと災禍にキーが無いことも確かめる。
 
 各 getter、添付モデルの ID / Amount、変数一覧の取得・列挙、要素の失敗で、
 null・パス別理由・warnings と、他項目の保持・復旧を検査する。

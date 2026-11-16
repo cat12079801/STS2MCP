@@ -77,6 +77,24 @@ namespace MegaCrit.Sts2.Core.Models
         public IEnumerable<CardTag> Tags => Read("tags", TagSet);
     }
 }
+// Mirrors v0.113.1 MegaCrit.Sts2.Core.Models.Enchantments.Momentum: a private int _extraDamage
+// that OnPlay grows by Amount. The real class is sealed; the subclasses model a moved or retyped field.
+namespace MegaCrit.Sts2.Core.Models.Enchantments
+{
+    public class Momentum : EnchantmentModel
+    {
+        private int _extraDamage;
+        public void SimulateOnPlay() => _extraDamage += Amount;
+        public int PeekExtraDamage() => _extraDamage;
+    }
+    public class MissingMomentumField : Momentum { }
+    public class WrongMomentumField : Momentum
+    {
+#pragma warning disable CS0169
+        private long _extraDamage;
+#pragma warning restore CS0169
+    }
+}
 namespace MegaCrit.Sts2.Core.Localization.DynamicVars
 {
     public class DynamicVar(decimal value)

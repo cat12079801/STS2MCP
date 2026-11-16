@@ -564,6 +564,12 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 - `enchantment` は `CardModel.Enchantment` の `{ id, amount, status }`。
   `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
   例は `{ "id": "VIGOROUS", "amount": 3, "status": "Disabled" }`。
+  モメンタム（`Momentum`）だけ `extra_damage`（整数）を足す。`Momentum.EnchantDamageAdditive` が
+  PoweredAttack に返す private の `_extraDamage` で、`Momentum.OnPlay` がプレイのたびに `Amount` を足す。
+  宣言されたフィールドを読むだけで、getter・setter（`AssertMutable`）・フックは呼ばない。
+  未プレイの 0 も出す。例は `{ "id": "MOMENTUM", "amount": 5, "status": "Normal", "extra_damage": 10 }`。
+  読めない（フィールドの欠落・型違い）ときは null とし、`enchantment.extra_damage` の理由と `warnings` を付け、
+  `id` / `amount` / `status` は保持する。他のエンチャントと災禍にはこのキーが無い。
 - `dynamic_vars` は `CardModel.DynamicVars` の変数名から現在の `BaseValue` への辞書。
   小数・0・負数をそのまま JSON 数値で出す。`StringVar` は文字列用のため除外する。
   数値変数が0件なら `{}`。成長・強化を反映した現在値を毎回読む。
@@ -572,7 +578,7 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
 災禍・エンチャントの getter が正常に null を返したときは、その項目を null とし、
 理由の辞書は空。読取例外が出たときは該当値を null にし、理由と `warnings` を付ける。
-例として `affliction.amount`、`enchantment.status`、`dynamic_vars.Damage` の失敗では、
+例として `affliction.amount`、`enchantment.status`、`enchantment.extra_damage`、`dynamic_vars.Damage` の失敗では、
 同じオブジェクト内の読めた項目を保持する。変数一覧の取得・列挙の失敗は
 `dynamic_vars` 全体を null にする。手札の `CanPlay` の例外も局所化し、
 `can_play` / `unplayable_reason` を null と理由にする（パイルの札も同じ）。
@@ -611,6 +617,7 @@ BaseReplayCount → キーの ordinal 順で各 DynamicVar.BaseValue を比較�
 入力順を保つ）。`play_pile` も格納順を保つ。
 Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型・対象を付ける。
 存在する災禍・エンチャントと読取失敗の理由は短い子行で表示する。
+モメンタムは `enchantment MOMENTUM (amount 5, extra damage 10)` の形で同じ子行に出す。
 エンチャントは `status` が `Disabled` のときだけ `(disabled)` を付ける。
 基底値は `base Damage 6, Vulnerable 2` の形で札ごとに1行にまとめる。
 手札の型・対象は既存の行に表示し、プレイ可否が読めなければ `?` を付ける。
@@ -625,6 +632,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
 `EnchantmentModel.Amount` / `Status`、`EnchantmentStatus`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
 `StringVar`。契約試験は詳細の取得・失敗・表示を検査する。
+`extra_damage` の出典（v0.113.1、`sts2-a671e9ef` デコンパイル）は `Momentum._extraDamage` /
+`ExtraDamage` / `OnPlay` / `EnchantDamageAdditive`。
 パイルの `can_play`・`is_upgraded` / `is_upgradable`・`tags` の出典（v0.113.1、`sts2-a671e9ef` デコンパイル）は
 `CardModel.CanPlay(out UnplayableReason, out AbstractModel)` / `IsPlayable` / `IsUpgraded` / `IsUpgradable` / `Tags`、
 `UnplayableReason`、`CardTag`、`PlayerCombatState.HasEnoughResourcesFor`、`Hook.ShouldPlay`、

@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Enchantments;
+using MegaCrit.Sts2.Core.Models.Enchantments;
 
 STS2_MCP.McpMod.RunCardDetailsContract();
 
@@ -227,6 +228,47 @@ namespace STS2_MCP
             card.Vars = new Dictionary<string, DynamicVar> { ["Broken"] = null!, ["Valid"] = new(1m) };
             var nullVar = Details(card);
             Check(Object(nullVar, "dynamic_vars")["Broken"] == null && Equals(Object(nullVar, "dynamic_vars")["Valid"], 1m) && Reasons(nullVar).ContainsKey("dynamic_vars.Broken"), "null entry preserves other entries");
+
+            // Momentum: the private _extraDamage that EnchantDamageAdditive returns.
+            Check(!Object(snapshot, "enchantment").ContainsKey("extra_damage") && !Object(snapshot, "affliction").ContainsKey("extra_damage"), "extra_damage only on Momentum");
+            BeginStateWarnings();
+            var momentum = new Momentum { ModelId = new("MOMENTUM"), Value = 5 };
+            var momentumCard = new CardModel { Enchanted = momentum };
+            var freshMomentum = Details(momentumCard);
+            Check(Equals(Object(freshMomentum, "enchantment")["extra_damage"], 0) && Reasons(freshMomentum).Count == 0 && _stateWarnings.Count == 0, "unplayed Momentum reads real zero without reasons");
+            Check(Markdown(freshMomentum).Contains("enchantment MOMENTUM (amount 5, extra damage 0)"), "markdown shows Momentum extra damage with amount");
+            momentum.SimulateOnPlay();
+            momentum.SimulateOnPlay();
+            var grownMomentum = Details(momentumCard);
+            Check(Equals(Object(grownMomentum, "enchantment")["extra_damage"], 10) && Equals(Object(grownMomentum, "enchantment")["amount"], 5), "extra damage follows OnPlay growth separately from Amount");
+            Check(momentum.PeekExtraDamage() == 10 && momentum.Amount == 5, "reading extra damage does not change the enchantment");
+            Check(Equals(Object(freshMomentum, "enchantment")["extra_damage"], 0), "previous Momentum snapshot independent of later plays");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(grownMomentum, options)))
+                Check(json.RootElement.GetProperty("enchantment").GetProperty("extra_damage").GetInt32() == 10, "wire extra_damage is numeric");
+            momentum.StatusValue = EnchantmentStatus.Disabled;
+            Check(Markdown(Details(momentumCard)).Contains("(amount 5, extra damage 10) (disabled)"), "disabled Momentum keeps extra damage visible");
+            momentum.StatusValue = EnchantmentStatus.Normal;
+            momentum.ThrowAmount = true;
+            var momentumAmountFailed = Details(momentumCard);
+            Check(Object(momentumAmountFailed, "enchantment")["amount"] == null && Equals(Object(momentumAmountFailed, "enchantment")["extra_damage"], 10), "amount failure preserves extra damage");
+            momentum.ThrowAmount = false;
+            foreach (var broken in new Momentum[] { new MissingMomentumField(), new WrongMomentumField() })
+            {
+                BeginStateWarnings();
+                broken.ModelId = new("MOMENTUM");
+                broken.Value = 5;
+                var row = Details(new CardModel { Enchanted = broken });
+                var attachment = Object(row, "enchantment");
+                Check(attachment.ContainsKey("extra_damage") && attachment["extra_damage"] == null && Reasons(row).Count == 1 && Reasons(row).ContainsKey("enchantment.extra_damage"), $"{broken.GetType().Name} is null with its own reason");
+                Check(Equals(attachment["id"], "MOMENTUM") && Equals(attachment["amount"], 5) && Equals(attachment["status"], "Normal"), $"{broken.GetType().Name} preserves other enchantment values");
+                Check(broken.PeekExtraDamage() == 0, $"{broken.GetType().Name} read leaves the enchantment unchanged");
+                Check(Markdown(row).Contains("extra damage null (") && Markdown(row).Contains("Exception"), "unreadable extra damage shows its reason");
+                var response = new Dictionary<string, object?> { ["hand"] = new[] { row } };
+                EndStateWarnings(response);
+                Check(response["warnings"] is List<string> warnings && warnings.Any(w => w.StartsWith("card.enchantment.extra_damage:")), "extra damage failure is attached to warnings");
+                using var json = JsonDocument.Parse(JsonSerializer.Serialize(row, options));
+                Check(json.RootElement.GetProperty("enchantment").GetProperty("extra_damage").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("enchantment.extra_damage", out _), "wire null and reason for extra damage");
+            }
 
             BeginStateWarnings();
             var recovered = Details(new());

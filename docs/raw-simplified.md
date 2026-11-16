@@ -64,13 +64,14 @@ Every JSON response includes:
     `type` / `target_type` はゲームの enum 名、`affliction` は現在の `{ id, amount }`、
     `enchantment` は `{ id, amount, status }`（正常に未付与と確認できた場合は null）。
     `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
+    モメンタムだけ `extra_damage`（`Momentum._extraDamage`。プレイごとに `amount` ずつ伸びる追加ダメージ）を足す。
     `is_upgraded` / `is_upgradable`、`tags`（`CardTag` の enum 名を enum の数値順。無ければ `[]`）、
     `can_play` / `unplayable_reason`（手札と同じ `CardModel.CanPlay`。パイルでは「いま出せるか」ではない。
     [パイルの `can_play`](raw-full.md) の節を参照）も同じく出す。
     `dynamic_vars` は変数名 → 現在の `BaseValue`（小数を含む数値、`StringVar` を除く）。
     EnchantedValue / PreviewValue ではない。CalculatedVar は計算前の基底値。
     数値変数なしは `{}`。読取失敗は該当値を null とし、行の `unavailable_reasons` に
-    `enchantment.status` / `dynamic_vars.Damage` 等のパス別理由を入れ、`warnings` に記録する。
+    `enchantment.status` / `enchantment.extra_damage` / `dynamic_vars.Damage` 等のパス別理由を入れ、`warnings` に記録する。
     山札は一次・二次比較にゲームの `Rarity` → `CardModel.CompareTo` を使い、
     同順位は固定 uid の ordinal 順にして引く順を意図して隠す。
     比較の例外は `draw_pile.order` の warning を出し、`Rarity` → `Id.Entry` → uid で返す。

@@ -4,6 +4,7 @@ using System.Linq;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Enchantments;
 
 namespace STS2_MCP;
 
@@ -71,6 +72,13 @@ public static partial class McpMod
         ReadCardDetailValue(state, reasons, "amount", () => readAmount(), $"{field}.amount");
         if (model is EnchantmentModel enchantment)
             ReadCardDetailValue(state, reasons, "status", () => enchantment.Status.ToString(), "enchantment.status");
+        // sts2-a671e9ef: Momentum.EnchantDamageAdditive returns the private _extraDamage
+        // (PoweredAttack only) and Momentum.OnPlay adds Amount to it after each play.
+        // Read the declared field only: no private getter, setter (AssertMutable) or hook.
+        // model.GetType() is Momentum itself (sealed); DeclaredOnly rejects a moved field.
+        if (model is Momentum)
+            ReadCardDetailValue(state, reasons, "extra_damage",
+                () => ReadDeclaredStateField<int>(model, model.GetType(), "_extraDamage"), $"{field}.extra_damage");
         return state;
     }
 
