@@ -64,6 +64,9 @@ Every JSON response includes:
     `type` / `target_type` はゲームの enum 名、`affliction` は現在の `{ id, amount }`、
     `enchantment` は `{ id, amount, status }`（正常に未付与と確認できた場合は null）。
     `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
+    `is_upgraded` / `is_upgradable`、`tags`（`CardTag` の enum 名を enum の数値順。無ければ `[]`）、
+    `can_play` / `unplayable_reason`（手札と同じ `CardModel.CanPlay`。パイルでは「いま出せるか」ではない。
+    [パイルの `can_play`](raw-full.md) の節を参照）も同じく出す。
     `dynamic_vars` は変数名 → 現在の `BaseValue`（小数を含む数値、`StringVar` を除く）。
     EnchantedValue / PreviewValue ではない。CalculatedVar は計算前の基底値。
     数値変数なしは `{}`。読取失敗は該当値を null とし、行の `unavailable_reasons` に
@@ -95,7 +98,7 @@ Every JSON response includes:
   - `enemies[].alive` — **on every enemy**. Almost always `true`: a killed enemy leaves the fight and stops being listed. The exception is a corpse the game refuses to remove — a Decimillipede segment held by `REATTACH_POWER` — which stays listed with `alive: false` and `hp: 0`, keeping the `entity_id` it already had. **Filter targets on `alive`, not on `hp > 0`**; `play_card` / `use_potion` already refuse a dead target.
   - `enemies[].revive` — present only when that corpse is scheduled to come back: `{ in_turns, hp, power_id, power_name }`. `in_turns` counts enemy turns until it heals itself back up (2 on the turn it dies, 1 on the turn before it stands up, when its `intents` also show `Heal`); `hp` is what it returns with. Both are `null` when they cannot be read. A corpse kept in the fight by a power that never revives it has `alive: false` and no `revive`. Markdown marks the enemy heading `— DEAD` and prints a `⚠ WAITING TO REVIVE in N enemy turn(s) at H HP` line.
 
-Every card object carries `is_upgraded`, `is_upgradable`, `upgrade_level` and `max_upgrade_level` (a card can have more than one upgrade level, so `is_upgraded` does not mean "no upgrade left"). On the screens where an upgrade or a pick is being decided — `card_select` with `screen_type: "upgrade"`, `hand_select` with `mode: "upgrade_select"`, and `card_reward` — a card that still has an upgrade left also carries `upgrade_preview`: `{ name, cost, star_cost, description, keywords }` of the card as it would read after one upgrade, built from the game's own upgraded clone. It is absent everywhere else (combat hand, piles, deck list) to keep the payload small.
+Card objects outside the combat piles (hand, deck, selection screens) carry `is_upgraded`, `is_upgradable`, `upgrade_level` and `max_upgrade_level`; combat pile rows carry only `is_upgraded` and `is_upgradable` (a card can have more than one upgrade level, so `is_upgraded` does not mean "no upgrade left"). On the screens where an upgrade or a pick is being decided — `card_select` with `screen_type: "upgrade"`, `hand_select` with `mode: "upgrade_select"`, and `card_reward` — a card that still has an upgrade left also carries `upgrade_preview`: `{ name, cost, star_cost, description, keywords }` of the card as it would read after one upgrade, built from the game's own upgraded clone. It is absent everywhere else (combat hand, piles, deck list) to keep the payload small.
 
 | `state_type` | Screen | Available Actions |
 |---|---|---|

@@ -586,12 +586,14 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
 - エネルギー・星は**いま**の値で比べる（`PlayerCombatState.HasEnoughResourcesFor`）。
   引いた時点のエネルギーとは違い得るので、`EnergyCostTooHigh` / `StarCostTooHigh` は将来の予測に使えない。
+  コストも札の**いまの場所**で評価する。手札・Play pile にある札だけに効くコストの修正（`FreeAttackPower` / `FreeSkillPower` / `FreePowerPower` / `FreeCardPower` / `VoidFormPower` / `EnsemblePower` / `VeilpiercerPower` の `TryModifyEnergyCostInCombat(Late)`、`BrilliantScarf`）は、山札・捨て札・廃棄札の札には効かない。パイルの行の `energy_cost.with_all_modifiers` も同じ。
 - 札自身のロジック（`IsPlayable`）は札の場所を前提にしない。`GrandFinale.IsPlayable` は
   山札が0枚のときだけ真なので、山札にある間は自分が数に入り、必ず `BlockedByCardLogic` になる。
   `Clash.IsPlayable` は手札の全札を見るので、パイルにある間は自分を含まない手札で判定される。
 - フック（`Hook.ShouldPlay`）は戦闘全体のリスナーを回す。`Normality` / `Enthralled` は
   **止める側の札自身が手札にあるとき**だけ他の札を止め、評価される札の場所は見ない。
   `ChainsOfBindingPower` / `RingingPower` / `SmoggyPower` は災禍の付いた札を、それぞれの条件のもとで場所に関係なく止める。
+  `SlothPower` / `EncorePower` / `VelvetChoker` の枚数の制限も、場所に関係なく `BlockedByHook` にする。
 - Play pile の札は解決中の snapshot なので、支払い済みのエネルギー・使用回数を反映した値になり得る。
 
 ゲーム側の札の場所に依存しない理由（`HasUnplayableKeyword`、災禍による `BlockedByHook` など）は、
