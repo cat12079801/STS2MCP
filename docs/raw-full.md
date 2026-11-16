@@ -213,7 +213,7 @@ POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.
 `battle` の無い state に付けたものなので、`schema_version` は 4 のまま。この state は `battle` が無いので、`wait: true` は以前から落ち着いたとみなさない。
 `map_traveling` / `map_closing` / `room_changing` / `run_loading` も、既存の `is_resolving` の意味（ゲームが自分で先へ進む途中で、入力を受け付けない）に沿って
 理由を足したもので、`schema_version` は 4 のまま。これまで `is_resolving: false` で返っていた移動中の `map`・読み込み中の `unknown` が true になり、
-`wait: true` もそこで落ち着いたとみなさなくなる（`choose_map_node` は次の部屋の state、`continue` は再開した部屋の state まで待つ）。
+`wait: true` もそこで落ち着いたとみなさなくなる（`choose_map_node` は次の部屋の state、`continue` は再開した部屋の state まで待つ）。ただし待ちの「3 秒変化なし」の打ち切りは `is_resolving` を見ないので、演出が 3 秒を超えて state が変わらないとき（協力プレイの投票の演出など）は、`is_resolving: true` のまま `settled: true, changed: false` で返り得る。読み手は応答の state の `is_resolving` も確かめる。
 
 ### 解放済みの戦闘生成 pool（追加、schema 3）
 

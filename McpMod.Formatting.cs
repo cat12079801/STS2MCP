@@ -775,7 +775,7 @@ public static partial class McpMod
         // to be JSON-only, which made it invisible to the markdown workflow.
         FormatMapBossMarkdown(sb, map);
 
-        // Only said when false: the usual map takes a choice, and the multiplayer map omits the field.
+        // Only said when false: the usual map takes a choice; the field is absent when NMapScreen.Instance is missing.
         if (map.GetValueOrDefault("travel_enabled") is false)
         {
             sb.AppendLine("**Travel:** not enabled - the current room is not finished (or the map is traveling); choose_map_node is refused.");

@@ -865,8 +865,12 @@ public static partial class McpMod
         }
         foreach (var queue in queues)
         {
-            if (queue == null || GetInstanceFieldValue(queue, "actions") is not System.Collections.IEnumerable actions)
+            if (queue == null) continue;
+            if (GetInstanceFieldValue(queue, "actions") is not System.Collections.IEnumerable actions)
+            {
+                Warn("is_resolving.map_travel_queue", "ActionQueue.actions not found");
                 continue;
+            }
             foreach (var action in actions)
             {
                 if (action is GameAction { State: not GameActionState.Canceled } gameAction
