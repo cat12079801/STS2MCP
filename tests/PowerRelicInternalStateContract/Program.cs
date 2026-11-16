@@ -75,6 +75,36 @@ public static partial class McpMod
             Check(Equals(Power(skittish)["has_gained_block_this_turn"], value), "skittish reads private Data bool");
         }
         var juggling = new JugglingPower();
+        var chains = new ChainsOfBindingPower();
+        foreach (bool value in new[] { false, true, false })
+        {
+            chains.Set(value); // Boundary fixture supplies updates; no game hook is simulated.
+            object? data = chains.PeekData();
+            var row = Power(chains);
+            Check(Equals(row["bound_card_played"], value) && !row.ContainsKey("unavailable_reasons"), "Bound flag reads current private Data bool, including reset");
+            Check(ReferenceEquals(chains.PeekData(), data) && chains.Peek() == value, "Bound read never replaces or mutates Data");
+            Check(FormatPowerInternalState(row).Contains("bound card played: " + (value ? "yes" : "no")), "Bound markdown preserves both true and false");
+        }
+        chains.Set(true);
+        var boundSnapshot = Power(chains);
+        chains.Set(false);
+        Check(boundSnapshot["bound_card_played"] is true && Power(chains)["bound_card_played"] is false, "Bound snapshot stays independent of game reset");
+        Check(Power(chains, false).Count == 2, "hidden Bound power omits internal state");
+        foreach (object? invalidData in new object?[] { null, new object() })
+        {
+            chains.SetData(invalidData);
+            var row = Power(chains);
+            Unknown(row, "bound_card_played", "status.ChainsOfBindingPower");
+            Check(row["skip_next_duration_tick"] is false && Equals(row["amount"], 1), "Bound Data failure keeps other fields");
+            Check(ReferenceEquals(chains.PeekData(), invalidData), "failed Bound read never initializes Data");
+            Check(FormatPowerInternalState(row).Contains("bound card played: null ("), "unavailable Bound flag markdown includes reason");
+        }
+        foreach (var invalidPower in new ChainsOfBindingPower[] { new MissingBoundDataPower(), new MissingBoundFieldPower(), new WrongBoundFieldPower() })
+        {
+            object? data = invalidPower.PeekData();
+            Unknown(Power(invalidPower), "bound_card_played", "status." + invalidPower.GetType().Name);
+            Check(ReferenceEquals(invalidPower.PeekData(), data), "missing or wrong Bound field leaves Data unchanged");
+        }
         foreach (int value in new[] { 0, 2, 3, 4 })
         {
             juggling.Set(value);
@@ -249,6 +279,15 @@ public static partial class McpMod
             Check(json.RootElement.GetProperty("stolen_strength")[0].GetProperty("amount").GetDecimal() == -2.75m, "wire numeric decimal theft");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failedSkip, wireOptions)))
             Check(json.RootElement.GetProperty("skip_next_duration_tick").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("skip_next_duration_tick", out _), "power null and reason survive wire");
+        foreach (bool value in new[] { false, true })
+        {
+            var wireChains = new ChainsOfBindingPower();
+            wireChains.Set(value);
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(Power(wireChains), wireOptions));
+            Check(json.RootElement.GetProperty("bound_card_played").GetBoolean() == value, "Bound flag retains boolean wire type including false");
+        }
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(Power(chains), wireOptions)))
+            Check(json.RootElement.GetProperty("bound_card_played").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("bound_card_played", out _), "Bound null and reason survive production wire settings");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(partialPaper, wireOptions)))
             Check(json.RootElement.GetProperty("cards_exhausted").GetInt32() == 4 && json.RootElement.GetProperty("ethereal_count").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("ethereal_count", out _), "relic partial values and null reason survive wire");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noPending, wireOptions)))

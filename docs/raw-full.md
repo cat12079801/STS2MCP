@@ -335,6 +335,7 @@ encode every reason a relic can be disabled.
   "card_plays_finished_this_turn_card_uids": ["THRUMMING_HATCHET#0", "THRUMMING_HATCHET#0"],
   "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
   "cards_exhausted_this_turn": 1,
+  "bound_afflictions_this_turn": 2,
   "unblocked_damage_events_this_turn": 1,
   "unblocked_damage_events_this_combat": 3,
   "block_gains_this_turn": 2,
@@ -354,6 +355,7 @@ encode every reason a relic can be disabled.
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
+| `bound_afflictions_this_turn` | `History.Entries.OfType<CardAfflictedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature && e.Affliction is Bound`。`ChainsOfBindingPower.AfterCardDrawn` と同じ集合の件数。 |
 | `unblocked_damage_events_this_turn` | `History.Entries.OfType<DamageReceivedEntry>()` で `e.HappenedThisTurn(combat) && e.Receiver == creature && e.Result.UnblockedDamage > 0`。`Spite.LostHpThisTurn` の Any と同じ集合の件数。 |
 | `unblocked_damage_events_this_combat` | 同じ DamageReceivedEntry の Receiver・UnblockedDamage 条件で、ターン条件なし。`TearAsunder.CanonicalVars` の CalculatedHits の `1 + Count(...)` の Count 部分。 |
 | `block_gains_this_turn` | `History.Entries.OfType<BlockGainedEntry>()` で `e.HappenedThisTurn(combat) && e.CardPlay != null && e.CardPlay.Player.Creature == creature && e.Props.IsCardOrMonsterMove()`。`UnmovablePower.ModifyBlockMultiplicative` を **`cardPlay = null`（次のプレイを評価する文脈）** とした式そのもの。 |
@@ -368,6 +370,12 @@ encode every reason a relic can be disabled.
 `AfterSideTurnEnd` がリセットするため、`CardPlay.Player` で絞る履歴とは
 所有者が変わる札などで一致しない。この履歴をジャグリングの内部値の代用にしない。
 正確な値は `JUGGLING_POWER` の `status[].attacks_played_this_turn` を読む。
+
+`bound_afflictions_this_turn` は束縛（Bound）の付与 entry 数で、手札や各パイルに
+現在残る Bound の枚数ではない。同じ札への複数回付与も別件として数え、
+その札が移動したり Affliction が解除されたりしても当該手番の履歴は減らさない。
+パワーの有無・Amount で絞ったり上限に丸めたりせず、未発生なら 0 を明示する。
+使用済み状態は別の値であり、`CHAINS_OF_BINDING_POWER` の `status[].bound_card_played` を読む。
 
 このターンと前手番の uid 配列はどちらも履歴順で重複を保つ。他 Player のプレイも含む。
 これは札の所有者がプレイ後に変わり得るため、Bolas / ThrummingHatchet が
@@ -406,9 +414,11 @@ Player 側の play phase で読む `card_plays_finished_this_turn_card_uids` は
 
 Markdown は正の件数・非空の uid 配列・取得失敗があるときだけ短い History 行を出す。
 このターンの非空 uid は `this turn=[...]`、前手番の非空 uid は `last turn=[...]` と区別する。
+束縛の正の付与件数は `bound afflictions=2` のように表示する。
 既知の 0 と空配列だけなら省略し、TurnNumber 単独では行を増やさない。
 失敗時は null と理由を表示する。既存の意味の変更・削除を伴わない追加なので
-`schema_version` は **4 のまま**。利用側は `combat_history` の有無で検出する。
+`schema_version` は **4 のまま**。利用側は `combat_history` と必要な各項目の有無で検出する。
+束縛の付与件数を出さない旧 MOD の欠落を 0 と解釈しない。
 
 契約試験と実機確認の観点は [`tests/CombatHistoryContract`](../tests/CombatHistoryContract/README.md)。
 
@@ -807,9 +817,17 @@ Pets also share the same builder.
 | `POSSESS_STRENGTH_POWER` | `stolen_strength` | `[{"player_id":"17","amount":-2.75}]` |
 | `POSSESS_SPEED_POWER` | `stolen_dexterity` | 同上 |
 | `SKITTISH_POWER` | `has_gained_block_this_turn` | bool |
+| `CHAINS_OF_BINDING_POWER` | `bound_card_played` | bool |
 | `JUGGLING_POWER` | `attacks_played_this_turn` | int |
 | `JUGGLING_POWER` | `card_to_clone_uid` | string / null |
 | `JUGGLING_POWER` | `card_to_clone_readable` | bool |
+
+束縛の鎖の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
+`BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
+（自動プレイも対象）。`ShouldPlay` が参照し、所有者が participants に含まれる
+`BeforeSideTurnEnd` で false に戻る。`PowerModel._internalData` を読み、Data を初期化せず、
+履歴・手札からフラグを再構成しない。読取不能は null と理由・warnings。
+付与件数の `player.combat_history.bound_afflictions_this_turn` とは独立した値である。
 
 ジャグリングの `card_to_clone_uid` は private `Data.cardToClone` の参照を既存の
 手札・パイル・grid・履歴共通の uid registry に通した値。3 回目のアタックの
@@ -829,6 +847,7 @@ Data を初期化せず、アタック数から予約を再構成しない。画
 Markdown は既存行に短く追記し、通常の skip=false と空の盗難配列は省略する。
 `card_to_clone_readable=true` も Markdown では省略し、JSON に保持する。false は表示する。
 例は `(facing: Left)`、`(stolen strength: 17: -2.75)`。
+束縛の使用済みフラグは false も `(bound card played: no)`、true は `yes` と表示する。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
 既存項目の意味を変えない追加のため schema は 4 のまま。
 

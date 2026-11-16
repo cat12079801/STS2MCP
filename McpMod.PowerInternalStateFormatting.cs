@@ -12,7 +12,7 @@ public static partial class McpMod
         var parts = new List<string>();
         var reasons = state.GetValueOrDefault("unavailable_reasons") as Dictionary<string, string>;
         foreach (string key in new[] { "skip_next_duration_tick", "block_base_value", "facing",
-            "stolen_strength", "stolen_dexterity", "has_gained_block_this_turn", "attacks_played_this_turn",
+            "stolen_strength", "stolen_dexterity", "has_gained_block_this_turn", "bound_card_played", "attacks_played_this_turn",
             "card_to_clone_uid", "card_to_clone_readable" })
         {
             if (!state.TryGetValue(key, out var value)) continue;

@@ -16,6 +16,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 包囲 `facing` | `SurroundedPower.Facing` の enum 名。 | `FaceDirection` / `FlipScale` が player・ペットの Body と FormVfxHolder の向きを反転する。画面に向きが見える。 |
 | `PossessStrengthPower.stolen_strength` / `PossessSpeedPower.stolen_dexterity` | private `Data.stolenStrength` / `stolenDexterity`。`AfterPowerAmountChanged` でその敵による player の減少分（decimal、負数）を累積し、死亡時に対象 player ごとに逆符号で返す。 | 筋力／敏捷の減少と、減少させた敵の行動は画面に出る。対象別にその出来事を数えられる。総能力値から推測せず記録された減少だけを出す。 |
 | 臆病 `has_gained_block_this_turn` | private `Data.hasGainedBlockThisTurn`。`AfterAttack` の初回非ブロックダメージで true、相手側 `AfterSideTurnEnd` で false。 | ブロック獲得、引っ込み／伸びるアニメーション（`BlockStart` / `BlockEnd`）が見える。 |
+| 束縛の鎖 `bound_card_played` | private `ChainsOfBindingPower.Data.boundCardPlayed`。`BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札で true（自動プレイも対象）。`ShouldPlay` が参照し、所有者が participants に含まれる `BeforeSideTurnEnd` で false。 | 表示された所有者の Bound 札のプレイを手番内で数えられる。複製札は除外し、現在の手札枚数からは推測しない。 |
 | ジャグリング `attacks_played_this_turn` | private `Data.attacksPlayedThisTurn`。`AfterApplied` で当手番の開始済みアタック数に設定、`BeforeCardPlayed` で増加、所有者参加の `AfterSideTurnEnd` で 0。3 で複製を予約。3 に丸めない。 | 表示されたアタックのプレイを、付与前も含め手番内で数えられる。 |
 | ジャグリング `card_to_clone_uid` / `card_to_clone_readable` | private `Data.cardToClone` を手札・パイル・履歴と同じ uid registry に通す。3回目の `BeforeCardPlayed` で対象を記録し、対象の `AfterCardPlayed` で参照を消して複製。 | 表示された3回目のアタックと複製の出来事から分かる予約状態。uid はその公開された札の個体を照合する。 |
 
@@ -34,6 +35,13 @@ private Data は `PowerModel._internalData`、対象クラスの private nested 
 行内 `unavailable_reasons.<key>` とトップレベル `warnings` の
 `status.<POWER_ID>.<key>` に理由を付ける。0 / false で補完しない。
 説明文の取得に失敗した最小行も同じ読取経路を通り、他項目は保持する。
+
+束縛の `bound_card_played` は読み取れた false も明示し、Markdown では
+`bound card played: no` / `yes`、読取不能は `null (理由)` と表示する。
+`PowerModel._internalData` を既存の `ReadPowerDataField<bool>` で読むだけで Data は初期化しない。
+同じ手番の Bound 付与件数は別契約の `player.combat_history.bound_afflictions_this_turn`
+（`ChainsOfBindingPower.AfterCardDrawn` と同じ履歴条件）であり、使用済みフラグと相互に代用しない。
+どちらも schema 4 の追加項目なので、必要な各項目の存在と読取可否を確認する。
 
 ジャグリングの予約は読み取れた場合に `card_to_clone_readable=true`、待ちなしは
 `card_to_clone_uid=null` とし、この正常な null に理由や警告を付けない。

@@ -35,6 +35,9 @@ public static partial class McpMod
             case SkittishPower:
                 Read("has_gained_block_this_turn", () => ReadPowerDataField<bool>(power, "hasGainedBlockThisTurn"));
                 break;
+            case ChainsOfBindingPower:
+                Read("bound_card_played", () => ReadPowerDataField<bool>(power, "boundCardPlayed"));
+                break;
             case JugglingPower:
                 Read("attacks_played_this_turn", () => ReadPowerDataField<int>(power, "attacksPlayedThisTurn"));
                 state["card_to_clone_readable"] = false;

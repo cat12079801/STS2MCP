@@ -9,6 +9,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.ValueProps;
 
 namespace STS2_MCP;
@@ -71,6 +72,9 @@ public static partial class McpMod
         Check(Equals(Plays(empty, "started")["total"], 0) && Types(empty, "started").Values.All(n => n == 0), "empty history has real zero counts");
         Check(Types(empty, "started").Keys.SequenceEqual(Enum.GetNames<CardType>()), "every card type including None/Status/Curse/Quest");
         Check(Last(empty).Count == 0 && ThisTurn(empty).Count == 0 && Reasons(empty).Count == 0 && _stateWarnings.Count == 0, "known empty differs from unknown");
+        Check(Equals(empty["bound_afflictions_this_turn"], 0), "no Bound affliction events is explicit zero without requiring the power");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(empty, WireOptions)))
+            Check(json.RootElement.GetProperty("bound_afflictions_this_turn").GetInt32() == 0, "known zero Bound count survives production wire settings");
         Check(Markdown(empty) == "" && Markdown(null) == "", "empty history and missing field stay quiet");
 
         Current(new CardPlayStartedEntry(attackPlay));
@@ -91,6 +95,15 @@ public static partial class McpMod
         Current(new CardExhaustedEntry { Actor = owner.Creature });
         Current(new CardExhaustedEntry { Actor = other.Creature });
         Current(new CardExhaustedEntry { Actor = owner.Creature }, false);
+        var bound = new Bound();
+        attack.Affliction = bound;
+        Current(new CardAfflictedEntry(attack, bound) { Actor = owner.Creature });
+        Current(new CardAfflictedEntry(attack, bound) { Actor = owner.Creature }); // Same card, two recorded events.
+        Current(new CardAfflictedEntry(attack, bound) { Actor = other.Creature });
+        Current(new CardAfflictedEntry(attack, bound)); // No actor is not the owner.
+        Current(new CardAfflictedEntry(attack, bound) { Actor = owner.Creature }, false);
+        Current(new CardAfflictedEntry(attack, new AfflictionModel()) { Actor = owner.Creature });
+        attack.Affliction = null; // Clearing the current affliction must not erase historical events.
         foreach (int amount in new[] { 2, 7, 0, -1 })
             Current(new DamageReceivedEntry(new DamageResult(amount)) { Actor = owner.Creature });
         Current(new DamageReceivedEntry(new DamageResult(9)) { Actor = other.Creature });
@@ -110,6 +123,7 @@ public static partial class McpMod
         Check(Last(full).SequenceEqual(new[] { pileUid, pileUid, GetStableCardUid(otherPlay.Card) }), "last turn keeps entry order, duplicate and other-player uid using shared registry");
         Check(ThisTurn(full).SequenceEqual(new[] { pileUid, GetStableCardUid(skillPlay.Card), GetStableCardUid(otherPlay.Card), GetStableCardUid(otherPlay.Card) }), "this-turn uids filter turn, keep order, duplicate and other-player plays using shared registry");
         Check(Equals(full["cards_exhausted_this_turn"], 2), "exhaust counts events for owner, not exhaust pile size");
+        Check(Equals(full["bound_afflictions_this_turn"], 2) && attack.Affliction == null, "Bound count filters turn, recorded actor and entry affliction, keeps repeated events after current affliction cleared");
         Check(Equals(full["unblocked_damage_events_this_turn"], 2) && Equals(full["unblocked_damage_events_this_combat"], 3), "positive unblocked hits, not HP total, with separate time scopes");
         Check(Equals(full["block_gains_this_turn"], 3), "Unmovable uses playing owner, Move flag, repeated events, no receiver filter");
         Check(Reasons(full).Count == 0 && _stateWarnings.Count == 0, "valid history has no warnings");
@@ -117,12 +131,14 @@ public static partial class McpMod
         string markdown = Markdown(full);
         Check(markdown.Contains("player turn 1") && markdown.Contains("started=8") && markdown.Contains("finished=2") && markdown.Contains("Attack:2") && markdown.Contains(pileUid), "compact markdown shows useful counts and uid");
         Check(markdown.Contains("exhausted=2") && markdown.Contains("unblocked hits (turn)=2") && markdown.Contains("unblocked hits (combat)=3") && markdown.Contains("card block gains=3"), "compact markdown distinguishes damage scopes and block/exhaust events");
+        Check(markdown.Contains("bound afflictions=2"), "markdown labels Bound affliction events");
         Check(markdown.Contains($"this turn=[{string.Join(", ", ThisTurn(full))}]") && markdown.Contains($"last turn=[{string.Join(", ", Last(full))}]"), "markdown distinguishes nonempty current and previous uid arrays");
         Check(Markdown(new(empty) { ["cards_exhausted_this_turn"] = 1 }).Contains("this turn=[") == false, "empty current uid array stays hidden when another field is shown");
         Check(!markdown.Contains("Power:0") && JsonSerializer.Serialize(full, WireOptions) == saved, "markdown omits empty type counts and does not mutate JSON");
         using (var json = JsonDocument.Parse(saved))
         {
             Check(json.RootElement.GetProperty("turn_number").GetInt32() == 1, "turn number is numeric");
+            Check(json.RootElement.GetProperty("bound_afflictions_this_turn").GetInt32() == 2, "Bound affliction count is a wire integer");
             Check(json.RootElement.GetProperty("card_plays_started_this_turn").GetProperty("by_type").GetProperty("Attack").GetInt32() == 2, "type counts are numeric");
             Check(!json.RootElement.GetProperty("card_plays_started_this_turn").GetProperty("by_type").TryGetProperty("attack", out _), "wire naming policy leaves dictionary type keys unchanged");
             Check(json.RootElement.GetProperty("last_player_turn_card_uids")[0].GetString() == pileUid, "uids are strings");
@@ -132,6 +148,7 @@ public static partial class McpMod
         owner.PlayerCombatState!.Number = 3;
         var next = BuildCombatHistoryState(owner);
         Check(Equals(next["turn_number"], 3) && Equals(next["cards_exhausted_this_turn"], 0) && Last(next).Count == 0 && ThisTurn(next).Count == 0, "fresh snapshot follows engine reset and player-specific turn number");
+        Check(Equals(next["bound_afflictions_this_turn"], 0) && Equals(full["bound_afflictions_this_turn"], 2), "Bound count follows history reset and previous snapshot stays independent");
         Check(JsonSerializer.Serialize(full, WireOptions) == saved, "previous snapshot detached from history changes");
 
         var brokenCard = new CardModel(CardType.Attack) { ThrowType = true };
@@ -146,6 +163,19 @@ public static partial class McpMod
         brokenPredicate.ThisTurn = _ => throw new MissingMethodException("HappenedThisTurn renamed");
         var predicateFailure = BuildCombatHistoryState(owner);
         Check(predicateFailure["cards_exhausted_this_turn"] == null && Equals(Plays(predicateFailure, "started")["total"], 1), "predicate failure is isolated");
+        history.Items.Clear();
+        BeginStateWarnings();
+        Current(new CardAfflictedEntry(attack, bound) { Actor = owner.Creature });
+        var badBound = Current(new CardAfflictedEntry(attack, bound) { Actor = owner.Creature });
+        badBound.ThisTurn = _ => throw new MissingMethodException("Bound turn predicate failed");
+        var boundFailure = BuildCombatHistoryState(owner);
+        const string boundKey = "bound_afflictions_this_turn";
+        Check(boundFailure[boundKey] == null && Reasons(boundFailure)[boundKey].Contains("Bound turn predicate failed"), "late Bound predicate failure discards partial count and records reason");
+        Check(_stateWarnings.Count == 1 && _stateWarnings[0].StartsWith($"player.combat_history.{boundKey}:"), "Bound failure records field-specific warning");
+        Check(Equals(boundFailure["cards_exhausted_this_turn"], 0) && Equals(Plays(boundFailure, "started")["total"], 0), "Bound failure preserves independent values");
+        Check(Markdown(boundFailure).Contains($"{boundKey}=null (") && Markdown(boundFailure).Contains("Bound turn predicate failed"), "markdown displays unavailable Bound count and reason");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(boundFailure, WireOptions)))
+            Check(json.RootElement.GetProperty(boundKey).ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty(boundKey, out _), "unavailable Bound count stays null with wire reason");
         history.Items.Clear();
         Previous(new CardPlayFinishedEntry(attackPlay));
         var badLast = Previous(new CardPlayFinishedEntry(attackPlay));
@@ -174,18 +204,18 @@ public static partial class McpMod
         history.ThrowFinished = false;
         history.ThrowEntries = true;
         var failedEntries = BuildCombatHistoryState(owner);
-        Check(Reasons(failedEntries).Count == 8 && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number");
+        Check(Reasons(failedEntries).Count == 9 && failedEntries[boundKey] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
         history.ThrowEntries = false;
         CombatManager.Instance.ThrowHistory = true;
         var failedHistory = BuildCombatHistoryState(owner);
-        Check(Reasons(failedHistory).Count == 8 && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
+        Check(Reasons(failedHistory).Count == 9 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
         CombatManager.Instance.ThrowHistory = false;
         CombatManager.Instance.Value = null;
-        Check(Reasons(BuildCombatHistoryState(owner)).Count == 8, "null history is unavailable");
+        Check(Reasons(BuildCombatHistoryState(owner)).Count == 9, "null history is unavailable");
         CombatManager.Instance.Value = history;
         owner.Creature.CombatState = null;
         var failedCombat = BuildCombatHistoryState(owner);
-        Check(Reasons(failedCombat).Count == 7 && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
+        Check(Reasons(failedCombat).Count == 8 && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
         owner.Creature.CombatState = combat;
         owner.PlayerCombatState!.ThrowTurn = true;
         var failedTurn = BuildCombatHistoryState(owner);

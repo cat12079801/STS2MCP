@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.ValueProps;
 
 namespace STS2_MCP;
@@ -59,6 +60,14 @@ public static partial class McpMod
             var combat = CurrentCombat();
             return CombatManager.Instance.History.Entries.OfType<CardExhaustedEntry>()
                 .Count(e => e.HappenedThisTurn(combat) && e.Actor == owner.Creature);
+        });
+        Read("bound_afflictions_this_turn", () =>
+        {
+            var combat = CurrentCombat();
+            // ChainsOfBindingPower.AfterCardDrawn counts affliction events, not
+            // cards still carrying Bound or currently remaining in hand.
+            return CombatManager.Instance.History.Entries.OfType<CardAfflictedEntry>()
+                .Count(e => e.HappenedThisTurn(combat) && e.Actor == owner.Creature && e.Affliction is Bound);
         });
         Read("unblocked_damage_events_this_turn", () =>
         {

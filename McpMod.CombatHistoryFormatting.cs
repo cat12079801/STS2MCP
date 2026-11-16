@@ -21,6 +21,7 @@ public static partial class McpMod
                 string label = key switch
                 {
                     "cards_exhausted_this_turn" => "exhausted",
+                    "bound_afflictions_this_turn" => "bound afflictions",
                     "unblocked_damage_events_this_turn" => "unblocked hits (turn)",
                     "unblocked_damage_events_this_combat" => "unblocked hits (combat)",
                     "block_gains_this_turn" => "card block gains",

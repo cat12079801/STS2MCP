@@ -55,6 +55,7 @@ namespace MegaCrit.Sts2.Core.Models
     public class ModelId(string entry) { public string Entry = entry; }
     public class CardModel(Entities.Cards.CardType type)
     {
+        public AfflictionModel? Affliction;
         public ModelId Id = new("TEST");
         public CardModel? DeckVersion;
         public int Rarity => 0;
@@ -62,6 +63,11 @@ namespace MegaCrit.Sts2.Core.Models
         public bool ThrowType;
         public Entities.Cards.CardType Type => ThrowType ? throw new MissingMemberException("Type renamed") : Value;
     }
+    public class AfflictionModel { }
+}
+namespace MegaCrit.Sts2.Core.Models.Afflictions
+{
+    public sealed class Bound : AfflictionModel { }
 }
 namespace MegaCrit.Sts2.Core.ValueProps
 {
@@ -98,6 +104,11 @@ namespace MegaCrit.Sts2.Core.Combat.History.Entries
     public class CardPlayStartedEntry(Entities.Cards.CardPlay play) : CombatHistoryEntry { public Entities.Cards.CardPlay CardPlay = play; }
     public class CardPlayFinishedEntry(Entities.Cards.CardPlay play) : CombatHistoryEntry { public Entities.Cards.CardPlay CardPlay = play; }
     public class CardExhaustedEntry : CombatHistoryEntry { }
+    public class CardAfflictedEntry(Models.CardModel card, Models.AfflictionModel affliction) : CombatHistoryEntry
+    {
+        public Models.CardModel Card = card;
+        public Models.AfflictionModel Affliction = affliction;
+    }
     public class DamageReceivedEntry(Entities.Creatures.DamageResult result) : CombatHistoryEntry
     {
         public Entities.Creatures.Creature? Receiver => Actor;

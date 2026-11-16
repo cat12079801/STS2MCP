@@ -91,6 +91,24 @@ namespace MegaCrit.Sts2.Core.Models.Powers
         public void SetPending(CardModel? card) => ((Data)PeekData()!).cardToClone = card;
         public CardModel? PeekPending() => ((Data)PeekData()!).cardToClone;
     }
+    public class ChainsOfBindingPower : PowerModel
+    {
+        private class Data { public bool boundCardPlayed = false; }
+        public ChainsOfBindingPower() => SetData(new Data());
+        public void Set(bool value) => ((Data)PeekData()!).boundCardPlayed = value;
+        public bool Peek() => ((Data)PeekData()!).boundCardPlayed;
+    }
+    public class MissingBoundDataPower : ChainsOfBindingPower { }
+    public class MissingBoundFieldPower : ChainsOfBindingPower
+    {
+        private class Data { }
+        public MissingBoundFieldPower() => SetData(new Data());
+    }
+    public class WrongBoundFieldPower : ChainsOfBindingPower
+    {
+        private class Data { public int boundCardPlayed = 1; }
+        public WrongBoundFieldPower() => SetData(new Data());
+    }
     public class MissingDataPower : JugglingPower { }
     public class MissingCloneFieldPower : JugglingPower
     {
