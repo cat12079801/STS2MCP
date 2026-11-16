@@ -64,7 +64,7 @@ Every JSON response includes:
     `type` / `target_type` はゲームの enum 名、`affliction` は現在の `{ id, amount }`、
     `enchantment` は `{ id, amount, status }`（正常に未付与と確認できた場合は null）。
     `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
-    モメンタムだけ `extra_damage`（`Momentum._extraDamage`。プレイごとに `amount` ずつ伸びる追加ダメージ）を足す。
+    モメンタムだけ `extra_damage`（`Momentum._extraDamage`。再演を含むプレイの 1 回ごとに、そのダメージの後で `amount` ずつ伸びる追加ダメージ。手札の `vs_targets` には既に含まれる）を足す。
     `is_upgraded` / `is_upgradable`、`tags`（`CardTag` の enum 名を enum の数値順。無ければ `[]`）、
     `can_play` / `unplayable_reason`（手札と同じ `CardModel.CanPlay`。パイルでは「いま出せるか」ではない。
     [パイルの `can_play`](raw-full.md) の節を参照）も同じく出す。

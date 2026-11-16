@@ -566,6 +566,8 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   例は `{ "id": "VIGOROUS", "amount": 3, "status": "Disabled" }`。
   モメンタム（`Momentum`）だけ `extra_damage`（整数）を足す。`Momentum.EnchantDamageAdditive` が
   PoweredAttack に返す private の `_extraDamage` で、`Momentum.OnPlay` がプレイのたびに `Amount` を足す。
+  現在値は、次のプレイ（再演の 1 回目）で PoweredAttack の各ダメージに加わる値。`CardModel.OnPlayWrapper` は再演の各回で札の `OnPlay` の後に `Momentum.OnPlay` を呼ぶので、増えるのは各回のダメージの後（1 回目のプレイには、そのプレイの増分は乗らない）。
+  手札の `vs_targets` などのプレビュー値（`DamageVar.UpdateCardPreview` / `Hook.ModifyDamage`）には、この加算が既に含まれる。足し直さない。
   宣言されたフィールドを読むだけで、getter・setter（`AssertMutable`）・フックは呼ばない。
   未プレイの 0 も出す。例は `{ "id": "MOMENTUM", "amount": 5, "status": "Normal", "extra_damage": 10 }`。
   読めない（フィールドの欠落・型違い）ときは null とし、`enchantment.extra_damage` の理由と `warnings` を付け、
