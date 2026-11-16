@@ -418,6 +418,8 @@ public static partial class McpMod
         var topOverlay = NOverlayStack.Instance?.Peek();
         var currentRoom = runState.CurrentRoom;
         bool mapIsOpen = IsMapScreenOpenOrVisible();
+        // Set only for the battle-less combat state below (see CombatBoundaryReason).
+        string? combatBoundaryReason = null;
         // The settings screen is pushed on the run's submenu stack, over everything below.
         // It is checked first so the room underneath is not reported as the live screen.
         var settingsState = TryBuildSettingsMenuState(tree?.Root, inRun: true);
@@ -533,8 +535,12 @@ public static partial class McpMod
                 }
                 else
                 {
+                    // No battle to show: the fight is being set up, or it is over and the rewards
+                    // (or the way out) are on their way. Either way the game moves on by itself.
                     result["state_type"] = combatRoom.RoomType.ToString().ToLower();
-                    result["message"] = "Combat ended. Waiting for rewards...";
+                    combatBoundaryReason = ReadCombatBoundaryReason(combatRoom);
+                    result["message"] = CombatBoundaryMessage(
+                        combatBoundaryReason, ReadEncounterGivesRewards(combatRoom));
                 }
             }
         }
@@ -644,7 +650,7 @@ public static partial class McpMod
             result["player"] = BuildPlayerState(_player);
         }
 
-        AddResolvingState(result, result.GetValueOrDefault("state_type")?.ToString());
+        AddResolvingState(result, result.GetValueOrDefault("state_type")?.ToString(), combatBoundaryReason);
 
         return result;
     }
@@ -673,7 +679,11 @@ public static partial class McpMod
         "crystal_sphere", "map", "menu", "game_over"
     };
 
-    private static void AddResolvingState(Dictionary<string, object?> result, string? stateType)
+    /// <param name="combatBoundaryReason">
+    /// <c>combat_starting</c> / <c>combat_ending</c> for the battle-less combat state (a combat room whose
+    /// fight is not in progress and has nothing in front of it); null everywhere else.
+    /// </param>
+    private static void AddResolvingState(Dictionary<string, object?> result, string? stateType, string? combatBoundaryReason = null)
     {
         var reasons = new List<string>();
 
@@ -692,12 +702,20 @@ public static partial class McpMod
             var combat = CombatManager.Instance;
             if (combat.IsInProgress)
             {
+                // IsStarting is never true here: StartCombatInternal sets IsInProgress and clears
+                // IsStarting together. The start is reported by the battle-less state instead.
                 if (combat.PlayerActionsDisabled) reasons.Add("player_actions_disabled");
-                if (combat.IsStarting) reasons.Add("combat_starting");
-                if (combat.IsOverOrEnding) reasons.Add("combat_ending");
+                if (combat.IsOverOrEnding) reasons.Add(CombatEndingReason);
             }
         }
         catch (Exception ex) { Warn("is_resolving.combat", ex); }
+
+        // Before the fight is in progress, and from its end until the rewards screen (or the map, the
+        // event, the game over screen) is up, the combat state has no battle and nothing to answer:
+        // the game is still on its way. Every one of those destinations is an input screen, which
+        // is caught before this state is built, so the reason cannot outlive the window.
+        if (combatBoundaryReason != null)
+            reasons.Add(combatBoundaryReason);
 
         // The turn-start draw and hooks run outside the action queue, with player actions
         // already re-enabled, so the two checks above both read "idle" while the hand is still
@@ -749,6 +767,41 @@ public static partial class McpMod
         result["is_resolving"] = reasons.Count > 0;
         if (reasons.Count > 0)
             result["resolving_reasons"] = reasons;
+    }
+
+    /// <summary>
+    /// Reads the public values <see cref="CombatBoundaryReason"/> needs. Called only from the
+    /// battle-less combat state (the fight is not in progress), on the main thread.
+    /// </summary>
+    private static string ReadCombatBoundaryReason(CombatRoom combatRoom)
+    {
+        try
+        {
+            var combat = CombatManager.Instance;
+            return CombatBoundaryReason(
+                       combat.IsInProgress,
+                       combat.CurrentCombatId != null,
+                       combat.IsStarting,
+                       combatRoom.IsPreFinished)
+                   // Unreachable from the caller (it checked !IsInProgress on the same frame); a fight
+                   // that is in progress here has only just begun.
+                   ?? CombatStartingReason;
+        }
+        catch (Exception ex)
+        {
+            Warn("combat_boundary.reason", ex);
+            return CombatEndingReason;
+        }
+    }
+
+    private static bool ReadEncounterGivesRewards(CombatRoom combatRoom)
+    {
+        try { return combatRoom.Encounter.ShouldGiveRewards; }
+        catch (Exception ex)
+        {
+            Warn("combat_boundary.encounter_rewards", ex);
+            return true;
+        }
     }
 
     /// <summary>

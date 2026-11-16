@@ -157,8 +157,10 @@ public static partial class McpMod
                 }
                 else
                 {
+                    // The fight is being set up, or it is over and the rewards are on their way.
                     result["state_type"] = combatRoom.RoomType.ToString().ToLower();
-                    result["message"] = "Combat ended. Waiting for rewards...";
+                    result["message"] = CombatBoundaryMessage(
+                        ReadCombatBoundaryReason(combatRoom), ReadEncounterGivesRewards(combatRoom));
                 }
             }
         }

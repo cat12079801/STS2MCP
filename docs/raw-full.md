@@ -133,8 +133,8 @@ markdown では先頭に `STILL RESOLVING (理由)` の警告が出る。理由�
 |---|---|
 | `action_queue_not_empty` | `ActionQueueSet` が空でない。ただし選択待ちで止まっている action だけなら立てない |
 | `player_actions_disabled` | `CombatManager.PlayerActionsDisabled`。手番の終了（`PlayerCmd.EndTurn` → `OnEndedTurnLocally`）から、次の手番の `Phase` が `Start` になるまで |
-| `combat_ending` | `CombatManager.IsOverOrEnding` |
-| `combat_starting` | `CombatManager.IsStarting`。ただし判定は `IsInProgress` の内側にあり、`StartCombatInternal` は `IsInProgress` と `IsStarting=false` を同時に立てるので、現状は立たない（開始中の state は `battle` の無い `monster` になり、`wait: true` は落ち着いたとみなさない） |
+| `combat_ending` | 戦闘中は `CombatManager.IsOverOrEnding`（敵が全滅して `EndCombatInternal` が走る前など）。戦闘が終わってから報酬画面などが出るまでの `battle` の無い state でも立つ（下の「戦闘の前後」） |
+| `combat_starting` | 戦闘の部屋に入ってから戦闘が始まる（`CombatManager.IsInProgress` が立つ）までの `battle` の無い state（下の「戦闘の前後」） |
 | `player_turn_starting` | 戦闘の画面（`monster` / `elite` / `boss`）で、手番の初め（ブロックの消去・エナジーの再設定・手札のドロー・手番開始時のフック）が終わっていない |
 | `card_still_being_played` | `NPlayerHand.InCardPlay` |
 | `reward_selection_resolving` | 報酬・カード報酬の選択を送った後、完了の合図が出るまで |
@@ -155,6 +155,25 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 手番の初めのフックが開いた選択画面（`hand_select` / `card_select` など）は、下の規則で入力待ちとして false になる。
 未対応のオーバーレイ（`overlay`）にはこの理由を付けない。
 
+**戦闘の前後（`combat_starting` / `combat_ending`）。** 戦闘の部屋で `CombatManager.IsInProgress` が false で、
+マップ・報酬・ゲームオーバー・選択画面などが前に出ていないとき、state は `state_type` が `monster` / `elite` / `boss` で
+`battle` を持たず、`message` と次の理由で解決中（`is_resolving: true`）を返す。ゲームの値は公開のものだけを読む。
+
+| 局面 | 理由 | `message` | ゲームの値（デコンパイル `sts2-a671e9ef`） |
+|---|---|---|---|
+| 部屋に入ってから戦闘を組むまで | `combat_starting` | `Combat is starting. Waiting for the first turn...` | `RunManager.EnterRoomInternal` が部屋を積んだ後、`CombatRoom.StartCombat` が `CombatManager.SetUpCombat` を呼ぶ前。ターンの状態が無い（`CurrentCombatId` が null）で、部屋は終わっていない（`CombatRoom.IsPreFinished` が false） |
+| 戦闘を組んでから始まるまで | `combat_starting` | 同上 | `CombatManager.IsStarting`（`SetUpCombat` で true、`StartCombatInternal` が `IsInProgress` と同時に false にする） |
+| 勝ってから報酬画面が出るまで | `combat_ending` | `Combat ended. Waiting for rewards...`（報酬の無い戦闘では `Combat ended. This encounter gives no rewards; waiting to leave the fight...`） | `EndCombatInternal` が `IsInProgress` を false にし、後で `CombatRoom.MarkPreFinished`。`NCombatUi.OnCombatWon` が死亡の演出を待って `NRewardsScreen` を出す（`EncounterModel.ShouldGiveRewards` が false なら `ProceedWithoutRewards` で 1 秒後にマップか元のイベントへ） |
+| 保存から再開した終わった戦闘で、報酬画面が出るまで | `combat_ending` | 同上 | `CombatRoom.StartPreFinishedCombat`。ターンの状態を作らず、報酬を出し直す |
+
+ターンの状態があって、開始中でも戦闘中でもなければ、その戦闘は終わっている（`CombatManager.CancelCombat` がターンの状態を消すのは
+部屋を出るとき〔`RunManager.ExitCurrentRoom` が部屋を降ろした後〕だけ）。負けたとき（`ProcessPendingLoss`）は、
+`CreatureCmd.Kill` が先にゲームオーバーの画面を積むので `game_over`（入力待ち）が返る。
+行き先（報酬・カード報酬・マップ・元のイベント・ゲームオーバー）はどれも入力待ちの画面で、この分岐より前で判定するので、
+理由がそのまま残って待つ側が行き詰まることはない。
+戦闘中（`IsInProgress` が true）の判定に `IsStarting` は使わない（`StartCombatInternal` が `IsInProgress` と同時に `IsStarting` を false にするので立たない）。
+`message` は協力プレイの state でも同じ文言を返す（協力プレイの state は `is_resolving` を持たない）。
+
 **入力待ちの画面。** `card_select` / `hand_select` / `bundle_select` / `relic_select` / `card_reward` / `rewards` /
 `event` / `rest_site` / `shop` / `fake_merchant` / `treasure` / `crystal_sphere` / `map` / `menu` / `game_over` では、
 上の理由をすべて消して false にする（ゲームは呼び出し側の答えを待っていて、解決中と返すと待つ側が行き詰まるため）。
@@ -163,6 +182,8 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.is_play_phase` も true の state が
 3 回続くまで待つ（[Waiting for the Game to Settle](#waiting-for-the-game-to-settle)）。
 `player_turn_starting` は既存の `is_resolving` の意味（解決途中の値を返している）に沿って理由を足したものなので、`schema_version` は 4 のまま。
+戦闘の前後の `combat_starting` / `combat_ending` も、既にあった理由の名前を同じ意味（戦闘の開始中・終了中で、ゲームが自分で先へ進む）で
+`battle` の無い state に付けたものなので、`schema_version` は 4 のまま。この state は `battle` が無いので、`wait: true` は以前から落ち着いたとみなさない。
 
 ### 解放済みの戦闘生成 pool（追加、schema 3）
 
