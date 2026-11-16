@@ -1588,7 +1588,7 @@ grid と choose の両方に次を出す。
 
 | 項目 | 型 | 意味 |
 |---|---|---|
-| `screen_visible` | bool | 画面（grid 画面は `_grid` も）が表示されているか（`Visible` と `IsVisibleInTree`） |
+| `screen_visible` | bool | 画面（grid 画面は `_grid` も）が表示されているか（`Visible` と `IsVisibleInTree`。choose 画面は覗き見中でないことも含む） |
 | `hidden_by` | string \| null | 見えていない理由。`map`・`peek`・`capstone`・`unknown`。見えていれば `null` |
 | `reveal_on_action` | bool | `select_card` / `confirm_selection` / `cancel_selection` が、押す前に覆いを外すか |
 
@@ -1597,6 +1597,8 @@ grid と choose の両方に次を出す。
 - `NOverlayStack.Push` は、`StackIsCovered`（`NMapScreen.Instance.IsOpen` か `NCapstoneContainer.InUse`）のときに
   積んだ画面の `AfterOverlayHidden` を呼び、画面を `Visible = false` にする。マップの `Opened` シグナルは
   `NOverlayStack.HideOverlays` につながっていて、開いている選択画面も同じく隠れる
+- 例外: `NDeckCardSelectScreen`（除去などのデッキ選択）は `AfterOverlayShown` / `AfterOverlayHidden` を override して base を呼ばず、`_closeButton` の有効・無効だけを切り替える。そのためマップの下にあっても `Visible` が落ちず、`screen_visible: true`・`hidden_by: null` になる。`select_card` / `confirm_selection` はマップを閉じずにその下で押し、`cancel_selection` は `_closeButton` が無効なので error になる
+- 矢印で閉じる経路は `Close(animateOut: true)` なので、閉じる演出（最長約 0.35 秒）の間は `NMapScreen.Visible` が true のまま残る。この間、部屋の state が `map` を返すことがある（sts2 の MCP_ISSUES に未解決として記録）
 - マップの左下の戻る矢印は `NMapScreen._backButton`（`NBackButton`）。押すと `OnBackButtonPressed` → `NMapScreen.Close`
   → `Closed` シグナル → `NOverlayStack.ShowOverlays` → `AfterOverlayShown` で画面が戻る。この矢印は `NMapScreen.Open` で
   `ActFloor > 0` のときだけ有効になる

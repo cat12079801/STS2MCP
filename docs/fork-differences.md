@@ -94,6 +94,7 @@
   - 候補と `select_card` の index は画面の全候補（`NCardGrid._cards`）から作る。画面外の札も選べる（#73）
   - `cards[].selected` / `selected_count` / `required_count` / `min_select` / `max_select` と `screen_type` を出す。`select_card` はトグル。
     `confirm_selection` は枚数の不一致・空の選択をエラーにする。エンチャント画面のプレビュー板も扱う（#56）
+  - マップ（または戦闘中の覗き見）に隠れた選択画面は、`select_card` / `confirm_selection` / `cancel_selection` が、人の操作と同じ経路（マップの戻る矢印・覗き見の解除）で 1 回だけ表に戻してから続け、外したものを `revealed` で返す。矢印が無効・移動中・capstone・原因不明なら何も押さずに error。state に `screen_visible` / `hidden_by` / `reveal_on_action`（#84）
 - **休憩所**: `choose_rest_option` は `option_id`（`HEAL` / `SMITH` / `DIG` …）を受け、id で選択肢を決めてからボタンを引く（並び順に依存しない）。`options[].has_button` を出す（#46）
 - **ショップ**: `sell_potion slot N` で悪臭ポーションなどを商人に売れる。売れるものは `shop.sellable_potions`（#20）
 - **マップ**:
