@@ -29,6 +29,8 @@
   手番の初めのドローと手番開始時のフックの間も、戦闘の画面では `player_turn_starting` で解決中と返す（ゲームはこの間 `PlayerActionsDisabled` を戻し、action の列の外でドローする）（#87）
   戦闘の部屋に入ってから戦闘が始まるまでと、戦闘が終わってから報酬画面などが出るまでの `battle` の無い state も、`combat_starting` / `combat_ending` で解決中と返し、
   `message` を局面に合わせる（開始中は `Combat is starting...`。本家は開始中も `Combat ended. Waiting for rewards...` と返す）（#88）
+  マップの移動中（`map_traveling`）・閉じる演出の間（`map_closing`）の `map` と、ラン中の部屋の切り替え（`room_changing`）・読み込み中（`run_loading`）の `unknown` も
+  解決中と返し、`wait: true` もそこで落ち着いたとみなさない（本家はどれも `is_resolving: false` で返し、`choose_map_node` / `continue` の `wait: true` が途中で返る）（#TBD）
 - **`warnings`**: state の一部を組めなかったとき、その箇所と例外を一覧で返す（黙って欠かさない）（#54）
 - **JSON は既定でコンパクト**。`?pretty=1` で字下げ（#45）
 - **`GET /api/v1/singleplayer?passive=1`**: 読むだけで UI に触らない（ショップの在庫を開き直す・偽商人や宝箱のボタンを押す、をしない）（#59）
@@ -104,6 +106,8 @@
   - `map.encounters_seen`: この層でもう戦った通常戦・エリート・イベント（`elite_cycle` 付き）。次の遭遇（隠し情報）は出さない（#34 で足した `next_encounters` を #57 で撤去した）
   - レリックが付けた印: ノードの `marked_by` / `quests` / `can_be_modified`、`map.marked_nodes`（#33）
   - markdown に `## Map Graph`（行ごとの隣接リスト）（#35）と `**Boss:**` / `**Boss candidates:**`（#22）
+  - `choose_map_node` は、人のクリックと同じく選択を受け付けるマップでだけ押す。閉じる演出中・移動中・部屋が終わる前に開いた（`IsTravelEnabled` が false の）マップでは何も押さずに error。
+    `map.travel_enabled` で移動が有効かを返す（本家は閉じかけのマップや、トップバーで開いたマップからも移動できる）（#TBD）
 
 ## 索引・用語
 
@@ -129,4 +133,4 @@
 
 ## 試験
 
-- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・uid・カード選択・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応）
+- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・uid・カード選択・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中）

@@ -775,6 +775,13 @@ public static partial class McpMod
         // to be JSON-only, which made it invisible to the markdown workflow.
         FormatMapBossMarkdown(sb, map);
 
+        // Only said when false: the usual map takes a choice, and the multiplayer map omits the field.
+        if (map.GetValueOrDefault("travel_enabled") is false)
+        {
+            sb.AppendLine("**Travel:** not enabled - the current room is not finished (or the map is traveling); choose_map_node is refused.");
+            sb.AppendLine();
+        }
+
         // What this act has already served. NOT what comes next - the game does not show that
         // before the room is entered, and neither do we (see BuildEncountersSeen).
         if (map.TryGetValue("encounters_seen", out var esObj) && esObj is Dictionary<string, object?> seen && seen.Count > 0)

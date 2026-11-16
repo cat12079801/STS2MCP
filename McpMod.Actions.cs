@@ -777,8 +777,15 @@ public static partial class McpMod
     private static Dictionary<string, object?> ExecuteChooseMapNode(Dictionary<string, JsonElement> data)
     {
         var mapScreen = NMapScreen.Instance;
-        if (mapScreen == null || (!mapScreen.IsOpen && !IsNodeVisible(mapScreen)))
+        if (mapScreen == null)
             return Error("Map screen is not open");
+        // Only a map that is open and takes a click: not one closing (Close(animateOut: true) keeps it
+        // visible for its tween), not one already traveling, not one opened before the room was finished.
+        string? refusal = ChooseMapNodeRefusal(
+            mapScreen.IsOpen, IsNodeVisible(mapScreen), mapScreen.IsTraveling,
+            mapScreen.IsTravelEnabled, mapScreen.IsDebugTravelEnabled, IsMapTravelActionPending());
+        if (refusal != null)
+            return Error(refusal);
 
         var travelable = FindAll<NMapPoint>(mapScreen)
             .Where(mp => mp.State == MapPointState.Travelable && mp.Point != null)

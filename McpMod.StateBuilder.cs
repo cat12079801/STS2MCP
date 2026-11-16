@@ -20,6 +20,8 @@ using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
 using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
+using MegaCrit.Sts2.Core.Entities.Actions;
+using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
@@ -759,6 +761,14 @@ public static partial class McpMod
         if (stateType != null && _playerInputStates.Contains(stateType))
             reasons.Clear();
 
+        // A map that is traveling or closing is not waiting for the player, although "map" is an input
+        // screen; an in-run screen the builder does not recognise is a room change or a run loading. Added
+        // after the clear on purpose, so it is limited to those two screens and ends by itself
+        // (see MapTransitionReason / RunTransitionReason).
+        string? transitionReason = ReadTransitionReason(stateType);
+        if (transitionReason != null)
+            reasons.Add(transitionReason);
+
         // A submitted reward choice is resolving until the public completion signal or the
         // next OptionSelected wait. Merely displaying a choice is still an input boundary.
         if (stateType is "rewards" or "card_reward" && _rewardSession.Entries.Any(e => e.Resolving))
@@ -802,6 +812,69 @@ public static partial class McpMod
             Warn("combat_boundary.encounter_rewards", ex);
             return true;
         }
+    }
+
+    /// <summary>
+    /// Reads the values <see cref="MapTransitionReason"/> (for <c>map</c>) and <see cref="RunTransitionReason"/>
+    /// (for an in-run <c>unknown</c>) need. Every other screen gets null. On the main thread.
+    /// </summary>
+    private static string? ReadTransitionReason(string? stateType)
+    {
+        try
+        {
+            if (stateType == "map")
+            {
+                var map = NMapScreen.Instance;
+                if (map == null)
+                    return null;
+                return MapTransitionReason(
+                    map.IsOpen, IsNodeVisible(map), map.IsTraveling, map.IsTravelEnabled, IsMapTravelActionPending());
+            }
+
+            if (stateType == "unknown")
+            {
+                var run = RunManager.Instance;
+                if (!run.IsInProgress)
+                    return null;
+                return RunTransitionReason(run.DebugOnlyGetState()?.CurrentRoom != null, run.IsChangingRooms);
+            }
+        }
+        catch (Exception ex) { Warn("is_resolving.transition", ex); }
+        return null;
+    }
+
+    /// <summary>
+    /// A map vote or the move it leads to is running, or waits in the action queue. The executor normally runs
+    /// both synchronously inside the enqueue (<c>ActionExecutor.ActionQueueChanged</c> → <c>ExecuteActions</c>), so
+    /// this covers the frames before <c>NMapScreen.TravelToMapCoord</c> sets <c>IsTraveling</c> when it does not.
+    /// In combat a queued <c>MoveToMapCoordAction</c> (<c>GameActionType.NonCombat</c>) waits for the fight to end
+    /// (<c>ActionQueueSet.GetReadyAction</c>), so only a running action counts there.
+    /// </summary>
+    private static bool IsMapTravelActionPending()
+    {
+        var run = RunManager.Instance;
+        if (run.ActionExecutor?.CurrentlyRunningAction is VoteForMapCoordAction or MoveToMapCoordAction)
+            return true;
+        if (CombatManager.Instance.IsInProgress || run.ActionQueueSet == null)
+            return false;
+
+        if (GetInstanceFieldValue(run.ActionQueueSet, "_actionQueues") is not System.Collections.IEnumerable queues)
+        {
+            Warn("is_resolving.map_travel_queue", "ActionQueueSet._actionQueues not found");
+            return false;
+        }
+        foreach (var queue in queues)
+        {
+            if (queue == null || GetInstanceFieldValue(queue, "actions") is not System.Collections.IEnumerable actions)
+                continue;
+            foreach (var action in actions)
+            {
+                if (action is GameAction { State: not GameActionState.Canceled } gameAction
+                    && gameAction is VoteForMapCoordAction or MoveToMapCoordAction)
+                    return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -2731,6 +2804,11 @@ public static partial class McpMod
                 nextOptions.Add(option);
                 index++;
             }
+
+            // The nodes above list where the run can go next; whether the map takes the choice now is the
+            // game's IsTravelEnabled (false on a map opened from the top bar before the room is finished,
+            // and during travel). choose_map_node refuses while it is false.
+            state["travel_enabled"] = mapScreen.IsTravelEnabled;
         }
         state["next_options"] = nextOptions;
 

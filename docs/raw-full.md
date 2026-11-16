@@ -138,6 +138,10 @@ markdown では先頭に `STILL RESOLVING (理由)` の警告が出る。理由�
 | `player_turn_starting` | 戦闘の画面（`monster` / `elite` / `boss`）で、手番の初め（ブロックの消去・エナジーの再設定・手札のドロー・手番開始時のフック）が終わっていない |
 | `card_still_being_played` | `NPlayerHand.InCardPlay` |
 | `reward_selection_resolving` | 報酬・カード報酬の選択を送った後、完了の合図が出るまで |
+| `map_traveling` | `map` の state で、マップがノードへ移動している（下の「画面の遷移」） |
+| `map_closing` | `map` の state で、閉じたマップが閉じる演出の間まだ見えている（下の「画面の遷移」） |
+| `room_changing` | ラン中の `unknown` の state で、`RunManager.IsChangingRooms`（前の部屋を出て次の部屋に入るまで。再開したランが保存の部屋に入るときも） |
+| `run_loading` | ラン中の `unknown` の state で、ランの状態はあるが部屋がまだ無い（`continue` や新しいランの読み込み中） |
 
 **手番の初め（`player_turn_starting`）。** ゲームの `CombatManager.StartTurn` は、Player の手番に入ると
 `PlayerCombatState.Phase` を `Start` にしてすぐ `PlayerActionsDisabled` を false に戻し、ドローを含む
@@ -174,16 +178,42 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 戦闘中（`IsInProgress` が true）の判定に `IsStarting` は使わない（`StartCombatInternal` が `IsInProgress` と同時に `IsStarting` を false にするので立たない）。
 `message` は協力プレイの state でも同じ文言を返す（協力プレイの state は `is_resolving` を持たない）。
 
+**画面の遷移（`map_traveling` / `map_closing` / `room_changing` / `run_loading`）。** 入力を受け付けない遷移の途中を、
+入力待ちの画面や落ち着いた state と取り違えないための理由。ゲームの値（デコンパイル `sts2-a671e9ef`）は次のとおり。
+
+| 局面 | 理由 | ゲームの値 |
+|---|---|---|
+| `choose_map_node` の後、移動の演出と暗転の間（`map` のまま約 1.2 秒） | `map_traveling` | `NMapScreen.OnMapPointSelectedLocally` が `VoteForMapCoordAction` を積み、その実行（`MapSelectionSynchronizer.PlayerVotedForMapCoord` → `MoveToMapCoord`）が `MoveToMapCoordAction` を積む。後者が `NMapScreen.TravelToMapCoord` を待ち、そこで `IsTraveling = true` と `IsTravelEnabled = false` を同時に立て、経路の演出と暗転の後に `RunManager.EnterMapCoord` → `EnterMapPointInternal` へ進む。`IsTraveling` が true で `IsTravelEnabled` が false の間か、この 2 つの action が実行中か（戦闘の外で）列にある間 |
+| マップを戻る矢印・トップバーのボタンで閉じた直後（約 0.35 秒） | `map_closing` | `NMapScreen.Close(animateOut: true)` は `IsOpen` をすぐ false にし、`AnimClose` の tween（遅延 0.1 秒＋0.25 秒）が終わってから `Visible` を false にする。`IsOpen` が false で画面が見えている間 |
+| 移動・部屋の切り替えで、前の部屋を出てから次の部屋の画面が出るまで（`unknown`） | `room_changing` | `RunManager.IsChangingRooms`（`EnterMapPointInternal` などの開始から `finally` まで。`ExitCurrentRooms` の後は部屋が無い） |
+| 再開（`continue`）・新しいランの読み込み中（`unknown`・`room_type: null`。約 2 秒） | `run_loading`（保存の部屋に入る段階は `room_changing`） | `NMainMenu.OnContinueButtonPressedAsync` が `RunManager.SetUpSavedSingleplayer` でランの状態を先に置き（`IsInProgress` が true になる）、暗転・`NGame.LoadRun`（資源の読み込み・`NRun` の生成・地図の生成）の後で `LoadIntoLatestMapCoord` が部屋に入る。`RunState.CurrentRoom` が null で `IsChangingRooms` でない間 |
+
+- 移動が部屋に入ると、`EnterMapPointInternal` が `ClearScreens` でマップを演出なしで閉じ、`EnterRoom` の後に `IsTraveling = false` にする。
+  その後は部屋の state（戦闘の開始中なら `combat_starting`、イベントなら入力待ち）になる
+- 理由が残って行き詰まらないための条件: `map_traveling` は `IsTravelEnabled` が false の間だけ `IsTraveling` を数える。
+  次の部屋の終わり（`RunManager.Proceed` → `SetTravelEnabled(true)`）で移動が有効に戻ったマップは、人がクリックで移動できる
+  （`NMapPoint.IsTravelable` は `IsTravelEnabled` と点の状態だけを読む）ので、移動が途中で止まって `IsTraveling` が残っても、そのマップを解決中にしない。
+  戦闘中は `MoveToMapCoordAction`（`NonCombat`）が戦闘の終わりまで待つ（`ActionQueueSet.GetReadyAction`）ので、列にあるだけでは数えない。
+  `map_closing` は `Open` が tween を止めて `IsOpen` を戻すか、tween の終わりで画面が消えるので続かない。
+  `run_loading` は読み込みに失敗すると `RunManager.CleanUp` がランの状態を消す（`menu` に戻る）
+- 部屋の終わりに開いたマップ（入力待ち）と、トップバーで開いたマップ（部屋が終わっていない）には付けない。選択画面・イベント・報酬・メニュー・
+  ゲームオーバーなどほかの入力待ちの画面にも付けない。マップに隠れた選択画面（`card_select` の `hidden_by: "map"`）は、矢印で表に戻した直後も
+  overlay の判定がマップより先なので `card_select` で返る。選択が終わって画面が閉じ、マップの閉じる演出がまだ続いていれば `map`（`map_closing`）になる
+
 **入力待ちの画面。** `card_select` / `hand_select` / `bundle_select` / `relic_select` / `card_reward` / `rewards` /
 `event` / `rest_site` / `shop` / `fake_merchant` / `treasure` / `crystal_sphere` / `map` / `menu` / `game_over` では、
 上の理由をすべて消して false にする（ゲームは呼び出し側の答えを待っていて、解決中と返すと待つ側が行き詰まるため）。
-`reward_selection_resolving` だけはその後に足す。
+`reward_selection_resolving` と、`map` の `map_traveling` / `map_closing` だけはその後に足す（どちらも入力を受け付けない間だけ立つ）。
+`unknown` は入力待ちの画面ではない（理由が無ければ従来どおり false）。メニュー（ランの外）の state は `is_resolving` を持たない。
 
 POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.is_play_phase` も true の state が
 3 回続くまで待つ（[Waiting for the Game to Settle](#waiting-for-the-game-to-settle)）。
 `player_turn_starting` は既存の `is_resolving` の意味（解決途中の値を返している）に沿って理由を足したものなので、`schema_version` は 4 のまま。
 戦闘の前後の `combat_starting` / `combat_ending` も、既にあった理由の名前を同じ意味（戦闘の開始中・終了中で、ゲームが自分で先へ進む）で
 `battle` の無い state に付けたものなので、`schema_version` は 4 のまま。この state は `battle` が無いので、`wait: true` は以前から落ち着いたとみなさない。
+`map_traveling` / `map_closing` / `room_changing` / `run_loading` も、既存の `is_resolving` の意味（ゲームが自分で先へ進む途中で、入力を受け付けない）に沿って
+理由を足したもので、`schema_version` は 4 のまま。これまで `is_resolving: false` で返っていた移動中の `map`・読み込み中の `unknown` が true になり、
+`wait: true` もそこで落ち着いたとみなさなくなる（`choose_map_node` は次の部屋の state、`continue` は再開した部屋の state まで待つ）。
 
 ### 解放済みの戦闘生成 pool（追加、schema 3）
 
@@ -1403,6 +1433,7 @@ Pick one card to add to your deck. Appears after claiming a card reward, or dire
       { "col": 3, "row": 1, "type": "Monster" },
       { "col": 3, "row": 2, "type": "Monster" }
     ],
+    "travel_enabled": true,      // NMapScreen.IsTravelEnabled. false: choose_map_node is refused
     "next_options": [
       {
         "index": 0,
@@ -2444,12 +2475,25 @@ logged. The main thread is never blocked waiting for a removal/relic selection.
 Travel to a map node.
 
 ```json
+{ "action": "choose_map_node", "col": 2, "row": 3 }
 { "action": "choose_map_node", "index": 0 }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `index` | int | Yes | 0-based index from `next_options` |
+| `col` + `row` | int | One selector | Coordinates of a node in `next_options` (preferred: stable) |
+| `index` (alias `node_index`) | int | One selector | 0-based index from `next_options` |
+
+マップが選択を受け付けるときだけ押す。人のクリック（`NMapPoint.OnRelease` → `IsTravelable`）と同じ条件で、次のときは何も押さずに error を返す（単独・協力プレイとも）。
+
+| 状況 | error | ゲームの値 |
+|---|---|---|
+| マップが開いていない | `Map screen is not open` | `NMapScreen.IsOpen` が false で画面も見えていない |
+| 閉じる演出の途中（state は `map`・`map_closing`） | `Map screen is closing. ...` | `IsOpen` が false で画面が見えている（`Close(animateOut: true)` → `AnimClose`） |
+| 移動中（state は `map`・`map_traveling`） | `The map is already traveling to a node. ...` | 上の「画面の遷移」の `map_traveling` と同じ条件 |
+| 部屋が終わる前に開いたマップ（トップバー） | `Travel is not enabled on this map ...` | `IsTravelEnabled` が false（開発用の `IsDebugTravelEnabled` が立っていれば受け付ける） |
+
+移動が有効かは state の `map.travel_enabled`（`NMapScreen.IsTravelEnabled`）で分かる。markdown は false のときだけ `**Travel:** not enabled` の行を出す。
 
 ### `select_card`
 
