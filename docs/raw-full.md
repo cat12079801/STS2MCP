@@ -1336,6 +1336,10 @@ left to reattach to, the fight is over rather than about to restart.
 | `last_logged_id` | `MonsterModel.MoveStateMachine.StateLog` の実際の末尾の `Id`。MOD の観測履歴でも「最後に実行した行動」の再構築でもない |
 | `can_transition_away` | `NextMove.CanTransitionAway` の bool。false も必ず出す |
 
+**時機（`id` がいつ次の行動か）:** プレイヤーが入力できる落ち着いた局面では、`id` は次の敵手番で実行する行動。次の行動を抽選する `RollMove` は、プレイヤー側の追加ターンでない手番の始め（`CombatManager.StartTurn` → `Creature.PrepareForNextTurn`）と、プレイヤーの手番中に敵が追加されたとき（`CombatManager.AfterCreatureAdded`）にだけ呼ばれる。同じ手番の中でも `MonsterModel.SetMoveImmediate` が置き換えることがある（スタン・`Queen` の激昂・`ReattachPower`・`IllusionPower` など）。敵が行動してから次のプレイヤー手番が始まるまでは、実行済みの行動の ID が残る。追加ターンでは抽選しない（敵はまだ行動していないので `id` は次の行動のまま）。
+
+**次の行動を持たない行動:** `GasBomb` の `EXPLODE_MOVE`（`GasBomb.GenerateMoveStateMachine`。爆発のあと自分を倒す）のように、ゲームが `FollowUpState` も `FollowUpStateId` も設定しない行動では、`follow_up_id` は null で `readable` は false、warnings に `follow_up_id` の理由が出る。読取の失敗と区別できないので、読み手は `id` で判断する。
+
 参照・ログ末尾がない場合や読取例外では、該当項目だけ `null` とし、
 `move_state.unavailable_reasons.<key>` に `ExceptionType: message`、トップレベルの
 `warnings` に `battle.enemies.<entity_id>.move_state.<key>` を付ける。成功した項目は保持する。
