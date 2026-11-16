@@ -69,7 +69,7 @@
   - 山札の表示順はゲームの並べ方（`Rarity` → `CardModel.CompareTo`）で、同順位は uid の順。引く順を漏らさない（#79）
 - **戦闘中の `card_select`**: 戦闘のパイルから選ぶ行に、戦闘中の `uid` を出す（#70）
 - **死亡中の敵**: 復活を待つ敵（再結合など）を `alive: false` で `enemies[]` に残し、`revive: {in_turns, hp, power_id, power_name}` を付ける（#55）
-- **敵の行動状態**: 全モンスターの `battle.enemies[].move_state` に現在の行動 ID・follow-up ID・ゲームの行動ログ末尾 ID・遷移可否を公開する。スタン時も実際の復帰先とロックを保持。四値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体別 warnings とし、履歴から推測しない。分岐の事前抽選やゲームの状態変更はせず、Markdown に ID と follow-up を表示する。単独・協力プレイと死亡中の敵で共通、schema 4 を維持。[入力契約と出典](raw-full.md#敵の行動状態追加schema-4)（#TBD、`cat12079801/sts2#910`）
+- **敵の行動状態**: 全モンスターの `battle.enemies[].move_state` に現在の行動 ID・follow-up ID・ゲームの行動ログ末尾 ID・遷移可否を公開する。スタン時も実際の復帰先とロックを保持。四値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体別 warnings とし、履歴から推測しない。分岐の事前抽選やゲームの状態変更はせず、Markdown に ID と follow-up を表示する。単独・協力プレイと死亡中の敵で共通、schema 4 を維持。[入力契約と出典](raw-full.md#敵の行動状態追加schema-4)（#91、`cat12079801/sts2#910`）
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
