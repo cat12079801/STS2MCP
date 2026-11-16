@@ -123,6 +123,46 @@ state-specific data:
 }
 ```
 
+### 解決中の判定（`is_resolving` / `resolving_reasons`）
+
+単独プレイの state は `is_resolving`（bool）を必ず持ち、true のときだけ `resolving_reasons`（文字列の配列）を足す。
+true の間の手札・エナジー・敵の HP・`combat_history` などは解決途中の値で、計画には false の snapshot を使う。
+markdown では先頭に `STILL RESOLVING (理由)` の警告が出る。理由は次のとおり（複数が同時に出ることがある）。
+
+| 理由 | 立つ条件（ゲーム側の値） |
+|---|---|
+| `action_queue_not_empty` | `ActionQueueSet` が空でない。ただし選択待ちで止まっている action だけなら立てない |
+| `player_actions_disabled` | `CombatManager.PlayerActionsDisabled`。手番の終了（`PlayerCmd.EndTurn` → `OnEndedTurnLocally`）から、次の手番の `Phase` が `Start` になるまで |
+| `combat_starting` / `combat_ending` | `CombatManager.IsStarting` / `IsOverOrEnding` |
+| `player_turn_starting` | 戦闘の画面（`monster` / `elite` / `boss`）で、手番の初め（ブロックの消去・エナジーの再設定・手札のドロー・手番開始時のフック）が終わっていない |
+| `card_still_being_played` | `NPlayerHand.InCardPlay` |
+| `reward_selection_resolving` | 報酬・カード報酬の選択を送った後、完了の合図が出るまで |
+
+**手番の初め（`player_turn_starting`）。** ゲームの `CombatManager.StartTurn` は、Player の手番に入ると
+`PlayerCombatState.Phase` を `Start` にしてすぐ `PlayerActionsDisabled` を false に戻し、ドローを含む
+`SetupPlayerTurn`（`ResetEnergy` → `BeforeHandDraw` → `CardPileCmd.Draw` → `AfterPlayerTurnStart`）を
+action の列の外で進める。このため `action_queue_not_empty` と `player_actions_disabled` は、手札が増えている途中でも立たない。
+`player_turn_starting` は、戦闘中（開始中・終了中を除く）で `CurrentSide` が Player のとき、次のどちらかで立つ。
+
+- ローカルの Player（生きている）の `PlayerCombatState.Phase` が `None` / `Start` / `AutoPrePlay`。
+  `RunAutoPrePlayPhase` の最後で `Play` になるまでで、手番の初めの選択に答えた後に残りのドローやフックが続く間も含む
+- `ActionQueueSynchronizer.CombatState` が `NotPlayPhase`（ゲームの定義で「敵の手番と、Player の手番のドローの局面」）。
+  `StartTurn` の最後、全員の `AutoPrePlay` と `CheckWinCondition` の後に `PlayPhase` へ戻るので、`Phase` が `Play` になってから列が開くまでの間も覆う
+
+`Phase` が `AutoPostPlay` / `End`（手番の終わり）のときは立てない（`player_actions_disabled` が受け持つ）。
+死んだローカルの Player（協力プレイ）は `Phase` が `Start` のまま手番を過ごすので、`Phase` では判定せず同期器だけを見る。
+手番の初めのフックが開いた選択画面（`hand_select` / `card_select` など）は、下の規則で入力待ちとして false になる。
+未対応のオーバーレイ（`overlay`）にはこの理由を付けない。
+
+**入力待ちの画面。** `card_select` / `hand_select` / `bundle_select` / `relic_select` / `card_reward` / `rewards` /
+`event` / `rest_site` / `shop` / `fake_merchant` / `treasure` / `crystal_sphere` / `map` / `menu` / `game_over` では、
+上の理由をすべて消して false にする（ゲームは呼び出し側の答えを待っていて、解決中と返すと待つ側が行き詰まるため）。
+`reward_selection_resolving` だけはその後に足す。
+
+POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.is_play_phase` も true の state が
+3 回続くまで待つ（[Waiting for the Game to Settle](#waiting-for-the-game-to-settle)）。
+`player_turn_starting` は既存の `is_resolving` の意味（解決途中の値を返している）に沿って理由を足したものなので、`schema_version` は 4 のまま。
+
 ### 解放済みの戦闘生成 pool（追加、schema 3）
 
 `player.generation_pool` は単独プレイとマルチのローカル `player` に入る。

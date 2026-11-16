@@ -699,6 +699,34 @@ public static partial class McpMod
         }
         catch (Exception ex) { Warn("is_resolving.combat", ex); }
 
+        // The turn-start draw and hooks run outside the action queue, with player actions
+        // already re-enabled, so the two checks above both read "idle" while the hand is still
+        // growing. Only the fight's own screens get this reason: a choice screen opened by a
+        // turn-start hook is cleared below as an input boundary, and an unsupported overlay
+        // must not be reported as something that will finish on its own.
+        if (stateType is "monster" or "elite" or "boss")
+        {
+            try
+            {
+                var combat = CombatManager.Instance;
+                if (combat.IsInProgress && !combat.IsStarting && !combat.IsOverOrEnding)
+                {
+                    var combatState = combat.DebugOnlyGetState();
+                    if (combatState != null)
+                    {
+                        var me = LocalContext.GetMe(combatState);
+                        if (IsLocalPlayerTurnStarting(
+                                combatState.CurrentSide,
+                                me?.Creature is { IsDead: false },
+                                me?.PlayerCombatState?.Phase,
+                                RunManager.Instance.ActionQueueSynchronizer.CombatState))
+                            reasons.Add("player_turn_starting");
+                    }
+                }
+            }
+            catch (Exception ex) { Warn("is_resolving.turn_start", ex); }
+        }
+
         try
         {
             var hand = NPlayerHand.Instance;
