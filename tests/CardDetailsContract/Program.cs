@@ -40,6 +40,11 @@ namespace STS2_MCP
             yield return new("Damage", new DynamicVar(3m));
             throw new InvalidOperationException("enumeration failed");
         }
+        private static IEnumerable<CardTag> BrokenTags()
+        {
+            yield return CardTag.Strike;
+            throw new InvalidOperationException("tags enumeration failed");
+        }
         public static void RunCardDetailsContract()
         {
             BeginStateWarnings();
@@ -48,6 +53,19 @@ namespace STS2_MCP
             Check(plain["affliction"] == null && plain["enchantment"] == null, "known absence is null");
             Check(Object(plain, "dynamic_vars").Count == 0 && Reasons(plain).Count == 0 && _stateWarnings.Count == 0, "known empty values have no failure reasons or warnings");
             Check(Markdown(plain) == "", "plain details omit empty values and leave shape in main row");
+            Check(plain["is_upgraded"] is false && plain["is_upgradable"] is true, "unupgraded card reads game upgrade flags");
+            Check(plain["tags"] is List<string> noTags && noTags.Count == 0, "known untagged card is an empty list, not null");
+            card.UpgradeLevel = 1;
+            Check(Details(card)["is_upgraded"] is true && Details(card)["is_upgradable"] is false, "single-level card at max is upgraded and not upgradable");
+            card.MaxLevel = 2;
+            Check(Details(card)["is_upgraded"] is true && Details(card)["is_upgradable"] is true, "multi-level card keeps both flags true below its max");
+            card.UpgradeLevel = 0;
+            card.MaxLevel = 1;
+            card.TagSet = new HashSet<CardTag> { CardTag.Defend, CardTag.Strike };
+            var tagged = Details(card);
+            Check(tagged["tags"] is List<string> tagList && tagList.SequenceEqual(new[] { "Strike", "Defend" }), "tags use game enum names in enum order");
+            Check(Markdown(tagged) == "  - tags Strike, Defend\n".Replace("\n", Environment.NewLine), "markdown tags share one line");
+            card.TagSet = new HashSet<CardTag>();
             foreach (var type in Enum.GetValues<CardType>())
             {
                 card.CardType = type;
@@ -89,9 +107,12 @@ namespace STS2_MCP
                 Check(json.RootElement.GetProperty("dynamic_vars").GetProperty("Damage").GetDecimal() == 12.75m, "wire retains decimal and game variable key casing");
                 Check(json.RootElement.GetProperty("affliction").GetProperty("amount").GetInt32() == 0, "wire amount is numeric zero");
                 Check(json.RootElement.GetProperty("enchantment").GetProperty("status").GetString() == "Normal", "wire status is an enum name string");
+                Check(json.RootElement.GetProperty("is_upgraded").ValueKind == JsonValueKind.False && json.RootElement.GetProperty("is_upgradable").ValueKind == JsonValueKind.True, "wire upgrade flags are booleans");
             }
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(tagged, options)))
+                Check(json.RootElement.GetProperty("tags").EnumerateArray().Select(tag => tag.GetString()).SequenceEqual(new[] { "Strike", "Defend" }), "wire tags are a string array");
             using (var json = JsonDocument.Parse(JsonSerializer.Serialize(plain, options)))
-                Check(json.RootElement.GetProperty("affliction").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("dynamic_vars").EnumerateObject().Count() == 0, "dictionary null survives production JSON settings");
+                Check(json.RootElement.GetProperty("affliction").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("dynamic_vars").EnumerateObject().Count() == 0 && json.RootElement.GetProperty("tags").GetArrayLength() == 0, "dictionary null and empty tags survive production JSON settings");
 
             foreach (var status in Enum.GetValues<EnchantmentStatus>())
             {
@@ -136,6 +157,22 @@ namespace STS2_MCP
             AttachCardPlayability(playable, card);
             Check(playable["can_play"] is false && Equals(playable["unplayable_reason"], "BlockedByCardLogic"), "known unplayable retains game enum name");
             card.PlayReason = UnplayableReason.None;
+            var okRow = Details(card);
+            AttachCardPlayability(okRow, card);
+            card.PlayReason = UnplayableReason.HasUnplayableKeyword | UnplayableReason.EnergyCostTooHigh;
+            var pileRow = Details(card);
+            AttachCardPlayability(pileRow, card);
+            Check(pileRow["can_play"] is false && Equals(pileRow["unplayable_reason"], "HasUnplayableKeyword, EnergyCostTooHigh"), "combined flags keep the game Flags enum name");
+            Check(!Markdown(pileRow).Contains("can_play"), "shared details markdown leaves known playability to the row owner");
+            {
+                var player = new Dictionary<string, object?> { ["draw_pile_count"] = 1, ["discard_pile_count"] = 0, ["exhaust_pile_count"] = 0, ["play_pile_count"] = 0,
+                    ["draw_pile"] = new List<Dictionary<string, object?>> { pileRow, okRow } };
+                var sb = new StringBuilder();
+                FormatDeckPilesMarkdown(sb, player);
+                Check(sb.ToString().Split('\n').Count(line => line.TrimEnd('\r') == "  - can_play false (HasUnplayableKeyword, EnergyCostTooHigh)") == 1
+                    && sb.ToString().Split('\n').Count(line => line.StartsWith("  - can_play")) == 1, "pile markdown shows unplayable reason once and omits playable rows");
+            }
+            card.PlayReason = UnplayableReason.None;
             foreach (string field in new[] { "target_type", "can_play" })
             {
                 card.ThrowOn.Add(field);
@@ -146,7 +183,7 @@ namespace STS2_MCP
                 card.ThrowOn.Clear();
             }
 
-            foreach (string field in new[] { "type", "target_type", "affliction", "enchantment", "dynamic_vars" })
+            foreach (string field in new[] { "type", "target_type", "is_upgraded", "is_upgradable", "tags", "affliction", "enchantment", "dynamic_vars" })
             {
                 BeginStateWarnings();
                 card.ThrowOn.Add(field);
@@ -178,6 +215,10 @@ namespace STS2_MCP
             Check(Object(otherPartial, "affliction")["id"] == null && Reasons(otherPartial).ContainsKey("affliction.id"), "affliction ID failure");
             Check(Object(otherPartial, "enchantment")["amount"] == null && Reasons(otherPartial).ContainsKey("enchantment.amount"), "enchantment amount failure");
 
+            card.TagSet = BrokenTags();
+            var brokenTags = Details(card);
+            Check(brokenTags["tags"] == null && Reasons(brokenTags)["tags"].Contains("tags enumeration failed") && brokenTags["is_upgraded"] is false, "incomplete tag enumeration cannot claim a complete list");
+            card.TagSet = new HashSet<CardTag>();
             card.Vars = BrokenEnumeration();
             var enumeration = Details(card);
             Check(enumeration["dynamic_vars"] == null && Reasons(enumeration)["dynamic_vars"].Contains("enumeration failed"), "incomplete enumeration cannot claim a complete value map");
@@ -212,6 +253,9 @@ namespace STS2_MCP
             Check(hand.Contains("BuildCardInfo(card, includeType: false)") && hand.Contains("AttachCardDetails(state, card)"), "hand shares safe detail reader and avoids earlier unsafe type read");
             Check(!hand.Contains("card.TargetType.ToString()") && hand.Contains("state[\"target_type\"] != null ? BuildCardTargetPreviews(card) : []"), "failed target getter skips target preview");
             Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry").Contains("AttachCardDetails(state, card)"), "all pile rows share detail reader");
+            string pileBuilder = Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry");
+            int pileDetails = pileBuilder.IndexOf("AttachCardDetails(state, card)", StringComparison.Ordinal);
+            Check(pileDetails >= 0 && pileBuilder.IndexOf("AttachCardPlayability(state, card)", StringComparison.Ordinal) > pileDetails, "all pile rows share hand playability reader after the reasons dictionary exists");
             foreach (string pile in new[] { "Draw", "Discard", "Exhaust", "Play" })
                 Check(builder.Contains($"BuildPileCardList(combatState.{pile}Pile.Cards, PileType.{pile})"), $"{pile} wiring");
             Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry").Contains("OrderPileCardsForDisplay(cards, pile)"), "pile details use display ordering covered by CardIdentityContract");

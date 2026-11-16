@@ -30,6 +30,9 @@ public static partial class McpMod
                 string shape = card.ContainsKey("type")
                     ? $" [{card["type"] ?? "null"}/{card.GetValueOrDefault("target_type") ?? "null"}]" : "";
                 sb.AppendLine($"- {card["name"]} ({card["cost"]}{starCost}){exhaustNext}: {card["description"]}{shape}");
+                // CanPlay at the card's current pile; location itself is not one of its reasons.
+                if (card.GetValueOrDefault("can_play") is false)
+                    sb.AppendLine($"  - can_play false ({card.GetValueOrDefault("unplayable_reason") ?? "no reason"})");
                 AppendCardEnergyCostMarkdown(sb, card);
                 AppendCardDetailsMarkdown(sb, card);
             }

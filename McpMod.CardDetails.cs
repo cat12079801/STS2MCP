@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
@@ -13,6 +14,8 @@ public static partial class McpMod
         var reasons = (Dictionary<string, string>)state["unavailable_reasons"]!;
         state["unplayable_reason"] = null;
         // CanPlay also reads TargetType and card logic. Keep their failures local.
+        // CardModel.CanPlay has no pile/location check, so pile rows get the same judgment
+        // at their current position; manual play still needs the card in hand.
         ReadCardDetailValue(state, reasons, "can_play", () =>
         {
             card.CanPlay(out var reason, out _);
@@ -29,6 +32,12 @@ public static partial class McpMod
         state["unavailable_reasons"] = reasons;
         ReadCardDetailValue(state, reasons, "type", () => card.Type.ToString());
         ReadCardDetailValue(state, reasons, "target_type", () => card.TargetType.ToString());
+        // CardModel.IsUpgraded / IsUpgradable read CurrentUpgradeLevel against MaxUpgradeLevel.
+        ReadCardDetailValue(state, reasons, "is_upgraded", () => card.IsUpgraded);
+        ReadCardDetailValue(state, reasons, "is_upgradable", () => card.IsUpgradable);
+        // CardModel.Tags (CardTag enum names). Ordered by enum value: the game holds a HashSet.
+        ReadCardDetailValue(state, reasons, "tags", () => card.Tags
+            .Distinct().OrderBy(tag => (int)tag).Select(tag => tag.ToString()).ToList());
         ReadCardDetailValue(state, reasons, "affliction", () =>
         {
             var affliction = card.Affliction;

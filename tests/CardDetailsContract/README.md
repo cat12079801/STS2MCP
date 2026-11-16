@@ -17,6 +17,10 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
 StringVar の除外、PreviewValue / EnchantedValue と区別した値の取得と状態の保持、
 ゲーム側の成長・付与解除後の再読取と snapshot の独立を確認する。
 
+`is_upgraded` / `is_upgradable` の未強化・最大段階・多段階の途中、`tags` の enum 名と数値順・
+タグなしの `[]`・列挙途中の失敗、`UnplayableReason` の複数フラグの名前（ゲームの Flags の値を写した境界ダブル）、
+パイルの Markdown の `can_play false (…)` 子行（出せる札には付かない）と `tags` の1行を検査する。
+
 各 getter、添付モデルの ID / Amount、変数一覧の取得・列挙、要素の失敗で、
 null・パス別理由・warnings と、他項目の保持・復旧を検査する。
 CanPlay 内の対象 getter・カードロジックの失敗も手札の行に局所化する。
@@ -26,7 +30,8 @@ JSON は本番と同じ WhenWritingNull・SnakeCaseLower・Encoder 設定で確�
 Markdown は4パイルの本行末尾の `[Attack/AnyEnemy]` と、
 札ごとに1行にまとめた `base Damage 6, …`、Disabled のときだけ付く `(disabled)`、
 正常な未付与・空辞書の省略、失敗時の理由、旧形式の行も表示できることを確認する。
-巨大な state builder はリンクせず、ソースの文字列検査で手札と4パイルの共通経路、
+巨大な state builder はリンクせず、ソースの文字列検査で手札と4パイルの共通経路
+（パイルも詳細の後に手札と同じ `AttachCardPlayability` を通ること）、
 パイルの共通の表示順ヘルパー（動作の検査は `CardIdentityContract`）、非戦闘の対象範囲、マルチの共通経路、
 Markdown の配線、schema 4 を確認する。
 

@@ -33,10 +33,13 @@ public static partial class McpMod
         else if (reasons?.ContainsKey("dynamic_vars") == true)
             sb.AppendLine($"  - base {Value(null, "dynamic_vars")}");
 
-        // Shape is already in the main card line. Keep its failure reasons visible.
+        if (card.GetValueOrDefault("tags") is List<string> tags && tags.Count > 0)
+            sb.AppendLine($"  - tags {string.Join(", ", tags)}");
+
+        // Shape, upgrade (title "+") and playability show elsewhere. Keep their failure reasons visible.
         if (reasons != null)
         {
-            foreach (string field in new[] { "type", "target_type", "can_play", "unplayable_reason" })
+            foreach (string field in new[] { "type", "target_type", "is_upgraded", "is_upgradable", "tags", "can_play", "unplayable_reason" })
                 if (reasons.ContainsKey(field)) sb.AppendLine($"  - {field} {Value(null, field)}");
         }
     }

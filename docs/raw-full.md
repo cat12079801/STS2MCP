@@ -493,10 +493,12 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "dynamic_vars": { "Damage": 6 }, // Current decimal BaseValue, by game variable name
   "unavailable_reasons": {}, // Card detail read failures, by field path
   "can_play": true,
-  "unplayable_reason": null, // e.g. "NotEnoughEnergy", "Unplayable", null if playable
+  "unplayable_reason": null, // UnplayableReason flag names, e.g. "EnergyCostTooHigh"; null if playable
   "exhaust_on_next_play": false, // Combat-only CardModel.ExhaustOnNextPlay; see below
   "energy_cost": { /* Energy Cost Object below; combat only */ },
   "is_upgraded": false,
+  "is_upgradable": true,
+  "tags": ["Strike"],        // CardTag enum names; [] if none
   "keywords": [ /* Keyword Objects */ ]
 }
 ```
@@ -521,10 +523,15 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   "name": "Strike",
   "type": "Attack",
   "target_type": "AnyEnemy",
+  "is_upgraded": false,
+  "is_upgradable": true,
+  "tags": ["Strike"],
   "affliction": null,
   "enchantment": null,
   "dynamic_vars": { "Damage": 6 },
   "unavailable_reasons": {},
+  "can_play": true,          // CardModel.CanPlay at the card's current pile (not "playable from here")
+  "unplayable_reason": null,
   "cost": "1",               // Energy cost as string ("X" for X-cost)
   "star_cost": null,          // Regent star cost as string, null if N/A
   "exhaust_on_next_play": false,
@@ -541,6 +548,17 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 対象は戦闘中の手札と4パイルで、各行は既存の `uid` で照合できる。
 
 - `type` / `target_type` は `CardModel.Type` / `TargetType` の enum 名。
+- `is_upgraded` / `is_upgradable` は `CardModel.IsUpgraded`（`CurrentUpgradeLevel > 0`）/
+  `IsUpgradable`（`CurrentUpgradeLevel < MaxUpgradeLevel`）の bool。手札では既存の値と同じ。
+- `tags` は `CardModel.Tags` の `CardTag` enum 名の配列（`Strike` / `Defend` / `Minion` /
+  `OstyAttack` / `Shiv` / `Wah` / `Cho` / `Ki` / `Shoot`）。ゲームは HashSet で持つので、
+  enum の数値順に並べる。タグの無い札は `[]`。キーワード（`keywords`）とは別物で、
+  `PerfectedStrike` や `PandorasBox` などが他の札を探すための目印（`CardTag` のコメント）。
+- `can_play` / `unplayable_reason` は手札と同じ読取（`CardModel.CanPlay(out reason, out _)`）を
+  4パイルの札にも行う。`unplayable_reason` は `UnplayableReason`（Flags）の enum 名で、
+  複数なら `"HasUnplayableKeyword, EnergyCostTooHigh"` のようにゲームの `ToString()` のまま。
+  値は `HasUnplayableKeyword` / `BlockedByHook` / `BlockedByCardLogic` / `EnergyCostTooHigh` /
+  `StarCostTooHigh` / `NoLivingAllies`。
 - `affliction` は `CardModel.Affliction` の `{ id, amount }`。
   `id` は `Id.Entry`、`amount` は現在の `Amount`（整数）。
 - `enchantment` は `CardModel.Enchantment` の `{ id, amount, status }`。
@@ -557,8 +575,27 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 例として `affliction.amount`、`enchantment.status`、`dynamic_vars.Damage` の失敗では、
 同じオブジェクト内の読めた項目を保持する。変数一覧の取得・列挙の失敗は
 `dynamic_vars` 全体を null にする。手札の `CanPlay` の例外も局所化し、
-`can_play` / `unplayable_reason` を null と理由にする。
+`can_play` / `unplayable_reason` を null と理由にする（パイルの札も同じ）。
 項目の欠落がある旧 snapshot は未観測として扱う。
+
+パイルの札の `can_play` は手札と同じ名前・同じ関数の値だが、「いまその札を出せるか」ではない。
+`CardModel.CanPlay` は札の場所を見ない（`UnplayableReason` に「手札に無い」に当たる値は無い）。
+手で出すには手札にあることが別に要る（MOD の `play_card` は手札の札だけを受け付ける）。
+パイルの値は、その札の**いまの場所のまま**、いまの戦闘状態で `CanPlay` を評価した結果で、
+次の点で「引いたときに出せるか」とも一致しない:
+
+- エネルギー・星は**いま**の値で比べる（`PlayerCombatState.HasEnoughResourcesFor`）。
+  引いた時点のエネルギーとは違い得るので、`EnergyCostTooHigh` / `StarCostTooHigh` は将来の予測に使えない。
+- 札自身のロジック（`IsPlayable`）は札の場所を前提にしない。`GrandFinale.IsPlayable` は
+  山札が0枚のときだけ真なので、山札にある間は自分が数に入り、必ず `BlockedByCardLogic` になる。
+  `Clash.IsPlayable` は手札の全札を見るので、パイルにある間は自分を含まない手札で判定される。
+- フック（`Hook.ShouldPlay`）は戦闘全体のリスナーを回す。`Normality` / `Enthralled` は
+  **止める側の札自身が手札にあるとき**だけ他の札を止め、評価される札の場所は見ない。
+  `ChainsOfBindingPower` / `RingingPower` / `SmoggyPower` は災禍の付いた札を、それぞれの条件のもとで場所に関係なく止める。
+- Play pile の札は解決中の snapshot なので、支払い済みのエネルギー・使用回数を反映した値になり得る。
+
+ゲーム側の札の場所に依存しない理由（`HasUnplayableKeyword`、災禍による `BlockedByHook` など）は、
+パイルでもそのまま読める。戦闘外は `CanPlay` が理由なしで false を返すが、パイルの行は戦闘中だけ出る。
 
 山札の表示順は `Rarity` → `CardModel.CompareTo` → `uid`（ordinal 文字列比較）。
 一次・二次比較にゲームの `NCardPileScreen.OnPileContentsChanged` の
@@ -575,6 +612,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 エンチャントは `status` が `Disabled` のときだけ `(disabled)` を付ける。
 基底値は `base Damage 6, Vulnerable 2` の形で札ごとに1行にまとめる。
 手札の型・対象は既存の行に表示し、プレイ可否が読めなければ `?` を付ける。
+パイルの札は `can_play` が false のときだけ `  - can_play false (HasUnplayableKeyword)` の子行を付ける。
+タグがあれば手札・パイルとも `  - tags Strike` の子行を付ける。強化済みは札名の `+` で分かる。
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 追加項目で、既存の項目・action の意味を保つため `schema_version` は **4**。
@@ -584,6 +623,11 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
 `EnchantmentModel.Amount` / `Status`、`EnchantmentStatus`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
 `StringVar`。契約試験は詳細の取得・失敗・表示を検査する。
+パイルの `can_play`・`is_upgraded` / `is_upgradable`・`tags` の出典（v0.113.1、`sts2-a671e9ef` デコンパイル）は
+`CardModel.CanPlay(out UnplayableReason, out AbstractModel)` / `IsPlayable` / `IsUpgraded` / `IsUpgradable` / `Tags`、
+`UnplayableReason`、`CardTag`、`PlayerCombatState.HasEnoughResourcesFor`、`Hook.ShouldPlay`、
+`Clash.IsPlayable`、`GrandFinale.IsPlayable`、`Normality.ShouldPlay`、`Enthralled.ShouldPlay`、
+`ChainsOfBindingPower.ShouldPlay`、`RingingPower.ShouldPlay`、`SmoggyPower.ShouldPlay`。
 [CardDetailsContract](../tests/CardDetailsContract/README.md)
 
 ### 戦闘カードの uid とパイル順序

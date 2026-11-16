@@ -1942,6 +1942,7 @@ public static partial class McpMod
                 ["description"] = SafeGetCardDescription(card, pile)
             };
             AttachCardDetails(state, card);
+            AttachCardPlayability(state, card);
             list.Add(state);
         }
         return list;
