@@ -14,6 +14,10 @@ Singleplayer and multiplayer (co-op) supported, plus full menu and lobby control
 > [!caution]
 > Multiplayer support is in **beta** — expect bugs. Any multiplayer issues encountered with this mod installed are very likely caused by the mod, not the game. Please disable the mod and verify the issue persists before reporting bugs to the STS2 developers.
 
+> [!note]
+> このリポジトリは本家 [`Gennadiyev/STS2MCP`](https://github.com/Gennadiyev/STS2MCP) の fork。
+> 本家との差分（この fork で直した・足したこと）は [`docs/fork-differences.md`](docs/fork-differences.md) にまとめてある。
+
 ## For Players
 
 ### 1. Install the Mod
