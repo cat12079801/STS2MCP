@@ -13,11 +13,20 @@ public static partial class McpMod
         catch (Exception ex)
         {
             state[key] = null;
-            if (state.GetValueOrDefault("unavailable_reasons") is not Dictionary<string, string> reasons)
-                state["unavailable_reasons"] = reasons = new Dictionary<string, string>();
-            reasons[key] = $"{ex.GetType().Name}: {ex.Message}";
-            Warn($"{context}.{key}", ex);
+            RecordInternalStateFailure(state, key, ex, context);
         }
+    }
+
+    // Adds the row-level reason and the top-level warning for a failed read. reasonKey
+    // may be a dotted path into a nested object (vigor_attack.has_command); the reason
+    // still goes to the row's unavailable_reasons so every failure is found in one place.
+    private static void RecordInternalStateFailure(Dictionary<string, object?> state, string reasonKey,
+        Exception ex, string context)
+    {
+        if (state.GetValueOrDefault("unavailable_reasons") is not Dictionary<string, string> reasons)
+            state["unavailable_reasons"] = reasons = new Dictionary<string, string>();
+        reasons[reasonKey] = $"{ex.GetType().Name}: {ex.Message}";
+        Warn($"{context}.{reasonKey}", ex);
     }
 
     private static T ReadDeclaredStateField<T>(object instance, Type declaringType, string name)

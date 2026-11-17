@@ -41,6 +41,28 @@ public static partial class McpMod
                 : Convert.ToString(value, CultureInfo.InvariantCulture) ?? "?";
             parts.Add($"{key.Replace('_', ' ')}: {text}");
         }
+        if (state.GetValueOrDefault("vigor_attack") is Dictionary<string, object?> vigor)
+            parts.Add("vigor attack: " + FormatVigorAttack(vigor, reasons));
         return parts.Count == 0 ? "" : " (" + string.Join("; ", parts) + ")";
+    }
+
+    // Unbound reads as "has command: no, attacker is owner: none"; a failed read shows
+    // "readable: no" and each null with its reason. readable=true is JSON-only.
+    private static string FormatVigorAttack(Dictionary<string, object?> vigor, Dictionary<string, string>? reasons)
+    {
+        bool readable = vigor.GetValueOrDefault("readable") is true;
+        var items = new List<string>();
+        if (!readable) items.Add("readable: no");
+        foreach (string key in new[] { "has_command", "attacker_is_owner", "amount_when_started" })
+        {
+            object? value = vigor.GetValueOrDefault(key);
+            string text = value is bool flag ? (flag ? "yes" : "no")
+                : value != null ? Convert.ToString(value, CultureInfo.InvariantCulture) ?? "?"
+                : reasons?.GetValueOrDefault("vigor_attack." + key) is string reason ? $"null ({reason})"
+                : key == "attacker_is_owner" && vigor.GetValueOrDefault("has_command") is false ? "none"
+                : "null (unavailable)";
+            items.Add($"{key.Replace('_', ' ')}: {text}");
+        }
+        return string.Join(", ", items);
     }
 }

@@ -4,6 +4,21 @@ namespace MegaCrit.Sts2.Core.Combat
     public interface ICombatState { IReadOnlyList<Models.Player> Players { get; } }
     public class CombatState : ICombatState { public IReadOnlyList<Models.Player> Players { get; set; } = []; }
 }
+namespace MegaCrit.Sts2.Core.Commands.Builders
+{
+    // v0.113.1: Attacker is an auto-property { get; private set; }. The throwing getter
+    // only exercises the reader's failure path.
+    public class AttackCommand
+    {
+        public bool ThrowAttacker;
+        private Entities.Creatures.Creature? _attacker;
+        public Entities.Creatures.Creature? Attacker
+        {
+            get => ThrowAttacker ? throw new InvalidOperationException("attacker failed") : _attacker;
+            set => _attacker = value;
+        }
+    }
+}
 namespace MegaCrit.Sts2.Core.Entities.Cards
 {
     public enum PileType { Hand, Draw, Discard, Exhaust, Play }
@@ -32,6 +47,14 @@ namespace MegaCrit.Sts2.Core.Models
         public bool ThrowSkip;
         public bool SkipNextDurationTick => ThrowSkip ? throw new InvalidOperationException("skip failed") : Skip;
         public Entities.Creatures.Creature? Target { get; set; }
+        // Real getter: AssertMutable() then _owner (throws only on a canonical model).
+        public bool ThrowOwner;
+        private Entities.Creatures.Creature? _owner;
+        public Entities.Creatures.Creature? Owner
+        {
+            get => ThrowOwner ? throw new InvalidOperationException("canonical owner") : _owner;
+            set => _owner = value;
+        }
     }
     public class RelicModel
     {
@@ -135,6 +158,39 @@ namespace MegaCrit.Sts2.Core.Models.Powers
     {
         private class Data { public string playedCard = "wrong"; }
         public WrongPlayedCardFieldPower() => SetData(new Data());
+    }
+    // v0.113.1 VigorPower.Data: AttackCommand? commandToModify; int amountWhenAttackStarted.
+    public class VigorPower : PowerModel
+    {
+        private class Data { public Commands.Builders.AttackCommand? commandToModify; public int amountWhenAttackStarted; }
+        public VigorPower() => SetData(new Data());
+        public void Bind(Commands.Builders.AttackCommand? command, int started)
+        {
+            var data = (Data)PeekData()!;
+            data.commandToModify = command;
+            data.amountWhenAttackStarted = started;
+        }
+        public (Commands.Builders.AttackCommand?, int) Peek()
+        {
+            var data = (Data)PeekData()!;
+            return (data.commandToModify, data.amountWhenAttackStarted);
+        }
+    }
+    public class MissingVigorDataPower : VigorPower { }
+    public class MissingVigorCommandFieldPower : VigorPower
+    {
+        private class Data { public int amountWhenAttackStarted = 4; }
+        public MissingVigorCommandFieldPower() => SetData(new Data());
+    }
+    public class WrongVigorCommandFieldPower : VigorPower
+    {
+        private class Data { public object? commandToModify = new(); public int amountWhenAttackStarted = 4; }
+        public WrongVigorCommandFieldPower() => SetData(new Data());
+    }
+    public class WrongVigorAmountFieldPower : VigorPower
+    {
+        private class Data { public Commands.Builders.AttackCommand? commandToModify = null; public long amountWhenAttackStarted = 4; }
+        public WrongVigorAmountFieldPower() => SetData(new Data());
     }
     public class MissingDataPower : JugglingPower { }
     public class MissingCloneFieldPower : JugglingPower

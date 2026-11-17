@@ -1081,7 +1081,7 @@ Pets also share the same builder.
 
 画面に見えるパワーには次の内部状態を追加する（schema 4）。
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
-ただし `THIEVERY_POWER` / `HEIST_POWER` の項目は、`status[]` に出る行なら可視性によらず付ける。
+ただし `THIEVERY_POWER` / `HEIST_POWER` の項目と `VIGOR_POWER` の `vigor_attack` は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
@@ -1102,6 +1102,7 @@ Pets also share the same builder.
 | `THIEVERY_POWER` | `stolen_gold` | int |
 | `THIEVERY_POWER` | `target_player_id` | string（`player.player_id` と同じ） |
 | `HEIST_POWER` | `target_player_id` | string（同上） |
+| `VIGOR_POWER` | `vigor_attack` | `{"readable":true,"has_command":false,"attacker_is_owner":null,"amount_when_started":0}` |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1144,6 +1145,23 @@ Data を初期化せず、アタック数から予約を再構成しない。画
 ```
 
 （行の一部を抜粋。Markdown は `(stolen gold: 0; target player id: 1)`。0 も表示する。）
+
+活力（`VIGOR_POWER`）の `vigor_attack` は private `VigorPower.Data` の攻撃との結合。
+`has_command` は `commandToModify` が非 null か、`attacker_is_owner` は結合先の `Attacker == Owner`（未結合と読取失敗は null）、
+`amount_when_started` は `amountWhenAttackStarted` の実値（未結合でもそのまま）。`readable` は必要な項目をすべて読めたとき true。
+`BeforeAttack` が所有者の powered attack の開始で未結合なら結合して開始時の `Amount` を記録し、
+`ModifyDamageAdditive` は結合先の `Attacker` が dealer と違う攻撃には足さず、
+`AfterAttack` は同じコマンドのときだけ開始時の量を引く。参照は null に戻らないので、
+攻撃の後に活力が残った行は結合したままになる。player・敵の行、`hidden_in_ui`、最小行のいずれにも付ける。
+読取失敗は `readable=false`、項目は null、理由は行の `unavailable_reasons.vigor_attack.<項目>`、
+`warnings` は `status.VIGOR_POWER.vigor_attack.<項目>`。未結合（`has_command=false`）と区別し、
+履歴・ラベル・解決値との差から補わない。Data の初期化やフックの呼び出しはしない。
+
+```json
+{ "id": "VIGOR_POWER", "amount": 6, "vigor_attack": { "readable": true, "has_command": false, "attacker_is_owner": null, "amount_when_started": 0 } }
+```
+
+（行の一部を抜粋。Markdown は `(vigor attack: has command: no, attacker is owner: none, amount when started: 0)`。）
 
 `stolen_strength` / `stolen_dexterity` の盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
 文字列 ID。空の配列は盗んだ記録なしを表し、合算・正数化・既定値補完はしない。

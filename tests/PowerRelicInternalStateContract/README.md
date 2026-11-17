@@ -39,6 +39,14 @@ null・理由・warnings、Data を初期化・書換えしないこと、非表
 強奪（`HEIST_POWER`）は `target_player_id` だけを足して amount を変えないことを確認する。
 どちらも HUD 非表示（他の player が対象）の行でも付けること、Target 欠落・player でない Target・
 Gold の読取失敗で null・理由・warnings と他項目の保持、wire の int / string / null を確認する。
+活力（`VIGOR_POWER`）の `vigor_attack` は、新規の付与（未結合の readable=true・has_command=false・
+attacker_is_owner=null・amount_when_started=0）、所有者の攻撃への結合（true / true / 6）、他の攻撃者・
+Attacker が null の結合（false）、未結合で残る開始時の量の実値、snapshot の独立と非破壊読取（参照・量を変えない）、
+HUD 非表示の行にも付くこと、未結合では Owner を読まないことを確認する。Data の null・異型・Data 欠落で
+3 項目とも null・`unavailable_reasons.vigor_attack.<項目>`・warnings、コマンドのフィールドの欠落／型変更で
+has_command・attacker_is_owner が null（開始時の量は保持）、開始時の量の型変更で量だけ null（未結合は保持）、
+Attacker・Owner の getter 失敗で attacker_is_owner だけ null になり、どれも readable=false になることを確認する。
+wire の bool / null / int と行の理由、Markdown の `none`・`readable: no`・`null (理由)` も確認する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

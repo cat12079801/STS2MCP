@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Encodings.Web;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Commands.Builders;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -244,6 +245,89 @@ public static partial class McpMod
         Unknown(Power(new HeistPower()), "target_player_id", "status.HeistPower");
         Check(!Power(new PowerModel { Target = first }).ContainsKey("target_player_id"), "other targeted powers do not get target fields");
 
+        // Vigor: VigorPower.Data binding, read as-is. Before/After attack are not simulated.
+        // Own warning window: the response list is capped at MaxStateWarnings.
+        BeginStateWarnings();
+        var eel = new Creature();
+        var other = new Creature();
+        Dictionary<string, object?> Vigor(Dictionary<string, object?> row) => (Dictionary<string, object?>)row["vigor_attack"]!;
+        void VigorUnknown(Dictionary<string, object?> row, string key, string context)
+        {
+            Check(Vigor(row).ContainsKey(key) && Vigor(row)[key] == null, $"vigor {key} is explicit null");
+            Check(Reasons(row).TryGetValue("vigor_attack." + key, out var reason) && reason.Length > 0, $"vigor {key} has row reason");
+            Check(_stateWarnings.Any(w => w.StartsWith(context + ".vigor_attack." + key + ":")), $"vigor {key} has path warning");
+            Check(Vigor(row)["readable"] is false, "vigor failure is readable=false");
+        }
+        var vigor = new VigorPower { Owner = eel };
+        var unbound = Power(vigor);
+        Check(Vigor(unbound)["readable"] is true && Vigor(unbound)["has_command"] is false && Vigor(unbound)["attacker_is_owner"] == null
+            && Equals(Vigor(unbound)["amount_when_started"], 0) && Vigor(unbound).Count == 4 && !unbound.ContainsKey("unavailable_reasons"),
+            "fresh Vigor is a known unbound state, not unknown");
+        Check(FormatPowerInternalState(unbound).Contains("vigor attack: has command: no, attacker is owner: none, amount when started: 0")
+            && !FormatPowerInternalState(unbound).Contains("readable"), "unbound Vigor markdown; readable=true is JSON-only");
+        var ownCommand = new AttackCommand { Attacker = eel };
+        vigor.Bind(ownCommand, 6);
+        var bound = Power(vigor);
+        Check(Vigor(bound)["readable"] is true && Vigor(bound)["has_command"] is true && Vigor(bound)["attacker_is_owner"] is true
+            && Equals(Vigor(bound)["amount_when_started"], 6) && !bound.ContainsKey("unavailable_reasons"), "Vigor bound to the owner's attack");
+        Check(FormatPowerInternalState(bound).Contains("vigor attack: has command: yes, attacker is owner: yes, amount when started: 6"), "bound Vigor markdown");
+        Check(vigor.Peek() == (ownCommand, 6) && ReferenceEquals(vigor.Peek().Item1, ownCommand), "Vigor read leaves the binding untouched");
+        vigor.Bind(new AttackCommand { Attacker = other }, 3);
+        var foreign = Power(vigor);
+        Check(Vigor(foreign)["has_command"] is true && Vigor(foreign)["attacker_is_owner"] is false && Equals(Vigor(foreign)["amount_when_started"], 3),
+            "binding to another attacker is a known false, distinct from unbound null");
+        vigor.Bind(new AttackCommand(), 2);
+        Check(Vigor(Power(vigor))["attacker_is_owner"] is false && Vigor(Power(vigor))["readable"] is true, "null Attacker compares unequal like the game");
+        vigor.Bind(null, 5);
+        var staleAmount = Power(vigor);
+        Check(Vigor(staleAmount)["has_command"] is false && Vigor(staleAmount)["attacker_is_owner"] == null && Equals(Vigor(staleAmount)["amount_when_started"], 5),
+            "unbound reports the real started field, not a default");
+        Check(Equals(Vigor(bound)["amount_when_started"], 6) && Vigor(bound)["attacker_is_owner"] is true, "Vigor snapshot independent of later binding");
+        vigor.Bind(ownCommand, 6);
+        var hiddenVigor = Power(vigor, false);
+        Check(Vigor(hiddenVigor)["has_command"] is true && Vigor(hiddenVigor)["attacker_is_owner"] is true && !hiddenVigor.ContainsKey("skip_next_duration_tick"),
+            "hidden / visibility-unknown Vigor row keeps the binding only");
+        ownCommand.ThrowAttacker = true;
+        var failedAttacker = Power(vigor);
+        VigorUnknown(failedAttacker, "attacker_is_owner", "status.VigorPower");
+        Check(Vigor(failedAttacker)["has_command"] is true && Equals(Vigor(failedAttacker)["amount_when_started"], 6) && failedAttacker["skip_next_duration_tick"] is false,
+            "Attacker failure keeps the other Vigor values and row fields");
+        Check(FormatPowerInternalState(failedAttacker).Contains("vigor attack: readable: no, has command: yes, attacker is owner: null (InvalidOperationException: attacker failed), amount when started: 6"),
+            "Vigor attacker failure markdown");
+        ownCommand.ThrowAttacker = false;
+        vigor.ThrowOwner = true;
+        VigorUnknown(Power(vigor), "attacker_is_owner", "status.VigorPower");
+        vigor.Bind(null, 0);
+        Check(Vigor(Power(vigor))["readable"] is true && Vigor(Power(vigor))["attacker_is_owner"] == null, "unbound never reads Owner");
+        vigor.ThrowOwner = false;
+        foreach (object? invalidData in new object?[] { null, new object() })
+        {
+            var broken = new VigorPower { Owner = eel };
+            broken.SetData(invalidData);
+            var row = Power(broken);
+            foreach (string key in new[] { "has_command", "attacker_is_owner", "amount_when_started" })
+                VigorUnknown(row, key, "status.VigorPower");
+            Check(ReferenceEquals(broken.PeekData(), invalidData), "failed Vigor read never initializes Data");
+            Check(FormatPowerInternalState(row).Contains("vigor attack: readable: no, has command: null (") && !FormatPowerInternalState(row).Contains("attacker is owner: none"),
+                "unreadable Vigor differs from unbound in markdown");
+        }
+        var noData = Power(new MissingVigorDataPower { Owner = eel });
+        foreach (string key in new[] { "has_command", "attacker_is_owner", "amount_when_started" })
+            VigorUnknown(noData, key, "status.MissingVigorDataPower");
+        foreach (var badCommand in new VigorPower[] { new MissingVigorCommandFieldPower(), new WrongVigorCommandFieldPower() })
+        {
+            object? data = badCommand.PeekData();
+            var row = Power(badCommand);
+            VigorUnknown(row, "has_command", "status." + badCommand.GetType().Name);
+            VigorUnknown(row, "attacker_is_owner", "status." + badCommand.GetType().Name);
+            Check(Equals(Vigor(row)["amount_when_started"], 4) && ReferenceEquals(badCommand.PeekData(), data), "command field failure keeps amount and Data");
+        }
+        var badAmount = Power(new WrongVigorAmountFieldPower { Owner = eel });
+        VigorUnknown(badAmount, "amount_when_started", "status.WrongVigorAmountFieldPower");
+        Check(Vigor(badAmount)["has_command"] is false && !Reasons(badAmount).ContainsKey("vigor_attack.has_command"), "amount field failure keeps known unbound");
+        Check(!Power(new PowerModel()).ContainsKey("vigor_attack") && !Power(new JugglingPower()).ContainsKey("vigor_attack"), "other powers have no vigor_attack");
+        BeginStateWarnings();
+
         var nib = new PenNib();
         var scarf = new BrilliantScarf();
         foreach (int count in new[] { 0, 5, 6, 7 })
@@ -372,6 +456,26 @@ public static partial class McpMod
             Check(json.RootElement.GetProperty("played_card_uid").ValueKind == JsonValueKind.Null && !json.RootElement.GetProperty("played_card_readable").GetBoolean() && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("played_card_uid", out _), "failed CurlUp survives production wire as null, false and reason");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(BuildRelicCombatState(new WrongScarfField()), wireOptions)))
             Check(json.RootElement.GetProperty("cards_played_this_turn").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("cards_played_this_turn", out _), "failed scarf survives production wire as null and reason");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(unbound, wireOptions)))
+        {
+            var va = json.RootElement.GetProperty("vigor_attack");
+            Check(va.GetProperty("readable").GetBoolean() && va.GetProperty("has_command").ValueKind == JsonValueKind.False
+                && va.GetProperty("attacker_is_owner").ValueKind == JsonValueKind.Null && va.GetProperty("amount_when_started").GetInt32() == 0,
+                "unbound Vigor survives production wire with false, explicit null and int 0");
+        }
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(bound, wireOptions)))
+        {
+            var va = json.RootElement.GetProperty("vigor_attack");
+            Check(va.GetProperty("has_command").GetBoolean() && va.GetProperty("attacker_is_owner").GetBoolean() && va.GetProperty("amount_when_started").GetInt32() == 6,
+                "bound Vigor survives production wire");
+        }
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noData, wireOptions)))
+        {
+            var va = json.RootElement.GetProperty("vigor_attack");
+            Check(!va.GetProperty("readable").GetBoolean() && va.GetProperty("has_command").ValueKind == JsonValueKind.Null
+                && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("vigor_attack.has_command", out _),
+                "failed Vigor survives production wire as readable=false, null and row reason");
+        }
         var response = new Dictionary<string, object?>();
         EndStateWarnings(response);
         Check(response.ContainsKey("warnings"), "warnings attached to surviving response");

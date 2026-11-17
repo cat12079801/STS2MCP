@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using MegaCrit.Sts2.Core.Commands.Builders;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -31,6 +32,12 @@ public static partial class McpMod
             case HeistPower:
                 // HeistPower.BeforeDeath returns Amount gold to Target.Player.
                 Read("target_player_id", () => ReadPowerTargetPlayerId(power));
+                break;
+            case VigorPower:
+                // The binding decides whether the current Amount is added to, and later
+                // subtracted by, an attack; the HUD flag does not change it, so hidden and
+                // minimal rows carry it too.
+                AttachVigorAttackState(state, power, context);
                 break;
         }
 
@@ -78,6 +85,71 @@ public static partial class McpMod
                 return uid;
             });
         }
+    }
+
+    // v0.113.1 (sts2-a671e9ef) VigorPower.Data: BeforeAttack binds the owner's first
+    // powered attack (commandToModify, amountWhenAttackStarted = Amount) while unbound;
+    // ModifyDamageAdditive skips a bound command whose Attacker is not the dealer;
+    // AfterAttack subtracts amountWhenAttackStarted only for that same command and never
+    // clears the reference. Read the two fields as they are: no InitInternalData, no
+    // GetInternalData, no hook. A readable null command (unbound) is reported as
+    // has_command=false and stays distinct from a failed read (readable=false, nulls).
+    private static void AttachVigorAttackState(Dictionary<string, object?> state, PowerModel power,
+        string context)
+    {
+        var vigor = new Dictionary<string, object?>
+        {
+            ["readable"] = false,
+            ["has_command"] = null,
+            ["attacker_is_owner"] = null,
+            ["amount_when_started"] = null
+        };
+        state["vigor_attack"] = vigor;
+        void Fail(string key, Exception ex) => RecordInternalStateFailure(state, "vigor_attack." + key, ex, context);
+
+        object data;
+        try { data = ReadPowerData(power); }
+        catch (Exception ex)
+        {
+            // Without Data neither the binding nor its attacker is known.
+            Fail("has_command", ex);
+            Fail("attacker_is_owner", ex);
+            Fail("amount_when_started", ex);
+            return;
+        }
+
+        bool ok = true;
+        try { vigor["amount_when_started"] = ReadDeclaredStateField<int>(data, data.GetType(), "amountWhenAttackStarted"); }
+        catch (Exception ex) { ok = false; Fail("amount_when_started", ex); }
+
+        AttackCommand? command;
+        try { command = ReadVigorCommand(data); }
+        catch (Exception ex)
+        {
+            Fail("has_command", ex);
+            Fail("attacker_is_owner", ex);
+            return;
+        }
+        vigor["has_command"] = command != null;
+        if (command != null)
+        {
+            // Creature has no operator overload: the same reference comparison as
+            // VigorPower.ModifyDamageAdditive. Attacker is an auto-property and
+            // PowerModel.Owner only asserts the model is mutable.
+            try { vigor["attacker_is_owner"] = command.Attacker == power.Owner; }
+            catch (Exception ex) { ok = false; Fail("attacker_is_owner", ex); }
+        }
+        vigor["readable"] = ok;
+    }
+
+    private static AttackCommand? ReadVigorCommand(object data)
+    {
+        var field = data.GetType().GetField("commandToModify",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            ?? throw new MissingFieldException(data.GetType().Name, "commandToModify");
+        if (field.FieldType != typeof(AttackCommand))
+            throw new InvalidOperationException("Expected AttackCommand field Data.commandToModify");
+        return field.GetValue(data) as AttackCommand;
     }
 
     // Target is null for untargeted powers and may be a non-player creature. Neither is

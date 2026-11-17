@@ -2,8 +2,8 @@
 
 `status[]` の各行は player・敵・ペットで共通。画面に見えるパワーに限り、
 許可リストの項目を付ける。HUD 非表示・可視性不明のパワーの追加状態は省略する。
-例外は泥棒（`THIEVERY_POWER`）と強奪（`HEIST_POWER`）の対象別の項目で、`status[]` に出る行には
-可視性によらず付ける（下記）。
+例外は泥棒（`THIEVERY_POWER`）と強奪（`HEIST_POWER`）の対象別の項目と、活力（`VIGOR_POWER`）の
+`vigor_attack` で、`status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
 追加契約のため `schema_version` は 4。項目の有無で利用可否を判別する。
 
@@ -23,6 +23,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | ジャグリング `card_to_clone_uid` / `card_to_clone_readable` | private `Data.cardToClone` を手札・パイル・履歴と同じ uid registry に通す。3回目の `BeforeCardPlayed` で対象を記録し、対象の `AfterCardPlayed` で参照を消して複製。 | 表示された3回目のアタックと複製の出来事から分かる予約状態。uid はその公開された札の個体を照合する。 |
 | 泥棒（`THIEVERY_POWER`） `stolen_gold` | `ThieveryPower.DynamicVars.Gold.IntValue`（出典は v0.113.1 `sts2-a671e9ef`）。`CanonicalVars` の `GoldVar(0)` から始まり、`Steal` が対象の player から実際に失わせた額（`min(Amount, 所持金)`。対象が死亡・所持金 0 なら何もしない）を `Gold.BaseValue` に足す。`SurprisePower.AfterDeath` はこの値を強奪の量として引き継ぐ。`Amount` は 1 回の上限で、盗んだ累計ではない。 | 盗まれたゴールドは player の所持金の減少として画面に出る。対象別に数えられる。 |
 | 泥棒 `target_player_id` / 強奪（`HEIST_POWER`） `target_player_id` | `PowerModel.Target.Player.NetId` の文字列。泥棒は `GremlinMerc` が player ごとに 1 インスタンス（`Instanced`）付け、`SurprisePower.AfterDeath` が各インスタンスの `Target` を強奪へ写す。強奪の `BeforeDeath` はこの player へ `Amount` のゴールドを報酬として返す。`stolen_gold` が 0 のインスタンスからは強奪を付与しない（`PowerCmd.Apply` が amount 0 を無視）ので、強奪の行は盗んだ額が正の対象だけに出る。 | どの player から盗んだかは所持金の減少で見える。 |
+| 活力（`VIGOR_POWER`） `vigor_attack` | private `VigorPower.Data` の `commandToModify`（`AttackCommand?`）と `amountWhenAttackStarted`（int）（出典は v0.113.1 `sts2-a671e9ef`）。`BeforeAttack` は所有者の powered attack で、未結合かつ `ModelSource` が null（敵の `AttackCommand.FromMonster`）か札のときに、そのコマンドと開始時の `Amount` を記録する。`ModifyDamageAdditive` は結合先の `Attacker` が dealer と違う（札なら `ModelSource` が違う）攻撃には足さない。`AfterAttack` は同じコマンドのときだけ開始時の量を引き、参照は null に戻さない。新規の付与は `PowerCmd.Apply` が正準モデルから複製し、`DeepCloneFields` が `InitInternalData` で未結合の Data を作る。 | 結合は所有者の攻撃の開始で起き、攻撃の終わりの減少は画面の活力の数字と被ダメージに出る。攻撃の解決後の snapshot では通常、活力は消えて行ごと無くなるか、未結合で残る。 |
 | まるくなる（`CURL_UP_POWER`） `played_card_uid` / `played_card_readable` | private `CurlUpPower.Data.playedCard` を同じ uid registry に通す（出典は v0.113.1 `sts2-a671e9ef`。v0.113.0 `sts2-d009478a` と同一）。`AfterDamageReceived` は所有者への `IsPoweredAttack` かつ `cardSource` ありの被弾で、未記録または同じ札なら記録（別の札が記録済みなら無視）。`AfterCardPlayed` は `cardPlay.Card` が記録の札と同じときに参照を消し、Amount のブロックを得てパワーを外す。 | 画面に出た、その敵へのアタック札の命中から分かる追跡状態。uid はその公開された札の個体を照合する。 |
 
 盗難の配列の各行は `{player_id, amount}`。`player_id` は `player.player_id` と同じ文字列。
@@ -76,6 +77,30 @@ uid が付かない札は無いので、札が分からないことによる nul
 `null` でない値が見えるのはその札の解決中（プレイ途中の選択を含む）か、
 プレイを経ない `cardSource` 付きの被弾があった場合（該当する札は未確認）だけ。
 消えると同時にブロックを得てパワーが外れるので、発動した後は status の行ごと無くなる。
+
+活力（`VIGOR_POWER`）の `vigor_attack` は player・敵の活力のどちらの行にも、`hidden_in_ui`・可視性不明・
+説明取得失敗の最小行にも付ける 4 項目のオブジェクト。
+
+| 項目 | 型 | 意味 |
+|---|---|---|
+| `readable` | bool | 下の 3 項目のうち必要なものをすべて読めたら true |
+| `has_command` | bool / null | `Data.commandToModify` が非 null か。読めなければ null |
+| `attacker_is_owner` | bool / null | 結合先の `AttackCommand.Attacker == PowerModel.Owner`（`Creature` は等値演算子を持たないので参照の比較で、`ModifyDamageAdditive` と同じ）。未結合（`has_command=false`）と読取失敗は null |
+| `amount_when_started` | int / null | `Data.amountWhenAttackStarted` の実値。未結合でもフィールドの値をそのまま出す（新規の付与なら 0）。読めなければ null |
+
+未結合は `readable=true, has_command=false, attacker_is_owner=null` で、理由・警告を付けない。
+読取失敗は `readable=false` とし、失敗した項目を null、行の `unavailable_reasons` に
+`vigor_attack.<項目>`、`warnings` に `status.VIGOR_POWER.vigor_attack.<項目>` を付ける。
+Data が読めないときは 3 項目とも null と理由。null を未結合や 0 に読み替えない。
+コマンドの参照・アドレス・ID は出さない。履歴・意図のラベル・解決値との差からは作らない。
+Markdown は `(vigor attack: has command: no, attacker is owner: none, amount when started: 0)` の形で、
+未結合の `attacker_is_owner` を `none`、読取失敗を `readable: no` と `null (理由)` で表示する。
+`readable=true` は Markdown で省略する。
+
+読取は `PowerModel._internalData` のリフレクション（`ReadPowerData`。`Data` の型を確かめる）と、
+`Data` の 2 つのフィールドの `FieldInfo.GetValue`、自動プロパティ `AttackCommand.Attacker`、
+`PowerModel.Owner`（`AssertMutable` のあと `_owner` を返すだけ）の getter に限る。
+`GetInternalData` / `InitInternalData`・`BeforeAttack` / `AfterAttack` / `ModifyDamageAdditive` は呼ばず、Data も書き換えない。
 
 Markdown は情報がある場合だけ既存 status 行に追記する。skip=false と空配列は省略し、
 対象別の 0 / false は表示、失敗時は null と理由を表示する。
