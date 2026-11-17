@@ -88,6 +88,17 @@ public static partial class McpMod
             sb.AppendLine();
         }
 
+        if (state.GetValueOrDefault("player") is Dictionary<string, object?> colorlessPlayer
+            && colorlessPlayer.GetValueOrDefault("colorless_generation_pool") is Dictionary<string, object?> colorlessPool)
+        {
+            string summary = colorlessPool.GetValueOrDefault("known") is true
+                && colorlessPool.GetValueOrDefault("cards") is List<Dictionary<string, object?>> cards
+                ? $"{cards.Count} cards"
+                : $"unknown: {colorlessPool.GetValueOrDefault("reason")}";
+            sb.AppendLine($"Colorless generation pool: {summary}");
+            sb.AppendLine();
+        }
+
         if (state.GetValueOrDefault("player") is Dictionary<string, object?> unlockedPlayer
             && unlockedPlayer.GetValueOrDefault("unlocked_pools") is Dictionary<string, object?> unlocked)
         {

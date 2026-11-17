@@ -294,13 +294,13 @@ namespace STS2_MCP
             string hand = Slice("private static Dictionary<string, object?> BuildCardState", "private static List<Dictionary<string, object?>> BuildCardTargetPreviews");
             Check(hand.Contains("BuildCardInfo(card, includeType: false)") && hand.Contains("AttachCardDetails(state, card)"), "hand shares safe detail reader and avoids earlier unsafe type read");
             Check(!hand.Contains("card.TargetType.ToString()") && hand.Contains("state[\"target_type\"] != null ? BuildCardTargetPreviews(card) : []"), "failed target getter skips target preview");
-            Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry").Contains("AttachCardDetails(state, card)"), "all pile rows share detail reader");
-            string pileBuilder = Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry");
+            Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "private static List<Dictionary<string, object?>> BuildEnemyList").Contains("AttachCardDetails(state, card)"), "all pile rows share detail reader");
+            string pileBuilder = Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "private static List<Dictionary<string, object?>> BuildEnemyList");
             int pileDetails = pileBuilder.IndexOf("AttachCardDetails(state, card)", StringComparison.Ordinal);
             Check(pileDetails >= 0 && pileBuilder.IndexOf("AttachCardPlayability(state, card)", StringComparison.Ordinal) > pileDetails, "all pile rows share hand playability reader after the reasons dictionary exists");
             foreach (string pile in new[] { "Draw", "Discard", "Exhaust", "Play" })
                 Check(builder.Contains($"BuildPileCardList(combatState.{pile}Pile.Cards, PileType.{pile})"), $"{pile} wiring");
-            Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry").Contains("OrderPileCardsForDisplay(cards, pile)"), "pile details use display ordering covered by CardIdentityContract");
+            Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "private static List<Dictionary<string, object?>> BuildEnemyList").Contains("OrderPileCardsForDisplay(cards, pile)"), "pile details use display ordering covered by CardIdentityContract");
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("AttachCardDetails"), "noncombat deck and previews omit added combat fields");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCardDetailsMarkdown(sb, card)"), "hand markdown wiring");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState("), "multiplayer shares player builder");

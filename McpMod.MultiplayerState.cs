@@ -93,6 +93,9 @@ public static partial class McpMod
         {
             result["state_type"] = "card_select";
             result["card_select"] = BuildChooseCardState(chooseCardScreen, runState);
+            // Same as singleplayer: a combat choose screen carries the live battle snapshot.
+            if (currentRoom is CombatRoom chooseCombatRoom && CombatManager.Instance.IsInProgress)
+                result["battle"] = BuildMultiplayerBattleState(runState, chooseCombatRoom);
         }
         else if (topOverlay is NChooseABundleSelectionScreen bundleScreen)
         {

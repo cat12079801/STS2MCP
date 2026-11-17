@@ -210,7 +210,7 @@ namespace STS2_MCP
             string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             string Slice(string start, string end) => builder[builder.IndexOf(start, StringComparison.Ordinal)..builder.IndexOf(end, builder.IndexOf(start, StringComparison.Ordinal), StringComparison.Ordinal)];
             Check(Slice("private static Dictionary<string, object?> BuildCardState", "private static List<Dictionary<string, object?>> BuildCardTargetPreviews").Contains("state[\"energy_cost\"] = BuildCardEnergyCostState(card)"), "hand wiring");
-            Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "// entity_id registry").Contains("[\"energy_cost\"] = BuildCardEnergyCostState(card)"), "shared pile wiring");
+            Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "private static List<Dictionary<string, object?>> BuildEnemyList").Contains("[\"energy_cost\"] = BuildCardEnergyCostState(card)"), "shared pile wiring");
             foreach (string pile in new[] { "Draw", "Discard", "Exhaust", "Play" })
                 Check(builder.Contains($"BuildPileCardList(combatState.{pile}Pile.Cards, PileType.{pile})"), $"{pile} pile uses shared builder");
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("energy_cost"), "common deck/preview card builder omits combat-only data");

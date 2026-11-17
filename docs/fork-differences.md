@@ -66,8 +66,12 @@
   - `is_upgraded` / `is_upgradable`、`tags`、パイルにも `can_play` / `unplayable_reason`（#82）
   - `energy_cost`: コストの修正（local / global、種別・期限）と、素のコスト・X の捕捉値（#75・#80）
   - `exhaust_on_next_play`（#72）
+  - `star_cost_state`: スターコストの基底・canonical・X か・現在値と、一時コストの列（`TemporaryCardCost` の値・ターン終了/プレイで消えるか）を順に。履歴から作らない。[入力契約と出典](raw-full.md#star-cost-state-object追加schema-4)（#TBD、`cat12079801/sts2#958`）
   - 山札の表示順はゲームの並べ方（`Rarity` → `CardModel.CompareTo`）で、同順位は uid の順。引く順を漏らさない（#79）
 - **戦闘中の `card_select`**: 戦闘のパイルから選ぶ行に、戦闘中の `uid` を出す（#70）
+- **戦闘中の choose-a-card（3 択ポーションなど）**: 候補の実個体に手札と同じ `uid`・`energy_cost`・`star_cost_state`・札の詳細と `can_play`・`exhaust_on_next_play` を付け、画面に `battle` を付ける。
+  選択後の継続（生成時・使用後・空手札の通知）に参加する listener を `card_select.continuation_context` に、候補自身の override を `cards[].continuation_listeners` に出す（hook は呼ばない）。
+  GET で選択・無料化・生成・抽選をしない。`index` は `select_card` と同じ holder の位置で、札の無い holder は選ばない。schema 4 を維持。[入力契約と出典](raw-full.md#戦闘中の-choose-a-card追加schema-4)（#TBD、`cat12079801/sts2#958`）
 - **死亡中の敵**: 復活を待つ敵（再結合など）を `alive: false` で `enemies[]` に残し、`revive: {in_turns, hp, power_id, power_name}` を付ける（#55）
 - **敵の行動状態**: 全モンスターの `battle.enemies[].move_state` に現在の行動 ID・follow-up ID・ゲームの行動ログ末尾 ID・遷移可否を公開する。スタン時も実際の復帰先とロックを保持。四値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体別 warnings とし、履歴から推測しない。分岐の事前抽選やゲームの状態変更はせず、Markdown に ID と follow-up を表示する。単独・協力プレイと死亡中の敵で共通、schema 4 を維持。[入力契約と出典](raw-full.md#敵の行動状態追加schema-4)（#91、`cat12079801/sts2#910`）
 - **敵の戦闘内部状態**: 滝の巨人の `battle.enemies[].combat_state` に `is_about_to_blow`（private `_isAboutToBlow`）・`steam_eruption_damage`（private `_steamEruptionDamage`）・`current_pressure_gun_damage`（private `_currentPressureGunDamage`）と、getter の現在値 `steam_boost_amount`（`SteamBoostAmount`。Dread 込み）・`pressurize_amount`・`stomp_damage`・`ram_damage`・`pressure_up_damage`・`siphon_heal`（人数を掛ける前）を公開する。false・0 も実値で、HP・行動 ID・Ascension から作らない。ラン外（getter が Ascension を無視する）・負の値は null。読取失敗は null・項目別理由・warnings。Markdown に `Combat state:` 行を表示。他の敵には出さない。schema 4 を維持。[入力契約と出典](raw-full.md#敵の戦闘内部状態追加schema-4)（#92・#94、`cat12079801/sts2#954`・`cat12079801/sts2#968`）
@@ -76,9 +80,11 @@
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
   - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92）
-- **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）
+- **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）。
+  この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#TBD、`cat12079801/sts2#937`）
 - **生成の候補**:
-  - `run.generation_pool`: ランの解放済みの戦闘生成の候補（#63）
+  - `player.generation_pool`: オロビックの酸液の抽選前の候補。本体の `CardModel.IsAllowedInRun`（`CardFactory.FilterForRun`。人数と Blitz）→ `FilterForCombat` を通した一覧で、`filter_version: 2`（#63・#TBD、`cat12079801/sts2#940`）
+  - `player.colorless_generation_pool`: 何でも屋の抽選前の候補（無色の解放済み pool から自身を除き、`IsAllowedInRun` → `FilterForCombat`）。戦闘中だけ（#TBD、`cat12079801/sts2#940`）
   - `player.unlocked_pools`: 何でも屋・ジャックポット・錬金術と同じ関数で取った、解放済みのカード・無色カード・ポーションの ID（戦闘中だけ）（#71）
 - **`end_turn` と `discard_potion` は本体の UI と同じ GameAction を積む**（`EndPlayerTurnAction` / `DiscardPotionGameAction`）。本体の戦闘リプレイに残る（#61）
 
@@ -137,4 +143,4 @@
 
 ## 試験
 
-- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・uid・カード選択・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中）
+- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・uid・カード選択・戦闘中の choose-a-card・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中）

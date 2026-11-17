@@ -218,7 +218,7 @@ POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.
 ### 解放済みの戦闘生成 pool（追加、schema 3）
 
 `player.generation_pool` は単独プレイとマルチのローカル `player` に入る。
-`BuildPlayerState` と同じ snapshot で、その Player 自身の `UnlockState` を使う。
+`BuildPlayerState` と同じ snapshot で、その Player 自身の `UnlockState` と `RunState` を使う。
 対象の照合用に `player.character_id` / `player.player_id`、`run.player_count` /
 `run.card_multiplayer_constraint` も追加した。ID は表示名や配列添字ではない。
 
@@ -230,32 +230,67 @@ POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.
   "multiplayer_constraint": "SingleplayerOnly",
   "known": true,
   "cards": [ { "id": "UPPERCUT", "type": "Attack" } ], // 例示。実際には全候補
-  "game_assembly_sha256": "9cb4f1ad8c9f284aa8fec3122ffd6d780bbf543d875c817abdd12ff63fbf12b4",
-  "filter_version": 1,
-  "filter_source": "CardPoolModel.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForPlayerCount;CardFactory.FilterForCombat;OrobicAcid.OnUse:Attack,Skill,Power"
+  "game_assembly_sha256": "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb",
+  "filter_version": 2,
+  "filter_source": "CardPoolModel.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;OrobicAcid.OnUse:Attack,Skill,Power"
 }
 ```
 
-`GetUnlockedCards` の結果に実人数の filter、`CardFactory.FilterForCombat`、
-Attack/Skill/Power の型 filter を適用し、ID の昇順で出す。`FilterForPlayerCount` は private
-なので、人数 > 1 では SingleplayerOnly、そうでなければ MultiplayerOnly を除く同じ条件を実装した。
+オロビックの酸液（`OrobicAcid.OnUse`）は、キャラの解放済み pool を型ごとに
+`CardFactory.GetDistinctForCombat` へ渡す。v0.113.1 の `GetDistinctForCombat` は
+private な `CardFactory.FilterForRun`（`c.IsAllowedInRun(runState)`）→ `FilterForCombat` の順に絞ってから抽選する。
+この欄は `GetUnlockedCards` の結果に、本体の public な `CardModel.IsAllowedInRun(player.RunState)`、
+`CardFactory.FilterForCombat`、Attack/Skill/Power の型 filter を適用し、ID の昇順で出す。
+`IsAllowedInRun` は人数（2 人以上で SingleplayerOnly、1 人以下で MultiplayerOnly を除く）と、
+`GameMode.Blitz` のとき `IsAllowedInBlitz` が false の札を除く。MOD は条件を写さず本体の判定を呼ぶので、
+state にゲームモードが無くても Blitz の除外は反映される。
 抽選、戦闘カード作成、RNG の読み取りはしない。ID と型だけを載せ、本文・コストは複製しない。
 `game_assembly_sha256` は実際にロードした `CardModel` の assembly ファイルから初回に計算して保持する。
+
 `filter_version` はこの pool 契約の版であり、state の schema とは別。
+**版 2 は候補の条件の意味を変えた**（版 1 は人数の条件だけを MOD に写し、`filter_source` に
+`CardFactory.FilterForPlayerCount` と書いていた。v0.113.1 の本体の `FilterForRun` とは Blitz の条件が違う）。
+利用側は `filter_version` と `filter_source` の完全一致で契約を判定し、版 1 の観測を版 2 として扱わない。
+state 全体の `schema_version` は上げない（版付きの pool の更新として扱う）。
 
 取得中に例外が出た場合は `known: false, cards: []` と `reason`（例外の型とメッセージ）、
 state の `warnings` を返す。取得前に失敗したメタデータは欠落しうる。部分一覧を known=true にしない。
 旧 MOD にはこの欄が無い。取得不能と空一覧を同一視せず、欄の存在を検出すること。
 Markdown は単独・マルチのローカル player について件数・人数、または unknown と理由の1行だけを出す。
-追加項目なので schema は 3 のまま。
 
-出典は sts2-9cb4f1ad の `OrobicAcid.OnUse`、`CardPoolModel.GetUnlockedCards`、
-`CardFactory.FilterForCombat/FilterForPlayerCount`。これは discovered_cards とは別の情報。
+出典は v0.113.1 のデコンパイル `sts2-a671e9ef` の `OrobicAcid.OnUse`、`CardPoolModel.GetUnlockedCards`、
+`CardFactory.GetDistinctForCombat` / `FilterForRun` / `FilterForCombat`、`CardModel.IsAllowedInRun` / `IsAllowedInBlitz`。
+これは discovered_cards とは別の情報。
 `NCardLibraryGrid.GetCardVisibility` は profile の解放条件と発見条件を分け、解放済みでも未発見なら
 NotSeen にする。図鑑がこのラン固有の候補ID一覧をそのまま見せるとは言えない。
 解放対象札は各 Epoch の `QueueUnlocks` → `NTimelineScreen.QueueCardUnlock` →
 `NUnlockCardsScreen.Open` で表示される。保存ランの `Player.UnlockState` は profile の現在値と
 異なりうる（`UnlockState` の契約、`Player.FromSerializable`）。未来の抽選結果・山札順は含まない。
+
+#### 何でも屋の生成候補（`player.colorless_generation_pool`、追加。filter_version 2）
+
+戦闘中の単独・マルチのローカル `player` に、何でも屋（`JackOfAllTrades.OnPlay`）の抽選前の候補を出す。
+戦闘外・旧 MOD では省略する。形は `generation_pool` と同じ（`character_id` / `player_id` / `players` /
+`multiplayer_constraint` / `known` / `cards` / `game_assembly_sha256` / `filter_version` / `filter_source`、失敗時 `reason`）。
+
+```jsonc
+"colorless_generation_pool": {
+  "known": true,
+  "cards": [ { "id": "FLASH_OF_STEEL", "type": "Attack" } ], // 例示。実際には全候補
+  "filter_version": 2,
+  "filter_source": "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;JackOfAllTrades.OnPlay:ExcludeSelf"
+  // character_id / player_id / players / multiplayer_constraint / game_assembly_sha256 も同じ
+}
+```
+
+`ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint)`
+から `JackOfAllTrades` 自身を除き（`OnPlay` の `where !(c is JackOfAllTrades)`）、
+`CardModel.IsAllowedInRun` → `CardFactory.FilterForCombat` を通した ID の昇順。何でも屋は型で絞らないので
+型の filter はかけない。通常モードでは解放済みの `MY_SHINIES` を含み、Blitz では本体の判定で除かれる。
+失敗時の契約・抽選をしないことは `generation_pool` と同じ（warning のパスは `player.colorless_generation_pool`）。
+Markdown は `Colorless generation pool: N cards` または unknown と理由の 1 行。
+解放済み一覧の `unlocked_pools.colorless_cards`（後段の filter 前）は従来どおり残す。
+出典は `sts2-a671e9ef` の `JackOfAllTrades.OnPlay`、上記の `CardFactory` / `CardModel` のメソッド。
 
 ### 戦闘中の解放済み pool（追加、schema 3）
 
@@ -305,6 +340,7 @@ UnlockState も札の `Owner.UnlockState` と同じものを使う。
 この欄のポーション一覧には、その追加条件を適用しない。
 抽選・RNG・モデルの mutable 化や戦闘カード作成は行わない。
 既存の `generation_pool` は別の filter を持つため、同一視しない。
+何でも屋の抽選前の最終候補は `player.colorless_generation_pool`（上記）を読む。
 
 各配列の読み取り・遅延列挙中に例外が出た場合、その配列だけを `null` にし、
 `warnings` に `player.unlocked_pools.colorless_cards` / `character_cards` /
@@ -426,6 +462,14 @@ encode every reason a relic can be disabled.
   },
   "any_manual_cards_played_this_turn": true,
   "card_plays_finished_this_turn_card_uids": ["THRUMMING_HATCHET#0", "THRUMMING_HATCHET#0"],
+  "card_play_events_this_turn": [
+    { "phase": "started", "uid": "HAVOC#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1 },
+    { "phase": "started", "uid": "TAUNT#20", "is_auto_play": true,
+      "target": { "combat_id": 12, "entity_id": "WRIGGLER_1" }, "play_index": 0, "play_count": 1 },
+    { "phase": "finished", "uid": "TAUNT#20", "is_auto_play": true,
+      "target": { "combat_id": 12, "entity_id": "WRIGGLER_1" }, "play_index": 0, "play_count": 1 },
+    { "phase": "finished", "uid": "HAVOC#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1 }
+  ],
   "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
   "cards_exhausted_this_turn": 1,
   "bound_afflictions_this_turn": 2,
@@ -447,6 +491,7 @@ encode every reason a relic can be disabled.
 | `card_plays_finished_this_turn` | `History.CardPlaysFinished` で同じターン・Player 条件。`RippleBasin.BeforeSideTurnEnd` の Attack、`LunarBlast.CanonicalVars` の Skill と同じ。 |
 | `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
+| `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
 | `bound_afflictions_this_turn` | `History.Entries.OfType<CardAfflictedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature && e.Affliction is Bound`。`ChainsOfBindingPower.AfterCardDrawn` と同じ集合の件数。 |
@@ -457,6 +502,27 @@ encode every reason a relic can be disabled.
 開始・完了は独立に読むため、解決中には差が出る。`by_type` は `CardType` の全 enum 名をキーにし、
 未発生の型も 0。`total` は全型の合計。リプレイ・自動プレイも entry の数だけ数え、
 重複を除かない。本体と同じく現在の `CardPlay.Card.Type` を読み、過去の型の snapshot は作らない。
+
+`card_play_events_this_turn` は本体が記録した開始・完了の entry の明細で、MOD は蓄積・並べ替え・重複除去をしない。各要素:
+
+| キー | 値 |
+|---|---|
+| `phase` | `"started"`（`CardPlayStartedEntry`）/ `"finished"`（`CardPlayFinishedEntry`） |
+| `uid` | `CardPlay.Card` を手札・各パイルと共通の `GetStableCardUid` で変換。山から消えた Power・生成札・同じ札の再プレイも記録する |
+| `is_auto_play` | `CardPlay.IsAutoPlay`（bool）。荒廃・カスケード・騒乱などの自動プレイが true |
+| `target` | `CardPlay.Target` が null のときだけ `null`。非 null は `{combat_id, entity_id}`。`combat_id` は `Creature.CombatId`、`entity_id` は敵（`Creature.IsEnemy`）なら `battle.enemies[]` と共通の安定 ID（死んで戦闘から消えた敵も最初に割り当てた ID）、敵でなければ `null` |
+| `play_index` / `play_count` | `CardPlay.PlayIndex` / `PlayCount`。リプレイの各回は別の要素（同じ uid で index が増える） |
+
+順序は `CardModel.OnPlayWrapper` が記録したとおり（`BeforeCardPlayed` → 開始の記録 → 本文 → enchantment → affliction → 完了の記録 → `AfterCardPlayed`）。
+本文の中で自動プレイを待つ札（荒廃 `Havoc.OnPlay` → `CardPileCmd.AutoPlayFromDrawPile` → `CardCmd.AutoPlay`）では
+「親の開始 → 子の開始 → 子の完了 → 親の完了」になり、完了の順は予約の順ではない。
+`CardCmd.AutoPlay` が `ShouldPlay` 偽・Unplayable・対象なしで本文を実行せず結果の山へ送った札（`MoveToResultPileWithoutPlaying`）は
+`OnPlayWrapper` に入らないので、開始・完了のどちらにも出ない（プレイされずに動いた札はパイルの差分で読む）。
+読取（History・entry の判定・`CardPlay` の各値・対象の `CombatId`）のどれかに失敗したら、配列全体を `null` にし、
+`unavailable_reasons.card_play_events_this_turn` と warning `player.combat_history.card_play_events_this_turn` を出す。
+未知の対象を `null` に化けさせない（`target: null` は「対象なし」だけを意味する）。
+既存の集計・完了 uid 列は残す。`card_plays_finished_this_turn_card_uids` は全 Player の完了を含むので、マルチではこの配列の完了と同一視しない。
+Markdown の History 行に `play events=[start HAVOC#10, start auto TAUNT#20 -> WRIGGLER_1, …]` と出す（リプレイは `(2/2)`）。
 
 `any_manual_cards_played_this_turn` は記録済み Actor が所有者である手動プレイ完了の有無を公開する。
 各 snapshot で本体の履歴を再読取する。札の開始だけでは false のまま、手動プレイ完了後は true。
@@ -815,7 +881,8 @@ round 1 の途中から保存して終了 → continue したとき、初手の�
 `play_pile[]` と、戦闘中の `card_select.cards[]` の grid 行に `energy_cost` を出す。
 grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な combat state）。
 単独・マルチのローカル player は共通の `BuildPlayerState` を通る。
-戦闘外のデッキ・選択、choose-a-card、`hand_select.cards[]`、各 preview には出さない。
+戦闘中の choose-a-card の候補にも出す（[戦闘中の choose-a-card](#戦闘中の-choose-a-card追加schema-4)）。
+戦闘外のデッキ・選択、戦闘外の choose-a-card、`hand_select.cards[]`、各 preview には出さない。
 手札選択中も同じ札は `player.hand[]` で読む。
 
 ```jsonc
@@ -886,7 +953,7 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 通常の適用対象外の理由は `x_cost` / `no_energy_cost` / `not_x_cost`。
 `null` には理由を添える。Play Pile の節は `play_pile_count` が1以上の場合だけ表示する。
 既存の `cost`（文字列、X は `"X"`、それ以外は `GetAmountToSpend()`）と `star_cost` は変更しない。
-ここで追加するのはエナジーコストだけで、star cost の修正は対象外。
+スターコストの一時値は別の `star_cost_state`（下記）で出す。
 既存フィールドの意味・削除・action の変更がないため `schema_version` は **4 のまま**。
 利用側は `energy_cost` と各追加キーの有無で検出する。古い state の欠落は「修正なし」ではなく未観測。
 
@@ -909,15 +976,46 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 契約試験は [`tests/CardEnergyCostContract`](../tests/CardEnergyCostContract/README.md)。
 効果適用・ターン遷移の実機検証とは区別する。
 
+### Star Cost State Object（追加、schema 4）
+
+戦闘中の `player.hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]` と、
+戦闘中の choose-a-card の候補に `star_cost_state` を出す（`energy_cost` と同じ行）。
+
+```jsonc
+"star_cost_state": {
+  "costs_x": false,          // CardModel.HasStarCostX
+  "canonical": -1,           // CardModel.CanonicalStarCost（-1 はスターコストなし）
+  "base": -1,                // CardModel.BaseStarCost
+  "current": -1,             // CardModel.CurrentStarCost（最後の一時値。負の基底に 0 の一時値は基底のまま）
+  "temporary_costs": [       // private CardModel._temporaryStarCosts を順に（最後が有効）
+    { "cost": 0, "clears_when_turn_ends": true, "clears_when_card_is_played": true }
+  ],
+  "unavailable_reasons": {}
+}
+```
+
+- 値は本体の getter をそのまま読む。`BaseStarCost` の getter（`CurrentStarCost` からも呼ばれる）は、未設定なら
+  `CanonicalStarCost`（各札の定数）を private の `_baseStarCost` に写して `_starCostSet` を立てる遅延初期化をする。
+  写す値は定数で、`_starCostSet` を読むのはこの getter だけなので冪等。X 以外の札では、同じ行の既存の `star_cost`
+  （`GetStarCostDisplay` → `CurrentStarCost`）が先に同じ初期化をしている。
+- `temporary_costs` は `TemporaryCardCost.Cost` / `ClearsWhenTurnEnds` / `ClearsWhenCardIsPlayed` を順序・重複ごと出す。
+  `SetToFreeThisTurn` は `SetStarCostThisTurn(0)`（`TemporaryCardCost.ThisTurn(0)`）を末尾に足す。
+  `[]` は一時値なし、`null` は読取失敗。効果名やプレイ履歴から補わない。
+- 読取失敗はその項目だけ `null`、`unavailable_reasons` に理由、warning `card.star_cost_state.<key>`。
+- Markdown には出さない（既存の `star_cost` 表示は変えない）。追加だけなので schema 4 のまま。
+
+出典は `sts2-a671e9ef` の `CardModel.BaseStarCost` / `CanonicalStarCost` / `HasStarCostX` / `CurrentStarCost` /
+`_temporaryStarCosts` / `SetToFreeThisTurn` / `SetStarCostThisTurn`、`TemporaryCardCost`。
+
 ### 次回プレイ時の廃棄フラグ（追加、schema 3）
 
 `exhaust_on_next_play` は `CardModel.ExhaustOnNextPlay` の現在の bool 値。
 戦闘中の `player.hand[]`、`draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]`、
 および `card_select.cards[]` の grid 行に出す。grid は `uid` と同じ条件、
 すなわち `CombatManager.IsInProgress` が true で combat state が取得できる場合だけ。
-戦闘外のデッキ・選択画面、choose-a-card 行、`preview_cards` / `upgrade_preview` には出さない。
+戦闘中の choose-a-card 行にも同じ条件で出す。戦闘外のデッキ・選択画面・choose-a-card 行、`preview_cards` / `upgrade_preview` には出さない。
 共通の `BuildCardInfo` には追加せず、`BuildCardState` / `BuildPileCardList` /
-`BuildCardSelectState` の戦闘用の行で読む。正常時は false も出し、
+`BuildCardSelectState` / `BuildChooseCardRows` の戦闘用の行で読む。正常時は false も出し、
 読み取り例外時は既存の `SafeGetBool` により `null` と `warnings` を返す（false と区別）。
 Markdown は手札・パイル・grid の行で true の場合だけ `[exhaust-next]` を付ける。
 false・null・項目なしでは印を付けない。schema 3 で追加した項目であり、その追加時には `schema_version` を変更していない。
@@ -1952,9 +2050,8 @@ grid と choose の両方に次を出す。
 During a live combat with an available combat state, grid selection rows (`cards[]`) also carry
 `uid`, using the same per-card-instance registry as the combat hand and piles. This includes
 combat-pile selection grids. Markdown displays the uid after the row index, as in the hand.
-Outside combat, `uid` is omitted. Choose-a-card (`screen_type: "choose"`) rows and `preview_cards`
-do not carry uids; the repository code does not establish that a generated choice remains the
-same card instance when it enters the hand. Selection actions still use `index`.
+Outside combat, `uid` is omitted. `preview_cards` do not carry uids. Combat choose-a-card rows are
+described below. Selection actions still use `index`.
 
 同じ戦闘中の grid 行には `exhaust_on_next_play` も含む。
 意味・例外時の扱い・ゲーム側の出典は [次回プレイ時の廃棄フラグ](#次回プレイ時の廃棄フラグ追加schema-3) を参照。
@@ -2000,6 +2097,80 @@ same card instance when it enters the hand. Selection actions still use `index`.
   "player": { ... }
 }
 ```
+
+#### 戦闘中の choose-a-card（追加、schema 4）
+
+`screen_type: "choose"` の `cards[].index` は `select_card` が押す holder 列
+（`FindAllSortedByPosition<NGridCardHolder>`）の位置。`CardModel` の無い holder は行を出さず位置を詰めない
+（warning `card_select.cards[<index>]`）。`select_card` はその index を覆いを外す前に拒否する。
+
+`CombatManager.IsInProgress` で combat state が取れる間（3 択ポーションなどの選択画面）は、候補の各行に
+手札と同じ読取で次を付ける。候補は `CardFactory.GetDistinctForCombat` → `CombatState.CreateCard` で作られた実個体で、
+選ばれると同じ個体が `SetToFreeThisTurn` → `CardPileCmd.AddGeneratedCardToCombat` で手札（満杯なら捨て札）に入る
+（`AttackPotion` / `SkillPotion` / `PowerPotion` / `ColorlessPotion.OnUse`）。
+
+| キー | 読み方 |
+|---|---|
+| `uid` | `GetStableCardUid`（手札・パイルと共通の registry。選択後のパイルでも同じ uid） |
+| `type` / `target_type` / `is_upgraded` / `is_upgradable` / `tags` / `affliction` / `enchantment` / `dynamic_vars` | `AttachCardDetails`（[戦闘カードの詳細](#戦闘カードの詳細追加schema-4)） |
+| `can_play` / `unplayable_reason` | `AttachCardPlayability`（`CardModel.CanPlay(out reason, out _)`）。details の `unavailable_reasons` に理由を足す |
+| `exhaust_on_next_play` | `CardModel.ExhaustOnNextPlay` |
+| `energy_cost` | `BuildCardEnergyCostState`（[Energy Cost Object](#energy-cost-object追加schema-4)） |
+| `star_cost_state` | [Star Cost State Object](#star-cost-state-object追加schema-4) |
+| `continuation_listeners` | 候補自身・その affliction・enchantment が下記 4 通知を override していれば `{notification, kind, model_type, model_id, declared_by}`。無ければ `[]`、読めなければ `null` |
+
+値は**選択前**の候補のもの。`cost` / `energy_cost` を 0 に加工しない（無料化は選択の後）。
+候補はまだ戦闘のパイルに無いため `CardModel.CombatState` が null で、`CardEnergyCost.GetWithModifiers` は
+global のフック（`Hook.ModifyEnergyCostInCombat`）を適用しない。よって候補の `with_all_modifiers` と `can_play` の
+コスト判定は local の修正までの値で、手札に入った後の値と違いうる。手札での値は選択後の state で読む。
+
+同じ条件で画面に `battle`（`BuildBattleState`。単独・マルチとも戦闘画面と同じ）を付け、`card_select.continuation_context` に
+選択後の継続で通知を受ける listener を出す。
+
+```jsonc
+"continuation_context": {
+  "version": 1,
+  "known": true,
+  "should_skip_combat_effect": false,   // CombatManager.ShouldSkipCombatEffect（true なら戦闘の通知は誰にも届かない）
+  "notifications": {
+    "after_card_entered_combat":       { "listener_count": 31, "listeners": [ /* rows */ ] },
+    "after_card_generated_for_combat": { "listener_count": 31, "listeners": [] },
+    "after_potion_used":               { "listener_count": 44, "listeners": [
+      { "order": 13, "model_type": "BeltBuckle", "model_id": "BELT_BUCKLE", "declared_by": "BeltBuckle",
+        "kind": "relic", "owner_player_id": "1" } ] },
+    "after_hand_emptied":              { "listener_count": 31, "listeners": [] }
+  }
+}
+```
+
+- 4 通知は本体の解決順（`CardPileCmd.AddGeneratedCardsToCombat` / `Add` の `Hook.AfterCardEnteredCombat` →
+  `Hook.AfterCardGeneratedForCombat` → `PotionModel.OnUseWrapper` の `Hook.AfterPotionUsed` → `CombatManager.CheckForEmptyHand` の
+  `Hook.AfterHandEmptied`）。`after_potion_used` は `IRunState.IterateHookListeners(combat)`（デッキの札・enchantment が先頭）、
+  他は `ICombatState.IterateHookListeners()` の列（`Hook.IterateCombatHookListeners` と同じ列）。
+- `listener_count` はその列の全件、`listeners` はそのうち該当の hook を `AbstractModel` の既定（何もしない）から
+  override している型だけ。`order` は列の中の位置（0 始まり）、`declared_by` は実装を宣言した型。
+  判定はリフレクションだけで、hook を呼ばない。同じ ID の複数行も潰さない。
+- 行の識別: `kind` は `power` / `relic` / `potion`（`slot`）/ `orb` / `card`（`uid` と `pile`）/ `affliction` / `enchantment`
+  （`parent_uid` と `parent_pile`）/ `monster` / `modifier` / `badge` / `run_model` / `dominion` / `achievement`。
+  power と monster は所有者の `combat_id` と、敵なら `entity_id`、プレイヤーなら `player_id`（power は `owner_` 接頭辞）。
+  relic / potion / orb は `owner_player_id`。戦闘のパイルに無いデッキの札（run scope）は戦闘 uid を発行せず
+  `pile: "Deck"` と `deck_index`（`Player.Deck.Cards` の位置）。
+- 未選択の候補はまだどの列にも無い。選ばれた候補が加わる分は各行の `continuation_listeners` で読む。
+- 通知の条件に要る内部状態（留め具の `_dexterityApplied` など）は既存の公開値（`relics[].combat_state` など）で読む。
+  この欄は listener の列であり、通知の結果を計算しない。
+- 公開状態に結べない種類の listener があれば `known: false` と `unavailable_reasons`（文字列の配列）。
+  他の MOD が `ModHelper` に hook の subscriber を登録しているときは、その delegate を呼ばないために列挙せず
+  `known: false`（`notifications` なし）。読取失敗も同じで、warning `card_select.continuation_context`。
+- Markdown は `Continuation listeners: after_card_entered_combat=N, …` の 1 行（未知なら理由）。
+
+戦闘外の choose（イベントの報酬など）は従来どおり `BuildCardInfo` の行だけで、`battle` も付けない。
+GET では選択・無料化・カードの追加・抽選・hook の呼び出しをしない（`AttachCardPlayability` の `CanPlay` は
+手札・パイルの行と同じ読取）。追加だけなので schema 4 のまま。旧 MOD の欠落は未観測として扱う。
+出典は `sts2-a671e9ef` の各ポーションの `OnUse`、`CardFactory.GetDistinctForCombat`、`CombatState.CreateCard` /
+`IterateHookListeners`、`RunState.IterateHookListeners`、`Hook.IterateCombatHookListeners` / `AfterCardEnteredCombat` /
+`AfterCardGeneratedForCombat` / `AfterPotionUsed` / `AfterHandEmptied`、`CardModel.CombatState` / `CanPlay`、
+`CardEnergyCost.GetWithModifiers`、`ModHelper.IterateAllCombatStateSubscribers` / `IterateAllRunStateSubscribers`。
+契約試験は [`tests/ChooseCardContract`](../tests/ChooseCardContract/README.md)。
 
 **Deck screens with a preview have two steps.** Cards are picked first; then a preview panel opens — by itself once
 `max_select` is reached, or when `confirm_selection` presses the screen's own confirm — and only the

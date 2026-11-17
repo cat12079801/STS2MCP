@@ -1101,6 +1101,9 @@ public static partial class McpMod
             var holders = FindAllSortedByPosition<NGridCardHolder>(chooseScreen);
             if (index < 0 || index >= holders.Count)
                 return Error($"Card index {index} out of range ({holders.Count} cards available)");
+            // State omits a row for a holder without a CardModel; never press it.
+            if (holders[index].CardModel == null)
+                return Error($"Card index {index} has no card on the choose screen - re-read state");
 
             // Bring a screen hidden under the map / by a peek back first, as the player would.
             var revealed = new List<string>();

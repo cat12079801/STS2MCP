@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace STS2_MCP;
@@ -68,6 +69,18 @@ public static partial class McpMod
         else
         {
             sb.AppendLine("Card candidates unavailable (cards: null). Re-read state before selecting.");
+            sb.AppendLine();
+        }
+
+        // Combat choose: who listens to what follows a pick (counts only; details in JSON).
+        if (cardSelect.GetValueOrDefault("continuation_context") is Dictionary<string, object?> continuation)
+        {
+            if (continuation.GetValueOrDefault("known") is true
+                && continuation.GetValueOrDefault("notifications") is Dictionary<string, object?> notifications)
+                sb.AppendLine("Continuation listeners: " + string.Join(", ", notifications.Select(n =>
+                    $"{n.Key}={((n.Value as Dictionary<string, object?>)?.GetValueOrDefault("listeners") as System.Collections.ICollection)?.Count.ToString() ?? "?"}")));
+            else
+                sb.AppendLine($"Continuation listeners: unknown ({string.Join("; ", continuation.GetValueOrDefault("unavailable_reasons") as List<string> ?? new List<string>())})");
             sb.AppendLine();
         }
 

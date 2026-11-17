@@ -4,6 +4,7 @@ using System.Linq;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.ValueProps;
@@ -52,6 +53,27 @@ public static partial class McpMod
             return CombatManager.Instance.History.CardPlaysFinished
                 .Where(e => e.HappenedThisTurn(combat))
                 .Select(e => GetStableCardUid(e.CardPlay.Card)).ToList();
+        });
+        Read("card_play_events_this_turn", () =>
+        {
+            var combat = CurrentCombat();
+            // Targets that died and left combat keep the id they were first seen with.
+            RefreshEntityIdRegistry(combat);
+            // History order as recorded by CardModel.OnPlayWrapper: a parent's start,
+            // its auto-played children, then the parent's finish. Never re-sort.
+            var events = new List<Dictionary<string, object?>>();
+            foreach (var entry in CombatManager.Instance.History.Entries)
+            {
+                string phase;
+                CardPlay play;
+                if (entry is CardPlayStartedEntry started) { phase = "started"; play = started.CardPlay; }
+                else if (entry is CardPlayFinishedEntry finished) { phase = "finished"; play = finished.CardPlay; }
+                else continue;
+                // Same owner/turn condition as card_plays_started/finished_this_turn.
+                if (!entry.HappenedThisTurn(combat) || play.Player != owner) continue;
+                events.Add(BuildCardPlayEvent(phase, play));
+            }
+            return events;
         });
         Read("last_player_turn_card_uids", () =>
         {
@@ -106,6 +128,33 @@ public static partial class McpMod
                 Warn($"player.combat_history.{key}", ex);
             }
         }
+    }
+
+    // One CardPlay as the engine recorded it (CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount).
+    // Any unreadable value throws so the whole array becomes null: never a guessed target.
+    private static Dictionary<string, object?> BuildCardPlayEvent(string phase, CardPlay play)
+    {
+        Dictionary<string, object?>? target = null;
+        if (play.Target is { } creature)
+        {
+            uint combatId = creature.CombatId
+                ?? throw new InvalidOperationException("CardPlay.Target has no CombatId");
+            target = new Dictionary<string, object?>
+            {
+                ["combat_id"] = combatId,
+                // Non-enemy targets (allies/self) have no entity_id in battle.enemies.
+                ["entity_id"] = creature.IsEnemy ? GetStableEntityId(creature) : null
+            };
+        }
+        return new Dictionary<string, object?>
+        {
+            ["phase"] = phase,
+            ["uid"] = GetStableCardUid(play.Card),
+            ["is_auto_play"] = play.IsAutoPlay,
+            ["target"] = target,
+            ["play_index"] = play.PlayIndex,
+            ["play_count"] = play.PlayCount
+        };
     }
 
     private static Dictionary<string, object?> SummarizeCardPlays(IEnumerable<CardPlay> plays)

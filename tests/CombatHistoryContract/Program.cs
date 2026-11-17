@@ -204,18 +204,18 @@ public static partial class McpMod
         history.ThrowFinished = false;
         history.ThrowEntries = true;
         var failedEntries = BuildCombatHistoryState(owner);
-        Check(Reasons(failedEntries).Count == 10 && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
+        Check(Reasons(failedEntries).Count == 11 && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
         history.ThrowEntries = false;
         CombatManager.Instance.ThrowHistory = true;
         var failedHistory = BuildCombatHistoryState(owner);
-        Check(Reasons(failedHistory).Count == 10 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
+        Check(Reasons(failedHistory).Count == 11 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
         CombatManager.Instance.ThrowHistory = false;
         CombatManager.Instance.Value = null;
-        Check(Reasons(BuildCombatHistoryState(owner)).Count == 10, "null history is unavailable");
+        Check(Reasons(BuildCombatHistoryState(owner)).Count == 11, "null history is unavailable");
         CombatManager.Instance.Value = history;
         owner.Creature.CombatState = null;
         var failedCombat = BuildCombatHistoryState(owner);
-        Check(Reasons(failedCombat).Count == 9 && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
+        Check(Reasons(failedCombat).Count == 10 && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
         owner.Creature.CombatState = combat;
         owner.PlayerCombatState!.ThrowTurn = true;
         var failedTurn = BuildCombatHistoryState(owner);
@@ -241,6 +241,7 @@ public static partial class McpMod
         Check(!recoveredResponse.ContainsKey("warnings"), "recovery has no stale warnings");
 
         CheckManualCardPlayHistory();
+        CheckCardPlayEvents();
 
         string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
         string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));

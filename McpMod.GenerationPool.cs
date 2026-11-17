@@ -7,6 +7,8 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Factories;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.CardPools;
+using MegaCrit.Sts2.Core.Models.Cards;
 
 namespace STS2_MCP;
 
@@ -19,14 +21,38 @@ public static partial class McpMod
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     });
 
-    private static Dictionary<string, object?> BuildGenerationPool(Player player)
+    // pool 契約の版。v0.113.1（sts2-a671e9ef）の CardFactory.GetDistinctForCombat は
+    // private な FilterForRun（= CardModel.IsAllowedInRun）を通す。版1は人数条件だけを手で写していた。
+    private const int GenerationPoolFilterVersion = 2;
+    private const string GenerationPoolFilterSource =
+        "CardPoolModel.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;OrobicAcid.OnUse:Attack,Skill,Power";
+    private const string ColorlessGenerationPoolFilterSource =
+        "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;JackOfAllTrades.OnPlay:ExcludeSelf";
+
+    // OrobicAcid.OnUse: キャラの解放済み pool → GetDistinctForCombat（FilterForRun → FilterForCombat）を
+    // Attack/Skill/Power の型ごとに抽選する。その抽選前の候補一覧。
+    private static Dictionary<string, object?> BuildGenerationPool(Player player) =>
+        BuildCombatGenerationPool(player, "player.generation_pool", GenerationPoolFilterSource,
+            p => p.Character.CardPool.GetUnlockedCards(p.UnlockState, p.RunState.CardMultiplayerConstraint),
+            c => c.Type is CardType.Attack or CardType.Skill or CardType.Power);
+
+    // JackOfAllTrades.OnPlay: 無色の解放済み pool から自身（JackOfAllTrades）を除き、
+    // GetDistinctForCombat（FilterForRun → FilterForCombat）で抽選する。その抽選前の候補一覧。
+    private static Dictionary<string, object?> BuildColorlessGenerationPool(Player player) =>
+        BuildCombatGenerationPool(player, "player.colorless_generation_pool", ColorlessGenerationPoolFilterSource,
+            p => ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(p.UnlockState, p.RunState.CardMultiplayerConstraint)
+                .Where(c => c is not JackOfAllTrades),
+            _ => true);
+
+    private static Dictionary<string, object?> BuildCombatGenerationPool(Player player, string warningPath,
+        string filterSource, Func<Player, IEnumerable<CardModel>> unlockedCards, Func<CardModel, bool> keep)
     {
         var result = new Dictionary<string, object?>
         {
             ["known"] = false,
             ["cards"] = new List<Dictionary<string, object?>>(),
-            ["filter_version"] = 1,
-            ["filter_source"] = "CardPoolModel.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForPlayerCount;CardFactory.FilterForCombat;OrobicAcid.OnUse:Attack,Skill,Power"
+            ["filter_version"] = GenerationPoolFilterVersion,
+            ["filter_source"] = filterSource
         };
         try
         {
@@ -39,12 +65,10 @@ public static partial class McpMod
             if (run.Players.Count < 1 || !run.Players.Contains(player))
                 throw new InvalidOperationException("対象playerがrun.Playersに存在しない");
 
-            var unlocked = player.Character.CardPool.GetUnlockedCards(player.UnlockState, run.CardMultiplayerConstraint);
-            // privateなFilterForPlayerCountと同じ条件（sts2-9cb4f1ad）。
-            var excluded = run.Players.Count > 1
-                ? CardMultiplayerConstraint.SingleplayerOnly : CardMultiplayerConstraint.MultiplayerOnly;
-            var cards = CardFactory.FilterForCombat(unlocked.Where(c => c.MultiplayerConstraint != excluded))
-                .Where(c => c.Type is CardType.Attack or CardType.Skill or CardType.Power)
+            // FilterForRun は private なので、同じ式の public な CardModel.IsAllowedInRun を呼ぶ
+            // （人数の制約と GameMode.Blitz の IsAllowedInBlitz）。条件を MOD に写さない。
+            var cards = CardFactory.FilterForCombat(unlockedCards(player).Where(c => c.IsAllowedInRun(run)))
+                .Where(keep)
                 .OrderBy(c => c.Id.Entry, StringComparer.Ordinal)
                 .Select(c => new Dictionary<string, object?> { ["id"] = c.Id.Entry, ["type"] = c.Type.ToString() })
                 .ToList();
@@ -55,7 +79,7 @@ public static partial class McpMod
         catch (Exception ex)
         {
             result["reason"] = $"{ex.GetType().Name}: {ex.Message}";
-            Warn("player.generation_pool", ex);
+            Warn(warningPath, ex);
         }
         return result;
     }

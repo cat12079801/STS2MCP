@@ -31,6 +31,8 @@ public static partial class McpMod
                 };
                 parts.Add($"{label}={count}");
             }
+            else if (value is List<Dictionary<string, object?>> events && events.Count > 0)
+                parts.Add($"play events=[{string.Join(", ", events.Select(FormatCardPlayEvent))}]");
             else if (value is List<string> uids && uids.Count > 0)
                 parts.Add($"{(key == "card_plays_finished_this_turn_card_uids" ? "this turn" : "last turn")}=[{string.Join(", ", uids)}]");
             else if (value is Dictionary<string, object?> plays && plays.GetValueOrDefault("total") is int total && total > 0)
@@ -46,5 +48,17 @@ public static partial class McpMod
         string turn = history.GetValueOrDefault("turn_number") is int number ? $" (player turn {number})" : "";
         sb.AppendLine($"History{turn}: {string.Join("; ", parts)}");
         sb.AppendLine();
+    }
+
+    // "start HAVOC#10", "start auto STRIKE_IRONCLAD#2 -> NIBBIT_0", "finish auto TAUNT#20 (2/2)".
+    private static string FormatCardPlayEvent(Dictionary<string, object?> e)
+    {
+        string text = $"{(e.GetValueOrDefault("phase") as string == "started" ? "start" : "finish")}"
+            + $"{(e.GetValueOrDefault("is_auto_play") is true ? " auto" : "")} {e.GetValueOrDefault("uid")}";
+        if (e.GetValueOrDefault("target") is Dictionary<string, object?> target)
+            text += $" -> {target.GetValueOrDefault("entity_id") ?? $"combat_id {target.GetValueOrDefault("combat_id")}"}";
+        if (e.GetValueOrDefault("play_count") is int count && count > 1 && e.GetValueOrDefault("play_index") is int index)
+            text += $" ({index + 1}/{count})";
+        return text;
     }
 }

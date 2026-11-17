@@ -37,6 +37,13 @@ Markdown の `this turn=[...]` / `last turn=[...]`、非空・空・失敗表示
 巨大な state builder はリンクせず、ソースの文字列検査で戦闘限定・共通の Player builder・
 UID registry の更新・マルチ・Markdown の配線と schema 4 を確認する。
 
+`card_play_events_this_turn` は `CardPlayEventChecks.cs` で、空履歴の `[]`、本番の entity_id registry
+（`McpMod.EntityIdentity.cs` をリンク）での敵の初見順の ID・戦闘から消えた敵の ID の保持・非敵の `entity_id: null`、
+履歴順（親の開始 → 自動プレイの子の開始・完了 → 親の完了）、他 Player・別手番・プレイ以外の entry の除外、
+リプレイの同 uid と `play_index` / `play_count`、開始だけの札、wire の `target: null`・bool・数値、
+Markdown の `play events=[...]`、対象の `CombatId` 欠落・`IsAutoPlay` 取得失敗・途中の手番判定失敗での配列全体の null・理由・warning、
+他の項目の保持、復旧・履歴リセット・前の snapshot の独立を検査する。
+
 ターン判定は境界ダブル。判定結果を設定し、本体メソッドへの委譲を確かめる。
 uid registry は本番を実行し、パイルとこのターン・前手番の履歴が同じ個体を同じ uid で参照することを確認する。
 本体のターン進行・履歴記録を再現した証拠ではない。
@@ -68,5 +75,13 @@ uid registry は本番を実行し、パイルとこのターン・前手番の�
    追加手番を得ないことも確認する。
    マルチでは別 Player だけの手動プレイはローカルの履歴値を変えず、
    所有者の不参加フラグと消費済みフラグが追加手番を抑止することを確認する。
+
+9. 荒廃（`HAVOC`）の自動プレイがある手番で、荒廃の前後の `card_play_events_this_turn` を照合する。
+   山札の先頭が通常の札なら、荒廃の後に「`started HAVOC`（手動）→ `started` 子（`is_auto_play: true`）→ `finished` 子 → `finished HAVOC`」が追加され、
+   子は山札から廃棄札へ移る（`Havoc.OnPlay` → `CardPileCmd.AutoPlayFromDrawPile(..., forceExhaust: true)` → `CardCmd.AutoPlay` → `CardModel.OnPlayWrapper`）。
+   子が敵 1 体を取る札で敵が複数なら、`target` が実際に当たった敵の `entity_id` と一致すること（`CardCmd.AutoPlay` の `CombatTargets` の抽選）。
+   怠惰（`SLOTH_POWER`）の上限で子が拒否される局面では、親の開始・完了だけが追加され子の event は出ない（`SlothPower.ShouldPlay`、
+   `CardModel.MoveToResultPileWithoutPlaying`）。山札が空なら捨て札のシャッフルの後に予約される（`CardPileCmd.ShuffleIfNecessary`）。
+   リプレイを持つ札では同じ uid の `play_index` 0..`play_count`-1 が順に並ぶこと。
 
 ゲーム build・MOD commit・schema・前後の state を記録する。

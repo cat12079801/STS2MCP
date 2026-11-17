@@ -2,10 +2,16 @@
 // turn logic. Tests verify that the production builder delegates to these methods.
 namespace MegaCrit.Sts2.Core.Combat
 {
-    public interface ICombatState { IReadOnlyList<Entities.Players.Player> Players { get; } }
+    public interface ICombatState
+    {
+        IReadOnlyList<Entities.Players.Player> Players { get; }
+        IReadOnlyList<Entities.Creatures.Creature> Enemies { get; }
+    }
     public class CombatState : ICombatState
     {
         public IReadOnlyList<Entities.Players.Player> Players => Array.Empty<Entities.Players.Player>();
+        public List<Entities.Creatures.Creature> EnemyList = new();
+        public IReadOnlyList<Entities.Creatures.Creature> Enemies => EnemyList;
     }
     public class CombatManager
     {
@@ -20,6 +26,10 @@ namespace MegaCrit.Sts2.Core.Entities.Creatures
     public class Creature
     {
         public Combat.ICombatState? CombatState;
+        public uint? CombatId;
+        public Models.MonsterModel? Monster;
+        public bool Enemy;
+        public bool IsEnemy => Enemy;
     }
     public class DamageResult(int damage) { public int UnblockedDamage = damage; }
 }
@@ -50,6 +60,9 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
         public Players.Player Player = player;
         public bool AutoPlay;
         public bool ThrowAutoPlay;
+        public Creatures.Creature? Target;
+        public int PlayIndex;
+        public int PlayCount = 1;
         public bool IsAutoPlay => ThrowAutoPlay ? throw new MissingMemberException("IsAutoPlay renamed") : AutoPlay;
     }
 }
@@ -67,6 +80,7 @@ namespace MegaCrit.Sts2.Core.Models
         public Entities.Cards.CardType Type => ThrowType ? throw new MissingMemberException("Type renamed") : Value;
     }
     public class AfflictionModel { }
+    public class MonsterModel(string id) { public ModelId Id = new(id); }
 }
 namespace MegaCrit.Sts2.Core.Models.Afflictions
 {
