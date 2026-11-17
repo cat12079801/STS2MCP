@@ -80,7 +80,7 @@
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
-  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。schema 4 を維持。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#TBD、`cat12079801/sts2#980`）
+  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。schema 4 を維持。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）。
   この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#95、`cat12079801/sts2#937`）
 - **生成の候補**:

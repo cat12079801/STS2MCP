@@ -1153,6 +1153,7 @@ Data を初期化せず、アタック数から予約を再構成しない。画
 `ModifyDamageAdditive` は結合先の `Attacker` が dealer と違う攻撃には足さず、
 `AfterAttack` は同じコマンドのときだけ開始時の量を引く。参照は null に戻らないので、
 攻撃の後に活力が残った行は結合したままになる。player・敵の行、`hidden_in_ui`、最小行のいずれにも付ける。
+player の札の攻撃では、結合先の `ModelSource` と札の一致も加算の条件になる。この一致は出さないので、結合済み（`has_command=true`）の player の活力では、札の攻撃に足すかどうかは決まらない。敵の攻撃（`cardSource` が null）には `attacker_is_owner` で足りる。
 読取失敗は `readable=false`、項目は null、理由は行の `unavailable_reasons.vigor_attack.<項目>`、
 `warnings` は `status.VIGOR_POWER.vigor_attack.<項目>`。未結合（`has_command=false`）と区別し、
 履歴・ラベル・解決値との差から補わない。Data の初期化やフックの呼び出しはしない。
