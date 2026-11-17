@@ -8,7 +8,8 @@ public static partial class McpMod
 {
     // battle.enemies[].hittable: Creature.IsHittable as the game answers it (sts2-a671e9ef):
     // IsDead -> false, else Hook.ShouldAllowHitting(CombatState, creature) over the combat
-    // hook listeners (ReattachPower / IllusionPower / AdaptablePower: not while reviving).
+    // hook listeners (ReattachPower / IllusionPower / AdaptablePower: not while reviving;
+    // DieForYouPower / WuppysLoyaltyPower: creature.IsAlive).
     // CombatState.HittableEnemies and CardCmd.AutoPlay's random target use the same getter.
     // Read on every listed enemy, alive or not. Never derived from hp, alive or power names;
     // a failed read is null with a reason, distinct from false.

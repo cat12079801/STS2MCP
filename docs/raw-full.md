@@ -1448,7 +1448,7 @@ left to reattach to, the fight is over rather than about to restart.
 
 - getter（v0.113.1 `sts2-a671e9ef` の `Creature.IsHittable`）: `IsDead`（`CurrentHp <= 0`）なら false、
   そうでなければ `Hook.ShouldAllowHitting(CombatState, creature)`（戦闘の hook listener の `ShouldAllowHitting` が 1 つでも false なら false）。
-  override は敵では `ReattachPower`（ムカデの体節）・`IllusionPower`（パラフライト・歯の目）・`AdaptablePower`（被検体）で、
+  override は敵では `ReattachPower`（ムカデの体節）・`IllusionPower`（パラフライト `PARAFRIGHT`・牙むく眼 `EYE_WITH_TEETH`）・`AdaptablePower`（実験体 `TEST_SUBJECT`）で、
   どれも「その所有者が復活中（private の `isReviving`）なら false」。味方の `DieForYouPower`・`WuppysLoyaltyPower` は対象が生存しているかを返す。
 - 読み取りは状態を書き換えない（`IsDead` は HP の比較、各 override は private の内部データか `IsAlive` を読むだけ）。
   `Hook.ShouldAllowHitting` は `Hook.IterateCombatHookListeners` を通るので、`CanPlay` と同じく他の MOD の hook subscriber を通りうる。
