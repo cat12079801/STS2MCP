@@ -188,7 +188,9 @@ async def get_game_state(format: str = "markdown") -> str:
     resolved_damage はローカルのプレイヤーへの 1 ヒットの解決値。ラベルから逆算しない。
     読めない値は null・unavailable_reasons・warnings。
     滝の巨人だけ battle.enemies[].combat_state に is_about_to_blow（bool）と
-    steam_eruption_damage（int）を出す。false・0 も実値、失敗は null・理由・warnings。
+    steam_eruption_damage・current_pressure_gun_damage・steam_boost_amount・
+    pressurize_amount・stomp_damage・ram_damage・pressure_up_damage・siphon_heal（int）を出す。
+    ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
     hidden_in_ui の行にも付く。Target が無い・読めないときは null・理由・warnings。

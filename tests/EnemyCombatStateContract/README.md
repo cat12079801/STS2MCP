@@ -7,10 +7,15 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/bi
 ```
 
 本番の `McpMod.EnemyCombatState.cs`（builder と Markdown）・内部状態の読取 helper・warnings をリンクする。
-ゲームの型は滝の巨人（`WaterfallGiant`）の private フィールドの名前と型だけを写し、
-move の実行・`TriggerAboutToBlowState`・乱数は用意しない。値は試験がフィールドへ直接入れる。
+ゲームの型は滝の巨人（`WaterfallGiant`）の private フィールド・getter の名前と型と、`RunManager.IsInProgress` だけを写し、
+move の実行・`TriggerAboutToBlowState`・乱数・Ascension の判定は用意しない。値は試験がフィールドへ直接入れる。
 
 - `is_about_to_blow` / `steam_eruption_damage` の false・0・true・正の値を実値として出す。理由・警告なし。
+- 通常段階の 7 値（`current_pressure_gun_damage`・`steam_boost_amount`・`pressurize_amount`・`stomp_damage`・
+  `ram_damage`・`pressure_up_damage`・`siphon_heal`）を、A7・A9＋Dread 相当・プレッシャーガン 2 回後・0 の値で、そのまま int で出す。
+  getter は 6 個を 1 回ずつ読む（`current_pressure_gun_damage` はフィールド）。
+- ラン外（`RunManager.IsInProgress=false`）は getter を呼ばず、getter の 6 項目を null と理由・warnings。フィールドの値は出す。
+- getter の例外・負の値は、その項目だけ null と理由（0 に丸めない）。欠落・型違いの getter も null と理由。
 - 読取がフィールドを変更しないこと、前回の snapshot の独立、本番の wire 設定で bool / int のまま送ること。
 - Markdown の `**Combat state:**` 行（false=no、0 を表示）と、欠落・空の省略。
 - Monster が無い敵・別の敵（同名フィールドを持つものを含む）には `combat_state` を付けず、警告も出さない。
@@ -20,5 +25,8 @@ move の実行・`TriggerAboutToBlowState`・乱数は用意しない。値は�
 - 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・schema 4 の維持はソース文字列で確認。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `WaterfallGiant._isAboutToBlow` / `_steamEruptionDamage`、
-`WaterfallGiant.TriggerAboutToBlowState` / `AboutToBlowMove` / `ExplodeMove`、`SteamEruptionPower.AfterDeath`。
+`WaterfallGiant.TriggerAboutToBlowState` / `AboutToBlowMove` / `ExplodeMove`、`SteamEruptionPower.AfterDeath`、
+`WaterfallGiant._currentPressureGunDamage` / `AfterAddedToRoom` / `PressureGunMove` / `SteamBoostAmount` / `PressurizeAmount` /
+`StompDamage` / `RamDamage` / `PressureUpDamage` / `SiphonHeal`、`AscensionHelper.GetValueIfAscension` / `IsDread`、
+`RunManager.HasAscension` / `IsDread` / `IsInProgress`。
 実機での段階ごとの値の確認は取得担当へ引き渡す。

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Monsters;
+using MegaCrit.Sts2.Core.Runs;
 
 namespace STS2_MCP;
 
@@ -36,20 +37,31 @@ public static partial class McpMod
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
         };
 
+        string[] keys =
+        {
+            "is_about_to_blow", "steam_eruption_damage", "current_pressure_gun_damage", "steam_boost_amount",
+            "pressurize_amount", "stomp_damage", "ram_damage", "pressure_up_damage", "siphon_heal"
+        };
+        // A7 の通常モード（ToughEnemies・DeadlyEnemies・Dread 無し）の getter 値と初期のプレッシャーガン。
+        var a7 = new GiantValues(20, 3, 15, 15, 10, 13, 10);
+        const string a7Tail = " | current pressure gun damage: 20 | steam boost amount: 3 | pressurize amount: 15"
+            + " | stomp damage: 15 | ram damage: 10 | pressure up damage: 13 | siphon heal: 10";
+
         // 値の並びは WaterfallGiant のソース上の段階（通常 → TriggerAboutToBlowState → AboutToBlowMove）。
         // 遷移の模擬ではなく、試験が private フィールドに直接入れた値を読むだけ。
         var giant = new WaterfallGiant();
+        giant.Set(a7);
         foreach (var (blow, damage, text) in new[]
         {
-            (false, 0, "**Combat state:** is about to blow: no | steam eruption damage: 0"),
-            (true, 0, "**Combat state:** is about to blow: yes | steam eruption damage: 0"),
-            (true, 37, "**Combat state:** is about to blow: yes | steam eruption damage: 37")
+            (false, 0, "**Combat state:** is about to blow: no | steam eruption damage: 0" + a7Tail),
+            (true, 0, "**Combat state:** is about to blow: yes | steam eruption damage: 0" + a7Tail),
+            (true, 37, "**Combat state:** is about to blow: yes | steam eruption damage: 37" + a7Tail)
         })
         {
             giant.Set(blow, damage);
             var state = Read(giant);
-            Check(state.Count == 2 && Equals(state["is_about_to_blow"], blow) && Equals(state["steam_eruption_damage"], damage),
-                "false と 0 も実値として出す");
+            Check(state.Keys.SequenceEqual(keys) && Equals(state["is_about_to_blow"], blow) && Equals(state["steam_eruption_damage"], damage),
+                "false と 0 も実値として出す・項目の並びは固定");
             Check(!state.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "成功時に理由・警告なし");
             Check(Markdown(state) == text, "Markdown は false=no・0 を表示");
             Check(giant.Peek() == (blow, damage), "読取でフィールドを変更しない");
@@ -61,6 +73,50 @@ public static partial class McpMod
         var snapshot = Read(giant);
         giant.Set(false, 0);
         Check(Equals(snapshot["steam_eruption_damage"], 37) && Equals(Read(giant)["steam_eruption_damage"], 0), "前回の snapshot は独立");
+
+        // 通常段階の 7 値。A7・A9（DeadlyEnemies・ToughEnemies）+ Dread・PressureGunMove を 2 回終えた値（20+5+5）・0 も実値。
+        foreach (var values in new[] { a7, new GiantValues(30, 3, 15, 15, 10, 13, 10), new GiantValues(23, 4, 20, 16, 11, 14, 15), new GiantValues(0, 0, 0, 0, 0, 0, 0) })
+        {
+            giant.Set(values);
+            giant.Set(false, 0);
+            var state = Read(giant);
+            int[] expected = { values.PressureGun, values.SteamBoost, values.Pressurize, values.Stomp, values.Ram, values.PressureUp, values.Siphon };
+            Check(keys.Skip(2).Select(key => state[key]).SequenceEqual(expected.Cast<object?>()), $"7 値を getter・フィールドの値のまま出す（{values}）");
+            Check(!state.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "7 値の成功時に理由・警告なし");
+            Check(giant.PeekValues() == (values.PressureGun, values), "読取で値を変更しない");
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(state, wireOptions));
+            Check(keys.Skip(2).Zip(expected).All(pair => json.RootElement.GetProperty(pair.First).ValueKind == JsonValueKind.Number
+                && json.RootElement.GetProperty(pair.First).GetInt32() == pair.Second), "wire でも int のまま（0 を省略しない）");
+        }
+        giant.Set(a7);
+        int reads = giant.GetterReads;
+        Read(giant);
+        Check(giant.GetterReads - reads == 6, "getter は 6 個を 1 回ずつ読む（CurrentPressureGunDamage はフィールド）");
+
+        // 試合の外（RunManager.IsInProgress=false）では getter が Ascension・Dread を無いものとして返すので読まない。
+        RunManager.Instance.IsInProgress = false;
+        reads = giant.GetterReads;
+        var outside = Read(giant);
+        RunManager.Instance.IsInProgress = true;
+        var outsideReasons = (Dictionary<string, string>)outside["unavailable_reasons"]!;
+        Check(keys.Skip(3).All(key => outside[key] == null && outsideReasons[key].Contains("RunManager is not in progress")),
+            "ラン外は getter の 6 値を null と理由（既定値で補わない）");
+        Check(Equals(outside["current_pressure_gun_damage"], 20) && Equals(outside["is_about_to_blow"], false) && giant.GetterReads == reads,
+            "フィールドの値は読み、getter は呼ばない");
+        Check(_stateWarnings.Count == 6 && _stateWarnings.All(w => w.StartsWith($"battle.enemies.{Entity}.combat_state.")), "ラン外の warnings は 6 項目");
+        Check(Markdown(outside).Contains("steam boost amount: null (InvalidOperationException: RunManager is not in progress"), "Markdown に理由");
+
+        // getter が投げたとき・負の値は、その項目だけ null と理由。他の項目は残す。
+        giant.ThrowFrom = "SteamBoostAmount";
+        giant.Set(a7 with { PressureGun = -5, Siphon = -1 });
+        var broken = Read(giant);
+        giant.ThrowFrom = null;
+        var brokenReasons = (Dictionary<string, string>)broken["unavailable_reasons"]!;
+        Check(broken["steam_boost_amount"] == null && brokenReasons["steam_boost_amount"].Contains("boom"), "getter の例外は null と理由");
+        Check(broken["current_pressure_gun_damage"] == null && brokenReasons["current_pressure_gun_damage"].Contains("non-negative")
+            && broken["siphon_heal"] == null && brokenReasons["siphon_heal"].Contains("non-negative"), "負の値は null と理由（0 に丸めない）");
+        Check(Equals(broken["stomp_damage"], 15) && brokenReasons.Count == 3 && _stateWarnings.Count == 3, "他の項目は残し、warnings は失敗した 3 項目");
+        giant.Set(a7);
 
         BeginStateWarnings();
         Check(BuildEnemyCombatState(null, Entity) == null, "Monster が無い敵には付けない");
@@ -77,10 +133,16 @@ public static partial class McpMod
             () => ReadDeclaredStateField<bool>(giant, typeof(WaterfallGiant), "_removed"), $"battle.enemies.{Entity}.combat_state");
         ReadInternalStateValue(failed, "steam_eruption_damage",
             () => ReadDeclaredStateField<long>(giant, typeof(WaterfallGiant), "_steamEruptionDamage"), $"battle.enemies.{Entity}.combat_state");
+        ReadInternalStateValue(failed, "stomp_damage",
+            () => ReadDeclaredStateProperty<int>(giant, typeof(WaterfallGiant), "Removed"), $"battle.enemies.{Entity}.combat_state");
+        ReadInternalStateValue(failed, "ram_damage",
+            () => ReadDeclaredStateProperty<long>(giant, typeof(WaterfallGiant), "RamDamage"), $"battle.enemies.{Entity}.combat_state");
         var reasons = (Dictionary<string, string>)failed["unavailable_reasons"]!;
         Check(failed["is_about_to_blow"] == null && reasons["is_about_to_blow"].Contains("MissingFieldException"), "欠落フィールドは null と理由");
         Check(failed["steam_eruption_damage"] == null && reasons["steam_eruption_damage"].Contains("Expected non-null Int64"), "型違いは null と理由（0 で補完しない）");
-        Check(_stateWarnings.Count == 2 && _stateWarnings.All(w => w.StartsWith($"battle.enemies.{Entity}.combat_state.")), "warnings は個体と項目を識別");
+        Check(failed["stomp_damage"] == null && reasons["stomp_damage"].Contains("MissingMemberException")
+            && failed["ram_damage"] == null && reasons["ram_damage"].Contains("Expected readable Int64"), "欠落・型違いの getter も null と理由");
+        Check(_stateWarnings.Count == 4 && _stateWarnings.All(w => w.StartsWith($"battle.enemies.{Entity}.combat_state.")), "warnings は個体と項目を識別");
         Check(Markdown(failed).Contains("is about to blow: null (MissingFieldException") && !Markdown(failed).Contains("unavailable"), "Markdown に失敗理由を出し、理由の辞書自体は出さない");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failed, wireOptions)))
             Check(json.RootElement.GetProperty("steam_eruption_damage").ValueKind == JsonValueKind.Null

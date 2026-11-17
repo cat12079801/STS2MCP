@@ -33,7 +33,7 @@ public static partial class McpMod
     private static T ReadDeclaredStateProperty<T>(object instance, Type declaringType, string name)
     {
         var property = declaringType.GetProperty(name,
-            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
             ?? throw new MissingMemberException(declaringType.Name, name);
         if (property.PropertyType != typeof(T) || property.GetMethod == null || property.GetIndexParameters().Length != 0)
             throw new InvalidOperationException($"Expected readable {typeof(T).Name} property {declaringType.Name}.{name}");

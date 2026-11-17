@@ -1465,21 +1465,39 @@ Markdown は意図の行の `label` の後に `[attack: base 20 | hits 1 | resol
 
 `battle.enemies[].combat_state` は許可リストの敵にだけ出す。いまは滝の巨人（`WaterfallGiant`）だけで、
 他の敵・旧 MOD では省略する（欠落は unknown）。生存敵・戦闘に残る死亡中の敵、単独・協力プレイで共通。
-宣言型 `WaterfallGiant` の private フィールドを宣言型・型を検査して読むだけで、move の実行・初期化・
-乱数・履歴の集計はしない。HP・行動 ID・パワーから作らない。
+宣言型 `WaterfallGiant` の private フィールドと、副作用の無い getter を宣言型・型を検査して読むだけで、
+move の実行・初期化・乱数・履歴の集計はしない。HP・行動 ID・パワー・Ascension の値から作らない。
+すべて非負の int（`is_about_to_blow` だけ bool）で、false・0 も実値。
 
 ```json
-{ "is_about_to_blow": false, "steam_eruption_damage": 0 }
+{
+  "is_about_to_blow": false, "steam_eruption_damage": 0,
+  "current_pressure_gun_damage": 20, "steam_boost_amount": 3, "pressurize_amount": 15,
+  "stomp_damage": 15, "ram_damage": 10, "pressure_up_damage": 13, "siphon_heal": 10
+}
 ```
 
 | 項目 | 読取元・意味 |
 | --- | --- |
 | `is_about_to_blow` | private bool `WaterfallGiant._isAboutToBlow`。`SteamEruptionPower.AfterDeath`（所有者の死亡、`wasRemovalPrevented` でないとき）が呼ぶ `TriggerAboutToBlowState` で true。最大 HP・HP を 999999999 にして `ABOUT_TO_BLOW_MOVE` へ強制遷移する。false に戻す処理は無い。false も実値 |
 | `steam_eruption_damage` | private int `WaterfallGiant._steamEruptionDamage`。`AboutToBlowMove` がそのときの `SteamEruptionPower` の量を写してパワーを外し、`EXPLODE_MOVE` の `DeathBlowIntent` と `ExplodeMove` の攻撃（攻撃後に自身を倒す）に使う。写す前は 0 の実値 |
+| `current_pressure_gun_damage` | private int `WaterfallGiant._currentPressureGunDamage`（`CurrentPressureGunDamage` の実体）。`AfterAddedToRoom` が `BasePressureGunDamage`（DeadlyEnemies で 23、無しで 20）を入れ、`PressureGunMove` が攻撃の後に `PressureGunIncrease`（5）を足す。次の `PRESSURE_GUN_MOVE` の攻撃の素値 |
+| `steam_boost_amount` | private getter `WaterfallGiant.SteamBoostAmount`（`AscensionHelper.IsDread()` で 4、それ以外 3）。STOMP・RAM・SIPHON・PRESSURE_GUN・PRESSURE_UP の各行動の最後に `SteamEruptionPower` へ足す量 |
+| `pressurize_amount` | private getter `WaterfallGiant.PressurizeAmount`（DeadlyEnemies で 20、無しで 15）。`PressurizeMove` が付ける `SteamEruptionPower` の量 |
+| `stomp_damage` | private getter `WaterfallGiant.StompDamage`（16 / 15）。`StompMove` の攻撃の素値 |
+| `ram_damage` | private getter `WaterfallGiant.RamDamage`（11 / 10）。`RamMove` の攻撃の素値 |
+| `pressure_up_damage` | private getter `WaterfallGiant.PressureUpDamage`（14 / 13）。`PressureUpMove` の攻撃の素値 |
+| `siphon_heal` | public getter `WaterfallGiant.SiphonHeal`（ToughEnemies で 15、無しで 10）。`SiphonMove` はこれに `CombatState.Players.Count` を掛けて回復する。ここは掛ける前の 1 人分 |
+
+getter は `AscensionHelper.GetValueIfAscension` / `IsDread` を経て `RunManager.HasAscension`（`AscensionManager.HasLevel`、
+`List.Contains`）・`RunManager.IsDread`（`RunState.GameMode`）を読むだけで、状態を変えない。
+`RunManager.IsInProgress` が false のとき getter は Ascension・Dread を「無し」として返すので、そのときは getter を呼ばず、
+getter の 6 項目を `null`（理由付き）にする。括弧内の値は v0.113.1 のソースの分岐で、MOD はこれを使わず getter の現在値を出す。
 
 読取失敗は該当項目だけ `null` とし、`combat_state.unavailable_reasons.<key>` に理由、
 トップレベルの `warnings` に `battle.enemies.<entity_id>.combat_state.<key>` を出す。0 / false で補わない。
-Markdown は行動の行の次に `Combat state: is about to blow: no | steam eruption damage: 0` と表示し、
+負の値は該当項目を `null`・理由にする（0 に丸めない）。
+Markdown は行動の行の次に `Combat state: is about to blow: no | steam eruption damage: 0 | current pressure gun damage: 20 | …` と表示し、
 失敗は `null (理由)` と表示する。
 
 ### `hand_select` — In-Combat Card Selection
