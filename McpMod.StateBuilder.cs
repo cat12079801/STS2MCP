@@ -2184,6 +2184,8 @@ public static partial class McpMod
             ["move_state"] = BuildEnemyMoveState(monster, entityId),
             ["status"] = BuildPowersState(creature)
         };
+        // Alive or dead, minion or reviving: always the game's own getter (false != unknown).
+        AttachEnemyHittable(state, creature, entityId);
         if (BuildEnemyCombatState(monster, entityId) is { } enemyCombatState)
             state["combat_state"] = enemyCombatState;
 

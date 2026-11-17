@@ -1378,6 +1378,7 @@ Run state or room type not recognized.
         "combat_id": 42,               // Internal combat ID
         "name": "Jaw Worm",
         "alive": true,                 // Always present. false = dead but still in the fight
+        "hittable": true,              // Creature.IsHittable; null when unreadable (see below)
         "hp": 44,
         "max_hp": 44,
         "block": 0,
@@ -1404,6 +1405,7 @@ Run state or room type not recognized.
         "combat_id": 44,
         "name": "Decimillipede Segment",
         "alive": false,
+        "hittable": false,             // IsDead -> not hittable
         "hp": 0,
         "max_hp": 46,
         "block": 0,
@@ -1436,6 +1438,25 @@ its `intents` then show `Heal`), and `hp` is the amount it heals for. A corpse h
 fight by something that never revives it (`DieForYouPower`, `IllusionPower`) has `alive: false`
 and no `revive`, and neither does the last segment of a Decimillipede — with no living peer
 left to reattach to, the fight is over rather than about to restart.
+
+#### 敵に当てられるか（`hittable`、追加。schema 4）
+
+`battle.enemies[]` の**すべての行**（通常の敵・ミニオン・復活待ちの死亡個体・復活後）に `hittable` を出す。
+値は `Creature.IsHittable` の bool をそのまま。HP・`alive`・パワー名から作らない。
+本体の対象の抽選（`CombatState.HittableEnemies` → `CardCmd.AutoPlay` の `CombatTargets` の抽選。ジャガーノートなどのランダムな対象）と同じ getter である。
+`targetable`（手で狙えるか）とは別で、本体の注釈どおり「当てられない」のではない全体攻撃もある。
+
+- getter（v0.113.1 `sts2-a671e9ef` の `Creature.IsHittable`）: `IsDead`（`CurrentHp <= 0`）なら false、
+  そうでなければ `Hook.ShouldAllowHitting(CombatState, creature)`（戦闘の hook listener の `ShouldAllowHitting` が 1 つでも false なら false）。
+  override は敵では `ReattachPower`（ムカデの体節）・`IllusionPower`（パラフライト・歯の目）・`AdaptablePower`（被検体）で、
+  どれも「その所有者が復活中（private の `isReviving`）なら false」。味方の `DieForYouPower`・`WuppysLoyaltyPower` は対象が生存しているかを返す。
+- 読み取りは状態を書き換えない（`IsDead` は HP の比較、各 override は private の内部データか `IsAlive` を読むだけ）。
+  `Hook.ShouldAllowHitting` は `Hook.IterateCombatHookListeners` を通るので、`CanPlay` と同じく他の MOD の hook subscriber を通りうる。
+  `CombatManager.ShouldSkipCombatEffect` の間は listener が空になり、生存個体は true になる（本体の値のまま）。
+- 読めなければ `hittable: null`、敵の行の `unavailable_reasons.hittable` に理由、warning `battle.enemies.<entity_id>.hittable`。
+  false と区別する。旧 MOD では欠落し、未観測として扱う。
+- Markdown は HP の行に `| Hittable: yes|no`（読めなければ `null (理由)`）。追加だけなので schema 4 のまま。
+- 契約試験は [`tests/EnemyHittableContract`](../tests/EnemyHittableContract/README.md)。
 
 #### 敵の行動状態（追加、schema 4）
 
