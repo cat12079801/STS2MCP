@@ -1037,6 +1037,7 @@ Data を初期化せず、アタック数から予約を再構成しない。画
 別インスタンス（`Instanced`）で、行ごとに対象を持つ。`SurprisePower.AfterDeath` が各インスタンスの
 `Target` と `stolen_gold` を強奪（`HEIST_POWER`）の `Target` と `amount` へ写し、
 強奪の `BeforeDeath` がその player へ `amount` のゴールドを返す。強奪には `target_player_id` だけを足す。
+`stolen_gold` が 0 のインスタンスからは強奪を付与しない（`PowerCmd.Apply` が amount 0 を無視して返る）ので、強奪の行は盗んだ額が正の対象だけに出る。
 同じ対象の行も合算しない。他の player が対象の行は `hidden_in_ui` だが、この 2 項目は付ける。
 `Target` が無い・player でない場合と読取失敗は null・理由・warnings で、0 や自分の ID で補わない。
 

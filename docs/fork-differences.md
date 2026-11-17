@@ -70,11 +70,11 @@
 - **戦闘中の `card_select`**: 戦闘のパイルから選ぶ行に、戦闘中の `uid` を出す（#70）
 - **死亡中の敵**: 復活を待つ敵（再結合など）を `alive: false` で `enemies[]` に残し、`revive: {in_turns, hp, power_id, power_name}` を付ける（#55）
 - **敵の行動状態**: 全モンスターの `battle.enemies[].move_state` に現在の行動 ID・follow-up ID・ゲームの行動ログ末尾 ID・遷移可否を公開する。スタン時も実際の復帰先とロックを保持。四値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体別 warnings とし、履歴から推測しない。分岐の事前抽選やゲームの状態変更はせず、Markdown に ID と follow-up を表示する。単独・協力プレイと死亡中の敵で共通、schema 4 を維持。[入力契約と出典](raw-full.md#敵の行動状態追加schema-4)（#91、`cat12079801/sts2#910`）
-- **敵の戦闘内部状態**: 滝の巨人の `battle.enemies[].combat_state` に `is_about_to_blow`（private `_isAboutToBlow`）と `steam_eruption_damage`（private `_steamEruptionDamage`）を公開する。false・0 も実値で、HP や行動 ID から作らない。読取失敗は null・項目別理由・warnings。Markdown に `Combat state:` 行を表示。他の敵には出さない。schema 4 を維持。[入力契約と出典](raw-full.md#敵の戦闘内部状態追加schema-4)（#TBD、`cat12079801/sts2#954`）
+- **敵の戦闘内部状態**: 滝の巨人の `battle.enemies[].combat_state` に `is_about_to_blow`（private `_isAboutToBlow`）と `steam_eruption_damage`（private `_steamEruptionDamage`）を公開する。false・0 も実値で、HP や行動 ID から作らない。読取失敗は null・項目別理由・warnings。Markdown に `Combat state:` 行を表示。他の敵には出さない。schema 4 を維持。[入力契約と出典](raw-full.md#敵の戦闘内部状態追加schema-4)（#92、`cat12079801/sts2#954`）
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
-  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#TBD）
+  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92）
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）
 - **生成の候補**:
   - `run.generation_pool`: ランの解放済みの戦闘生成の候補（#63）
