@@ -1289,7 +1289,13 @@ Run state or room type not recognized.
             "type": "Attack",          // Attack, Defend, Buff, Debuff, Sleep, etc.
             "label": "11",             // Damage number or short label
             "title": "Attack",         // Hover tip title
-            "description": "Deals 11 damage."  // Hover tip description
+            "description": "Deals 11 damage.",  // Hover tip description
+            "attack": {                // Attack / DeathBlow only (see below)
+              "readable": true,
+              "base_damage": "11",     // DamageCalc() before modifiers, decimal as a string
+              "hits": 1,               // AttackIntent.Repeats
+              "resolved_damage": 11    // GetSingleDamage against the local player
+            }
           }
         ]
       },
@@ -1399,6 +1405,61 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
   はログへ追加しないため、スタンの ID・復帰先・ログ末尾は同一とは限らない。
 - `LouseProgenitor.GenerateMoveStateMachine` は `WEB_CANNON_MOVE` → `CURL_AND_GROW_MOVE`
   → `POUNCE_MOVE` → WEB の参照を設定する。`Curled` は今回の公開対象に含めない。
+
+#### 敵の攻撃の意図（追加、schema 4）
+
+`battle.enemies[].intents[].attack` は、意図が `AttackIntent`（`SingleAttackIntent`・`MultiAttackIntent`・
+`DeathBlowIntent`。`type` は `Attack` か `DeathBlow`）のときだけ出す。攻撃以外の意図・旧 MOD では省略（欠落は unknown）。
+読むのは `MonsterModel.NextMove.Intents` の現在の意図そのもので、生存敵・戦闘に残る死亡敵、単独・協力プレイで共通。
+追加契約なので schema は 4 のまま。`label`・`description`・履歴・パワーから値を補完しない。
+
+```json
+{ "readable": true, "base_damage": "20", "hits": 1, "resolved_damage": 36 }
+```
+
+| 項目 | 読取元・意味 |
+| --- | --- |
+| `readable` | 三値すべてが取得できたときだけ true。失敗が一つでもあれば false |
+| `base_damage` | `AttackIntent.DamageCalc.Invoke()` の decimal を `ToString(CultureInfo.InvariantCulture)` した 10 進文字列。`Hook.ModifyDamage`（筋力・脆弱・脱力など）を通す前の 1 ヒットの素値。丸めず、scale もそのまま。`DamageCalc` が null・例外なら null |
+| `hits` | `AttackIntent.Repeats` の int。`SingleAttackIntent`（`DeathBlowIntent` を含む）は 1、`MultiAttackIntent` は `_repeatCalc?.Invoke() ?? _repeat`（`TestSubject` の `MULTI_CLAW_MOVE` のように現在値で変わる）。0 も実値。負・例外なら null |
+| `resolved_damage` | `AttackIntent.GetSingleDamage(PlayerCreatures, creature)` の int。`label` と hover の数値と同じ経路で、ローカルのプレイヤー（`LocalContext.GetMe(creature.CombatState)`）が対象のときの 1 ヒットの解決値。協力プレイでも他のプレイヤーへの値ではない。ローカルのプレイヤーが居ないとき、ゲームは補正前の値を返すので、MOD は同じ判定を先に行って null にする |
+
+`resolved_damage` の計算（v0.113.1）: `GetSingleDamage` は `DamageCalc()` を
+`Hook.ModifyDamage(..., target: 自分, dealer: 敵, ValueProp.Move, ModifyDamageHookType.All)` に通し、
+`Math.Max(0, (int)num)` で int にする（小数は 0 方向へ切り捨て）。`Hook.ModifyDamageInternal` の順序は
+加算（`StrengthPower.ModifyDamageAdditive` など）→ 倍率（`VulnerablePower` / `WeakPower.ModifyDamageMultiplicative` など）
+→ 後段の倍率 → 上限。たとえば素 20・敵の筋力 4・自分が脆弱なら (20+4)×1.5=36、筋力 6 なら 39。
+敵が脱力なら (20+4)×0.75=18、筋力 6 なら 19.5→19。素 21・筋力 4・脱力でも 18 になるので、`label` から素値は一意に戻らない。
+
+読取は副作用を持たない。`DamageCalc` はモンスターが行動の定義で渡した delegate で、v0.113.1 では
+定数を返す closure（`SingleAttackIntent(int)` / `MultiAttackIntent(int, …)`）か、フィールド・パワー量・アセンションを読む getter
+（`WaterfallGiant.CurrentPressureGunDamage` / `SteamEruptionDamage`、`TheForgotten.DreadDamage`、`GasBomb.ExplodeDamage`）だけ。
+`GetSingleDamage` はゲームの意図の表示（`GetIntentLabel`・`GetHoverTip`・`GetTexture`）が毎回呼ぶのと同じ読取で、
+`Hook.ModifyDamage` は各モデルの `ModifyDamage*` を集計するだけ。乱数・行動の抽選・状態の書き込みは行わない。
+
+読めない値は該当項目だけ `null` とし、`attack.unavailable_reasons.<key>` に `ExceptionType: message`、
+トップレベルの `warnings` に `battle.enemies.<entity_id>.intents.<意図の位置>.attack.<key>` を出す。取得できた項目は保持する。
+`unavailable_reasons` は失敗がなければ省略する。
+
+```json
+{
+  "readable": false,
+  "base_damage": "20",
+  "hits": 1,
+  "resolved_damage": null,
+  "unavailable_reasons": {
+    "resolved_damage": "InvalidOperationException: ローカルのプレイヤーがいません（LocalContext.GetMe が null）"
+  }
+}
+```
+
+Markdown は意図の行の `label` の後に `[attack: base 20 | hits 1 | resolved 36]` を足す。
+取得不能の項目は `null (理由)` と表示する。
+
+根拠（v0.113.1、逆コンパイル `sts2-a671e9ef`）: `AttackIntent.DamageCalc` / `Repeats` / `GetSingleDamage`、
+`SingleAttackIntent` / `MultiAttackIntent` / `DeathBlowIntent` のコンストラクタと `Repeats`・`GetIntentLabel`、
+`Hook.ModifyDamage` / `ModifyDamageInternal`、`StrengthPower.ModifyDamageAdditive`、
+`VulnerablePower` / `WeakPower.ModifyDamageMultiplicative`、`LocalContext.GetMe(ICombatState?)`。
 
 #### 敵の戦闘内部状態（追加、schema 4）
 

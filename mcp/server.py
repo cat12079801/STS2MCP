@@ -183,6 +183,10 @@ async def get_game_state(format: str = "markdown") -> str:
     スタン時も実際の復帰先を読み、分岐先の事前抽選や履歴からの推測はしない。
     取得不能の項目は null・unavailable_reasons・warnings、旧 MOD の欠落は unknown。
     Markdown は行動 ID と follow-up を短く表示する。schema は 4 のまま。
+    battle.enemies[].intents[] の Attack / DeathBlow は attack（readable・base_damage・hits・
+    resolved_damage）を持つ。base_damage は補正前の素値（decimal の文字列）、hits は回数、
+    resolved_damage はローカルのプレイヤーへの 1 ヒットの解決値。ラベルから逆算しない。
+    読めない値は null・unavailable_reasons・warnings。
     滝の巨人だけ battle.enemies[].combat_state に is_about_to_blow（bool）と
     steam_eruption_damage（int）を出す。false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と

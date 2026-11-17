@@ -504,7 +504,7 @@ public static partial class McpMod
                         string typeTag = $" ({i["type"]})";
                         string label = i.TryGetValue("label", out var l) && l is string ls && ls.Length > 0 ? $" {ls}" : "";
                         string desc = i.TryGetValue("description", out var d) && d is string ds && ds.Length > 0 ? $" - {ds}" : "";
-                        return $"{title}{typeTag}{label}{desc}";
+                        return $"{title}{typeTag}{label}{FormatEnemyAttackIntent(i)}{desc}";
                     })));
                 }
 

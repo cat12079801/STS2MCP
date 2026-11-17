@@ -2245,12 +2245,16 @@ public static partial class McpMod
         if (monster?.NextMove is MoveState moveState)
         {
             var intents = new List<Dictionary<string, object?>>();
+            int intentIndex = 0;
             foreach (var intent in moveState.Intents)
             {
                 var intentData = new Dictionary<string, object?>
                 {
                     ["type"] = intent.IntentType.ToString()
                 };
+                // Attack / DeathBlow（AttackIntent）だけ。ラベルの取得とは独立に読み、失敗は attack の中に閉じる。
+                if (BuildEnemyAttackIntent(intent, creature, entityId, intentIndex++) is { } attack)
+                    intentData["attack"] = attack;
                 try
                 {
                     var targets = creature.CombatState?.PlayerCreatures;
