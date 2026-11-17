@@ -79,6 +79,10 @@ namespace STS2_MCP
             return uid;
         }
         private static bool? SafeGetBool(Func<bool> read) => read();
+        // Display order boundary (the real one sorts by Rarity, CompareTo, uid): any order
+        // that does not depend on the hidden pile order.
+        private static IEnumerable<CardModel> OrderPileCardsForDisplay(IEnumerable<CardModel> cards, PileType pile)
+            => cards.OrderBy(c => c.Id.Entry, StringComparer.Ordinal).ThenBy(GetStableCardUid, StringComparer.Ordinal).ToList();
         private static void RefreshEntityIdRegistry(ICombatState state) => EntityRefreshes++;
         private static string GetStableEntityId(Creature creature) => $"{creature.MonsterId}_0";
         private static Dictionary<string, object?> BuildGameStateCore() => new();
@@ -110,6 +114,7 @@ namespace STS2_MCP
             Check(Equals(rows[0]["uid"], "CRUELTY#g0") && Equals(rows[1]["uid"], "STOMP#g1") && GetStableCardUid(stomp) == "STOMP#g1", "実個体の uid（選択後のパイルでも同じ registry の値）");
             Check(rows[2]["exhaust_on_next_play"] is true && rows[0]["exhaust_on_next_play"] is false, "ExhaustOnNextPlay の現在値");
             Check(Equals(rows[0]["cost"], "2") && Equals(((Dictionary<string, object?>)rows[0]["energy_cost"]!)["base"], 2), "選択前のコストを 0 に加工しない");
+            Check(((Dictionary<string, object?>)rows[0]["energy_cost"]!)["global_modifiers_applied"] is false, "パイルに無い候補は global の修正が入っていないことを行で示す");
             Check(rows[0]["can_play"] is false && Equals(rows[0]["unplayable_reason"], "EnergyCostTooHigh"), "可否は本体の判定をそのまま");
             var star = (Dictionary<string, object?>)rows[0]["star_cost_state"]!;
             var temps = (List<Dictionary<string, object?>>)star["temporary_costs"]!;
@@ -194,6 +199,53 @@ namespace STS2_MCP
             md.Clear();
             FormatCardSelectMarkdown(md, new Dictionary<string, object?> { ["screen_type"] = "choose", ["cards"] = rows, ["continuation_context"] = context });
             Check(md.ToString().Contains("Continuation listeners: after_card_entered_combat=2, after_card_generated_for_combat=2, after_potion_used=2, after_hand_emptied=1"), "Markdown は通知ごとの listener 数");
+
+            // --- draw pile order must not leak through listener order ---
+            var drawPlayer = new Player { NetId = 2 };
+            var stompX = new StompLike(drawPlayer);
+            var stompY = new StompLike(drawPlayer);
+            var zed = new CardModel("ZED", drawPlayer);
+            zed.Affliction = new HexedLike(zed);
+            var drawDiscard = new StompLike(me) { Pile = new CardPile(PileType.Discard) };
+            string DrawContext(CardModel[] hiddenOrder)
+            {
+                var drawPile = new CardPile(PileType.Draw);
+                var cards = hiddenOrder.ToList();
+                drawPile.Cards.AddRange(cards);
+                foreach (var c in cards) c.Pile = drawPile;
+                var state = new CombatState();
+                var discardStomp = drawDiscard;
+                state.Listeners.Add(new GalvanicLike(enemy));
+                state.Listeners.Add(handStomp);
+                foreach (var c in cards)
+                {
+                    state.Listeners.Add(c);
+                    if (c.Affliction != null) state.Listeners.Add(c.Affliction);
+                }
+                state.Listeners.Add(discardStomp);
+                var ctx = BuildChoiceContinuationContext(new RunState(), state);
+                Check(ctx["known"] is true, "山札の listener があっても既知");
+                return JsonSerializer.Serialize(((Dictionary<string, object?>)ctx["notifications"]!)["after_card_entered_combat"]);
+            }
+            foreach (var c in new CardModel[] { stompY, stompX, zed, drawDiscard }) GetStableCardUid(c); // uids fixed before any read
+            string first = DrawContext(new CardModel[] { stompX, zed, stompY });
+            string second = DrawContext(new CardModel[] { stompY, stompX, zed });
+            Check(first == second, "山札の並びを入れ替えても listener の行・order が完全に同じ（引く順が漏れない）");
+            using (var json = JsonDocument.Parse(first))
+            {
+                var listeners = json.RootElement.GetProperty("listeners");
+                Check(listeners.GetArrayLength() == 6, "Galvanic・手札・山札 3 行・捨て札");
+                Check(listeners[0].GetProperty("order").GetInt32() == 0 && listeners[1].GetProperty("order").GetInt32() == 1, "山札より前の order は公開の件数");
+                var drawRows = Enumerable.Range(2, 3).Select(i => listeners[i]).ToList();
+                Check(drawRows.All(r => r.GetProperty("order").ValueKind == JsonValueKind.Null
+                    && r.GetProperty("order_group").GetString() == "draw_pile"
+                    && r.GetProperty("order_group_start").GetInt32() == 2
+                    && r.GetProperty("order_group_owner_player_id").GetString() == "2"), "山札の行は order=null とまとまりの開始位置だけ");
+                Check(drawRows.Select(r => r.GetProperty("model_id").GetString()).SequenceEqual(new[] { "STOMP", "STOMP", "HEXED" })
+                    && drawRows[0].GetProperty("uid").GetString() == GetStableCardUid(stompY) && drawRows[1].GetProperty("uid").GetString() == GetStableCardUid(stompX)
+                    && drawRows[2].GetProperty("parent_uid").GetString() == GetStableCardUid(zed), "山札の行は表示順（OrderPileCardsForDisplay）で、付属効果は親の札の位置");
+                Check(listeners[5].GetProperty("order").GetInt32() == 6, "山札より後ろの order は山札の公開の枚数（札 3・付属効果 1）から決まる");
+            }
 
             // --- wiring (source checks) ---
             string sources = Path.Combine(AppContext.BaseDirectory, "Sources");

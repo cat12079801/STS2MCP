@@ -41,7 +41,13 @@ public static partial class McpMod
                 AttachCardDetails(row, card);
                 row["uid"] = GetStableCardUid(card);
                 row["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
-                row["energy_cost"] = BuildCardEnergyCostState(card);
+                var energyCost = BuildCardEnergyCostState(card);
+                // CardEnergyCost.GetWithModifiers applies global (in-combat) hooks only when
+                // CardModel.CombatState is set, i.e. once the card sits in a combat pile. A
+                // candidate is not in one yet, so with_all_modifiers (and can_play's cost check)
+                // stop at local modifiers. Say so in the row instead of only in the docs.
+                energyCost["global_modifiers_applied"] = SafeGetBool(() => card.CombatState != null);
+                row["energy_cost"] = energyCost;
                 row["star_cost_state"] = BuildCardStarCostState(card);
                 AttachCardPlayability(row, card);
             }

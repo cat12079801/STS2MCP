@@ -996,8 +996,8 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 
 - 値は本体の getter をそのまま読む。`BaseStarCost` の getter（`CurrentStarCost` からも呼ばれる）は、未設定なら
   `CanonicalStarCost`（各札の定数）を private の `_baseStarCost` に写して `_starCostSet` を立てる遅延初期化をする。
-  写す値は定数で、`_starCostSet` を読むのはこの getter だけなので冪等。X 以外の札では、同じ行の既存の `star_cost`
-  （`GetStarCostDisplay` → `CurrentStarCost`）が先に同じ初期化をしている。
+  写す値は定数（`CanonicalStarCost` の override はすべて定数）で、`_starCostSet` を読むのはこの getter と setter だけなので、
+  外から見える状態は変わらない（冪等）。`IsMutable` が偽の札では初期化せず `CanonicalStarCost` を返す。
 - `temporary_costs` は `TemporaryCardCost.Cost` / `ClearsWhenTurnEnds` / `ClearsWhenCardIsPlayed` を順序・重複ごと出す。
   `SetToFreeThisTurn` は `SetStarCostThisTurn(0)`（`TemporaryCardCost.ThisTurn(0)`）を末尾に足す。
   `[]` は一時値なし、`null` は読取失敗。効果名やプレイ履歴から補わない。
@@ -2123,9 +2123,17 @@ described below. Selection actions still use `index`.
 候補はまだ戦闘のパイルに無いため `CardModel.CombatState` が null で、`CardEnergyCost.GetWithModifiers` は
 global のフック（`Hook.ModifyEnergyCostInCombat`）を適用しない。よって候補の `with_all_modifiers` と `can_play` の
 コスト判定は local の修正までの値で、手札に入った後の値と違いうる。手札での値は選択後の state で読む。
+これを機械的に読み分けられるよう、choose の候補の `energy_cost` にだけ `global_modifiers_applied`
+（`CardModel.CombatState != null`。候補では通常 `false`、読めなければ `null`）を付ける。
+`false` の行の `with_all_modifiers` は `with_local_modifiers` と同じ範囲の値で、手札の行の同名キーと同じ意味ではない。
 
 同じ条件で画面に `battle`（`BuildBattleState`。単独・マルチとも戦闘画面と同じ）を付け、`card_select.continuation_context` に
 選択後の継続で通知を受ける listener を出す。
+
+この欄は**戦闘中のすべての choose 画面**に付く（3 択ポーションのほか、発見系の札・豊穣・知識の呪いなど敵の手番に出る画面も）。
+MOD は画面を開いた親の操作を区別しない。4 通知はポーション（`AttackPotion` などの `OnUse` → `OnUseWrapper`）の継続の定義で、
+どの画面の継続かと、どの通知が実際に続くかはクライアントが自分の送った親の操作から決める
+（例: 札の効果の choose では `after_potion_used` は起きない）。
 
 ```jsonc
 "continuation_context": {
@@ -2150,6 +2158,13 @@ global のフック（`Hook.ModifyEnergyCostInCombat`）を適用しない。よ
 - `listener_count` はその列の全件、`listeners` はそのうち該当の hook を `AbstractModel` の既定（何もしない）から
   override している型だけ。`order` は列の中の位置（0 始まり）、`declared_by` は実装を宣言した型。
   判定はリフレクションだけで、hook を呼ばない。同じ ID の複数行も潰さない。
+- **山札にある listener 同士の順序は非公開。** 列は各 player の `PlayerCombatState.AllPiles`（手札・山札・捨て札・廃棄札・Play）を
+  札ごとに並べるので、山札の札（とその affliction・enchantment）の位置は引く順そのものになる。そのため、
+  札（または付属効果の親の札）が山札にある行は `order: null` とし、代わりに `order_group: "draw_pile"`、
+  `order_group_start`（その player の山札のまとまりが列の中で始まる位置）、`order_group_owner_player_id` を出す。
+  行の並びも山札の表示順（`OrderPileCardsForDisplay`。`Rarity` → `CardModel.CompareTo` → uid）に並べ替え、付属効果は親の札の直後に置く。
+  他の player の山札も同じ。山札より前・後ろの行の `order` は公開の件数（山札の枚数と付属効果の数を含む）から決まるのでそのまま出す。
+  山札の中の listener が実際にどの順で通知を受けるかは分からないので、利用側は順序に依存しない（可換な）場合だけ扱う。
 - 行の識別: `kind` は `power` / `relic` / `potion`（`slot`）/ `orb` / `card`（`uid` と `pile`）/ `affliction` / `enchantment`
   （`parent_uid` と `parent_pile`）/ `monster` / `modifier` / `badge` / `run_model` / `dominion` / `achievement`。
   power と monster は所有者の `combat_id` と、敵なら `entity_id`、プレイヤーなら `player_id`（power は `owner_` 接頭辞）。
@@ -2159,13 +2174,15 @@ global のフック（`Hook.ModifyEnergyCostInCombat`）を適用しない。よ
 - 通知の条件に要る内部状態（留め具の `_dexterityApplied` など）は既存の公開値（`relics[].combat_state` など）で読む。
   この欄は listener の列であり、通知の結果を計算しない。
 - 公開状態に結べない種類の listener があれば `known: false` と `unavailable_reasons`（文字列の配列）。
-  他の MOD が `ModHelper` に hook の subscriber を登録しているときは、その delegate を呼ばないために列挙せず
-  `known: false`（`notifications` なし）。読取失敗も同じで、warning `card_select.continuation_context`。
+  他の MOD が `ModHelper` に hook の subscriber を登録しているときは、その subscriber が足す MOD 製の model を
+  公開状態に結べないので、列挙せず `known: false`（`notifications` なし）。delegate を呼ばないことの保証ではない
+  （同じ GET の可否判定 `CanPlay` → `Hook.ShouldPlay` などの問い合わせの hook が、列挙の中でその delegate を呼びうる）。
+  読取失敗も同じく `known: false` で、warning `card_select.continuation_context`。
 - Markdown は `Continuation listeners: after_card_entered_combat=N, …` の 1 行（未知なら理由）。
 
 戦闘外の choose（イベントの報酬など）は従来どおり `BuildCardInfo` の行だけで、`battle` も付けない。
-GET では選択・無料化・カードの追加・抽選・hook の呼び出しをしない（`AttachCardPlayability` の `CanPlay` は
-手札・パイルの行と同じ読取）。追加だけなので schema 4 のまま。旧 MOD の欠落は未観測として扱う。
+GET では選択・無料化・カードの追加・抽選と、通知の hook（`After…`）の呼び出しをしない。`AttachCardPlayability` の `CanPlay` は
+手札・パイルの行と同じ読取で、可否の問い合わせの hook（`Hook.ShouldPlay`）を通る。追加だけなので schema 4 のまま。旧 MOD の欠落は未観測として扱う。
 出典は `sts2-a671e9ef` の各ポーションの `OnUse`、`CardFactory.GetDistinctForCombat`、`CombatState.CreateCard` /
 `IterateHookListeners`、`RunState.IterateHookListeners`、`Hook.IterateCombatHookListeners` / `AfterCardEnteredCombat` /
 `AfterCardGeneratedForCombat` / `AfterPotionUsed` / `AfterHandEmptied`、`CardModel.CombatState` / `CanPlay`、

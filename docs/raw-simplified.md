@@ -400,7 +400,7 @@ and on `preview_cards`. Actions still use `index`.
 戦闘中の choose-a-card（3 択ポーションなど）の候補行は、選ばれると手札に入る実個体として手札と同じ `uid`・`energy_cost`・`star_cost_state`・
 札の詳細・`can_play`・`exhaust_on_next_play` を持ち（値は選択前。コストを 0 に加工しない）、画面に `battle` と
 選択後の通知の listener の列 `card_select.continuation_context`、各行に候補自身の `continuation_listeners` が付く。
-`index` は `select_card` と同じ holder の位置。[契約・出典](raw-full.md#戦闘中の-choose-a-card追加schema-4)。
+`index` は `select_card` と同じ holder の位置。候補の `energy_cost` はパイルに入る前なので global の修正を含まず、`global_modifiers_applied: false` で示す。継続の listener のうち山札にあるものは引く順を漏らさないため `order: null`（`order_group: "draw_pile"` とまとまりの開始位置）で、行は山札の表示順に並べ替える。4 通知はポーションの継続の定義で、どの画面の継続かはクライアントが親の操作から決める。[契約・出典](raw-full.md#戦闘中の-choose-a-card追加schema-4)。
 
 同じ戦闘中の grid 行には `exhaust_on_next_play`（`CardModel.ExhaustOnNextPlay`）も出し、
 true のときだけ Markdown に `[exhaust-next]` を付ける。戦闘外には出さない。

@@ -11,8 +11,9 @@ public static partial class McpMod
     // sts2-a671e9ef: CardModel.BaseStarCost / CanonicalStarCost / HasStarCostX / CurrentStarCost
     // and the declared private _temporaryStarCosts (TemporaryCardCost list, latest wins).
     // Read the live ordered list; never reconstruct temporary costs from card/play history.
-    // BaseStarCost's getter lazily copies CanonicalStarCost on first read; the existing
-    // star_cost display (CurrentStarCost) already triggers that same idempotent read.
+    // BaseStarCost's getter lazily copies CanonicalStarCost (a constant in every override)
+    // into _baseStarCost and sets _starCostSet, read only by that getter/setter: idempotent,
+    // no observable change.
     private static Dictionary<string, object?> BuildCardStarCostState(CardModel card)
     {
         var reasons = new Dictionary<string, string>();

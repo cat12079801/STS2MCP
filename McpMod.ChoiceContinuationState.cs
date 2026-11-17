@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
@@ -55,11 +56,12 @@ public static partial class McpMod
         var reasons = new List<string>();
         try
         {
-            // IterateHookListeners also yields ModHelper subscribers by invoking third-party
-            // delegates. Do not invoke them from a read: refuse when any are registered.
+            // ModHelper subscribers append mod-made models whose origin cannot be tied to public
+            // state. (Other parts of the same read, e.g. CanPlay -> Hook.ShouldPlay, may already
+            // reach those delegates; this guard is about the listener list, not about calls.)
             int modSubscribers = CountModHookSubscribers("_runHookSubscribers") + CountModHookSubscribers("_combatHookSubscribers");
             if (modSubscribers > 0)
-                throw new InvalidOperationException($"{modSubscribers} ModHelper hook subscriber(s) registered; their delegates are not invoked by a state read");
+                throw new InvalidOperationException($"{modSubscribers} ModHelper hook subscriber(s) registered; their models cannot be tied to public state");
 
             RefreshEntityIdRegistry(combatState);
             result["should_skip_combat_effect"] = CombatManager.Instance.ShouldSkipCombatEffect;
@@ -69,21 +71,10 @@ public static partial class McpMod
             foreach (var hook in ChoiceContinuationHooks)
             {
                 var listeners = hook.RunScope ? runListeners : combatListeners;
-                var rows = new List<Dictionary<string, object?>>();
-                for (int order = 0; order < listeners.Count; order++)
-                {
-                    var model = listeners[order];
-                    var declarer = HookOverrideDeclarer(model.GetType(), hook.Method, hook.Parameters);
-                    if (declarer == null) continue;
-                    var row = BuildHookListenerRow(model, reasons);
-                    row["order"] = order;
-                    row["declared_by"] = declarer.Name;
-                    rows.Add(row);
-                }
                 notifications[hook.Notification] = new Dictionary<string, object?>
                 {
                     ["listener_count"] = listeners.Count,
-                    ["listeners"] = rows
+                    ["listeners"] = BuildHookListenerRows(listeners, hook, reasons)
                 };
             }
             result["notifications"] = notifications;
@@ -98,6 +89,75 @@ public static partial class McpMod
         if (reasons.Count > 0) result["unavailable_reasons"] = reasons;
         return result;
     }
+
+    // IterateHookListeners walks PlayerCombatState.AllPiles card by card, so a draw-pile
+    // listener's position is its hidden place in the draw order. Never publish it:
+    // draw-pile rows get order=null plus the (public) position where that player's draw-pile
+    // block starts, and are re-sorted into the draw pile's display order
+    // (OrderPileCardsForDisplay), so neither the numbers nor the row order reveal the draw order.
+    // Positions outside the block depend only on public counts and are kept.
+    private static List<Dictionary<string, object?>> BuildHookListenerRows(List<AbstractModel> listeners,
+        (string Notification, string Method, Type[] Parameters, bool RunScope) hook, List<string> reasons)
+    {
+        var drawStart = new Dictionary<CardPile, int>(ReferenceEqualityComparer.Instance);
+        var drawRank = new Dictionary<CardModel, int>(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < listeners.Count; i++)
+        {
+            if (DrawPileOf(listeners[i]) is not { } pile || drawStart.ContainsKey(pile)) continue;
+            drawStart[pile] = i;
+            int rank = 0;
+            foreach (var card in OrderPileCardsForDisplay(pile.Cards, PileType.Draw))
+                drawRank[card] = rank++;
+        }
+
+        var rows = new List<(Dictionary<string, object?> Row, CardPile? Draw, int Rank, int Kind)>();
+        for (int order = 0; order < listeners.Count; order++)
+        {
+            var model = listeners[order];
+            var declarer = HookOverrideDeclarer(model.GetType(), hook.Method, hook.Parameters);
+            if (declarer == null) continue;
+            var row = BuildHookListenerRow(model, reasons);
+            row["declared_by"] = declarer.Name;
+            var draw = DrawPileOf(model);
+            if (draw == null)
+            {
+                row["order"] = order;
+                rows.Add((row, null, 0, 0));
+                continue;
+            }
+            var card = ListenerCard(model)!;
+            row["order"] = null;
+            row["order_group"] = "draw_pile";
+            row["order_group_start"] = drawStart[draw];
+            row["order_group_owner_player_id"] = card.Owner.NetId.ToString();
+            int kind = model is CardModel ? 0 : model is AfflictionModel ? 1 : 2; // game order within a card
+            rows.Add((row, draw, drawRank.TryGetValue(card, out int r) ? r : int.MaxValue, kind));
+        }
+
+        // A player's draw-pile rows are contiguous (one AllPiles block): sort each run.
+        var result = new List<Dictionary<string, object?>>(rows.Count);
+        for (int start = 0; start < rows.Count;)
+        {
+            int end = start + 1;
+            if (rows[start].Draw is { } pile)
+                while (end < rows.Count && ReferenceEquals(rows[end].Draw, pile)) end++;
+            result.AddRange(rows.Skip(start).Take(end - start)
+                .OrderBy(x => x.Rank).ThenBy(x => x.Kind).Select(x => x.Row));
+            start = end;
+        }
+        return result;
+    }
+
+    private static CardModel? ListenerCard(AbstractModel model) => model switch
+    {
+        CardModel card => card,
+        AfflictionModel affliction => affliction.Card,
+        EnchantmentModel enchantment => enchantment.Card,
+        _ => null
+    };
+
+    private static CardPile? DrawPileOf(AbstractModel model)
+        => ListenerCard(model)?.Pile is { Type: PileType.Draw } pile ? pile : null;
 
     // Hook overrides on a not-yet-placed candidate (the card, its affliction, its enchantment).
     // They join the listener lists only after the pick puts the card in a pile.

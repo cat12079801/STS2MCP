@@ -71,6 +71,7 @@ namespace MegaCrit.Sts2.Core.Models
     {
         public Player Owner => owner;
         public CardPile? Pile;
+        public object? CombatState => Pile is { IsCombatPile: true } ? this : null;
         public AfflictionModel? Affliction;
         public EnchantmentModel? Enchantment;
         public bool ExhaustOnNextPlay;
