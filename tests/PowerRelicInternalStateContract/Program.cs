@@ -209,6 +209,41 @@ public static partial class McpMod
         strength.SetData(null);
         Unknown(Power(strength), "stolen_strength", "status.PossessStrengthPower");
 
+        // Thievery / Heist: per-target instances. Values come from the boundary double;
+        // ThieveryPower.Steal / SurprisePower.AfterDeath are not simulated.
+        var thiefA = new ThieveryPower { Target = first };
+        var thiefB = new ThieveryPower { Target = second };
+        thiefA.DynamicVars.Gold.Value = 0m;
+        thiefB.DynamicVars.Gold.Value = 13m;
+        var rowA = Power(thiefA);
+        var rowB = Power(thiefB);
+        Check(Equals(rowA["stolen_gold"], 0) && Equals(rowA["target_player_id"], "17") && !rowA.ContainsKey("unavailable_reasons"), "Thievery zero stolen gold is a real int, not unknown");
+        Check(Equals(rowB["stolen_gold"], 13) && Equals(rowB["target_player_id"], "23") && Equals(rowB["amount"], 1), "Thievery stolen gold is Gold.IntValue, independent of amount");
+        Check(FormatPowerInternalState(rowA).Contains("stolen gold: 0; target player id: 17"), "Thievery markdown shows zero and target");
+        thiefB.DynamicVars.Gold.Value = 20m;
+        Check(Equals(rowB["stolen_gold"], 13) && Equals(Power(thiefB)["stolen_gold"], 20), "Thievery snapshot detached from later steal");
+        var hiddenThief = Power(thiefB, false);
+        Check(Equals(hiddenThief["stolen_gold"], 20) && Equals(hiddenThief["target_player_id"], "23") && !hiddenThief.ContainsKey("skip_next_duration_tick"), "hidden (other player's target) Thievery row keeps target and stolen gold only");
+        var noTargetThief = new ThieveryPower();
+        noTargetThief.DynamicVars.Gold.Value = 5m;
+        var noTargetRow = Power(noTargetThief);
+        Unknown(noTargetRow, "target_player_id", "status.ThieveryPower");
+        Check(Equals(noTargetRow["stolen_gold"], 5) && Reasons(noTargetRow)["target_player_id"].Contains("Target がありません"), "missing Target is null with reason, stolen gold kept");
+        var monsterTarget = Power(new ThieveryPower { Target = new Creature() });
+        Unknown(monsterTarget, "target_player_id", "status.ThieveryPower");
+        Check(Reasons(monsterTarget)["target_player_id"].Contains("player ではありません"), "non-player Target is not replaced by a default id");
+        thiefA.DynamicVars.Gold.ThrowBase = true;
+        var failedGold = Power(thiefA);
+        Unknown(failedGold, "stolen_gold", "status.ThieveryPower");
+        Check(Equals(failedGold["target_player_id"], "17") && FormatPowerInternalState(failedGold).Contains("stolen gold: null (InvalidOperationException: base failed)"), "Gold failure keeps target and shows reason");
+        thiefA.DynamicVars.Gold.ThrowBase = false;
+        var heistA = Power(new HeistPower { Target = first });
+        var heistB = Power(new HeistPower { Target = second }, false);
+        Check(Equals(heistA["target_player_id"], "17") && Equals(heistB["target_player_id"], "23") && !heistA.ContainsKey("stolen_gold"), "Heist rows keep their own target; amount untouched; no stolen_gold");
+        Check(Equals(heistA["amount"], 1) && FormatPowerInternalState(heistA).Contains("target player id: 17"), "Heist markdown target");
+        Unknown(Power(new HeistPower()), "target_player_id", "status.HeistPower");
+        Check(!Power(new PowerModel { Target = first }).ContainsKey("target_player_id"), "other targeted powers do not get target fields");
+
         var nib = new PenNib();
         var scarf = new BrilliantScarf();
         foreach (int count in new[] { 0, 5, 6, 7 })
@@ -308,6 +343,10 @@ public static partial class McpMod
             Check(json.RootElement.GetProperty("broken").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").GetProperty("broken").GetString()!.Contains("removed"), "null and reason survive production wire settings");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(theftSnapshot, wireOptions)))
             Check(json.RootElement.GetProperty("stolen_strength")[0].GetProperty("amount").GetDecimal() == -2.75m, "wire numeric decimal theft");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(rowA, wireOptions)))
+            Check(json.RootElement.GetProperty("stolen_gold").GetInt32() == 0 && json.RootElement.GetProperty("target_player_id").GetString() == "17", "Thievery zero int and string target survive production wire");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noTargetRow, wireOptions)))
+            Check(json.RootElement.GetProperty("target_player_id").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("target_player_id", out _), "missing Thievery target survives wire as null and reason");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failedSkip, wireOptions)))
             Check(json.RootElement.GetProperty("skip_next_duration_tick").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("skip_next_duration_tick", out _), "power null and reason survive wire");
         foreach (bool value in new[] { false, true })

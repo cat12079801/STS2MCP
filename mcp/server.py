@@ -183,6 +183,11 @@ async def get_game_state(format: str = "markdown") -> str:
     スタン時も実際の復帰先を読み、分岐先の事前抽選や履歴からの推測はしない。
     取得不能の項目は null・unavailable_reasons・warnings、旧 MOD の欠落は unknown。
     Markdown は行動 ID と follow-up を短く表示する。schema は 4 のまま。
+    滝の巨人だけ battle.enemies[].combat_state に is_about_to_blow（bool）と
+    steam_eruption_damage（int）を出す。false・0 も実値、失敗は null・理由・warnings。
+    敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
+    target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
+    hidden_in_ui の行にも付く。Target が無い・読めないときは null・理由・warnings。
     所有レリックは戦闘中・戦闘外とも vars（変数名→数値の現在の BaseValue）を含む。
     小数は保持し表示文字列は除外する。取得失敗時は vars を省略して warnings に記録する。
     During combat, allowlisted owned relics also include combat_state (usage flags

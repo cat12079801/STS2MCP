@@ -983,6 +983,7 @@ Pets also share the same builder.
 
 画面に見えるパワーには次の内部状態を追加する（schema 4）。
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
+ただし `THIEVERY_POWER` / `HEIST_POWER` の項目は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
@@ -1000,6 +1001,9 @@ Pets also share the same builder.
 | `JUGGLING_POWER` | `card_to_clone_readable` | bool |
 | `CURL_UP_POWER` | `played_card_uid` | string / null |
 | `CURL_UP_POWER` | `played_card_readable` | bool |
+| `THIEVERY_POWER` | `stolen_gold` | int |
+| `THIEVERY_POWER` | `target_player_id` | string（`player.player_id` と同じ） |
+| `HEIST_POWER` | `target_player_id` | string（同上） |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1026,7 +1030,23 @@ Data を初期化せず、アタック数から予約を再構成しない。画
 `card_to_clone_uid` / `card_to_clone_readable` と同じ（`played_card_readable`）。
 デッキに無い札も registry が `CARD_ID#g<番号>` を割り当てるので、札が分からない null は無い。
 
-盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
+泥棒（`THIEVERY_POWER`）の `stolen_gold` は `ThieveryPower.DynamicVars.Gold.IntValue`。
+`GoldVar(0)` から始まり、`ThieveryPower.Steal` が実際に盗んだ額（`min(Amount, 所持金)`）を足す。
+`amount` は 1 回に盗む上限で、累計ではない。0 も実値として出す。
+`target_player_id` は `PowerModel.Target.Player.NetId` の文字列。泥棒は対象 player ごとの
+別インスタンス（`Instanced`）で、行ごとに対象を持つ。`SurprisePower.AfterDeath` が各インスタンスの
+`Target` と `stolen_gold` を強奪（`HEIST_POWER`）の `Target` と `amount` へ写し、
+強奪の `BeforeDeath` がその player へ `amount` のゴールドを返す。強奪には `target_player_id` だけを足す。
+同じ対象の行も合算しない。他の player が対象の行は `hidden_in_ui` だが、この 2 項目は付ける。
+`Target` が無い・player でない場合と読取失敗は null・理由・warnings で、0 や自分の ID で補わない。
+
+```json
+{ "id": "THIEVERY_POWER", "amount": 20, "stolen_gold": 0, "target_player_id": "1", "skip_next_duration_tick": false }
+```
+
+（行の一部を抜粋。Markdown は `(stolen gold: 0; target player id: 1)`。0 も表示する。）
+
+`stolen_strength` / `stolen_dexterity` の盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
 文字列 ID。空の配列は盗んだ記録なしを表し、合算・正数化・既定値補完はしない。
 読めない項目は `null`、同じ status 行の `unavailable_reasons.<key>` に理由、
 トップレベル `warnings` に `status.<POWER_ID>.<key>` を出す。他項目・説明失敗時の
@@ -1378,6 +1398,27 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
   はログへ追加しないため、スタンの ID・復帰先・ログ末尾は同一とは限らない。
 - `LouseProgenitor.GenerateMoveStateMachine` は `WEB_CANNON_MOVE` → `CURL_AND_GROW_MOVE`
   → `POUNCE_MOVE` → WEB の参照を設定する。`Curled` は今回の公開対象に含めない。
+
+#### 敵の戦闘内部状態（追加、schema 4）
+
+`battle.enemies[].combat_state` は許可リストの敵にだけ出す。いまは滝の巨人（`WaterfallGiant`）だけで、
+他の敵・旧 MOD では省略する（欠落は unknown）。生存敵・戦闘に残る死亡中の敵、単独・協力プレイで共通。
+宣言型 `WaterfallGiant` の private フィールドを宣言型・型を検査して読むだけで、move の実行・初期化・
+乱数・履歴の集計はしない。HP・行動 ID・パワーから作らない。
+
+```json
+{ "is_about_to_blow": false, "steam_eruption_damage": 0 }
+```
+
+| 項目 | 読取元・意味 |
+| --- | --- |
+| `is_about_to_blow` | private bool `WaterfallGiant._isAboutToBlow`。`SteamEruptionPower.AfterDeath`（所有者の死亡、`wasRemovalPrevented` でないとき）が呼ぶ `TriggerAboutToBlowState` で true。最大 HP・HP を 999999999 にして `ABOUT_TO_BLOW_MOVE` へ強制遷移する。false に戻す処理は無い。false も実値 |
+| `steam_eruption_damage` | private int `WaterfallGiant._steamEruptionDamage`。`AboutToBlowMove` がそのときの `SteamEruptionPower` の量を写してパワーを外し、`EXPLODE_MOVE` の `DeathBlowIntent` と `ExplodeMove` の攻撃（攻撃後に自身を倒す）に使う。写す前は 0 の実値 |
+
+読取失敗は該当項目だけ `null` とし、`combat_state.unavailable_reasons.<key>` に理由、
+トップレベルの `warnings` に `battle.enemies.<entity_id>.combat_state.<key>` を出す。0 / false で補わない。
+Markdown は行動の行の次に `Combat state: is about to blow: no | steam eruption damage: 0` と表示し、
+失敗は `null (理由)` と表示する。
 
 ### `hand_select` — In-Combat Card Selection
 

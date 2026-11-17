@@ -2231,6 +2231,8 @@ public static partial class McpMod
             ["move_state"] = BuildEnemyMoveState(monster, entityId),
             ["status"] = BuildPowersState(creature)
         };
+        if (BuildEnemyCombatState(monster, entityId) is { } enemyCombatState)
+            state["combat_state"] = enemyCombatState;
 
         if (!alive)
         {

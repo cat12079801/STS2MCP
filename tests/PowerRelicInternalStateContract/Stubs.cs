@@ -31,6 +31,7 @@ namespace MegaCrit.Sts2.Core.Models
         public bool Skip;
         public bool ThrowSkip;
         public bool SkipNextDurationTick => ThrowSkip ? throw new InvalidOperationException("skip failed") : Skip;
+        public Entities.Creatures.Creature? Target { get; set; }
     }
     public class RelicModel
     {
@@ -51,13 +52,21 @@ namespace MegaCrit.Sts2.Core.Models
         public decimal Value;
         public bool ThrowBase;
         public decimal BaseValue => ThrowBase ? throw new InvalidOperationException("base failed") : Value;
+        public int IntValue => (int)BaseValue;
     }
-    public class DynamicVars { public DynamicVar Block { get; set; } = new(); }
+    public class DynamicVars
+    {
+        public DynamicVar Block { get; set; } = new();
+        public DynamicVar Gold { get; set; } = new();
+    }
 }
 namespace MegaCrit.Sts2.Core.Models.Powers
 {
     using MegaCrit.Sts2.Core.Entities.Creatures;
     public class ToricToughnessPower : PowerModel { public DynamicVars DynamicVars { get; } = new(); }
+    // v0.113.1: Instanced, per-target. Gold starts at GoldVar(0); Steal adds the real loss.
+    public class ThieveryPower : PowerModel { public DynamicVars DynamicVars { get; } = new(); }
+    public class HeistPower : PowerModel { }
     public class SurroundedPower : PowerModel
     {
         public enum Direction { Right, Left }

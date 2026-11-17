@@ -2,6 +2,8 @@
 
 `status[]` の各行は player・敵・ペットで共通。画面に見えるパワーに限り、
 許可リストの項目を付ける。HUD 非表示・可視性不明のパワーの追加状態は省略する。
+例外は泥棒（`THIEVERY_POWER`）と強奪（`HEIST_POWER`）の対象別の項目で、`status[]` に出る行には
+可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
 追加契約のため `schema_version` は 4。項目の有無で利用可否を判別する。
 
@@ -19,11 +21,20 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 拘束の鎖（`CHAINS_OF_BINDING_POWER`） `bound_card_played` | private `ChainsOfBindingPower.Data.boundCardPlayed`。`BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札で true（自動プレイも対象）。`ShouldPlay` が参照し、所有者が participants に含まれる `BeforeSideTurnEnd` で false。 | 表示された所有者の Bound 札のプレイを手番内で数えられる。複製札は除外し、現在の手札枚数からは推測しない。 |
 | ジャグリング `attacks_played_this_turn` | private `Data.attacksPlayedThisTurn`。`AfterApplied` で当手番の開始済みアタック数に設定、`BeforeCardPlayed` で増加、所有者参加の `AfterSideTurnEnd` で 0。3 で複製を予約。3 に丸めない。 | 表示されたアタックのプレイを、付与前も含め手番内で数えられる。 |
 | ジャグリング `card_to_clone_uid` / `card_to_clone_readable` | private `Data.cardToClone` を手札・パイル・履歴と同じ uid registry に通す。3回目の `BeforeCardPlayed` で対象を記録し、対象の `AfterCardPlayed` で参照を消して複製。 | 表示された3回目のアタックと複製の出来事から分かる予約状態。uid はその公開された札の個体を照合する。 |
+| 泥棒（`THIEVERY_POWER`） `stolen_gold` | `ThieveryPower.DynamicVars.Gold.IntValue`（出典は v0.113.1 `sts2-a671e9ef`）。`CanonicalVars` の `GoldVar(0)` から始まり、`Steal` が対象の player から実際に失わせた額（`min(Amount, 所持金)`。対象が死亡・所持金 0 なら何もしない）を `Gold.BaseValue` に足す。`SurprisePower.AfterDeath` はこの値を強奪の量として引き継ぐ。`Amount` は 1 回の上限で、盗んだ累計ではない。 | 盗まれたゴールドは player の所持金の減少として画面に出る。対象別に数えられる。 |
+| 泥棒 `target_player_id` / 強奪（`HEIST_POWER`） `target_player_id` | `PowerModel.Target.Player.NetId` の文字列。泥棒は `GremlinMerc` が player ごとに 1 インスタンス（`Instanced`）付け、`SurprisePower.AfterDeath` が各インスタンスの `Target` を強奪へ写す。強奪の `BeforeDeath` はこの player へ `Amount` のゴールドを報酬として返す。 | どの player から盗んだかは所持金の減少で見える。 |
 | まるくなる（`CURL_UP_POWER`） `played_card_uid` / `played_card_readable` | private `CurlUpPower.Data.playedCard` を同じ uid registry に通す（出典は v0.113.1 `sts2-a671e9ef`。v0.113.0 `sts2-d009478a` と同一）。`AfterDamageReceived` は所有者への `IsPoweredAttack` かつ `cardSource` ありの被弾で、未記録または同じ札なら記録（別の札が記録済みなら無視）。`AfterCardPlayed` は `cardPlay.Card` が記録の札と同じときに参照を消し、Amount のブロックを得てパワーを外す。 | 画面に出た、その敵へのアタック札の命中から分かる追跡状態。uid はその公開された札の個体を照合する。 |
 
 盗難の配列の各行は `{player_id, amount}`。`player_id` は `player.player_id` と同じ文字列。
 マルチでも受取人を失わないよう合算しない。辞書が空なら空配列を出す。
 将来の盗難量や敵の行動予定は出さない。
+
+泥棒・強奪は対象 player ごとの別インスタンスで、`status[]` にも別々の行として出る。
+同じ対象の行も合算しない。マルチでは他の player が対象の行は `PowerModel.IsVisible` が false
+（`hidden_in_ui`）になるが、スタックが残る行は出るので、`stolen_gold` / `target_player_id` は
+可視性によらず付ける（`skip_next_duration_tick` などの他の項目は従来どおり付けない）。
+強奪の `amount` は既存のまま（返すゴールドの量）。`Target` が無い・player でない場合は、
+自分の ID や 0 で補わず、null と理由・warnings にする。0 の `stolen_gold` は実値。
 
 private Data は `PowerModel._internalData`、対象クラスの private nested `Data`、
 許可したフィールドの宣言型を確認してリフレクションで読む。

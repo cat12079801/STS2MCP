@@ -34,6 +34,11 @@ readable=false は Markdown に表示することも確認する。
 追跡なし（readable=true の null と Markdown の `none`）／デッキ札と生成札の uid／解除後の再読取と
 snapshot の独立、Data の null・異型・Data 欠落・フィールド欠落／型変更での readable=false と
 null・理由・warnings、Data を初期化・書換えしないこと、非表示時の省略、wire での string／null を確認する。
+泥棒（`THIEVERY_POWER`）は `stolen_gold`（`DynamicVars.Gold.IntValue`）の 0 と amount と異なる値、
+`target_player_id`（`Target.Player.NetId` の文字列）を対象別の複数行で確認し、
+強奪（`HEIST_POWER`）は `target_player_id` だけを足して amount を変えないことを確認する。
+どちらも HUD 非表示（他の player が対象）の行でも付けること、Target 欠落・player でない Target・
+Gold の読取失敗で null・理由・warnings と他項目の保持、wire の int / string / null を確認する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

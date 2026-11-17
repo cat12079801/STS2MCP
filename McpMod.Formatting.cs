@@ -489,6 +489,9 @@ public static partial class McpMod
                 string moveLine = FormatEnemyMoveState(enemy);
                 if (moveLine.Length > 0)
                     sb.AppendLine(moveLine);
+                string combatStateLine = FormatEnemyCombatState(enemy);
+                if (combatStateLine.Length > 0)
+                    sb.AppendLine(combatStateLine);
                 if (!alive)
                     sb.AppendLine(FormatReviveLine(enemy));
 

@@ -13,10 +13,29 @@ public static partial class McpMod
     private static void AttachPowerInternalState(Dictionary<string, object?> state, PowerModel power,
         bool visible)
     {
-        // Hidden bookkeeping powers have no observable application history.
-        if (!visible) return;
         string context = $"status.{state["id"]}";
         void Read(string key, Func<object?> read) => ReadInternalStateValue(state, key, read, context);
+        // v0.113.1 (sts2-a671e9ef): Thievery/Heist are Instanced powers, one per targeted
+        // player. PowerModel.IsVisible is false when Target is another player, but the row
+        // is still emitted with its live stack, so its target and stolen gold are attached
+        // to every row BuildPowersState emits, not only to HUD-visible ones.
+        switch (power)
+        {
+            case ThieveryPower thievery:
+                // ThieveryPower.Steal adds the amount actually lost (min(Amount, gold)) to
+                // Gold.BaseValue; SurprisePower.AfterDeath reads Gold.IntValue. Amount is
+                // only the per-steal cap, so never derive this from it.
+                Read("stolen_gold", () => thievery.DynamicVars.Gold.IntValue);
+                Read("target_player_id", () => ReadPowerTargetPlayerId(power));
+                break;
+            case HeistPower:
+                // HeistPower.BeforeDeath returns Amount gold to Target.Player.
+                Read("target_player_id", () => ReadPowerTargetPlayerId(power));
+                break;
+        }
+
+        // Hidden bookkeeping powers have no observable application history.
+        if (!visible) return;
         Read("skip_next_duration_tick", () => power.SkipNextDurationTick);
         switch (power)
         {
@@ -59,6 +78,15 @@ public static partial class McpMod
                 return uid;
             });
         }
+    }
+
+    // Target is null for untargeted powers and may be a non-player creature. Neither is
+    // replaced with the local player or a default id.
+    private static string ReadPowerTargetPlayerId(PowerModel power)
+    {
+        var target = power.Target ?? throw new InvalidOperationException("Target がありません");
+        var player = target.Player ?? throw new InvalidOperationException("Target が player ではありません");
+        return player.NetId.ToString();
     }
 
     private static T ReadPowerDataField<T>(PowerModel power, string field)
