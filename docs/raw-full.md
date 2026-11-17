@@ -1481,7 +1481,7 @@ move の実行・初期化・乱数・履歴の集計はしない。HP・行動 
 | --- | --- |
 | `is_about_to_blow` | private bool `WaterfallGiant._isAboutToBlow`。`SteamEruptionPower.AfterDeath`（所有者の死亡、`wasRemovalPrevented` でないとき）が呼ぶ `TriggerAboutToBlowState` で true。最大 HP・HP を 999999999 にして `ABOUT_TO_BLOW_MOVE` へ強制遷移する。false に戻す処理は無い。false も実値 |
 | `steam_eruption_damage` | private int `WaterfallGiant._steamEruptionDamage`。`AboutToBlowMove` がそのときの `SteamEruptionPower` の量を写してパワーを外し、`EXPLODE_MOVE` の `DeathBlowIntent` と `ExplodeMove` の攻撃（攻撃後に自身を倒す）に使う。写す前は 0 の実値 |
-| `current_pressure_gun_damage` | private int `WaterfallGiant._currentPressureGunDamage`（`CurrentPressureGunDamage` の実体）。`AfterAddedToRoom` が `BasePressureGunDamage`（DeadlyEnemies で 23、無しで 20）を入れ、`PressureGunMove` が攻撃の後に `PressureGunIncrease`（5）を足す。次の `PRESSURE_GUN_MOVE` の攻撃の素値 |
+| `current_pressure_gun_damage` | private int `WaterfallGiant._currentPressureGunDamage`（`CurrentPressureGunDamage` の実体）。`AfterAddedToRoom` が `BasePressureGunDamage`（DeadlyEnemies で 23、無しで 20）を入れ、`PressureGunMove` が攻撃の後に `PressureGunIncrease`（5）を足す。次の `PRESSURE_GUN_MOVE` の攻撃の素値。戦闘の準備中（`AfterAddedToRoom` の前。`is_resolving` の間）は 0 の実値 |
 | `steam_boost_amount` | private getter `WaterfallGiant.SteamBoostAmount`（`AscensionHelper.IsDread()` で 4、それ以外 3）。STOMP・RAM・SIPHON・PRESSURE_GUN・PRESSURE_UP の各行動の最後に `SteamEruptionPower` へ足す量 |
 | `pressurize_amount` | private getter `WaterfallGiant.PressurizeAmount`（DeadlyEnemies で 20、無しで 15）。`PressurizeMove` が付ける `SteamEruptionPower` の量 |
 | `stomp_damage` | private getter `WaterfallGiant.StompDamage`（16 / 15）。`StompMove` の攻撃の素値 |
