@@ -253,7 +253,7 @@ public static partial class McpMod
         Check(refresh > guard && refresh < wiring, "shared uid registry refreshed before serializing combat cards/history, including overlays");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer)"), "multiplayer uses same local-player history");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCombatHistoryMarkdown(sb, player)"), "battle markdown wired");
-        Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 10;"), "current schema is 10 (sts2#1037)");
+        Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 11;"), "current schema is 11 (sts2#1012)");
         Console.WriteLine($"CombatHistoryContract: {Checks} checks passed");
     }
 }

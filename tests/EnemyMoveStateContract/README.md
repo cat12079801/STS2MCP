@@ -26,7 +26,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/bi
   no-op と許可リストの 7 処理、CreatureCmd の外の no-op・別の個体の Wrapper・別の個体のメソッド・所有者が別の個体のパワーは未観測（null と理由）。
   Wrapper ではない delegate の STUNNED と、Wrapper なのに ID が STUNNED ではない行動は `is_stun` を null と理由、
   Wrapper ではない通常の行動は `is_stun=false`。delegate を呼ばない。
-- Markdown の ID・follow-up・スタンの処理・ログ末尾・読取不能の理由。全敵・協力プレイ・表示への配線と現行の schema 10 をソース文字列で確認。
+- Markdown の ID・follow-up・スタンの処理・ログ末尾・読取不能の理由。全敵・協力プレイ・表示への配線と現行の schema 11 をソース文字列で確認。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `MonsterModel.NextMove/MoveStateMachine/SetMoveImmediate`、
 `MoveState.Id/FollowUpState/FollowUpStateId/CanTransitionAway/GetNextState`、

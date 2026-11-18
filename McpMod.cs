@@ -97,8 +97,18 @@ public static partial class McpMod
     ///    ?passive=1&amp;scenario_setup_guard=1 adds scenario_setup_guard and the dev_console body takes
     ///    one; every state and GET / carry scenario_capabilities. Like 6 to 9, the bump is deliberate
     ///    although mostly additive; hand_select's index and selected_cards change meaning.
+    ///
+    /// 11: the potion can-use-now contract (sts2#1012). Every held player.potions[] row carries
+    ///    can_use_now (the belt's use button as NPotionPopup.CanEnableUseButton and the holder decide it,
+    ///    plus at least one legal destination), valid_target_entity_ids (enemy entity_ids, player:&lt;id&gt;
+    ///    for a player, [] when no creature is named) and can_use_now_reason (null, a ban code, or
+    ///    unobserved:&lt;stage&gt; with null in the other two). use_potion takes expected_potion_id, re-checked
+    ///    right before the enqueue; scenario_capabilities.potion_availability is 1. A passive read no longer
+    ///    closes the shop inventory to fill sellable_potions. Existing fields keep their meaning. Like 6 to
+    ///    10, the bump is deliberate although additive: the engine requires the contract on every row and
+    ///    gates on the version.
     /// </summary>
-    public const int StateSchemaVersion = 10;
+    public const int StateSchemaVersion = 11;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";

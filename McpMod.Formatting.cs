@@ -1249,7 +1249,7 @@ public static partial class McpMod
         int max = playerDict.TryGetValue("max_potion_slots", out var ms) && ms is int msi ? msi : potions.Count;
         sb.AppendLine($"### Potions ({potions.Count}/{max})");
         foreach (var p in potions)
-            sb.AppendLine($"- [{p["slot"]}] **{p["name"]}**: {p["description"]}");
+            sb.AppendLine($"- [{p["slot"]}] **{p["name"]}**: {p["description"]}{FormatPotionUsability(p)}");
         sb.AppendLine();
     }
 

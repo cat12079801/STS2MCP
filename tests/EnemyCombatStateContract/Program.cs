@@ -172,7 +172,7 @@ public static partial class McpMod
             "単独・協力プレイの battle に enemy_move_context");
         Check(Source("McpMod.Formatting.cs").Contains("FormatEnemyMoveContext(battle)") && Source("McpMod.Formatting.cs").Contains("FormatEnemySlotName(enemy)"),
             "Markdown への配線");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 10;"), "現行の schema は 10（sts2#1037）");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 11;"), "現行の schema は 11（sts2#1012）");
         Console.WriteLine($"敵の戦闘内部状態の契約試験: {Checks} 件成功");
     }
 

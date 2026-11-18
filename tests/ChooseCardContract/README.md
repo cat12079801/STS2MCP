@@ -17,7 +17,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 run scope のデッキの札に戦闘 uid を発行せずデッキ位置を出すこと、potion の slot、`listener_count`、
 山札の listener（札 2 枚と付属効果）の隠れた並びを入れ替えても行・`order` が完全に同じこと（`order: null`・`order_group_start`・表示順の並び・山札の後ろの `order` は公開の件数）、候補の `energy_cost.global_modifiers_applied: false`、未知の種類の listener での `known: false`、`ModHelper` の subscriber があると列挙せず `known: false`、復旧、Markdown の 1 行。
 配線（choose の行の作り方・`continuation_context`・GET に無料化・生成・選択が無いこと・戦闘中の choose だけの `battle`・
-マルチ・手札と 4 パイルの `star_cost_state`・`select_card` が札の無い holder を覆いを外す前に拒否すること・schema 10）は
+マルチ・手札と 4 パイルの `star_cost_state`・`select_card` が札の無い holder を覆いを外す前に拒否すること・schema 11）は
 本番ソースの文字列検査。details・可否・エナジーコスト・uid・entity_id は境界ダブル（各契約は別の試験）。
 本体の hook の列（`IterateHookListeners`）の中身と順序は境界ダブルで、実際の列は実機で確かめる。
 

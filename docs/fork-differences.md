@@ -20,14 +20,15 @@
 
 - **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6・7・8・9・10）。現在は `10`。
+- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6・7・8・9・10・11）。現在は `11`。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
   5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
   6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）、
   7 = 札の効果の入力契約（同じく追加だけ。`cat12079801/sts2#1019`）、
   8 = 弱化（Dampen）の入力契約（同じく追加だけ。`cat12079801/sts2#1031`）、
   9 = 破壊（Rend）の入力契約（同じく追加だけ。`cat12079801/sts2#1034`）、
-  10 = 検証用の採取の契約（`cat12079801/sts2#1037`。`hand_select.cards[].index` を holder の位置にし、`selected_cards` を常に返すよう意味を変えた）
+  10 = 検証用の採取の契約（`cat12079801/sts2#1037`。`hand_select.cards[].index` を holder の位置にし、`selected_cards` を常に返すよう意味を変えた）、
+  11 = ポーションの使用可否の契約（追加だけだが、読み手が所持行すべてに必須として扱えるように上げた。`cat12079801/sts2#1012`）
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
@@ -39,13 +40,15 @@
   解決中と返し、`wait: true` もそこで落ち着いたとみなさない（本家はどれも `is_resolving: false` で返し、`choose_map_node` / `continue` の `wait: true` が途中で返る）（#89）
 - **`warnings`**: state の一部を組めなかったとき、その箇所と例外を一覧で返す（黙って欠かさない）（#54）
 - **JSON は既定でコンパクト**。`?pretty=1` で字下げ（#45）
-- **`GET /api/v1/singleplayer?passive=1`**: 読むだけで UI に触らない（ショップの在庫を開き直す・偽商人や宝箱のボタンを押す、をしない）（#59）
+- **`GET /api/v1/singleplayer?passive=1`**: 読むだけで UI に触らない（ショップの在庫を開き直す・偽商人や宝箱のボタンを押す、をしない）（#59）。
+  `shop.sellable_potions` も在庫を閉じずにそのときの答えを返す（在庫を開いている間は悪臭ポーションに商人の的が無いので出ない。`sell_potion` は従来どおり自分で閉じる）（`cat12079801/sts2#1012`）
 - **戦闘外の準備の判定（検証用）**: `?passive=1&scenario_setup_guard=1` の GET に `scenario_setup_guard`
   （`version`・`screen`・`room`〔`RunState.CurrentRoom` の実型名〕・`combat_starting` / `combat_in_progress`〔`CombatManager.IsStarting` / `IsInProgress`〕・
   `run_over`〔`RunState.IsGameOver`〕・`allowed`・`reason`）を足す。許すのは MapRoom の `map`・Neow の EventRoom の `event`・RestSiteRoom の `rest_site` で、
   ラン継続中・戦闘の外・解決中でないときだけ。読めない値は null で許さない。[判定と出典](raw-full.md#戦闘外の準備の判定scenario_setup_guardschema-10)（schema 10、`cat12079801/sts2#1037`）
 - **`scenario_capabilities`**: すべての state と `GET /` に、この build が実装する検証用の契約の版を返す（`setup_guard: 1`・`selection_uid: 1`・
-  `potion_availability: 0`。0 は未実装）。古い build は未知の引数を無視するので、クライアントはこれで機能を確かめてから条件付きの要求を送る（schema 10、`cat12079801/sts2#1037`）
+  `potion_availability: 1`。0 は未実装）。古い build は未知の引数を無視するので、クライアントはこれで機能を確かめてから条件付きの要求を送る（schema 10、`cat12079801/sts2#1037`。
+  `potion_availability` は schema 11、`cat12079801/sts2#1012`）
 - **ブラウザからの要求を拒否する**: `Origin` や `Sec-Fetch-*`・`Referer` がある要求は処理前に 403。`Host` は `127.0.0.1:<port>` / `localhost:<port>` だけ。POST は JSON の `Content-Type` が必須（#69）
 - **開発コンソール API（検証用・既定は無効）**: `STS2_MCP.conf` の `dev_console_enabled: true` で、許可リスト内のコマンドを `dev_console` アクションで送れる。詳細は [`dev-console.md`](dev-console.md)（#68）。
   body に `scenario_setup_guard: {version: 1, expected_screen}` を付けると、実行の直前にメインスレッドで上の判定をやり直し、許されないか画面が動いていれば実行しない。
@@ -59,6 +62,11 @@
 - **index 系のパラメータ名の別名**: カード系は `card_index` / `index` の両方を受ける。文字列の数値も受ける。エラー文に受理する名前を書く（#25）
 - **ポーションのスロット**: `use_potion` / `discard_potion` は `slot` / `potion_index` / `index` を受ける。`slot` はポーション欄の固定番号。空スロットのエラーは欄の中身を返す（#26）
 - **対象の要るポーション・カード**: `target` を省くと、敵が 1 体なら自動で選び、複数ならエラー（黙って消費しない）（#27）
+- **ポーションをいま使えるか**: `player.potions[]` の所持行すべてに `can_use_now`・`valid_target_entity_ids`・`can_use_now_reason` を出す。
+  ゲームのベルトの使用ボタン（`NPotionPopup.CanEnableUseButton` と holder・所有者・部屋のロック）と対象の選び方（`NTargetManager`・`PotionModel.IsValidTarget`）を
+  読むだけで判定し、popup・選択・enqueue・在庫の開閉は起こさない。読めないときは `null`・`null`・`unobserved:<段>` で、使用不可と区別する。
+  `use_potion` に `expected_potion_id` を渡すと、使う直前に slot の個体・判定・`target` を照合し、違えば何も使わずに `potion_check` 付きのエラーを返す
+  （敵の自動補完・在庫を閉じる操作をしない）。[契約と出典](raw-full.md#ポーションをいま使えるかplayerpotionsschema-11)（schema 11、`cat12079801/sts2#1012`）
 - **マップ**: `choose_map_node` は `col` / `row` を受ける。到達できない座標はエラーで、到達できるノードを列挙する（#29）
 
 ## メニュー・ランの制御
@@ -189,4 +197,4 @@
 
 ## 試験
 
-- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・戦闘の強化結果・uid・カード選択・戦闘中の choose-a-card・敵に当てられるか・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中・検証用の採取の契約）
+- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・戦闘の強化結果・uid・カード選択・戦闘中の choose-a-card・敵に当てられるか・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中・検証用の採取の契約・ポーションの使用可否）

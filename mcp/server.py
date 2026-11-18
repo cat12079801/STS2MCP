@@ -230,6 +230,10 @@ async def get_game_state(format: str = "markdown") -> str:
     すべての state に scenario_capabilities（setup_guard・selection_uid・potion_availability の版。
     0 は未実装）を足した。combat_select_card / deck_select_card の expected_uid は index の現個体の
     uid と照合し、違えば何も押さない。
+    schema 11 で player.potions[] の所持行すべてに can_use_now（true / false / 読めなければ null）・
+    valid_target_entity_ids（敵の entity_id、プレイヤーは player:<player_id>、対象を指定しない瓶は []、
+    読めなければ null）・can_use_now_reason（使用可は null、禁止の理由、読めなければ unobserved:<段>）を
+    足した。use_potion の expected_potion_id で使う直前に照合する。potion_availability は 1。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 
@@ -450,10 +454,13 @@ async def delete_profile(profile_id: int) -> str:
 
 
 @mcp.tool()
-async def use_potion(slot: int, target: str | None = None, wait: bool = False) -> str:
+async def use_potion(slot: int, target: str | None = None, wait: bool = False,
+                     expected_potion_id: str | None = None) -> str:
     """Use a potion from the player's potion slots.
 
     Works both during and outside of combat. Combat-only potions require an active battle.
+    Each held `player.potions[]` row says whether it can be used now: `can_use_now`
+    (true / false / null = unreadable), `valid_target_entity_ids` and `can_use_now_reason`.
 
     Args:
         slot: The belt slot from game state `player.potions[].slot` — not a position
@@ -461,7 +468,13 @@ async def use_potion(slot: int, target: str | None = None, wait: bool = False) -
             is still slot 1.
         target: Target enemy, as either its entity_id ("JAW_WORM_0") or its combat_id
             ("3"). Required for enemy-targeted potions unless exactly one enemy is
-            alive, in which case it is chosen automatically.
+            alive, in which case it is chosen automatically. With expected_potion_id it
+            must be one of the row's valid_target_entity_ids (omit it for a potion used
+            directly or one with no creature target); no enemy is picked for you.
+        expected_potion_id: The potion id the caller read in that slot (e.g.
+            "FIRE_POTION"). When given, the slot, the can-use-now verdict and the target
+            are checked again right before the potion is used; any mismatch uses nothing
+            and the error carries `potion_check`.
         wait: Hold the response until the game has settled (animations, card
             resolution and the redraw finished) and return the settled state with it,
             instead of answering as soon as the action was dispatched. Saves a
@@ -471,6 +484,8 @@ async def use_potion(slot: int, target: str | None = None, wait: bool = False) -
     body: dict = {"action": "use_potion", "slot": slot}
     if target is not None:
         body["target"] = target
+    if expected_potion_id is not None:
+        body["expected_potion_id"] = expected_potion_id
     try:
         return await _post(body, wait=wait)
     except Exception as e:
@@ -1075,16 +1090,22 @@ async def mp_combat_undo_end_turn() -> str:
 
 
 @mcp.tool()
-async def mp_use_potion(slot: int, target: str | None = None) -> str:
+async def mp_use_potion(slot: int, target: str | None = None, expected_potion_id: str | None = None) -> str:
     """[Multiplayer] Use a potion from the local player's potion slots.
 
     Args:
         slot: Potion slot index (as shown in game state).
         target: Entity ID of the target enemy. Required for enemy-targeted potions.
+            With expected_potion_id: one of the row's valid_target_entity_ids
+            (a player is "player:<player_id>").
+        expected_potion_id: The potion id read in that slot; checked again (slot, can-use-now,
+            target) right before the potion is used, and a mismatch uses nothing.
     """
     body: dict = {"action": "use_potion", "slot": slot}
     if target is not None:
         body["target"] = target
+    if expected_potion_id is not None:
+        body["expected_potion_id"] = expected_potion_id
     try:
         return await _mp_post(body)
     except Exception as e:

@@ -1750,24 +1750,14 @@ public static partial class McpMod
         }
         state["relics"] = relics;
 
-        // Potions
+        // Potions: one row per held slot (empty slots get none). Each row carries can_use_now /
+        // valid_target_entity_ids / can_use_now_reason (sts2#1012, McpMod.PotionUsability*.cs).
         var potions = new List<Dictionary<string, object?>>();
         int slotIndex = 0;
         foreach (var potion in player.PotionSlots)
         {
             if (potion != null)
-            {
-                potions.Add(new Dictionary<string, object?>
-                {
-                    ["id"] = potion.Id.Entry,
-                    ["name"] = SafeGetText(() => potion.Title),
-                    ["description"] = SafeGetText(() => potion.DynamicDescription),
-                    ["slot"] = slotIndex,
-                    ["can_use_in_combat"] = potion.Usage == PotionUsage.CombatOnly || potion.Usage == PotionUsage.AnyTime,
-                    ["target_type"] = potion.TargetType.ToString(),
-                    ["keywords"] = BuildHoverTips(potion.ExtraHoverTips)
-                });
-            }
+                potions.Add(BuildPotionRow(player, potion, slotIndex));
             slotIndex++;
         }
         state["potions"] = potions;
@@ -2646,7 +2636,11 @@ public static partial class McpMod
             for (int slot = 0; slot < localPlayer.PotionSlots.Count; slot++)
             {
                 var held = localPlayer.GetPotionAtSlotIndex(slot);
-                if (held == null || !CanSellPotionToMerchant(localPlayer, held))
+                // A passive read must not close the inventory (CanSellPotionToMerchant does, to ask
+                // Foul Potion again); it asks the same question as things stand (sts2#1012).
+                if (held == null || !(_passiveRead
+                        ? CanSellPotionToMerchantNow(localPlayer, held)
+                        : CanSellPotionToMerchant(localPlayer, held)))
                     continue;
                 sellable.Add(new Dictionary<string, object?>
                 {

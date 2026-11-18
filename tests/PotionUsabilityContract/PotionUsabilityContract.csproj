@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../McpMod.PotionUsability.cs" Link="PotionUsability.cs" />
+    <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs;../../McpMod.MultiplayerActions.cs;../../McpMod.PotionUsabilityLive.cs;../../McpMod.ScenarioGuard.cs;../../mcp/server.py"
+          Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

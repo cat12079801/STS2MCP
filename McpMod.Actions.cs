@@ -307,7 +307,13 @@ public static partial class McpMod
         if (slot < 0 || slot >= player.PotionSlots.Count)
             return Error($"Potion slot {slot} out of range (player has {player.PotionSlots.Count} slots)");
 
+        // expected_potion_id (sts2#1012): the guarded path re-reads player.potions[]'s can-use-now verdict
+        // right before the enqueue and never completes a target or closes a shop panel.
+        if (ReadExpectedPotionId(data, out string? expectedPotionId) is { } badExpected)
+            return Error(badExpected);
         var potion = player.GetPotionAtSlotIndex(slot);
+        if (expectedPotionId != null)
+            return ExecuteGuardedUsePotion(player, slot, potion, expectedPotionId, data);
         if (potion == null)
             return Error(DescribeEmptyPotionSlot(player, slot));
         if (potion.IsQueued)

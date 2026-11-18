@@ -26,8 +26,9 @@ public static partial class McpMod
         // hand_select rows/selected_cards by uid at the holder index, and expected_uid on
         // combat_select_card / select_card (grid and choose-a-card).
         ["selection_uid"] = 1,
-        // The potion can-use-now contract (sts2#1012) is not in this build.
-        ["potion_availability"] = 0
+        // player.potions[].can_use_now / valid_target_entity_ids / can_use_now_reason and
+        // use_potion's expected_potion_id (sts2#1012).
+        ["potion_availability"] = 1
     };
 
     // Screens a setup console command may run from, and the room each one has to be in.

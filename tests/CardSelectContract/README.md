@@ -41,7 +41,7 @@ Markdown に `instance:` の 1 行が出ること、戦闘外の行には付か�
 
 ゲームのモデル・ノード・combat registry・カード情報作成・強化プレビュー作成は境界ダブル。
 実ゲームのソート、描画、ハイライト、シグナル、効果適用、uid の registry 本体を動かした証拠にはならない。
-schema 10、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
+schema 11、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
 巨大な state/action 全体をリンクせず、ビルド出力へコピーした本番ソースへの文字列検査で確認する。
 choose は formatter の即時選択案内・見出しを検査し、choose action / bundle / 手札の統合回帰は実機で行う。
 

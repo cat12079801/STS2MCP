@@ -178,7 +178,7 @@ public static partial class McpMod
         Check(wire < enemyBody.IndexOf("GetIntentLabel", StringComparison.Ordinal), "ラベルの取得（try）より前で、ラベルの失敗に巻き込まれない");
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildEnemyList(combatState)"), "協力プレイも共通の敵 builder");
         Check(Source("McpMod.Formatting.cs").Contains("{label}{FormatEnemyAttackIntent(i)}{desc}"), "意図の Markdown 行への配線");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 10;"), "現行の schema は 10（sts2#1037）");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 11;"), "現行の schema は 11（sts2#1012）");
         Console.WriteLine($"敵の攻撃の意図の契約試験: {Checks} 件成功");
     }
 }

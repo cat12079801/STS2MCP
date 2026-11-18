@@ -66,7 +66,7 @@ httpx はこれらのブラウザ用ヘッダーを送らず、POST に JSON の
 |-----------|-----------------------------------------------|---------|-----------------------------------------------------------------|
 | `format`  | `json`, `markdown`                            | `json`  | Response format                                                 |
 | `pretty`  | `1`, `true`, `yes` (or present with no value) | off     | Indent the JSON. Off by default — compact output is ~32% smaller |
-| `passive` | `1`, `true`, `yes`                            | off     | Read without UI side effects (no auto-opened merchant inventory, no fake-merchant / chest press) |
+| `passive` | `1`, `true`, `yes`                            | off     | Read without UI side effects (no auto-opened merchant inventory, no fake-merchant / chest press; `shop.sellable_potions` is answered without closing the inventory — schema 11) |
 | `scenario_setup_guard` | `1`, `true`, `yes`               | off     | With `passive` only: add [`scenario_setup_guard`](#戦闘外の準備の判定scenario_setup_guardschema-10) (verification runs) |
 
 JSON responses are compact by default; `pretty` opts into indentation for that one request. It works on
@@ -84,8 +84,8 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 10,     // Contract version — see below
-  "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 0 }
+  "schema_version": 11,     // Contract version — see below
+  "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
 ```
 
@@ -93,14 +93,14 @@ Every response — `menu` and error-ish states included — carries the build st
 (`0` = not implemented): `setup_guard` = the passive [`scenario_setup_guard`](#戦闘外の準備の判定scenario_setup_guardschema-10)
 and the guarded `dev_console`; `selection_uid` = `hand_select` rows / `selected_cards` by uid at the holder index
 and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability` = the potion can-use-now contract
-(`cat12079801/sts2#1012`, not in this build). It is a build constant on every state (and `GET /`). A client gates
+([`player.potions[]`](#ポーションをいま使えるかplayerpotionsschema-11) and `use_potion`'s `expected_potion_id`, `cat12079801/sts2#1012`). It is a build constant on every state (and `GET /`). A client gates
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The exceptions are **6**, **7**, **8**, **9** and **10**: additive contracts that a client treats as required as a whole, so
+The exceptions are **6**, **7**, **8**, **9**, **10** and **11**: additive contracts that a client treats as required as a whole, so
 they are gated on the version instead of probing each field. **10** (`cat12079801/sts2#1037`, the verification-capture
 contract) also changes two `hand_select` meanings: `cards[].index` is now the `NPlayerHand.ActiveHolders` position that
 `combat_select_card` presses (a holder without a card leaves a gap instead of shifting later rows), and `selected_cards`
@@ -113,6 +113,13 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **11** — the potion can-use-now contract (`cat12079801/sts2#1012`). Every held `player.potions[]` row
+  carries `can_use_now`, `valid_target_entity_ids` and `can_use_now_reason`; `use_potion` takes
+  `expected_potion_id`; `scenario_capabilities.potion_availability` is `1`; a `?passive=1` read no longer
+  closes the shop inventory to fill `shop.sellable_potions`. Existing fields keep their meaning (additive);
+  the version is bumped so a client can require the whole contract. See
+  [ポーションをいま使えるか](#ポーションをいま使えるかplayerpotionsschema-11).
+- **10** — the verification-capture contract (`cat12079801/sts2#1037`, described above).
 - **9** — the Rend input contract (`cat12079801/sts2#1034`). Every status row (player, enemy, pet;
   `hidden_in_ui` and minimal rows too) carries `type_for_current_amount` (`PowerModel.TypeForCurrentAmount`:
   a negative Strength / Dexterity / Focus reads `Debuff` while `type` stays `Buff`) and
@@ -474,7 +481,10 @@ Always present at the top level (except `menu`). Contains everything about the l
       "slot": 0,             // Potion slot index (use this for use_potion action)
       "can_use_in_combat": true,
       "target_type": "None", // None, Self, AnyEnemy, AnyAlly, AnyPlayer, etc.
-      "keywords": [ /* Keyword Objects */ ]
+      "keywords": [ /* Keyword Objects */ ],
+      "can_use_now": true,                       // schema 11: true / false / null (unreadable)
+      "valid_target_entity_ids": ["player:1"],   // enemy entity_ids, "player:<player_id>", [] or null
+      "can_use_now_reason": null                 // null / ban code / "unobserved:<stage>"
     }
   ],
   "max_potion_slots": 3      // Belt capacity. Default 3, grows with belt-expanding relics (e.g. Potion Belt: +2). Use to detect a full belt: len(potions) >= max_potion_slots.
@@ -491,6 +501,67 @@ notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint co
 from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for example,
 `LizardTail.WasUsed` sets that status when consumed. These booleans do not claim to
 encode every reason a relic can be disabled.
+
+### ポーションをいま使えるか（`player.potions[]`、schema 11）
+
+`cat12079801/sts2#1012`。単独・マルチのローカル `player` の所持行すべて（空き枠の行は作らない。戦闘中・戦闘外とも）に、
+ベルトの使用ボタンをいま押せるか・押したらどこへ使えるかを出す。ゲームの判定を読むだけで、popup の生成・`RefreshButtons`・
+対象選択の開始・拒否の VFX・enqueue・在庫の開閉は呼ばない（`McpMod.PotionUsability.cs` が判定、`McpMod.PotionUsabilityLive.cs` が読取）。
+
+| 読取の結果 | `can_use_now` | `valid_target_entity_ids` | `can_use_now_reason` |
+|---|---|---|---|
+| 使用可、creature の宛先あり | `true` | 許可された安定 ID の重複の無い配列（本体の列挙順） | `null` |
+| 使用可、creature を指定しない | `true` | `[]`（全体効果、商人宛ての悪臭ポーション） | `null` |
+| 既知の使用不可 | `false` | `[]` | 最初に確定した禁止の理由 |
+| 判定に要る読取の失敗・未知の形式 | `null` | `null` | `unobserved:<段>`。行の `unavailable_reasons.can_use_now` とトップレベルの `warnings`（`player.potions.<slot>.can_use_now`）にも出す |
+
+`null` を `false` や `[]` として扱わないこと。1 本の読取の失敗はその行だけに留まり、別の瓶・プレイヤー・戦闘の情報は返る。
+既存の `can_use_in_combat`（`Usage` が CombatOnly / AnyTime）と `target_type`（いまの `TargetType`）は意味を変えない。
+それらの getter が例外を投げても、その項目だけ `null` と `unavailable_reasons` にして行と `player` を残す。
+
+**ID の形。** 敵は `battle.enemies[].entity_id` と同じ registry（`RefreshEntityIdRegistry` / `GetStableEntityId`）の ID。
+CombatId か monster が無い敵、2 体が同じ ID になった場合は、許可される敵に限らず `unknown_0` や位置で代用せず `unobserved:entity_id` /
+`unobserved:entity_id_duplicate`。プレイヤーはこの配列の中だけ `player:<player_id>`（`Player.NetId` の 10 進）で表す。商人には ID を振らない。
+
+**判定の順（最初の禁止が理由になり、それより後の読取はしない）。** 出典は v0.113.1（sts2-a671e9ef）。
+
+| 順 | 読むもの（出典） | 理由 |
+|---|---|---|
+| 1 | ローカルのベルト `NRun.GlobalUi.TopBar.PotionContainer.Holders[slot].Potion.Model` がこの個体と同一（`NPotionContainer.Add`） | 違えば・UI が無ければ `unobserved:holder_model` / `unobserved:holder`（禁止と断定しない） |
+| 2 | `PotionModel.IsQueued`（`NPotionPopup._Ready`） | `queued` |
+| 3 | 所有者の `Creature.IsDead`（同） | `owner_dead` |
+| 4 | `RunState.IsGameOver`（`NPotionHolder.OpenPotionPopup`） | `game_over` |
+| 5 | `Player.CanUseOrRemovePotions`（`_Ready` / `RefreshButtons`） | `owner_locked` |
+| 6 | `RunManager.IsPotionUseLocked`（部屋の切り替え中か戦闘の開始中。同） | `room_locked` |
+| 7 | holder の private `_isUsable`（`NPotionHolder.OnRelease`。型を確かめて読む） | `holder_not_usable` |
+| 8 | holder の private `_disabledUntilPotionRemoved`（`OpenPotionPopup`） | `holder_disabled` |
+| 9 | 公開 static の `NPotionPopup.CanEnableUseButton(Usage, canUseInCombatNow, PassesCustomUsabilityCheck)` をそのまま呼ぶ | 個別条件の false は `custom_check_failed`、Automatic は `automatic`。`None`・未知の使用区分は本体が例外を投げるので `unobserved:can_enable_use_button` |
+| 9a | CombatOnly の `canUseInCombatNow`（`RefreshButtons` の式を本体の順に）: `CombatManager.IsInProgress` → `CombatState.CurrentSide == Side` → `IsAlive` → `InACardSelectScreen`（`NPlayerHand.IsInCardSelection` か `NOverlayStack.Peek() is ICardSelectionScreen`）→ `PlayerActionsDisabled` | `outside_combat` / `not_player_turn` / `owner_dead` / `card_selection` / `actions_disabled`。AnyTime にはかけない |
+| 10 | 生きた popup（holder の private `_popup` が有効で `IsMarkedForRemoval` でない）が開いていれば `IsUsable` と照合。閉じた holder の `IsPotionUsable` は `_popup` を参照するので呼ばない | 食い違えば `unobserved:popup` |
+| 11 | 対象（下） | `targeting_blocked` / `no_valid_target` |
+
+**対象（`NPotionHolder.UsePotion` の分岐）。** AnyEnemy・TargetedNoCreature・`PotionModel.CanThrowAtAlly()`（AnyPlayer かつ複数人かつ戦闘中）は対象の選択へ、それ以外は直接使う。
+
+- 直接使う: Self は所有者、他は null を `EnqueueManualUse` に渡し、所有者が `IsValidTarget` なら null を所有者に置き換える（ソロの AnyPlayer）。
+  所有者になるなら `["player:<自分>"]`（`use_potion` は `target` を省ける）。null のままなら `UsePotionAction.ExecuteAction` が、戦闘中は
+  単体型でない限り null のまま `IsValidTarget(null)` を、戦闘外は TargetedNoCreature 以外に所有者を当てて判定するので、戦闘中で `IsValidTarget(null)` なら `[]`、
+  そうでなければ `no_valid_target`。
+- 選択を伴う場合、戦闘中は `NPotionHolder.ShouldCancelTargeting`（`NOverlayStack.ScreenCount > 0` か `NCapstoneContainer.InUse`）で選択がすぐ終わるので `targeting_blocked`。
+- AnyEnemy（戦闘中）: 所有者の `CombatState.Enemies` を本体の順に走査し、`NTargetManager.AllowedToTargetCreature`（敵側・死んでいない）、`PotionModel.IsValidTarget`、
+  `NCombatRoom.GetCreatureNode` が有る（ホバーにはノードが要る）、`Hook.ShouldAllowTargeting`（`OnCreatureHovered`。拒否の VFX は呼ばない）、`Creature.IsHittable`
+  （`NTargetManager._Process` がホバー中の当てられない敵で選択を取り消す）をすべて通った敵だけ。0 体なら `no_valid_target`。戦闘外の AnyEnemy は `unobserved:target_type`。
+- TargetedNoCreature: 悪臭ポーション（戦闘外）だけ。`FoulPotion.GetFoulPotionMerchantTarget` が商人のボタンを返し `IsValidTarget(null)` なら `[]`、無ければ `no_valid_target`
+  （在庫を開いていると的は無い。そもそも `PassesCustomUsabilityCheck` が false になり `custom_check_failed`）。それ以外は `unobserved:target_type`。
+- マルチで味方に投げる（AnyPlayer）: `RunState.Players` を順に、`AllowedToTargetCreature`（AnyPlayer）と `IsValidTarget` を満たし、`NMultiplayerPlayerStateContainer` の
+  private `_nodes` にその player のノードがあるか、creature のノードが `Hook.ShouldAllowTargeting` と `IsHittable` を通る player を `player:<player_id>` で。
+
+可否は加算値・強化段階・同名の瓶の数と関係しない（同名 2 本も別スロットで別に判定する）。予約に成功しても消費は確定しない
+（`UsePotionAction.ExecuteAction` が空き・無効な対象で cancel し、`PotionModel.AfterUsageCanceled` が予約を外す）。
+
+**ゲームのボタンと MOD の受付は別。** 例えば AnyTime の瓶は手札の選択中・敵の手番でもボタンが有効（`can_use_now: true`）だが、
+MOD は戦闘中の `PlayerActionsDisabled` の間は `use_potion` を受けない。拒否は `expected_potion_id` 付きなら `potion_check.stage: "mod_acceptance"` で区別できる。
+
+Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` | Use now: yes (no target)` / ` | Use now: no (理由)` / ` | Use now: unobserved (段: 理由)` を付ける（旧 state の行には付けない）。
 
 ### 戦闘履歴の要約（追加・schema 4）
 
@@ -3304,8 +3375,25 @@ Use a potion from the potion belt.
 |---|---|---|---|
 | `slot` | int | Yes | Potion slot index |
 | `target` | string | For `AnyEnemy` potions | `entity_id` of the target enemy |
+| `expected_potion_id` | string | No | Schema 11. The potion id read in that slot (e.g. `FIRE_POTION`); turns on the checks below |
 
 **Errors:** Empty slot, combat-only potion used outside combat, automatic potion, already queued, player dead.
+
+With `expected_potion_id` (`cat12079801/sts2#1012`), on the game thread right before `EnqueueManualUse`:
+
+1. `identity` — the slot still holds a potion with that id.
+2. `can_use_now` — the [can-use-now verdict](#ポーションをいま使えるかplayerpotionsschema-11) read again now is `true` (`false` and `null` both refuse).
+3. `target` — `target` is one of `valid_target_entity_ids`, as written there (an enemy `entity_id`, `player:<player_id>`; a numeric `combat_id`
+   is not accepted). It may be omitted only for a potion used directly (the list is your own `player:<id>`) and must be omitted when the list is `[]`.
+   No enemy is chosen for you and the shop inventory is not closed.
+4. `mod_acceptance` — the MOD's own conditions, separate from the game's button: combat-only potions only in the play phase, nothing while
+   `PlayerActionsDisabled` in combat.
+
+The creature handed to `EnqueueManualUse` is the one the belt would hand over (direct use: the owner for Self, else null; an enemy by its id;
+a player by its NetId; null for `[]`). Any refusal uses nothing and returns
+`{"status": "error", "error": "...", "potion_check": {stage, slot, expected_potion_id, actual_potion_id, can_use_now, can_use_now_reason, valid_target_entity_ids}}`;
+success adds `potion_check.stage: "passed"`. Without `expected_potion_id` the call behaves as before (auto-picks the only living enemy, closes the
+merchant inventory for Foul Potion).
 
 ### `discard_potion`
 

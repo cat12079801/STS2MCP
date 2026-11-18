@@ -28,10 +28,10 @@ namespace STS2_MCP
 
         public static void RunScenarioContract()
         {
-            // --- scenario_capabilities: build-level versions, potion contract not in this build ---
+            // --- scenario_capabilities: build-level versions (the potion contract is in this build, sts2#1012) ---
             var caps = BuildScenarioCapabilities();
             Check(caps.Count == 3 && Equals(caps["setup_guard"], 1) && Equals(caps["selection_uid"], 1)
-                && Equals(caps["potion_availability"], 0), "capabilities: setup_guard 1, selection_uid 1, potion_availability 0");
+                && Equals(caps["potion_availability"], 1), "capabilities: setup_guard 1, selection_uid 1, potion_availability 1");
             Check(caps.Values.All(value => value is int), "capability values are ints (0 = not implemented)");
             Check(!ReferenceEquals(caps, BuildScenarioCapabilities()), "each payload gets its own capability object");
 
@@ -198,7 +198,7 @@ namespace STS2_MCP
                 return text[from..to];
             }
             string mod = Source("McpMod.cs");
-            Check(mod.Contains("public const int StateSchemaVersion = 10;"), "published schema is 10 (sts2#1037)");
+            Check(mod.Contains("public const int StateSchemaVersion = 11;"), "published schema is 11 (sts2#1012)");
             string getState = Slice(mod, "private static void HandleGetState", "if (format == \"markdown\")");
             Check(getState.Contains("bool setupGuard = passive\n") && getState.Contains("ScenarioSetupGuardKey, false)")
                 && getState.Contains("built[ScenarioSetupGuardKey] = BuildScenarioSetupGuard(built);"),
