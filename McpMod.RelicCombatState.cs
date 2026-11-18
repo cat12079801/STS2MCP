@@ -104,9 +104,16 @@ public static partial class McpMod
                 break;
             // sts2#1020, v0.113.1 (sts2-a671e9ef): per-turn counters. AfterCardPlayed counts the owner's
             // Attacks (Skills for Letter Opener) while a combat is in progress and fires on every multiple
-            // of DynamicVars.Cards (relics[].vars); BeforeSideTurnStart (owner participating) and
-            // AfterCombatEnd set them to 0. counter is a display value (count % Cards, or Cards while the
-            // private _isActivating animation flag is set), so the count itself is read here.
+            // of DynamicVars.Cards (relics[].vars). The resets differ per class:
+            //   Kunai, Shuriken: BeforeSideTurnStart (owner participating) and AfterCombatEnd.
+            //   OrnamentalFan: BeforeSideTurnStart (owner participating) only; AfterCombatEnd keeps the
+            //     count until the next combat's first owner turn start.
+            //   Kusarigama: BeforeCombatStart, AfterSideTurnEnd (owner participating) and AfterCombatEnd
+            //     (0 through the enemy turn; BeforeSideTurnStart does not touch it).
+            //   LetterOpener: BeforeCombatStart and AfterSideTurnStart (owner participating, skipped while
+            //     TurnNumber == 1); AfterCombatEnd does not reset it.
+            // counter is a display value (count % Cards, or Cards while the private _isActivating animation
+            // flag is set), so the count itself is read here.
             case Kunai:
             case Shuriken:
             case OrnamentalFan:
@@ -197,9 +204,10 @@ public static partial class McpMod
                 break;
             // Out-of-combat triggers whose counter shows only a derived value (a remainder, the uses
             // left) or nothing: elites defeated (Sword of Stone), flights used (Winged Boots), uses and
-            // treasure rooms (Silver Crucible), combats seen (Fishing Rod, Toy Box), combats finished
-            // (Wongo's Mystery Ticket), rewards sacrificed (Pael's Wing), the act-1 boss relic reward
-            // already added (Lava Rock).
+            // treasure rooms (Silver Crucible), combats finished (Wongo's Mystery Ticket), rewards
+            // sacrificed (Pael's Wing), the act-1 boss relic reward already added (Lava Rock).
+            // combats_seen differs: FishingRod.AfterCombatEnd counts only RoomType.Monster encounters
+            // (elites and bosses are skipped); ToyBox.AfterCombatEnd counts every combat until IsUsedUp.
             case SwordOfStone:
                 Int("elites_defeated", "_elitesDefeated");
                 break;
@@ -225,6 +233,27 @@ public static partial class McpMod
                 break;
         }
         return state;
+    }
+
+    /// <summary>
+    /// Attaches relics[].combat_state / run_state (sts2#1020). An empty section (a relic the switch does
+    /// not cover) is left out. When the builder itself throws (a type that no longer loads, JIT, a getter),
+    /// the key is null with the relic row's unavailable_reasons.&lt;key&gt; and a warning at
+    /// player.relics.&lt;ID&gt;.&lt;key&gt;, so a failure never reads as "not covered".
+    /// </summary>
+    private static void AttachRelicSection(Dictionary<string, object?> relicState, string key,
+        Func<Dictionary<string, object?>> build, string relicId)
+    {
+        try
+        {
+            var section = build();
+            if (section.Count > 0) relicState[key] = section;
+        }
+        catch (Exception ex)
+        {
+            relicState[key] = null;
+            RecordInternalStateFailure(relicState, key, ex, $"player.relics.{relicId}");
+        }
     }
 
     /// <summary>
@@ -300,9 +329,14 @@ public static partial class McpMod
     // "(key: value, ...)" shape, then a vars read failure (successful vars are JSON-only).
     private static string FormatRelicCombatState(Dictionary<string, object?> relic)
     {
-        string text = FormatRelicStateSection(relic.GetValueOrDefault("combat_state") as Dictionary<string, object?>)
-            + FormatRelicStateSection(relic.GetValueOrDefault("run_state") as Dictionary<string, object?>);
         var rowReasons = relic.GetValueOrDefault("unavailable_reasons") as Dictionary<string, string>;
+        string text = "";
+        foreach (string key in new[] { "combat_state", "run_state" })
+        {
+            if (!relic.TryGetValue(key, out var section)) continue;
+            text += section is Dictionary<string, object?> values ? FormatRelicStateSection(values)
+                : $" ({key.Replace('_', ' ')}: null ({rowReasons?.GetValueOrDefault(key) ?? "unavailable"}))";
+        }
         if (relic.TryGetValue("vars", out var vars))
         {
             if (vars is Dictionary<string, object?> values)

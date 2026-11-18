@@ -27,7 +27,8 @@ private 値の読取失敗・フィールド削除・型変更では該当キー
 `null` にし、`combat_state.unavailable_reasons.<key>` に理由も付ける。
 この4種では、全キーの失敗時にも `combat_state` を保持する。
 呼び出し側も例外を捕捉し、型・公開 getter の変更等で読み取り全体が失敗した場合は
-`combat_state` を省略して `warnings` の `player.relics.<ID>.combat_state` に記録する。
+`combat_state` を `null` にし、レリック行の `unavailable_reasons.combat_state` と `warnings` の `player.relics.<ID>.combat_state` に記録する
+（schema 12。`run_state` も同じ。対象外のレリックはキーが無く、失敗とは区別できる。Markdown は `(combat state: null (理由))`）。
 そのレリックの基本情報や player の他の項目の構築は続ける。
 欠落を false / 0 と解釈しないこと。
 
@@ -131,8 +132,10 @@ v0.113.1（`sts2-a671e9ef`）の同名クラスを出典とする（`cat12079801
 
 | レリック | 出す項目 ← 元の値 | 意味・戻る時機 |
 |---|---|---|
-| 苦無 `Kunai`・手裏剣 `Shuriken`・扇子 `OrnamentalFan`・鎖鎌 `Kusarigama` | `attacks_played_this_turn` ← `_attacksPlayedThisTurn` | `AfterCardPlayed` が戦闘中の所有者のアタックを数え、`vars.Cards` の倍数で発動。所有者が参加する `BeforeSideTurnStart` と `AfterCombatEnd` で 0。 |
-| レターオープナー `LetterOpener` | `skills_played_this_turn` ← `_skillsPlayedThisTurn` | 同じ形でスキルを数える。 |
+| 苦無 `Kunai`・手裏剣 `Shuriken` | `attacks_played_this_turn` ← `_attacksPlayedThisTurn` | `AfterCardPlayed` が戦闘中の所有者のアタックを数え、`vars.Cards` の倍数で発動。所有者が参加する `BeforeSideTurnStart` と `AfterCombatEnd` で 0。 |
+| 扇子 `OrnamentalFan` | `attacks_played_this_turn` ← `_attacksPlayedThisTurn` | 数え方は同じ。0 に戻すのは所有者が参加する `BeforeSideTurnStart` だけ。`AfterCombatEnd` は演出の印を戻すだけで数を残し、次の戦闘の最初の所有者の `BeforeSideTurnStart` まで前の戦闘の数が見える。 |
+| 鎖鎌 `Kusarigama` | `attacks_played_this_turn` ← `_attacksPlayedThisTurn` | 数え方は同じ（発動はランダムな当たる敵へのダメージ）。0 に戻すのは `BeforeCombatStart`・所有者が参加する `AfterSideTurnEnd`・`AfterCombatEnd`。`BeforeSideTurnStart` では戻さないので、敵の手番の間は 0。 |
+| レターオープナー `LetterOpener` | `skills_played_this_turn` ← `_skillsPlayedThisTurn` | `AfterCardPlayed` が戦闘中の所有者のスキルを数え、`vars.Cards` の倍数で発動。0 に戻すのは `BeforeCombatStart` と、所有者が参加する `AfterSideTurnStart`（`TurnNumber == 1` の手番は飛ばす）。`AfterCombatEnd` では戻さない。手番の初めのフックより前に数えたスキルは、その `AfterSideTurnStart` で消える。 |
 | 懐中時計 `Pocketwatch` | `cards_played_this_turn` ← `_cardsPlayedThisTurn` | `AfterCardPlayed` が戦闘中の所有者の札を数える。所有者が参加する `BeforeSideTurnStart` で `_cardsPlayedLastTurn`（既存の `cards_played_last_turn`）へ移して 0。`ModifyHandDraw` は 2 手番目以降、前手番の数が `vars.CardThreshold` 以下なら `vars.Cards` を足す。 |
 | オリハルコン `Orichalcum`・偽物 `FakeOrichalcum` | `should_trigger` ← `_shouldTrigger` | `BeforeSideTurnEndVeryEarly` が所有者のブロック 0 を見て true、`BeforeSideTurnEnd` が `vars.Block` を得て false、`BeforeSideTurnStart` も false。プレイヤーが行動する間は false で、true は手番終了の 2 つのフックの間だけ。 |
 
@@ -140,7 +143,8 @@ v0.113.1（`sts2-a671e9ef`）の同名クラスを出典とする（`cat12079801
 
 戦闘をまたいで残る `[SavedProperty]` の数・印は、戦闘中・戦闘外とも `player.relics[].run_state` に出す（`combat_state` は戦闘中だけ）。
 private の裏のフィールドを名前・宣言型で読み、getter・setter・フック・乱数は呼ばない。失敗はキーを `null`・`run_state.unavailable_reasons.<key>`・
-`warnings` の `player.relics.<ID>.run_state.<key>` にする。出典は v0.113.1（`sts2-a671e9ef`）の同名クラス。
+`warnings` の `player.relics.<ID>.run_state.<key>` にする。組み立て全体が失敗したとき（型の読み込み・JIT など）は `run_state: null` と
+レリック行の `unavailable_reasons.run_state`・`warnings` の `player.relics.<ID>.run_state`。対象外のレリックにはキーが無い。出典は v0.113.1（`sts2-a671e9ef`）の同名クラス。
 
 | レリック | 出す項目 ← 元の値 | 意味・戻る時機 |
 |---|---|---|
@@ -158,7 +162,8 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | `SwordOfStone` | `elites_defeated` ← `_elitesDefeated` | 倒したエリートの数。 |
 | `WingedBoots` | `times_used` ← `_timesUsed` | 使った回数（`counter` は残り回数）。 |
 | `SilverCrucible` | `times_used` ← `_timesUsed`、`treasure_rooms_entered` ← `_treasureRoomsEntered` | 使った回数と、入った宝箱部屋の数。 |
-| `FishingRod`・`ToyBox` | `combats_seen` ← `_combatsSeen` | 経た戦闘の数（`counter` は剰余か非表示）。 |
+| `FishingRod` | `combats_seen` ← `_combatsSeen` | `AfterCombatEnd` が `RoomType.Monster` の戦闘だけを数える（エリート・ボスは数えない）。`counter` は `vars.Combats` の剰余。 |
+| `ToyBox` | `combats_seen` ← `_combatsSeen` | `AfterCombatEnd` が、使い切る（`IsUsedUp`）までのすべての戦闘を数え、`vars.Combats` の倍数で発動。`counter` は使い切ると出ない。 |
 | `WongosMysteryTicket` | `combats_finished` ← `_combatsFinished` | 終えた戦闘の数（`counter` は残り）。 |
 | `PaelsWing` | `rewards_sacrificed` ← `_rewardsSacrificed` | 捧げた報酬の数（`counter` は `vars.Sacrifices` の剰余）。 |
 | `LavaRock` | `has_triggered` ← `_hasTriggered` | 第 1 層ボスのレリック報酬を足し終えたか（`TryModifyRewards`）。 |
@@ -183,7 +188,8 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | `StoneCalendar` | `_isActivating`（演出）しか無い。発動の手番は公開の `TurnNumber`（`combat_history.turn_number`）と `vars.DamageTurn` で決まる。 |
 | `BoneTea`・`EmberTea`・`TeaOfDiscourtesy` の `_combatsLeft` | setter が `vars.Combats` に同じ値を書くので `vars` で読める（v0.113.1 の `CombatsLeft`）。 |
 | `MawBank._hasItemBeenBought`、`BathRobes._wasUsed` | `IsUsedUp` が既存 `used_up` に出る。 |
-| `Byrdpip._swoopsPlayed`・`_skin`、`Byrdine._hair`、`PaelsLegion._skin`、`Wuppy` の HP（`_currentHp` / `_maxHp`。`counter` に出る）・`_combatWuppy` | ペットの外見・演出と、ペットの生き物そのもの（`pets[]` の対象外）。 |
+| `Byrdpip._swoopsPlayed` | 休憩所の進化の選択肢（`TryModifyRestSiteOptions`、6 以上）に効くが、`counter`（`DisplayAmount => Math.Min(SwoopsPlayed, 6)`）で閾値の 6 までは正確に読める。 |
+| `Byrdpip._skin`、`Byrdine._hair`、`PaelsLegion._skin`、`Wuppy` の HP（`_currentHp` / `_maxHp`。`counter` に出る）・`_combatWuppy` | ペットの外見と、ペットの生き物そのもの（`pets[]` の対象外）。 |
 | `ArchaicTooth`・`DustyTome`・`PaelsTooth`・`TouchOfOrobas`・`SeaGlass` の保存データ | 取得時のカード・レリックの選択の記録。戦闘・報酬の判断の入力ではない。 |
 | `SneckoEye`・`FakeSneckoEye._testEnergyCostOverride` | テスト用のコスト上書き。 |
 | `SilkenTress._isUsed`、`WongosMysteryTicket._gaveRelic`、`LizardTail._wasUsed` | それぞれの `IsUsedUp` が既存 `used_up` に出るため重複追加しない。 |

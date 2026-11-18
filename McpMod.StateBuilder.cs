@@ -1731,29 +1731,12 @@ public static partial class McpMod
                 relicState["vars"] = null;
                 RecordInternalStateFailure(relicState, "vars", ex, $"player.relics.{relic.Id.Entry}");
             }
-            try
-            {
-                var relicRunState = BuildRelicRunState(relic);
-                if (relicRunState.Count > 0)
-                    relicState["run_state"] = relicRunState;
-            }
-            catch (Exception ex)
-            {
-                Warn($"player.relics.{relic.Id.Entry}.run_state", ex);
-            }
+            // A builder that throws (type load / JIT / getter) leaves the key null with
+            // unavailable_reasons.<key>, distinct from "not an allowlisted relic" (key absent).
+            AttachRelicSection(relicState, "run_state", () => BuildRelicRunState(relic), relic.Id.Entry);
             if (inCombat)
             {
-                try
-                {
-                    var relicCombatState = BuildRelicCombatState(relic);
-                    if (relicCombatState.Count > 0)
-                        relicState["combat_state"] = relicCombatState;
-                }
-                catch (Exception ex)
-                {
-                    // 型や公開 getter の変更による呼び出し／JIT の失敗も、この項目に留める。
-                    Warn($"player.relics.{relic.Id.Entry}.combat_state", ex);
-                }
+                AttachRelicSection(relicState, "combat_state", () => BuildRelicCombatState(relic), relic.Id.Entry);
             }
             relics.Add(relicState);
         }

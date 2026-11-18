@@ -96,7 +96,8 @@ PumpkinCandle・SwordOfStone・WingedBoots・SilverCrucible〔2 項目〕・Fish
 初期値と値の読取、読取でフィールドを変えないこと、`combat_state` に出ないこと、Markdown、型違いのフィールドの null・理由・warnings、他のレリックに付かないことを検査する。
 レリックの `vars` は private `RelicModel._dynamicVars` から名前・BaseValue・StringVar を除くこと、空の `{}`、1 変数の失敗はその名前だけ null で
 `unavailable_reasons["vars.<名前>"]`・warnings・他の変数を保持、集合が null なら getter で作らず `vars: null`・理由・warnings で行を保つこと、
-Markdown は失敗だけを表示することを検査する。state builder の配線（`vars` と `run_state` が戦闘の条件の外、旧 `ReadRelicDynamicVarValues` が無い）はソース文字列で確かめる。
+Markdown は失敗だけを表示することを検査する。`AttachRelicSection` は対象のレリックだけに `run_state` / `combat_state` を付け、対象外ではキーを付けず、
+組み立てが例外を投げたらキーを null・`unavailable_reasons.<key>`・warnings にして行を保つこと（Markdown の `(run state: null (理由))`）を検査する。state builder の配線（`vars` と `run_state` が戦闘の条件の外、旧 `ReadRelicDynamicVarValues` が無い）はソース文字列で確かめる。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること（破壊の入力と `dynamic_vars` は除く）、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

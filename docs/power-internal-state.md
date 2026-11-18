@@ -45,7 +45,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 巨大化（`GIGANTIFICATION_POWER`） `has_command_to_modify` | private `GigantificationPower.Data.commandToModify`（`AttackCommand?`）が結合済みか（v0.113.1、schema 12）。`BeforeAttack` が所有者の powered なアタック札の最初の攻撃を結合し、`ModifyDamageMultiplicative` は結合中はその札だけ（未結合ならどれでも）3 倍、`AfterAttack` が外して 1 減らす。読めた false は未結合。 | 3 倍の攻撃は画面に出る。 |
 | 硬い殻（`HARDENED_SHELL_POWER`） `damage_received_this_turn` | private `HardenedShellPower.Data.damageReceivedThisTurn`（decimal、v0.113.1、schema 12）。`ModifyHpLostBeforeOstyLate` は HP 損失を `Amount` − この値で止め、`AfterDamageReceived` が非ブロックダメージを足し、どちらの側でも `BeforeSideTurnStart` で 0。`DisplayAmount` は残り。 | 受けたダメージは画面に出る。 |
 | 適応（`ADAPTABLE_POWER`）・再結合（`REATTACH_POWER`）・幻影（`ILLUSION_POWER`） `is_reviving` | private `Data.isReviving`（bool、v0.113.1、schema 12）。所有者が倒れて復活を待つ間 true。この間は `ShouldAllowHitting` が false（`battle.enemies[].hittable`）。 | 倒れた敵が復活を待つ様子は画面に出る。 |
-| `ILLUSION_POWER` `follow_up_state_id` / `follow_up_state_readable` | 公開 `IllusionPower.FollowUpStateId`（private `_followUpStateId` を返すだけ、v0.113.1、schema 12）。復活の後に戻る行動の ID。読めた null は「記録なし」（readable=true）で、読取失敗（readable=false・null・理由）と区別する。 | 復活後の行動は画面に出る。 |
+| `ILLUSION_POWER` `follow_up_state_id` / `follow_up_state_readable` | 公開 `IllusionPower.FollowUpStateId`（private `_followUpStateId` を返すだけ、v0.113.1、schema 12）。読めた null は「記録なし」（readable=true）で、読取失敗（readable=false・null・理由）と区別する。**v0.113.1 ではこのプロパティに代入する箇所が無く、常に null**。`IllusionPower.AfterDeath` は復活の行動（`REVIVE_MOVE`）の `MoveState.FollowUpStateId` を `FollowUpStateId ?? StateLog の最後の ID` にするので、実際の行き先は死亡時の `StateLog` の最後で、`battle.enemies[].move_state` の復活の行動の follow-up から読む。この項目を行き先として使わない。 | 復活後の行動は画面に出る。 |
 | ネメシス（`NEMESIS_POWER`） `should_apply_intangible` | private `NemesisPower._shouldApplyIntangible`（bool、v0.113.1、schema 12）。所有者が参加する `AfterSideTurnEnd` で反転し、true になったら霊体（`IntangiblePower`）1 を付け、false になったら外す。 | 霊体の付け外しは毎手番画面に出る。 |
 | 怠惰（`SLOTH_POWER`）・軟化（`TENDER_POWER`） `cards_played_this_turn` | private `_cardsPlayedThisTurn`（int、v0.113.1、schema 12）。怠惰は `ShouldPlay` が所有者の札をこの値が `Amount` に達したら止め、`BeforeCardPlayed` で 1 足し、`BeforeSideTurnStart` で 0。`TenderPower` は `AfterCardPlayed` で 1 足して筋力・敏捷を −1、`AfterSideTurnEnd` で同じ数だけ戻して 0。どちらも `DisplayAmount` はこの値。 | パワーの数字として画面に出る。 |
 | 希望の道標（`BEACON_OF_HOPE_POWER`） `has_already_been_given_block` | private `BeaconOfHopePower._hasAlreadyBeenGivenBlock`（bool、v0.113.1、schema 12）。`AfterBlockGained` が仲間にブロックの半分を渡す間だけ true（相互の無限の受け渡しを止める）。行動を選ぶ時点では false。 | — |
@@ -180,7 +180,10 @@ Data は `ReadPowerData`（`_internalData` と nested `Data` の型の確認）�
 Data が null・型違い・フィールドの欠落は、その項目を null・`unavailable_reasons.<key>`・`warnings` の `status.<POWER_ID>.<key>` にする。
 札の参照（血の沸騰・カラミティ・絞殺の記録、ヘル・レイザーの自動プレイ中の札、盗まれた札）は弱化と同じく既存の uid registry を引くだけで、
 registry に無い札は行ごとに `uid=null`・`uid_known=false`・`uid_unavailable_reason`・`warnings` の `status.<POWER_ID>.<key>.uid` にし、uid を新しく振らない。
-行は uid 順（無いものは後ろに card_id 順）。Markdown は `played cards: STRIKE_R#0=3`、空は `none`、盗まれた札は `stolen card: BASH#0`（なしは `none`）。
+行は uid 順（無いものは後ろに card_id 順）。
+敵側のパワー（絞殺の `amounts_for_played_cards`、盗むの `stolen_card`）は `battle` の中で組むので、自分の手札・パイルの行（registry に登録する側）より先に読まれる。
+戦闘の最初の state（registry が空）では、まだ登録されていない札が `uid_known=false` になり得る。ふつうは前の state で手札・山札として登録済み。
+uid が要るなら次の state を読み直す（registry の順序は採番の規則に関わるので、組む順は変えていない）。Markdown は `played cards: STRIKE_R#0=3`、空は `none`、盗まれた札は `stolen card: BASH#0`（なしは `none`）。
 
 実機の起動・照合は行っていない。契約試験はゲーム境界のダブルに対して
 本番の reader・formatter・warnings を直接実行する。

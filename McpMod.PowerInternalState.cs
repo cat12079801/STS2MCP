@@ -165,7 +165,10 @@ public static partial class McpMod
                 Read("is_reviving", () => ReadPowerDataField<bool>(power, "isReviving"));
                 if (power is IllusionPower illusion)
                 {
-                    // The move the revived monster returns to (a readable null is "none recorded").
+                    // IllusionPower.FollowUpStateId (a readable null is "none recorded"). v0.113.1 has no
+                    // caller of its setter, so it is always null: AfterDeath builds REVIVE_MOVE with
+                    // MoveState.FollowUpStateId = this ?? StateLog.Last().Id, and the real destination is
+                    // that move's follow-up in battle.enemies[].move_state. Exposed as is, not as the target.
                     state["follow_up_state_readable"] = false;
                     Read("follow_up_state_id", () =>
                     {

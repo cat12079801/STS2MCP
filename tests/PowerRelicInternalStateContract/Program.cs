@@ -349,6 +349,25 @@ public static partial class McpMod
         Check(!cleared.DynamicVarsInitialized && Reasons(clearedRow)["vars"].Contains("_dynamicVars") && Equals(clearedRow["id"], "GIRYA"),
             "a null relic _dynamicVars is not built by the read; vars is null with a reason, not dropped");
         Check(FormatRelicCombatState(clearedRow).Contains("(vars: null (InvalidOperationException"), "markdown shows the failed relic vars");
+
+        // AttachRelicSection: a covered section is attached, an empty one is left out, a throwing builder is null + reason.
+        BeginStateWarnings();
+        var nunchakuRow = new Dictionary<string, object?>();
+        AttachRelicSection(nunchakuRow, "run_state", () => BuildRelicRunState(new Nunchaku()), "NUNCHAKU");
+        Check(nunchakuRow["run_state"] is Dictionary<string, object?> { Count: 1 } && !nunchakuRow.ContainsKey("unavailable_reasons"), "a covered run_state is attached");
+        var plainRelicRow = new Dictionary<string, object?>();
+        AttachRelicSection(plainRelicRow, "run_state", () => BuildRelicRunState(new PenNib()), "PEN_NIB");
+        AttachRelicSection(plainRelicRow, "combat_state", () => new Dictionary<string, object?>(), "PEN_NIB");
+        Check(plainRelicRow.Count == 0 && _stateWarnings.Count == 0, "an uncovered relic has no run_state / combat_state key");
+        foreach (string section in new[] { "run_state", "combat_state" })
+        {
+            var brokenRelicRow = new Dictionary<string, object?> { ["id"] = "NUNCHAKU" };
+            AttachRelicSection(brokenRelicRow, section, () => throw new TypeLoadException("type moved"), "NUNCHAKU");
+            Unknown(brokenRelicRow, section, "player.relics.NUNCHAKU");
+            Check(FormatRelicCombatState(brokenRelicRow).Contains($"({section.Replace('_', ' ')}: null (TypeLoadException: type moved))"), $"{section} failure markdown");
+            Check(Reasons(brokenRelicRow)[section].Contains("type moved") && Equals(brokenRelicRow["id"], "NUNCHAKU"),
+                $"a throwing {section} builder is null with unavailable_reasons.{section}, not dropped; the row is kept");
+        }
     }
 
     // sts2#1020: power private Data / fields that neither Amount nor DynamicVars hold.
@@ -1214,11 +1233,11 @@ public static partial class McpMod
         {
             // sts2#1020: vars and run_state are attached for every relic, before (outside) the combat guard.
             int vars = builder.IndexOf("try { AttachRelicDynamicVars(relicState, relic); }", StringComparison.Ordinal);
-            int run = builder.IndexOf("var relicRunState = BuildRelicRunState(relic);", StringComparison.Ordinal);
-            int guard = builder.IndexOf("var relicCombatState = BuildRelicCombatState(relic);", StringComparison.Ordinal);
+            int run = builder.IndexOf("AttachRelicSection(relicState, \"run_state\", () => BuildRelicRunState(relic), relic.Id.Entry);", StringComparison.Ordinal);
+            int guard = builder.IndexOf("AttachRelicSection(relicState, \"combat_state\", () => BuildRelicCombatState(relic), relic.Id.Entry);", StringComparison.Ordinal);
             Check(vars > 0 && run > vars && guard > run && builder.LastIndexOf("if (inCombat)", guard, StringComparison.Ordinal) > run
-                && !builder.Contains("ReadRelicDynamicVarValues") && builder.Contains("relicState[\"run_state\"] = relicRunState;"),
-                "relic vars (field read) and run_state are wired outside the combat guard");
+                && !builder.Contains("ReadRelicDynamicVarValues"),
+                "relic vars (field read) and run_state are wired outside the combat guard; both sections go through AttachRelicSection");
         }
         {
             // Dampen's downgraded_cards only looks up uids (TryGetRegisteredCardUid): in BuildPlayerState

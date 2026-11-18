@@ -813,6 +813,8 @@ schema 12（`cat12079801/sts2#1020`）で、手番ごとの数（苦無・手裏
 次の発動が次の戦闘・休憩所・報酬画面にあり得るため、`combat_state`（戦闘中だけ）とは分ける。
 private の裏のフィールドを名前・宣言型で読み、getter・setter・フック・乱数は呼ばない。読めなければキーを `null` にし、
 `run_state.unavailable_reasons.<key>` と `warnings` の `player.relics.<ID>.run_state.<key>` に理由を書く。対象外のレリックには付かない。
+組み立て全体が失敗したら（型の読み込み・JIT など）`run_state: null` とレリック行の `unavailable_reasons.run_state`・`warnings` の
+`player.relics.<ID>.run_state`。`combat_state` も schema 12 から同じ形（以前はキーごと省略）。
 
 | レリック | 項目 ← private フィールド |
 |---|---|
@@ -828,7 +830,8 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | `SwordOfStone` | `elites_defeated` ← `_elitesDefeated` |
 | `WingedBoots` | `times_used` ← `_timesUsed` |
 | `SilverCrucible` | `times_used` ← `_timesUsed`、`treasure_rooms_entered` ← `_treasureRoomsEntered` |
-| `FishingRod`・`ToyBox` | `combats_seen` ← `_combatsSeen` |
+| `FishingRod` | `combats_seen` ← `_combatsSeen`（`RoomType.Monster` の戦闘だけ。エリート・ボスは数えない） |
+| `ToyBox` | `combats_seen` ← `_combatsSeen`（使い切るまでのすべての戦闘） |
 | `WongosMysteryTicket` | `combats_finished` ← `_combatsFinished` |
 | `PaelsWing` | `rewards_sacrificed` ← `_rewardsSacrificed` |
 | `LavaRock` | `has_triggered` ← `_hasTriggered` |
@@ -1506,7 +1509,7 @@ schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power`、s
 | `GIGANTIFICATION_POWER` | `has_command_to_modify` | bool（schema 12。同上） |
 | `HARDENED_SHELL_POWER` | `damage_received_this_turn` | decimal（schema 12。同上） |
 | `ADAPTABLE_POWER` / `REATTACH_POWER` / `ILLUSION_POWER` | `is_reviving` | bool（schema 12。同上） |
-| `ILLUSION_POWER` | `follow_up_state_id` / `follow_up_state_readable` | string / null と bool（schema 12。同上。readable=true の null は記録なし） |
+| `ILLUSION_POWER` | `follow_up_state_id` / `follow_up_state_readable` | string / null と bool（schema 12。同上。readable=true の null は記録なし。v0.113.1 では代入箇所が無く常に null で、復活の行き先は復活の行動の `move_state` から読む） |
 | `NEMESIS_POWER` | `should_apply_intangible` | bool（schema 12。同上） |
 | `SLOTH_POWER` / `TENDER_POWER` | `cards_played_this_turn` | int（schema 12。同上） |
 | `BEACON_OF_HOPE_POWER` | `has_already_been_given_block` | bool（schema 12。同上） |
