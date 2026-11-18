@@ -12,6 +12,6 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 手番の初めの選択に答えた後の残り）で真、通常のプレイの局面・手番の終わり・敵の手番・
 死んだローカルの Player の手番の残りで偽になることを検証する。
 `AddResolvingState` への配線（戦闘の画面に限ること・入力待ちの画面の消去より前に足すこと）と、
-現行の schema 8 であることはソース文字列で検査する。
+現行の schema 9 であることはソース文字列で検査する。
 
 ゲームに接続しない。実際の手番の進行での確認（`end_turn` と並行して GET を撃つ）は調整役が実機で行う。

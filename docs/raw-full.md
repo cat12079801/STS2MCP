@@ -82,14 +82,14 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 8       // Contract version — see below
+  "schema_version": 9       // Contract version — see below
 }
 ```
 
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The exceptions are **6**, **7** and **8**: additive contracts that a client treats as required as a whole, so
+The exceptions are **6**, **7**, **8** and **9**: additive contracts that a client treats as required as a whole, so
 they are gated on the version instead of probing each field.
 
 `game_version` and `game_commit` come from the game's `ReleaseInfoManager`, which reads
@@ -98,6 +98,12 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **9** — the Rend input contract (`cat12079801/sts2#1034`). Every status row (player, enemy, pet;
+  `hidden_in_ui` and minimal rows too) carries `type_for_current_amount` (`PowerModel.TypeForCurrentAmount`:
+  a negative Strength / Dexterity / Focus reads `Debuff` while `type` stays `Buff`) and
+  `is_temporary_power` (the instance implements `ITemporaryPower`). Existing fields keep their meaning
+  (`type` is still `PowerModel.Type`); the version is bumped so a client can require the whole
+  contract. See [破壊の入力](#破壊rendの入力schema-9).
 - **8** — the Dampen input contract (`cat12079801/sts2#1031`). `DAMPEN_POWER` status rows carry
   `caster_combat_ids` (the casters in private `DampenPower.Data.casters`, as `enemies[].combat_id`)
   and `downgraded_cards` (Data's card → original upgrade level map, as combat uids; a card the uid
@@ -872,7 +878,7 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 本節の項目は schema 4 で追加した（追加時に版は上げていない）。
-同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **8**。
+同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **9**。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
@@ -1306,7 +1312,9 @@ Pets also share the same builder.
   "id": "STRENGTH",
   "name": "Strength",
   "amount": 3,
-  "type": "Buff",            // "Buff" or "Debuff"
+  "type": "Buff",            // PowerModel.Type: "Buff", "Debuff" or "None"
+  "type_for_current_amount": "Buff", // PowerModel.TypeForCurrentAmount (schema 9; negative Strength → "Debuff")
+  "is_temporary_power": false,       // implements ITemporaryPower (schema 9)
   "description": "Increases attack damage by 3.",
   "keywords": [ /* Keyword Objects */ ]
 }
@@ -1315,12 +1323,15 @@ Pets also share the same builder.
 画面に見えるパワーには次の内部状態を追加する（schema 4）。
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
 ただし `THIEVERY_POWER` / `HEIST_POWER` の項目、`VIGOR_POWER` の `vigor_attack`、`HEX_POWER` の付与元、`RITUAL_POWER` の印と、
-schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANACHE_POWER` の項目、schema 8 の `DAMPEN_POWER` の項目は、`status[]` に出る行なら可視性によらず付ける。
+schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANACHE_POWER` の項目、schema 8 の `DAMPEN_POWER` の項目、
+schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power` は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
 | 対象 | 追加項目 | JSON の型 |
 |---|---|---|
+| 全パワー | `type_for_current_amount` | enum 名 `None` / `Buff` / `Debuff` / null（schema 9。可視性によらず付ける） |
+| 全パワー | `is_temporary_power` | bool（schema 9。同上） |
 | 全可視パワー | `skip_next_duration_tick` | bool |
 | `TORIC_TOUGHNESS_POWER` | `block_base_value` | decimal |
 | `SURROUNDED_POWER` | `facing` | enum 名 `Right` / `Left` |
@@ -1430,6 +1441,33 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 拘束の鎖の使用済みフラグは false も `(bound card played: no)`、true は `yes` と表示する。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
 既存項目の意味を変えない追加のため版は上げていない（schema 4 のときの追加）。
+
+#### 破壊（`Rend`）の入力（schema 9）
+
+破壊（`Rend`）の倍率は対象の `Creature.Powers` のうち `Rend.ShouldCountPower` を満たすパワーの数
+（`power.TypeForCurrentAmount == PowerType.Debuff && !(power is ITemporaryPower)`。出典は v0.113.1 `sts2-a671e9ef`、
+`cat12079801/sts2#1034`）。その 2 つの入力を、player・敵・ペットのすべての `status[]` の行（`hidden_in_ui` の行・説明失敗時の最小行も）に付ける。
+
+- `type_for_current_amount` — `PowerModel.TypeForCurrentAmount`（`GetTypeForAmount(Amount)`）の enum 名。
+  `GetTypeForAmount` は、`StackType` が `Counter` で `AllowNegative` のパワーの負の量を `Debuff`、`AllowNegative` でない
+  `Debuff` 型のパワーの負の量を `Buff` とし、それ以外は `Type`。v0.113.1 で `AllowNegative` なのは `StrengthPower`・
+  `DexterityPower`・`FocusPower`（`Type` は `Buff`）と `ShriekPower`・`ShrinkPower`（`Type` は `Debuff`）なので、
+  `type` と食い違うのは負の筋力・敏捷・集中（`Debuff`）。`AllowNegative` でないパワーは量が 0 以下になると外れる（`ShouldRemoveDueToAmount`）。
+  既存の `type` は `PowerModel.Type` のままで意味を変えない（負の筋力も `Buff`）。
+- `is_temporary_power` — インスタンスが `ITemporaryPower` を実装するか。v0.113.1 では `TemporaryStrengthPower`・
+  `TemporaryDexterityPower`・`TemporaryFocusPower`・`TemporaryThornsPower` とその派生。一時パワーは付与の前（`BeforeApplied`）に
+  内部の筋力などを別の行（`STRENGTH_POWER` など。こちらは一時パワーではない）として付ける。
+
+getter は `_amount` と `Type` / `StackType` / `AllowNegative` を読むだけで、フック・乱数・書き込みは無い
+（`MonologuePower.StackType` は生きたパワーが持つ `DynamicVars` を読む）。`is_temporary_power` は型の検査。
+読取失敗は `type` で補わず、項目を null・行の `unavailable_reasons.type_for_current_amount`・
+`warnings` の `status.<POWER_ID>.type_for_current_amount` にする。Markdown は `type` と違うときと失敗のときだけ
+`(type for current amount: Debuff)` / `null (理由)`、一時パワーは `(is temporary power: yes)` を足す（`type` と同じ値・false は JSON だけ）。
+
+```json
+{ "id": "STRENGTH_POWER", "amount": -2, "type": "Buff",
+  "type_for_current_amount": "Debuff", "is_temporary_power": false }
+```
 
 #### 弱化（`DAMPEN_POWER`）の入力（schema 8）
 

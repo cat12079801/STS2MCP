@@ -24,6 +24,11 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
     public enum PileType { Hand, Draw, Discard, Exhaust, Play }
     public class CardPile { public List<Models.CardModel> Cards = []; }
 }
+namespace MegaCrit.Sts2.Core.Entities.Powers
+{
+    // v0.113.1 MegaCrit.Sts2.Core.Entities.Powers.PowerType.
+    public enum PowerType { None, Buff, Debuff }
+}
 namespace MegaCrit.Sts2.Core.Entities.Creatures
 {
     // v0.113.1: CombatId is an auto-property { get; set; } (uint?), the same value as
@@ -44,8 +49,26 @@ namespace MegaCrit.Sts2.Core.Models
         public int Rarity { get; set; }
         public int CompareTo(CardModel? other) => StringComparer.Ordinal.Compare(Id.Entry, other?.Id.Entry);
     }
+    // v0.113.1 ITemporaryPower (OriginModel / InternallyAppliedPower are not read by the MOD).
+    public interface ITemporaryPower { }
     public class PowerModel
     {
+        // v0.113.1: abstract Type per power; TypeForCurrentAmount => GetTypeForAmount(Amount).
+        // The double does not compute GetTypeForAmount: a fixture whose amount flips the type
+        // sets CurrentType to the value the game gives; null means "same as Type".
+        public Entities.Powers.PowerType StaticType = Entities.Powers.PowerType.Buff;
+        public Entities.Powers.PowerType Type => StaticType;
+        public Entities.Powers.PowerType? CurrentType;
+        public bool ThrowCurrentType;
+        public int CurrentTypeReads;
+        public Entities.Powers.PowerType TypeForCurrentAmount
+        {
+            get
+            {
+                CurrentTypeReads++;
+                return ThrowCurrentType ? throw new InvalidOperationException("type for amount failed") : CurrentType ?? Type;
+            }
+        }
         private object? _internalData;
         // v0.113.1 PowerModel._dynamicVars / DynamicVars: DeepCloneFields builds the set on every
         // live power; the getter builds it when still null (the readers must not rely on that).
@@ -119,6 +142,18 @@ namespace MegaCrit.Sts2.Core.Models.Powers
 {
     using MegaCrit.Sts2.Core.Entities.Creatures;
     public class ToricToughnessPower : PowerModel { }
+    // sts2#1034, v0.113.1: StrengthPower Type => Buff, Counter, AllowNegative => true
+    // (GetTypeForAmount gives Debuff below 0). WeakPower / VulnerablePower Type => Debuff.
+    public class StrengthPower : PowerModel { }
+    public class WeakPower : PowerModel { public WeakPower() => StaticType = Entities.Powers.PowerType.Debuff; }
+    public class VulnerablePower : PowerModel { public VulnerablePower() => StaticType = Entities.Powers.PowerType.Debuff; }
+    // v0.113.1: abstract TemporaryStrengthPower / TemporaryDexterityPower : PowerModel, ITemporaryPower;
+    // Type is Debuff when IsPositive is false (ManglePower), else Buff (FlexPotionPower, SpeedPotionPower).
+    public abstract class TemporaryStrengthPower : PowerModel, ITemporaryPower { }
+    public abstract class TemporaryDexterityPower : PowerModel, ITemporaryPower { }
+    public class FlexPotionPower : TemporaryStrengthPower { }
+    public class ManglePower : TemporaryStrengthPower { public ManglePower() => StaticType = Entities.Powers.PowerType.Debuff; }
+    public class SpeedPotionPower : TemporaryDexterityPower { }
     // v0.113.1: Instanced, per-target. Gold starts at GoldVar(0); Steal adds the real loss.
     public class ThieveryPower : PowerModel { }
     public class HeistPower : PowerModel { }

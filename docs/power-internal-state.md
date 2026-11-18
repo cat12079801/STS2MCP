@@ -6,10 +6,11 @@
 `vigor_attack`、呪術（`HEX_POWER`）の付与元、儀式（`RITUAL_POWER`）の `was_just_applied_by_enemy`（schema 6）、
 札の効果の数値（爆弾〔`THE_BOMB_POWER`〕の `damage`、`INFERNO_POWER` / `CRIMSON_MANTLE_POWER` の `self_damage`、
 `PANACHE_POWER` の `cards_left` / `already_applied`。schema 7）、
-弱化（`DAMPEN_POWER`）の `caster_combat_ids` / `downgraded_cards`（schema 8）で、
+弱化（`DAMPEN_POWER`）の `caster_combat_ids` / `downgraded_cards`（schema 8）、
+全パワーの `type_for_current_amount` / `is_temporary_power`（schema 9）で、
 `status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
-schema 4 の項目は版を上げずに足したので、項目の有無で利用可否を判別する。schema 6・7・8 の項目は版を上げて足したので、版で必須にしてよい。
+schema 4 の項目は版を上げずに足したので、項目の有無で利用可否を判別する。schema 6・7・8・9 の項目は版を上げて足したので、版で必須にしてよい。
 
 以下の出典は v0.113.0 のデコンパイル `sts2-d009478a`。
 人間の観測可能性は画面表示または画面で起きた出来事の計数に基づく。
@@ -17,6 +18,8 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 
 | 対象／項目 | ゲーム側の出典・意味 | 人間が知りうる根拠 |
 |---|---|---|
+| 全パワー `type_for_current_amount` | `PowerModel.TypeForCurrentAmount`（`GetTypeForAmount(Amount)`）の enum 名 `None` / `Buff` / `Debuff`（出典は v0.113.1 `sts2-a671e9ef`。schema 9、`cat12079801/sts2#1034`）。`GetTypeForAmount` は、`StackType` が `Counter` で `AllowNegative` のパワーの負の量を `Debuff`、`AllowNegative` でない `Debuff` 型の負の量を `Buff` とし、それ以外は `Type` を返す。`AllowNegative` なのは `StrengthPower`・`DexterityPower`・`FocusPower`（`Type` は `Buff`）と、もともと `Debuff` の `ShriekPower`・`ShrinkPower` なので、型が入れ替わるのは負の筋力・敏捷・集中（`Debuff`）。`AllowNegative` でないパワーは量が 0 以下で外れる（`ShouldRemoveDueToAmount`）。既存の `type` は従来どおり `PowerModel.Type` で、負の筋力も `Buff`。破壊（`Rend.ShouldCountPower`）は対象の `Creature.Powers` のうち、これが `Debuff` で一時パワーでないものを数える。getter は `_amount` と `Type` / `StackType` / `AllowNegative` を読むだけ（`MonologuePower.StackType` は生きたパワーが持つ `DynamicVars` を読む）で、フック・乱数・書き込みは無い。読取失敗は `Type` で補わず null・理由・warnings。 | 筋力などの数字の符号と色（`AmountLabelColor` は `GetTypeForAmount(Amount)` が `Debuff` なら debuff の色）は画面に出る。 |
+| 全パワー `is_temporary_power` | パワーのインスタンスが `ITemporaryPower` を実装するか（v0.113.1、schema 9）。実装するのは `TemporaryStrengthPower`・`TemporaryDexterityPower`・`TemporaryFocusPower`・`TemporaryThornsPower` とその派生（`FlexPotionPower`・`ManglePower`・`DarkShacklesPower`・`ShacklingPotionPower` など）。これらは付与の前（`BeforeApplied`）に内部の筋力などを別の行として付け、手番の終わりに自分を外して戻す。`Rend`・`DebufferModel`・`SleightOfFleshPower`・`IllusionPower` は一時パワーを数えない。型の検査なので読取失敗は起きないが、同じ読取経路を通す。 | パワーの名前・説明と、付けた札・ポーション・レリックは画面に出る。 |
 | 全可視パワー `skip_next_duration_tick` | `PowerModel.SkipNextDurationTick`。`PowerCmd.Apply` は敵手番中の player への Debuff の新規インスタンス付与で true（既存インスタンスへの加算は `ModifyAmount` に戻り、このフラグを変更しない）、`TickDownDuration` は true を false に戻して減算を飛ばす。`Doubt.OnTurnEndInHand` / `Shame.OnTurnEndInHand` は手番終了時に手札にあり、対応する弱体／脆弱をもともと持たず、付与に成功した場合に true にする。非 duration でも元の bool を出す。 | 表示された新規付与と既存パワーへの加算の区別、手番終了時の手札の疑念／羞恥の効果、持続数の減少を数えられる。未表示のパワーへの付与はこの根拠を満たさないため対象外。 |
 | 円環の強靭 `block_base_value` | `ToricToughnessPower.DynamicVars.Block.BaseValue`。`SetBlock` が設定し、`AfterBlockCleared` で使用。Amount は残り回数。 | `ToricToughness.OnPlay` が画面で獲得したブロック量を `SetBlock` に渡す。表示された獲得量に対応する値。decimal のまま。 |
 | 包囲 `facing` | `SurroundedPower.Facing` の enum 名。 | `FaceDirection` / `FlipScale` が player・ペットの Body と FormVfxHolder の向きを反転する。画面に向きが見える。 |

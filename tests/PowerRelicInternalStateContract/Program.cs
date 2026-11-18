@@ -20,7 +20,8 @@ public static partial class McpMod
     }
     private static Dictionary<string, object?> Power(PowerModel power, bool visible = true)
     {
-        var row = new Dictionary<string, object?> { ["id"] = power.GetType().Name, ["amount"] = 1 };
+        // "type" is PowerModel.Type, as BuildPowersState writes it.
+        var row = new Dictionary<string, object?> { ["id"] = power.GetType().Name, ["amount"] = 1, ["type"] = power.Type.ToString() };
         AttachPowerInternalState(row, power, visible);
         return row;
     }
@@ -124,6 +125,85 @@ public static partial class McpMod
             if (power is PanachePower)
                 Check(row["already_applied"] is false, "Panache: the Data read is independent of the var set");
         }
+    }
+
+    // sts2#1034: Rend counts a power when TypeForCurrentAmount == Debuff && !(power is ITemporaryPower).
+    private static void RunRendInputContract()
+    {
+        var options = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        BeginStateWarnings();
+        // Debuff vs buff: the current type follows the power, read on hidden rows too.
+        var weak = new WeakPower();
+        var vulnerable = new VulnerablePower();
+        var strength = new StrengthPower();
+        foreach (var (power, expected) in new (PowerModel, string)[] { (weak, "Debuff"), (vulnerable, "Debuff"), (strength, "Buff") })
+        {
+            string name = power.GetType().Name;
+            foreach (bool visible in new[] { true, false })
+            {
+                var row = Power(power, visible);
+                Check(Equals(row["type_for_current_amount"], expected) && row["is_temporary_power"] is false
+                    && !row.ContainsKey("unavailable_reasons"), $"{name} (visible={visible}): current type {expected}, not temporary");
+            }
+            Check(!FormatPowerInternalState(Power(power)).Contains("type for current amount")
+                && !FormatPowerInternalState(Power(power)).Contains("temporary"), $"{name}: same-as-type and false are JSON-only in markdown");
+        }
+        Check(_stateWarnings.Count == 0, "readable Rend inputs add no warnings");
+
+        // Sign flip: Strength below 0 keeps Type Buff but GetTypeForAmount gives Debuff.
+        strength.CurrentType = MegaCrit.Sts2.Core.Entities.Powers.PowerType.Debuff;
+        var negative = Power(strength);
+        Check(Equals(negative["type"], "Buff") && Equals(negative["type_for_current_amount"], "Debuff") && negative["is_temporary_power"] is false,
+            "negative Strength: type stays PowerModel.Type, type_for_current_amount is Debuff (Rend counts it)");
+        Check(FormatPowerInternalState(negative).Contains("type for current amount: Debuff"), "a flipped type is shown in markdown");
+        strength.CurrentType = null;
+        Check(Equals(negative["type_for_current_amount"], "Debuff") && Equals(Power(strength)["type_for_current_amount"], "Buff"), "snapshot independent of a later amount change");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(negative, options)))
+            Check(json.RootElement.GetProperty("type_for_current_amount").GetString() == "Debuff"
+                && json.RootElement.GetProperty("is_temporary_power").ValueKind == JsonValueKind.False, "wire string and real false");
+
+        // Temporary powers: a debuff-typed one (Mangle) and buff-typed ones (Flex, Speed).
+        foreach (var (power, expected) in new (PowerModel, string)[] { (new ManglePower(), "Debuff"), (new FlexPotionPower(), "Buff"), (new SpeedPotionPower(), "Buff") })
+        {
+            string name = power.GetType().Name;
+            var row = Power(power, false);
+            Check(Equals(row["type_for_current_amount"], expected) && row["is_temporary_power"] is true && !row.ContainsKey("unavailable_reasons"),
+                $"{name}: ITemporaryPower on the instance (hidden row too), current type {expected}");
+            Check(FormatPowerInternalState(Power(power)).Contains("is temporary power: yes"), $"{name}: markdown shows temporary");
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(row, options));
+            Check(json.RootElement.GetProperty("is_temporary_power").ValueKind == JsonValueKind.True, $"{name}: wire true");
+        }
+        Check(Power(new PossessStrengthPower())["is_temporary_power"] is false, "a non-temporary Strength-related power is not temporary");
+
+        // Read failure: null, reason and warning; never PowerModel.Type in its place, other fields kept.
+        BeginStateWarnings();
+        var failing = new WeakPower { ThrowCurrentType = true };
+        var failed = Power(failing);
+        Unknown(failed, "type_for_current_amount", "status.WeakPower");
+        Check(Equals(failed["type"], "Debuff") && failed["is_temporary_power"] is false && failed["skip_next_duration_tick"] is false,
+            "a failed current type keeps type, is_temporary_power and the other fields");
+        Check(FormatPowerInternalState(failed).Contains("type for current amount: null (InvalidOperationException: type for amount failed)"), "markdown shows the failure and reason");
+        var failedHidden = Power(new ManglePower { ThrowCurrentType = true }, false);
+        Unknown(failedHidden, "type_for_current_amount", "status.ManglePower");
+        Check(failedHidden["is_temporary_power"] is true, "hidden row failure keeps is_temporary_power");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failed, options)))
+            Check(json.RootElement.GetProperty("type_for_current_amount").ValueKind == JsonValueKind.Null
+                && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("type_for_current_amount", out _), "wire null and reason");
+
+        // Side-effect free: one getter read per row; Data, _dynamicVars and Applier untouched.
+        var probe = new WeakPower();
+        probe.ClearDynamicVars();
+        var before = probe.PeekData();
+        Power(probe);
+        Check(probe.CurrentTypeReads == 1 && !probe.DynamicVarsInitialized && ReferenceEquals(probe.PeekData(), before) && probe.ApplierReads == 0,
+            "reading the Rend inputs touches only TypeForCurrentAmount");
+        Check(Power(new PowerModel()).Keys.Take(5).SequenceEqual(new[] { "id", "amount", "type", "type_for_current_amount", "is_temporary_power" }),
+            "Rend inputs follow the base row keys");
     }
 
     // sts2#1031: DampenPower.Data (casters, downgraded cards -> original upgrade level).
@@ -251,7 +331,8 @@ public static partial class McpMod
         plain.Skip = true;
         Check(Power(plain)["skip_next_duration_tick"] is true, "true skip read");
         Check(FormatPowerInternalState(Power(plain)).Contains("skip next duration tick: yes"), "true skip markdown");
-        Check(Power(plain, false).Count == 2, "hidden or visibility-unknown powers have no new details");
+        Check(Power(plain, false).Count == 5 && Power(plain, false).ContainsKey("type_for_current_amount") && Power(plain, false).ContainsKey("is_temporary_power"),
+            "hidden or visibility-unknown powers carry only the Rend inputs (sts2#1034)");
         plain.ThrowSkip = true;
         var failedSkip = Power(plain);
         Unknown(failedSkip, "skip_next_duration_tick", "status.PowerModel");
@@ -296,7 +377,7 @@ public static partial class McpMod
         var boundSnapshot = Power(chains);
         chains.Set(false);
         Check(boundSnapshot["bound_card_played"] is true && Power(chains)["bound_card_played"] is false, "Bound snapshot stays independent of game reset");
-        Check(Power(chains, false).Count == 2, "hidden Bound power omits internal state");
+        Check(Power(chains, false).Count == 5, "hidden Bound power omits internal state (only the Rend inputs)");
         foreach (object? invalidData in new object?[] { null, new object() })
         {
             chains.SetData(invalidData);
@@ -747,6 +828,7 @@ public static partial class McpMod
         }
         RunCardEffectPowerContract();
         RunDampenContract();
+        RunRendInputContract();
         var response = new Dictionary<string, object?>();
         EndStateWarnings(response);
         Check(response.ContainsKey("warnings"), "warnings attached to surviving response");
@@ -770,7 +852,10 @@ public static partial class McpMod
         }
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 8;"), "current schema is 8 (sts2#1031)");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 9;"), "current schema is 9 (sts2#1034)");
+        Check(Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = power.Type.ToString(),")
+            && Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = SafeGetText(() => power.Type.ToString()),"),
+            "status type stays PowerModel.Type in full and minimal rows (TypeForCurrentAmount is the new key)");
         Console.WriteLine($"PASS: {Checks} power/relic internal-state contract checks");
     }
 }

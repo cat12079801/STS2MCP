@@ -80,8 +80,15 @@ public static partial class McpMod
     ///    registry has not seen is reported per row, not given a new uid). Existing fields keep
     ///    their meaning. Like 6 and 7, the bump is deliberate although additive: the engine
     ///    requires these inputs and gates on the version.
+    ///
+    /// 9: the Rend input contract (sts2#1034). Every status row (player, enemy, pet; hidden and
+    ///    minimal rows too) carries type_for_current_amount (PowerModel.TypeForCurrentAmount: a
+    ///    negative Strength / Dexterity / Focus reads Debuff while its type stays Buff) and
+    ///    is_temporary_power (the instance implements ITemporaryPower). The existing type keeps
+    ///    its meaning (PowerModel.Type). Like 6 to 8, the bump is deliberate although additive:
+    ///    the engine requires these inputs on every status row and gates on the version.
     /// </summary>
-    public const int StateSchemaVersion = 8;
+    public const int StateSchemaVersion = 9;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";

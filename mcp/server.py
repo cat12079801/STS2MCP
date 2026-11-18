@@ -220,6 +220,10 @@ async def get_game_state(format: str = "markdown") -> str:
     schema 8 で弱化（DAMPEN_POWER）の status 行に caster_combat_ids（付与した敵の
     enemies[].combat_id の昇順）と downgraded_cards（{uid, uid_known, card_id,
     original_upgrade_level}。uid registry に無い札は uid=null・uid_known=false）を足した。
+    schema 9 ですべての status 行（player・敵・ペット、hidden_in_ui・最小行も）に
+    type_for_current_amount（PowerModel.TypeForCurrentAmount。負の筋力は type が Buff のまま
+    Debuff）と is_temporary_power（ITemporaryPower を実装するか）を足した。type は従来どおり
+    PowerModel.Type。読めないときは null・理由・warnings。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 

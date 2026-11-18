@@ -17,6 +17,19 @@ public static partial class McpMod
     {
         string context = $"status.{state["id"]}";
         void Read(string key, Func<object?> read) => ReadInternalStateValue(state, key, read, context);
+        // sts2#1034, v0.113.1 (sts2-a671e9ef): Rend.ShouldCountPower counts a target power when
+        // power.TypeForCurrentAmount == PowerType.Debuff && !(power is ITemporaryPower), over
+        // Creature.Powers whatever the HUD shows, so every emitted row carries both.
+        // TypeForCurrentAmount is GetTypeForAmount(Amount): Debuff for a Counter power that
+        // AllowNegative below 0 (Strength / Dexterity / Focus, whose Type is Buff), Buff for a
+        // !AllowNegative Debuff below 0, else Type. The row's existing "type" stays PowerModel.Type.
+        // It only reads _amount and the Type / StackType / AllowNegative getters (MonologuePower's
+        // StackType reads DynamicVars, which a live power already holds); no hook, RNG or write.
+        // A failed read is null and a reason, never Type in its place.
+        Read("type_for_current_amount", () => power.TypeForCurrentAmount.ToString());
+        // A type test on the instance: TemporaryStrength/Dexterity/Focus/ThornsPower and their
+        // subclasses (FlexPotionPower, ManglePower, ...). It cannot fail; read the same way.
+        Read("is_temporary_power", () => power is ITemporaryPower);
         // v0.113.1 (sts2-a671e9ef): Thievery/Heist are Instanced powers, one per targeted
         // player. PowerModel.IsVisible is false when Target is another player, but the row
         // is still emitted with its live stack, so its target and stolen gold are attached
