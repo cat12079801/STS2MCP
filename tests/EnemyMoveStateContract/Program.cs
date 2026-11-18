@@ -132,7 +132,7 @@ public static partial class McpMod
             "ログの順序・重複・is_move を保持");
         Check(Equals(histState["current_state_id"], "RAND") && Equals(histState["initial_state_id"], "SLICE_MOVE")
             && histState["performed_first_move"] is false && histState["spawned_this_turn"] is true
-            && histState["current_state_registered"] is false, "現在地点が分岐（未登録）・初回未実行・召喚直後");
+            && histState["current_state_registered"] is false, "現在地点が分岐（未登録）・初回未実行・召喚直後");  // stub では分岐を States に登録していないので false。本体で一覧に入った分岐（RegisterStates）は true（PR #99 round 2 の P3-1）
         Check(Markdown(histState) == "**Move:** `SLICE_MOVE` | follow-up: `HISS_MOVE` | log(5): … `SLICE_MOVE` > `BRANCH` > `BUTT_MOVE` > `SLICE_MOVE`",
             "長いログは末尾 4 件と件数");
 
