@@ -2428,6 +2428,9 @@ Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombat
   `local_keyword_ids` / `keyword_ids`、`exhaust_on_next_play`、`energy_cost`（パイルが無いので `with_all_modifiers` は null と
   `detached_preview_context`。[Energy Cost Object](#energy-cost-object追加schema-4)）、`star_cost_state`、`unavailable_reasons`。
   合法な対象・使用可否（`can_play`）・対象別のプレビュー・強化結果は detached の候補では評価しない。
+- 戦闘中の choose・grid の行に以前からある行の `uid` は、その個体の registry の uid（パイルに入った後も同じ値）。
+  ただし detached の間はどのパイルの行にも無いので、パイルの行への参照として使わない（参照は `source: "pile"` の `combat_instance.uid` だけ）。
+  choose の行に以前からある `can_play` / `unplayable_reason` は表示用の既存の値で、detached の候補の評価には使わない。
 - 2つ以上のパイルにある札は対応付けず、`source` / `pile` を null にして理由 `ambiguous: in N piles (…)` と warning。
   所有者・パイルが読めなければ同じく null と理由。
 - 読むだけ: パイル・札を動かさず、複製・プレイ・フック・乱数を使わない（`Player.Piles` の getter はデッキの配列を一度だけ作って持つ）。

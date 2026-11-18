@@ -111,6 +111,19 @@ public static partial class McpMod
         Unknown(failedLeft, "cards_left", "status.PanachePower");
         Check(failedLeft["already_applied"] is true, "cards_left failure keeps already_applied");
         Check(!Power(new ToricToughnessPower()).ContainsKey("damage") && !Power(new ToricToughnessPower()).ContainsKey("cards_left"), "other powers carry none of these keys");
+
+        // An uninitialized PowerModel._dynamicVars is a failed read: never built by the getter.
+        foreach (PowerModel power in new PowerModel[] { new TheBombPower(), new InfernoPower(), new CrimsonMantlePower(), new PanachePower() })
+        {
+            string name = power.GetType().Name;
+            string key = power switch { TheBombPower => "damage", PanachePower => "cards_left", _ => "self_damage" };
+            power.ClearDynamicVars();
+            var row = Power(power);
+            Unknown(row, key, $"status.{name}");
+            Check(!power.DynamicVarsInitialized && Reasons(row)[key].Contains("_dynamicVars"), $"{name}: a null _dynamicVars is not built by the read");
+            if (power is PanachePower)
+                Check(row["already_applied"] is false, "Panache: the Data read is independent of the var set");
+        }
     }
 
     public static void Main()

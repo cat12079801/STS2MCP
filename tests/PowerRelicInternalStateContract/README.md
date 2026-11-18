@@ -59,7 +59,8 @@ wire の uint 0・null と readable の bool を確認する。
 インフェルノ・深紅の衣の `self_damage`（`DynamicVars["SelfDamage"].BaseValue`。0 と `IncrementSelfDamage` 後の値、wire の decimal、失敗）、
 威風堂々（Panache）の `cards_left`（`DynamicVars["CardsLeft"].IntValue`）と `already_applied`（private Data の bool。新規の 5・false、
 適用後の値、Instanced の独立、非表示の行、Data が null なら初期化せずに null・理由・warnings で `cards_left` は保持）、
-Markdown の `damage:` / `self damage:` / `cards left:` / `already applied: yes`、他のパワーにキーが無いことを検査する。
+Markdown の `damage:` / `self damage:` / `cards left:` / `already applied: yes`、他のパワーにキーが無いこと、
+private `PowerModel._dynamicVars` が null の 4 種で getter が作らず（初期化しない）null・理由・warnings になること（威風堂々の `already_applied` は保持）を検査する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。

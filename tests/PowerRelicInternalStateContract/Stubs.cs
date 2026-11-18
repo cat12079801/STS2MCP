@@ -47,8 +47,12 @@ namespace MegaCrit.Sts2.Core.Models
     public class PowerModel
     {
         private object? _internalData;
-        // v0.113.1 PowerModel.DynamicVars: built by DeepCloneFields on every live power.
-        public DynamicVars DynamicVars { get; } = new();
+        // v0.113.1 PowerModel._dynamicVars / DynamicVars: DeepCloneFields builds the set on every
+        // live power; the getter builds it when still null (the readers must not rely on that).
+        private Localization.DynamicVars.DynamicVarSet? _dynamicVars = new DynamicVars();
+        public DynamicVars DynamicVars => (DynamicVars)(_dynamicVars ??= new DynamicVars());
+        public void ClearDynamicVars() => _dynamicVars = null;
+        public bool DynamicVarsInitialized => _dynamicVars != null;
         public void SetData(object? data) => _internalData = data;
         public object? PeekData() => _internalData;
         public bool Skip;
@@ -95,14 +99,20 @@ namespace MegaCrit.Sts2.Core.Models
         public decimal BaseValue => ThrowBase ? throw new InvalidOperationException("base failed") : Value;
         public int IntValue => (int)BaseValue;
     }
-    public class DynamicVars
+    public class DynamicVars : Localization.DynamicVars.DynamicVarSet
     {
         public DynamicVar Block { get; set; } = new();
         public DynamicVar Gold { get; set; } = new();
-        // DynamicVarSet.Damage is _vars["Damage"]; the indexer throws KeyNotFoundException.
-        public Dictionary<string, DynamicVar> Vars = new();
-        public DynamicVar Damage => Vars["Damage"];
-        public DynamicVar this[string key] => Vars[key];
+    }
+}
+namespace MegaCrit.Sts2.Core.Localization.DynamicVars
+{
+    // v0.113.1 DynamicVarSet: Damage is _vars["Damage"]; the indexer throws KeyNotFoundException.
+    public class DynamicVarSet
+    {
+        public Dictionary<string, Models.DynamicVar> Vars = new();
+        public Models.DynamicVar Damage => Vars["Damage"];
+        public Models.DynamicVar this[string key] => Vars[key];
     }
 }
 namespace MegaCrit.Sts2.Core.Models.Powers

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using MegaCrit.Sts2.Core.Commands.Builders;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
 
@@ -56,20 +57,20 @@ public static partial class McpMod
                 break;
             // sts2#1019, v0.113.1 (sts2-a671e9ef): per-instance numbers the power's effect uses
             // that Amount does not hold. They act whatever the HUD shows, so every emitted row
-            // carries them. PowerModel.DynamicVars is built by DeepCloneFields on every live
-            // (mutable) power, so the getter only returns the set; a missing var is a failed
-            // read (null and a reason), never a default.
-            case TheBombPower bomb:
+            // carries them. The set is read from PowerModel._dynamicVars as it is (the getter
+            // builds it when null; DeepCloneFields always has on a live power): a null set or a
+            // missing var is a failed read (null and a reason), never a default.
+            case TheBombPower:
                 // TheBombPower is Instanced; Amount counts the turns left. SetDamage writes the
                 // damage to DynamicVars.Damage.BaseValue and BeforeSideTurnEnd deals that var
                 // when Amount reaches 1.
-                Read("damage", () => bomb.DynamicVars.Damage.BaseValue);
+                Read("damage", () => ReadPowerDynamicVarSet(power).Damage.BaseValue);
                 break;
             case InfernoPower:
             case CrimsonMantlePower:
                 // AfterPlayerTurnStart damages the owner by DynamicVars["SelfDamage"].BaseValue
                 // (IncrementSelfDamage raises it each time the card is played again).
-                Read("self_damage", () => power.DynamicVars["SelfDamage"].BaseValue);
+                Read("self_damage", () => ReadPowerDynamicVarSet(power)["SelfDamage"].BaseValue);
                 break;
             case PanachePower:
                 // PanachePower is Instanced. AfterCardPlayed counts CardsLeft down only once
@@ -77,7 +78,7 @@ public static partial class McpMod
                 // just sets it), deals Amount at 0 and resets CardsLeft to 5; AfterSideTurnEnd
                 // resets CardsLeft to 5 and leaves alreadyApplied as it is. DisplayAmount is
                 // CardsLeft.IntValue. Data is read as is, never initialized.
-                Read("cards_left", () => power.DynamicVars["CardsLeft"].IntValue);
+                Read("cards_left", () => ReadPowerDynamicVarSet(power)["CardsLeft"].IntValue);
                 Read("already_applied", () => ReadPowerDataField<bool>(power, "alreadyApplied"));
                 break;
         }
@@ -127,6 +128,10 @@ public static partial class McpMod
             });
         }
     }
+
+    /// <summary>PowerModel._dynamicVars as it is: never the lazily-building getter.</summary>
+    private static DynamicVarSet ReadPowerDynamicVarSet(PowerModel power)
+        => ReadDeclaredStateField<DynamicVarSet>(power, typeof(PowerModel), "_dynamicVars");
 
     // v0.113.1 (sts2-a671e9ef): PowerCmd.Apply sets PowerModel.Applier only on a new
     // instance (HexPower keeps InstanceType None, so FindExistingInstanceForStacking sends a

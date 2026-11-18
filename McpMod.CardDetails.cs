@@ -90,7 +90,8 @@ public static partial class McpMod
     /// CardModel.IsSlyThisTurn = Keywords has Sly || _hasSingleTurnSly (GiveSingleTurnSly, i.e.
     /// CardCmd.ApplySingleTurnSly). EndOfTurnCleanup clears both private flags and resets
     /// ExtraReplayThisTurn to 0; BaseReplayCount stays (SoldiersStew, Transfigure, HiddenGem,
-    /// SwordSagePower raise it). CardModel.GetEnchantedReplayCount =
+    /// SwordSagePower raise it; SwordSagePower.AfterRemoved also lowers it on SovereignBlade).
+    /// CardModel.GetEnchantedReplayCount =
     /// Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn) ?? the sum: the
     /// extra executions OnPlay gets from the card and its enchantment (Glam adds its Times
     /// while its Status is not Disabled, Spiral always adds Times), before other models'
