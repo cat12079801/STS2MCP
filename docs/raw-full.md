@@ -1344,7 +1344,7 @@ schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANA
 | `PANACHE_POWER` | `cards_left` | int（schema 7。同上） |
 | `PANACHE_POWER` | `already_applied` | bool（schema 7。同上） |
 | `DAMPEN_POWER` | `caster_combat_ids` | uint の配列（昇順）/ null（schema 8。可視性によらず付ける） |
-| `DAMPEN_POWER` | `downgraded_cards` | `[{"uid","uid_known","card_id","original_upgrade_level"}]` / null（schema 8。同上） |
+| `DAMPEN_POWER` | `downgraded_cards` | `[{"uid","uid_known","card_id","original_upgrade_level"}]` / null。uid が無い行だけ `uid_unavailable_reason`（schema 8。同上） |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1453,7 +1453,8 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
   `CurrentUpgradeLevel` を記録して `CardCmd.Downgrade`（`DowngradeInternal`。段階 0 に戻し、数値・コスト・キーワードを基底に戻す）する。
   付与後に手に入った札・付与後に強化された札は記録されない。
 - `DampenPower.AfterDeath` は死んだ creature が caster で、除去が防がれていなければ caster から外し、caster が空になれば弱化を外す。
-- `DampenPower.AfterRemoved` は記録した各札を元の段階の回数だけ `CardCmd.Upgrade` する。
+- `DampenPower.AfterRemoved` は記録した各札を元の段階の回数だけ `CardCmd.Upgrade` する（`IsUpgradable` でない札は飛ばす）。
+- `CombatManager.IsEnding` の間は `Downgrade`・`Upgrade` とも何もしない。
 
 空の配列は読めた空（理由・警告なし）。Data が無い・型違い・フィールドの欠落は、項目を null・行の `unavailable_reasons.<key>`・
 `warnings` の `status.DAMPEN_POWER.<key>` にする。Markdown は

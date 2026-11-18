@@ -758,6 +758,16 @@ public static partial class McpMod
         Check(builder.Contains("AttachPowerInternalState(entry, power, visibilityKnown && isVisible);") && builder.Split("AttachPowerInternalState(entry, power, visibilityKnown && isVisible);").Length == 3, "full and minimal power rows attach details conservatively");
         Check(builder.Contains("[\"status\"] = BuildPowersState(creature)") && builder.Contains("[\"status\"] = BuildPowersState(osty)") && builder.Contains("state[\"status\"] = BuildPowersState(creature);"), "player, enemy and pet share builder");
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
+        {
+            // Dampen's downgraded_cards only looks up uids (TryGetRegisteredCardUid): in BuildPlayerState
+            // the hand and pile rows, which register them, must be built before the status rows.
+            int playerStart = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState(Player player)", StringComparison.Ordinal);
+            int hand = builder.IndexOf("state[\"hand\"] = hand;", playerStart, StringComparison.Ordinal);
+            int playPile = builder.IndexOf("state[\"play_pile\"] = BuildPileCardList(", playerStart, StringComparison.Ordinal);
+            int status = builder.IndexOf("state[\"status\"] = BuildPowersState(creature);", playerStart, StringComparison.Ordinal);
+            Check(playerStart >= 0 && hand > playerStart && playPile > hand && status > playPile,
+                "BuildPlayerState builds the hand and pile rows before the status rows (Dampen uid lookup)");
+        }
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 8;"), "current schema is 8 (sts2#1031)");
