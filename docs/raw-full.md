@@ -926,8 +926,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
   パイルを見る修正（`FreeAttackPower`・`BrilliantScarf` など）は入らない。schema 4 までの手札のプレビューの
   `cost` は大域の修正が入らない値だったので、同じ札でも値が違い得る。
 - 戦闘の `ready` には表示用の `keywords`（hover tips）を出さない（schema 4 までの手札のプレビューにはあった）。
-- 戦闘の `ready` の `description`（と `name`）も、パイルの無い複製の素の本文で、筋力・脱力・札自身のエンチャント（例: テスカタラの残り火）の加算を含まない。強化後に読み直した手札の行の本文とは違い得る。機械が読む値は `dynamic_vars` を使う（2026-11-18 の実機確認で 85 組中 11 組がこの差）。
   強化後のキーワードは `local_keyword_ids` / `keyword_ids` で読む。
+- 戦闘の `ready` の `description`（と `name`）も、パイルの無い複製の素の本文で、筋力・脱力・札自身のエンチャント（例: テスカタラの残り火）の加算を含まない。強化後に読み直した手札の行の本文とは違い得る。機械が読む値は `dynamic_vars` を使う（2026-11-18 の実機確認で 85 組中 11 組がこの差）。
 - 戦闘外の画面（報酬・鍛冶の `card_select`・`hand_select` の `upgrade_select`・図鑑）の `upgrade_preview` は
   従来どおり `{ name, cost, star_cost, description, keywords }` で、`status` を持たない。
   戦闘中の `hand_select` の候補行も同じ従来の形のまま（同じ札の機械向けの値は `player.hand[]` にある）。
