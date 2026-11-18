@@ -244,8 +244,9 @@ public static partial class McpMod
                     creature.Side == CombatSide.Enemy && !creature.IsDead
                     // PotionModel.IsValidTarget, re-checked by UsePotionAction.ExecuteAction.
                     && potion.IsValidTarget(creature)
-                    // Hovering needs the creature's node.
-                    && room.GetCreatureNode(creature) != null
+                    // Hovering needs the creature's node, and an interactable one: NCreature.SetIsInteractableInternal
+                    // turns the hitbox's mouse filter off (e.g. ThievingHopper.EscapeMove / FatGremlin.FleeMove).
+                    && room.GetCreatureNode(creature) is { IsInteractable: true }
                     // NTargetManager.OnCreatureHovered: Hook.ShouldAllowTargeting (the refusal VFX is not played here).
                     && Hook.ShouldAllowTargeting(creature.CombatState!, creature, out _)
                     // NTargetManager._Process cancels the selection on a hovered creature that is not hittable.
@@ -279,7 +280,7 @@ public static partial class McpMod
                 Allowed = () =>
                     creature.IsPlayer && !creature.IsDead && potion.IsValidTarget(creature)
                     && (stateNodes.Any(n => GodotObject.IsInstanceValid(n) && ReferenceEquals(n.Player, target))
-                        || (room?.GetCreatureNode(creature) != null
+                        || (room?.GetCreatureNode(creature) is { IsInteractable: true }
                             && Hook.ShouldAllowTargeting(creature.CombatState!, creature, out _)
                             && creature.IsHittable))
             });

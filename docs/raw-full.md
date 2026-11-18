@@ -537,7 +537,7 @@ CombatId か monster が無い敵、2 体が同じ ID になった場合は、�
 | 8 | holder の private `_disabledUntilPotionRemoved`（`OpenPotionPopup`） | `holder_disabled` |
 | 9 | 公開 static の `NPotionPopup.CanEnableUseButton(Usage, canUseInCombatNow, PassesCustomUsabilityCheck)` をそのまま呼ぶ | 個別条件の false は `custom_check_failed`、Automatic は `automatic`。`None`・未知の使用区分は本体が例外を投げるので `unobserved:can_enable_use_button` |
 | 9a | CombatOnly の `canUseInCombatNow`（`RefreshButtons` の式を本体の順に）: `CombatManager.IsInProgress` → `CombatState.CurrentSide == Side` → `IsAlive` → `InACardSelectScreen`（`NPlayerHand.IsInCardSelection` か `NOverlayStack.Peek() is ICardSelectionScreen`）→ `PlayerActionsDisabled` | `outside_combat` / `not_player_turn` / `owner_dead` / `card_selection` / `actions_disabled`。AnyTime にはかけない |
-| 10 | 生きた popup（holder の private `_popup` が有効で `IsMarkedForRemoval` でない）が開いていれば `IsUsable` と照合。閉じた holder の `IsPotionUsable` は `_popup` を参照するので呼ばない | 食い違えば `unobserved:popup` |
+| 10 | 生きた popup（holder の private `_popup` が有効で `IsMarkedForRemoval` でない）が開いていれば `IsUsable` と照合。閉じた holder の `IsPotionUsable` は `_popup` を参照するので呼ばない。1〜9 で禁止が決まったときは popup を見ない（古いまま有効な popup が開いていても `false` と理由を返す） | 規則が許すのに popup が無効なら `unobserved:popup` |
 | 11 | 対象（下） | `targeting_blocked` / `no_valid_target` |
 
 **対象（`NPotionHolder.UsePotion` の分岐）。** AnyEnemy・TargetedNoCreature・`PotionModel.CanThrowAtAlly()`（AnyPlayer かつ複数人かつ戦闘中）は対象の選択へ、それ以外は直接使う。
@@ -548,18 +548,22 @@ CombatId か monster が無い敵、2 体が同じ ID になった場合は、�
   そうでなければ `no_valid_target`。
 - 選択を伴う場合、戦闘中は `NPotionHolder.ShouldCancelTargeting`（`NOverlayStack.ScreenCount > 0` か `NCapstoneContainer.InUse`）で選択がすぐ終わるので `targeting_blocked`。
 - AnyEnemy（戦闘中）: 所有者の `CombatState.Enemies` を本体の順に走査し、`NTargetManager.AllowedToTargetCreature`（敵側・死んでいない）、`PotionModel.IsValidTarget`、
-  `NCombatRoom.GetCreatureNode` が有る（ホバーにはノードが要る）、`Hook.ShouldAllowTargeting`（`OnCreatureHovered`。拒否の VFX は呼ばない）、`Creature.IsHittable`
+  `NCombatRoom.GetCreatureNode` が有り `NCreature.IsInteractable`（ホバーには操作できるノードが要る。`SetIsInteractableInternal` が hitbox のマウス入力を切る。例: `ThievingHopper.EscapeMove` / `FatGremlin.FleeMove`）、`Hook.ShouldAllowTargeting`（`OnCreatureHovered`。拒否の VFX は呼ばない）、`Creature.IsHittable`
   （`NTargetManager._Process` がホバー中の当てられない敵で選択を取り消す）をすべて通った敵だけ。0 体なら `no_valid_target`。戦闘外の AnyEnemy は `unobserved:target_type`。
 - TargetedNoCreature: 悪臭ポーション（戦闘外）だけ。`FoulPotion.GetFoulPotionMerchantTarget` が商人のボタンを返し `IsValidTarget(null)` なら `[]`、無ければ `no_valid_target`
   （在庫を開いていると的は無い。そもそも `PassesCustomUsabilityCheck` が false になり `custom_check_failed`）。それ以外は `unobserved:target_type`。
 - マルチで味方に投げる（AnyPlayer）: `RunState.Players` を順に、`AllowedToTargetCreature`（AnyPlayer）と `IsValidTarget` を満たし、`NMultiplayerPlayerStateContainer` の
-  private `_nodes` にその player のノードがあるか、creature のノードが `Hook.ShouldAllowTargeting` と `IsHittable` を通る player を `player:<player_id>` で。
+  private `_nodes` にその player のノードがあるか、creature のノードが `IsInteractable` で `Hook.ShouldAllowTargeting` と `IsHittable` を通る player を `player:<player_id>` で。
 
 可否は加算値・強化段階・同名の瓶の数と関係しない（同名 2 本も別スロットで別に判定する）。予約に成功しても消費は確定しない
 （`UsePotionAction.ExecuteAction` が空き・無効な対象で cancel し、`PotionModel.AfterUsageCanceled` が予約を外す）。
 
 **ゲームのボタンと MOD の受付は別。** 例えば AnyTime の瓶は手札の選択中・敵の手番でもボタンが有効（`can_use_now: true`）だが、
 MOD は戦闘中の `PlayerActionsDisabled` の間は `use_potion` を受けない。拒否は `expected_potion_id` 付きなら `potion_check.stage: "mod_acceptance"` で区別できる。
+
+**passive と非 passive。** 判定そのものは常に読むだけだが、非 passive の読み取りはショップの在庫を自動で開き（`NMerchantRoom.OpenInventory`）、
+`sellable_potions` のために閉じることもある（`CanSellPotionToMerchant`）。`player` はその後に組むので、非 passive の `player.potions[]` の可否は
+同じ読み取りが行った在庫の開閉の後の状態を表す（悪臭ポーションの `custom_check_failed` / `true` がそれで変わりうる）。在庫に触れない答えは `?passive=1` で読む。
 
 Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` | Use now: yes (no target)` / ` | Use now: no (理由)` / ` | Use now: unobserved (段: 理由)` を付ける（旧 state の行には付けない）。
 
@@ -3383,8 +3387,8 @@ With `expected_potion_id` (`cat12079801/sts2#1012`), on the game thread right be
 
 1. `identity` — the slot still holds a potion with that id.
 2. `can_use_now` — the [can-use-now verdict](#ポーションをいま使えるかplayerpotionsschema-11) read again now is `true` (`false` and `null` both refuse).
-3. `target` — `target` is one of `valid_target_entity_ids`, as written there (an enemy `entity_id`, `player:<player_id>`; a numeric `combat_id`
-   is not accepted). It may be omitted only for a potion used directly (the list is your own `player:<id>`) and must be omitted when the list is `[]`.
+3. `target` — `target` is one of `valid_target_entity_ids`, as written there (an enemy `entity_id`, `player:<player_id>`; a digits-only
+   `combat_id` is refused as a format error, not as a stale target). It may be omitted only for a potion used directly (the list is your own `player:<id>`) and must be omitted when the list is `[]`.
    No enemy is chosen for you and the shop inventory is not closed.
 4. `mod_acceptance` — the MOD's own conditions, separate from the game's button: combat-only potions only in the play phase, nothing while
    `PlayerActionsDisabled` in combat.

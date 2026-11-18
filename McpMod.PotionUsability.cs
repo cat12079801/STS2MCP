@@ -292,6 +292,9 @@ public static partial class McpMod
             if (v.TargetOptional && ids.Count == 1) { targetId = ids[0]; return null; }
             return $"{actualPotionId} needs a target: one of [{string.Join(", ", ids)}]; nothing was used";
         }
+        if (requestedTarget.Length > 0 && requestedTarget.All(char.IsAsciiDigit))
+            return $"'{requestedTarget}': with {ExpectedPotionIdKey} the target must be an entity_id from "
+                + "valid_target_entity_ids (combat_id is not accepted); nothing was used";
         if (!ids.Contains(requestedTarget, StringComparer.Ordinal))
             return $"'{requestedTarget}' is not a valid target for {actualPotionId} now "
                 + $"(valid: [{string.Join(", ", ids)}]); nothing was used - re-read state";

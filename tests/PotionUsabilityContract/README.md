@@ -18,12 +18,13 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 - 対象: 許可された敵だけを本体の列挙順で、ID 欠測・重複・候補の判定の例外は未観測、0 件は `no_valid_target`、選択の中断条件は `targeting_blocked`
 - 行の `unavailable_reasons`（既存の理由を保つ）とトップレベルの `warnings`（`player.potions.<slot>.can_use_now`）、wire の true / false / null / `[]`、Markdown
 - `use_potion` の `expected_potion_id`: 読取（無ければ従来どおり、空・非文字列は拒否）と照合（空き枠・差し替え・未観測・禁止・target の欠落と許可外・
+  数字だけの target〔combat_id〕は書式のエラー・
   全体効果への ID・直接使用の省略）、拒否の `potion_check`（ゲームのボタン可否と MOD の受付を `stage` で分ける）
 
 本番の state・action・Markdown・MCP サーバーへの配線はゲームの型が要るのでソース文字列で検査する:
 `BuildPlayerState` が所持スロットごとに `BuildPotionRow` を通すこと（マルチのローカルプレイヤーも同じ builder）、
 観測の経路が popup の生成・Refresh・選択の開始・拒否の VFX・enqueue・在庫の開閉を呼ばないこと、`NPotionPopup.CanEnableUseButton` を直接使うこと、
-敵が `IsValidTarget`・ノード・`Hook.ShouldAllowTargeting`・`IsHittable` を通り battle と同じ ID の registry を使うこと、
+敵が `IsValidTarget`・操作できるノード（`NCreature.IsInteractable`。味方のクリーチャー経路も）・`Hook.ShouldAllowTargeting`・`IsHittable` を通り battle と同じ ID の registry を使うこと、
 passive の `sellable_potions` が在庫を閉じないこと、照合付きの `use_potion` が最新の判定 → 照合 → MOD の受付 → enqueue の順で、敵の補完・在庫の操作をしないこと、
 従来の呼び出しの前に分岐すること、`potion_availability: 1`、schema 11。
 

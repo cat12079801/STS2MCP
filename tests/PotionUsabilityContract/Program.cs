@@ -231,7 +231,9 @@ namespace STS2_MCP
             Check(Guard("FIRE_POTION", PotionUsabilityVerdict.Banned("not_player_turn"), "NIBBIT_0", out _, out var s4)!.Contains("not_player_turn") && s4 == "can_use_now", "既知の禁止は理由付きで拒否");
             Check(Guard("FIRE_POTION", fireVerdict, null, out _, out var s5)!.Contains("needs a target") && s5 == "target", "単体敵は target を補完しない");
             Check(Guard("FIRE_POTION", fireVerdict, "NIBBIT_1", out _, out var s6)!.Contains("not a valid target") && s6 == "target", "死者・対象外の ID は拒否");
-            Check(Guard("FIRE_POTION", fireVerdict, "3", out _, out _) != null, "combat_id の数値は許可集合の ID でないので拒否（明示 ID のみ）");
+            var digits = Guard("FIRE_POTION", fireVerdict, "3", out var r3d, out var s3d);
+            Check(digits != null && digits.Contains("combat_id is not accepted") && !digits.Contains("re-read state") && r3d == null && s3d == "target",
+                "expected_potion_id 付きで数字だけの target は書式のエラー（combat_id は受けない。読み直しを促さない）");
             Check(Guard("FIRE_POTION", fireVerdict, "SHRINKER_BEETLE_0", out var r7, out _) == null && r7 == "SHRINKER_BEETLE_0", "許可集合の ID はそのまま使う");
             var ownerVerdict = DecidePotionUsability(new Probe().Reads);
             Check(Guard("FIRE_POTION", ownerVerdict, null, out var r8, out _) == null && r8 == "player:1", "直接使用は target を省略できる");
@@ -277,7 +279,10 @@ namespace STS2_MCP
                 Check(!observation.Contains(forbidden), $"観測は {forbidden} を呼ばない（popup 生成・Refresh・選択開始・VFX・enqueue・在庫の開閉なし）");
             Check(observation.Contains("NPotionPopup.CanEnableUseButton(usage, canUseInCombatNow, passes)"), "使用区分の分岐は本体の公開 static をそのまま使う");
             Check(observation.Contains("Hook.ShouldAllowTargeting(") && observation.Contains("creature.IsHittable") && observation.Contains("potion.IsValidTarget(creature)")
-                && observation.Contains("room.GetCreatureNode(creature) != null"), "敵は IsValidTarget・ノード・targeting・hitting の全部を通す");
+                && observation.Contains("room.GetCreatureNode(creature) is { IsInteractable: true }"), "敵は IsValidTarget・操作できるノード・targeting・hitting の全部を通す");
+            Check(!observation.Contains("GetCreatureNode(creature) != null")
+                && observation.Contains("room?.GetCreatureNode(creature) is { IsInteractable: true }"),
+                "ノードは存在だけでなく NCreature.IsInteractable（逃走中などはホバーできない）を要求する（敵・味方のクリーチャー経路とも）");
             Check(observation.Contains("RefreshEntityIdRegistry(combatState);") && observation.Contains("GetStableEntityId(creature)"), "敵 ID は battle と同じ registry");
             string nowSell = CodeOnly(Between(live, "internal static bool CanSellPotionToMerchantNow", "\n    }\n"));
             Check(!nowSell.Contains("TryCloseMerchantInventory") && !nowSell.Contains("ForceClick"), "passive の販売可否は在庫を閉じない");
