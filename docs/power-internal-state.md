@@ -118,7 +118,7 @@ Markdown は `(vigor attack: has command: no, attacker is owner: none, amount wh
 `warnings` の `status.HEX_POWER.applier_combat_id` を付ける。ID を補わない。
 付与元が死んでも参照は残る（呪術はふつう同時に外れて行ごと無くなる。除去が防がれて残った場合は、死んだ付与元の ID のまま）。
 付与元が生きているか・敵の一覧に居るかは、この ID を `enemies[]` の `combat_id` と照合して判断する。
-読取は `PowerModel.Applier` の getter（`AssertMutable` のあと `_applier` を返すだけ）と
+読取は `PowerModel.Applier` の getter（`_applier` を返すだけ。`AssertMutable` は setter のみで、getter の失敗の経路は防御）と
 `Creature.CombatId`（自動プロパティ）に限る。フックの呼び出しや書き換えはしない。
 Markdown は `(applier combat id: 3)`、付与元なしは `none`、読取失敗は `null (理由); applier readable: no`。
 `applier_readable=true` は Markdown で省略する。

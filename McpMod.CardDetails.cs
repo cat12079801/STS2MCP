@@ -54,8 +54,8 @@ public static partial class McpMod
         // Ethereal goes with it; the card's own (Local: canonical + CardCmd.ApplyKeyword
         // from Music Box, Ghost Seed...) Ethereal stays. Only Hexed cards get the key; a
         // card with no or another affliction omits it. GetKeywordsWithSources(Local) skips
-        // Hook.ModifyKeywordsInCombat and returns the card's own set (created from
-        // CanonicalKeywords on first read, as every keyword read does); it is only queried.
+        // Hook.ModifyKeywordsInCombat and returns the card's own set; a mutable combat card already built it in
+        // CardModel.DeepCloneFields (MutableClone), so this read creates nothing; it is only queried.
         if (hexed)
             ReadCardDetailValue(state, reasons, "local_ethereal",
                 () => card.GetKeywordsWithSources(KeywordSources.Local).Contains(CardKeyword.Ethereal));

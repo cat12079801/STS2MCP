@@ -96,8 +96,8 @@ public static partial class McpMod
     // v0.113.1 (sts2-a671e9ef): PowerCmd.Apply sets PowerModel.Applier only on a new
     // instance (HexPower keeps InstanceType None, so FindExistingInstanceForStacking sends a
     // re-apply to ModifyAmount and the first applier stays); SpectralKnight.HexMove passes its own Creature. The id is the same
-    // Creature.CombatId as enemies[].combat_id. The public getter only runs
-    // AssertMutable() before returning _applier; nothing is initialized or written.
+    // Creature.CombatId as enemies[].combat_id. The public getter only returns
+    // _applier (AssertMutable is on the setter only; the failure path is defensive); nothing is initialized or written.
     // applier_readable=true with a null id is a known "no applier", distinct from a
     // failed read (readable=false, null id, reason). An applier without a CombatId is a
     // failed read too: no id is substituted.

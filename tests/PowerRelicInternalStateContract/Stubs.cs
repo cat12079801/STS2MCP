@@ -53,13 +53,13 @@ namespace MegaCrit.Sts2.Core.Models
         public bool ThrowSkip;
         public bool SkipNextDurationTick => ThrowSkip ? throw new InvalidOperationException("skip failed") : Skip;
         public Entities.Creatures.Creature? Target { get; set; }
-        // Real getter: AssertMutable() then _applier (throws only on a canonical model).
+        // Real getter: returns _applier only (AssertMutable is on the setter); the throw path is defensive.
         public bool ThrowApplier;
         public int ApplierReads;
         private Entities.Creatures.Creature? _applier;
         public Entities.Creatures.Creature? Applier
         {
-            get { ApplierReads++; return ThrowApplier ? throw new InvalidOperationException("canonical applier") : _applier; }
+            get { ApplierReads++; return ThrowApplier ? throw new InvalidOperationException("applier failed") : _applier; }
             set => _applier = value;
         }
         public Entities.Creatures.Creature? PeekApplier() => _applier;

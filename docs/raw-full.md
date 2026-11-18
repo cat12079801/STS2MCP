@@ -777,7 +777,7 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   災禍の読取に失敗した札にもキーは無い（`affliction` が null と理由になるので、呪詛かどうかが未確認）。
   `local_ethereal` 自体の読取失敗は null と `unavailable_reasons.local_ethereal`・`warnings`。
   `Local` だけを指定するので `Hook.ModifyKeywordsInCombat` は呼ばれず、キーワードの付け外しもしない
-  （札の Local の集合は、最初の読取で `CanonicalKeywords` から作られる。他のキーワードの読取と同じ）。
+  （戦闘中の札は変更可能なモデルで、Local の集合は `MutableClone` → `CardModel.DeepCloneFields` で作成済みなので、この読取は何も作らない）。
   例は `{ "affliction": { "id": "HEXED", "amount": 2 }, "local_ethereal": false }`。
   Markdown は災禍の行に `affliction HEXED (amount 2, local ethereal no)`。
 - `enchantment` は `CardModel.Enchantment` の `{ id, amount, status }`。
