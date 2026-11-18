@@ -73,8 +73,15 @@ public static partial class McpMod
     ///    candidate's own values). Existing fields keep their meaning. Like 6, the bump is
     ///    deliberate although additive: the engine requires these inputs on every row and gates
     ///    on the version.
+    ///
+    /// 8: the Dampen input contract (sts2#1031). DAMPEN_POWER status rows carry caster_combat_ids
+    ///    (DampenPower.Data.casters as enemies[].combat_id) and downgraded_cards (Data's
+    ///    card -> original upgrade level map, keyed by the combat uid registry; a card the
+    ///    registry has not seen is reported per row, not given a new uid). Existing fields keep
+    ///    their meaning. Like 6 and 7, the bump is deliberate although additive: the engine
+    ///    requires these inputs and gates on the version.
     /// </summary>
-    public const int StateSchemaVersion = 7;
+    public const int StateSchemaVersion = 8;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";

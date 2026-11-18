@@ -81,6 +81,17 @@ public static partial class McpMod
                 Read("cards_left", () => ReadPowerDynamicVarSet(power)["CardsLeft"].IntValue);
                 Read("already_applied", () => ReadPowerDataField<bool>(power, "alreadyApplied"));
                 break;
+            case DampenPower:
+                // sts2#1031, v0.113.1 (sts2-a671e9ef): private DampenPower.Data. MagiKnight.DampenMove
+                // calls AddCaster (casters.Add) on the target's existing power, or on a new one it
+                // then applies; AfterApplied records every upgraded combat card's
+                // CurrentUpgradeLevel and downgrades it; AfterDeath drops a dead caster (unless
+                // removal was prevented) and removes the power when none is left; AfterRemoved
+                // upgrades each recorded card that many times. Removal does not hang on the HUD,
+                // so every emitted row carries both. Data is read as is, never initialized.
+                Read("caster_combat_ids", () => ReadDampenCasterCombatIds(power));
+                Read("downgraded_cards", () => ReadDampenDowngradedCards(power, context));
+                break;
         }
 
         // Hidden bookkeeping powers have no observable application history.
@@ -258,6 +269,64 @@ public static partial class McpMod
         // tracked attack). Never initialize Data or derive the reference from counts
         // or history. Reuse the hand/pile/history registry.
         return field.GetValue(data) is CardModel card ? GetStableCardUid(card) : null;
+    }
+
+    // Creature.CombatId of each Data.casters entry, the same id as enemies[].combat_id, in
+    // ascending order (HashSet order is not part of the game state). A caster without a
+    // CombatId fails the whole read: no id is substituted and no caster is dropped.
+    private static List<uint> ReadDampenCasterCombatIds(PowerModel power)
+    {
+        var casters = ReadPowerDataField<HashSet<Creature>>(power, "casters");
+        var ids = new List<uint>(casters.Count);
+        foreach (var creature in casters)
+            ids.Add(creature.CombatId ?? throw new InvalidOperationException("caster に CombatId がありません"));
+        ids.Sort();
+        return ids;
+    }
+
+    // Data.downgradedCardsToOldUpgradeLevels as rows. The card is matched to the uid this
+    // combat's registry already gave it (pile rows are built before status rows); a card
+    // the registry has not seen gets uid=null, uid_known=false and a reason instead of a
+    // freshly minted uid. Rows are sorted by uid (then card id and level for unknown
+    // ones): the dictionary's insertion order follows PlayerCombatState.AllCards and so
+    // the hidden draw order.
+    private static List<Dictionary<string, object?>> ReadDampenDowngradedCards(PowerModel power, string context)
+    {
+        var levels = ReadPowerDataField<Dictionary<CardModel, int>>(power, "downgradedCardsToOldUpgradeLevels");
+        var rows = new List<Dictionary<string, object?>>(levels.Count);
+        foreach (var (card, level) in levels)
+        {
+            string? cardId = SafeGetText(() => card.Id.Entry);
+            var row = new Dictionary<string, object?>
+            {
+                ["uid"] = null,
+                ["uid_known"] = false,
+                ["card_id"] = cardId,
+                ["original_upgrade_level"] = level
+            };
+            if (TryGetRegisteredCardUid(card, out string uid))
+            {
+                row["uid"] = uid;
+                row["uid_known"] = true;
+            }
+            else
+            {
+                string reason = $"{cardId ?? "unknown"} は戦闘の uid registry に無い（新たに採番しない）";
+                row["uid_unavailable_reason"] = reason;
+                Warn($"{context}.downgraded_cards.uid", reason);
+            }
+            rows.Add(row);
+        }
+        rows.Sort((a, b) =>
+        {
+            bool aKnown = a["uid_known"] is true, bKnown = b["uid_known"] is true;
+            if (aKnown != bKnown) return aKnown ? -1 : 1;
+            int byUid = StringComparer.Ordinal.Compare(a["uid"] as string, b["uid"] as string);
+            if (byUid != 0) return byUid;
+            int byId = StringComparer.Ordinal.Compare(a["card_id"] as string, b["card_id"] as string);
+            return byId != 0 ? byId : ((int)a["original_upgrade_level"]!).CompareTo((int)b["original_upgrade_level"]!);
+        });
+        return rows;
     }
 
     private static List<Dictionary<string, object?>> ReadStolenPowerAmounts(PowerModel power, string field)

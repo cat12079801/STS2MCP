@@ -217,6 +217,9 @@ async def get_game_state(format: str = "markdown") -> str:
     威風堂々は cards_left と already_applied。戦闘中の選択画面の候補行は combat_instance
     （パイルの札は source=pile と uid、パイルに無い候補は source=detached と values）。
     false・0 は実値、読めない値は null・理由・warnings。
+    schema 8 で弱化（DAMPEN_POWER）の status 行に caster_combat_ids（付与した敵の
+    enemies[].combat_id の昇順）と downgraded_cards（{uid, uid_known, card_id,
+    original_upgrade_level}。uid registry に無い札は uid=null・uid_known=false）を足した。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 

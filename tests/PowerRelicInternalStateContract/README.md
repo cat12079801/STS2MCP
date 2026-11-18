@@ -61,12 +61,17 @@ wire の uint 0・null と readable の bool を確認する。
 適用後の値、Instanced の独立、非表示の行、Data が null なら初期化せずに null・理由・warnings で `cards_left` は保持）、
 Markdown の `damage:` / `self damage:` / `cards left:` / `already applied: yes`、他のパワーにキーが無いこと、
 private `PowerModel._dynamicVars` が null の 4 種で getter が作らず（初期化しない）null・理由・warnings になること（威風堂々の `already_applied` は保持）を検査する。
+弱化の入力（`cat12079801/sts2#1031`、schema 8）: `DampenPower` の private Data の `caster_combat_ids`
+（caster 0・1・2 体、昇順、CombatId 0 も実値、snapshot の独立、非表示の行にも付く、`CombatId` の無い caster は項目の失敗で ID を補わない）と
+`downgraded_cards`（registry の uid・`card_id`・元の段階、辞書の挿入順でなく uid 順、registry に無い札は行ごとに
+`uid=null`・`uid_known=false`・理由・warnings で項目は失敗にせず、読取で uid を採番しない）、Markdown、wire、
+Data が null・フィールドの欠落・型違いは null・理由・warnings で Data を初期化しないこと、読取で Data・中身・`_dynamicVars`・`Applier` に触れないことを検査する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。
 
 巨大な state builder はソース文字列で、通常行・説明失敗時の最小行、player・敵・ペット、
-マルチの共通経路、戦闘中だけのレリック出力、Markdown の配線、schema 7 を検査する。
+マルチの共通経路、戦闘中だけのレリック出力、Markdown の配線、schema 8 を検査する。
 フィールドと getter はゲーム境界のダブル。効果の適用やリセットを MOD 側では模倣しない。
 毛皮のコートは v0.113.0 の戦闘フックどおり、座標を比較し act の条件を足さない。
 実ゲームに対する 0警告0エラーのビルドを別途実行し、ゲーム起動・mods への配置はしない。

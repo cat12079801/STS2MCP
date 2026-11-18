@@ -17,7 +17,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/bi
 - ローカルのプレイヤーが居ない（`Creature.CombatState` が null・`LocalContext.GetMe` が null・例外）ときは `resolved_damage` だけ null。補正前の値を解決値として出さない。
 - `DamageCalc` が null・例外のときは `base_damage` と `resolved_damage` が null、`Repeats` が負・例外のときは `hits` が null。理由・個体と意図の位置を識別する warnings・Markdown の表示・wire の null。
 - 読取で `DamageCalc` を差し替えないこと、前回の snapshot の独立。
-- 意図ごとの配線（ラベルの try より前）・協力プレイの共通 builder・Markdown の配線・現行の schema 7 をソース文字列で確認。
+- 意図ごとの配線（ラベルの try より前）・協力プレイの共通 builder・Markdown の配線・現行の schema 8 をソース文字列で確認。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `AttackIntent.DamageCalc` / `Repeats` / `GetSingleDamage`、`SingleAttackIntent`・`MultiAttackIntent`・`DeathBlowIntent` の
 コンストラクタと `Repeats`、`Hook.ModifyDamage` / `ModifyDamageInternal`、`StrengthPower.ModifyDamageAdditive`、

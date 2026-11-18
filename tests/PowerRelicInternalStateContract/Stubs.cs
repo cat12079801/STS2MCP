@@ -148,6 +148,39 @@ namespace MegaCrit.Sts2.Core.Models.Powers
         public bool PeekApplied() => ((Data)PeekData()!).alreadyApplied;
     }
     public class MissingPanacheDataPower : PanachePower { public MissingPanacheDataPower() => SetData(null); }
+    // v0.113.1 (sts2#1031) DampenPower: private Data { readonly HashSet<Creature> casters;
+    // readonly Dictionary<CardModel, int> downgradedCardsToOldUpgradeLevels }. AddCaster is the
+    // game's public method (MagiKnight.DampenMove); Record is fixture setup for AfterApplied's
+    // map. Neither is a simulated effect.
+    public class DampenPower : PowerModel
+    {
+        private class Data
+        {
+            public readonly HashSet<Creature> casters = new();
+            public readonly Dictionary<CardModel, int> downgradedCardsToOldUpgradeLevels = new();
+        }
+        public DampenPower() => SetData(new Data());
+        public void AddCaster(Creature creature) => ((Data)PeekData()!).casters.Add(creature);
+        public void RemoveCaster(Creature creature) => ((Data)PeekData()!).casters.Remove(creature);
+        public void Record(CardModel card, int level) => ((Data)PeekData()!).downgradedCardsToOldUpgradeLevels.Add(card, level);
+        public int PeekCasterCount() => ((Data)PeekData()!).casters.Count;
+        public int PeekRecordCount() => ((Data)PeekData()!).downgradedCardsToOldUpgradeLevels.Count;
+    }
+    public class MissingDampenDataPower : DampenPower { public MissingDampenDataPower() => SetData(null); }
+    public class WrongDampenCastersFieldPower : DampenPower
+    {
+        private class Data
+        {
+            public List<Creature> casters = new();
+            public readonly Dictionary<CardModel, int> downgradedCardsToOldUpgradeLevels = new();
+        }
+        public WrongDampenCastersFieldPower() => SetData(new Data());
+    }
+    public class MissingDampenMapFieldPower : DampenPower
+    {
+        private class Data { public readonly HashSet<Creature> casters = new(); }
+        public MissingDampenMapFieldPower() => SetData(new Data());
+    }
     // v0.113.1: sealed, Single; AfterDeath removes it when the dying creature is Applier.
     public class HexPower : PowerModel { }
     // v0.113.1 RitualPower: private bool _wasJustAppliedByEnemy（AfterApplied で true、AfterSideTurnEnd で false）。

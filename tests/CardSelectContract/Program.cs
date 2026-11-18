@@ -406,7 +406,7 @@ namespace STS2_MCP
             // Lightweight integration assertions for entry points not linked into this
             // small boundary project (the entire state/action builders depend on Godot).
             var sources = Path.Combine(AppContext.BaseDirectory, "Sources");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 7;"), "published schema is 7 (sts2#1019)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 8;"), "published schema is 8 (sts2#1031)");
             var stateSource = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             Check(stateSource.Contains("state[\"cards\"] = BuildCardSelectCardRows(screen, selection);") && !stateSource.Contains("selected_outside_grid"), "state uses linked rows and removes old field");
             var actionSource = File.ReadAllText(Path.Combine(sources, "McpMod.Actions.cs"));

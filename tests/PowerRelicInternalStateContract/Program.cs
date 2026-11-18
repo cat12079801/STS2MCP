@@ -126,6 +126,122 @@ public static partial class McpMod
         }
     }
 
+    // sts2#1031: DampenPower.Data (casters, downgraded cards -> original upgrade level).
+    private static void RunDampenContract()
+    {
+        var options = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        BeginStateWarnings();
+        var strike = new CardModel("STRIKE_R");
+        var bash = new CardModel("BASH");
+        var owner = new Player();
+        owner.Deck.Cards.Add(strike);
+        owner.Deck.Cards.Add(bash);
+        RefreshCardUidRegistry(new CombatState { Players = [owner] });
+        var strikeCombat = new CardModel("STRIKE_R") { DeckVersion = strike };
+        var bashCombat = new CardModel("BASH") { DeckVersion = bash };
+        // Pile rows are built before status rows; this stands in for them.
+        string strikeUid = GetStableCardUid(strikeCombat), bashUid = GetStableCardUid(bashCombat);
+
+        var dampen = new DampenPower();
+        object? data = dampen.PeekData();
+        var empty = Power(dampen);
+        Check(empty["caster_combat_ids"] is List<uint> none && none.Count == 0 && empty["downgraded_cards"] is List<Dictionary<string, object?>> noCards && noCards.Count == 0
+            && !empty.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "Dampen: 0 casters and an empty map are a readable empty, no reason or warning");
+        Check(FormatPowerInternalState(empty).Contains("caster combat ids: none") && FormatPowerInternalState(empty).Contains("downgraded cards: none"), "Dampen: empty markdown is none");
+
+        var knight = new Creature { CombatId = 0 };
+        dampen.AddCaster(knight);
+        dampen.Record(strikeCombat, 1);
+        dampen.Record(bashCombat, 1);
+        var one = Power(dampen);
+        Check(one["caster_combat_ids"] is List<uint> oneIds && oneIds.SequenceEqual(new uint[] { 0 }), "Dampen: one caster, CombatId 0 is a real id");
+        var cards = (List<Dictionary<string, object?>>)one["downgraded_cards"]!;
+        Check(cards.Count == 2 && Equals(cards[0]["uid"], bashUid) && Equals(cards[1]["uid"], strikeUid)
+            && string.CompareOrdinal(bashUid, strikeUid) < 0, "Dampen: rows sorted by uid, not by the map's insertion (AllCards) order");
+        Check(cards.All(r => r["uid_known"] is true && Equals(r["original_upgrade_level"], 1) && !r.ContainsKey("uid_unavailable_reason"))
+            && Equals(cards[0]["card_id"], "BASH") && Equals(cards[1]["card_id"], "STRIKE_R"), "Dampen: registry uid, card id and original level per row");
+        Check(FormatPowerInternalState(one).Contains("caster combat ids: 0") && FormatPowerInternalState(one).Contains($"downgraded cards: {bashUid} from +1, {strikeUid} from +1"), "Dampen markdown");
+
+        var second = new Creature { CombatId = 5 };
+        var first = new Creature { CombatId = 2 };
+        dampen.RemoveCaster(knight);
+        dampen.AddCaster(second);
+        dampen.AddCaster(first);
+        var two = Power(dampen);
+        Check(two["caster_combat_ids"] is List<uint> twoIds && twoIds.SequenceEqual(new uint[] { 2, 5 }), "Dampen: two casters in ascending combat_id order");
+        Check(one["caster_combat_ids"] is List<uint> kept && kept.SequenceEqual(new uint[] { 0 }), "Dampen: snapshot independent of later caster changes");
+        Check(Power(dampen, false)["caster_combat_ids"] is List<uint> hiddenIds && hiddenIds.Count == 2 && Power(dampen, false)["downgraded_cards"] is List<Dictionary<string, object?>> { Count: 2 }
+            && !Power(dampen, false).ContainsKey("skip_next_duration_tick"), "Dampen: hidden rows carry both fields");
+        Check(FormatPowerInternalState(two).Contains("caster combat ids: 2, 5"), "Dampen: two casters markdown");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(two, options)))
+        {
+            var ids = json.RootElement.GetProperty("caster_combat_ids");
+            var row = json.RootElement.GetProperty("downgraded_cards")[0];
+            Check(ids.GetArrayLength() == 2 && ids[0].GetUInt32() == 2 && row.GetProperty("uid").GetString() == bashUid
+                && row.GetProperty("uid_known").GetBoolean() && row.GetProperty("original_upgrade_level").GetInt32() == 1 && row.GetProperty("card_id").GetString() == "BASH",
+                "Dampen: wire array of uint and rows");
+        }
+
+        // A card the registry has never seen: reported per row, never given a uid.
+        var unseen = new CardModel("INFLAME");
+        dampen.Record(unseen, 2);
+        var withUnseen = Power(dampen);
+        var unseenRows = (List<Dictionary<string, object?>>)withUnseen["downgraded_cards"]!;
+        var unseenRow = unseenRows[^1];
+        Check(unseenRows.Count == 3 && unseenRow["uid"] == null && unseenRow["uid_known"] is false && Equals(unseenRow["card_id"], "INFLAME")
+            && Equals(unseenRow["original_upgrade_level"], 2) && unseenRow["uid_unavailable_reason"] is string reason && reason.Contains("INFLAME"),
+            "Dampen: an unregistered card keeps its level with uid=null, uid_known=false and a reason; it sorts after known uids");
+        Check(unseenRows.Take(2).All(r => r["uid_known"] is true) && !withUnseen.ContainsKey("unavailable_reasons"), "Dampen: a missing uid does not fail the field or the other rows");
+        Check(_stateWarnings.Any(w => w.StartsWith("status.DampenPower.downgraded_cards.uid:") && w.Contains("INFLAME")), "Dampen: a missing uid is a warning");
+        Check(!TryGetRegisteredCardUid(unseen, out _), "Dampen: the read does not register a uid for the unseen card");
+        Check(FormatPowerInternalState(withUnseen).Contains("INFLAME (uid unknown) from +2"), "Dampen: unknown uid markdown");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(withUnseen, options)))
+        {
+            var row = json.RootElement.GetProperty("downgraded_cards")[2];
+            Check(row.GetProperty("uid").ValueKind == JsonValueKind.Null && !row.GetProperty("uid_known").GetBoolean() && row.GetProperty("original_upgrade_level").GetInt32() == 2
+                && row.GetProperty("uid_unavailable_reason").GetString()!.Contains("INFLAME"),
+                "Dampen: the production wire keeps the explicit null uid, uid_known=false, the level and the reason");
+        }
+
+        // No side effects: Data, its contents, the var set and the registry stay as they are.
+        dampen.ClearDynamicVars();
+        Power(dampen);
+        Check(ReferenceEquals(dampen.PeekData(), data) && dampen.PeekCasterCount() == 2 && dampen.PeekRecordCount() == 3, "Dampen: read never replaces or mutates Data");
+        Check(!dampen.DynamicVarsInitialized && dampen.ApplierReads == 0, "Dampen: read builds no _dynamicVars and reads no Applier");
+
+        // A caster without a CombatId fails casters only; no id is substituted.
+        var noId = new Creature();
+        dampen.AddCaster(noId);
+        var badCaster = Power(dampen);
+        Unknown(badCaster, "caster_combat_ids", "status.DampenPower");
+        Check(badCaster["downgraded_cards"] is List<Dictionary<string, object?>> { Count: 3 } && FormatPowerInternalState(badCaster).Contains("caster combat ids: null ("), "Dampen: a caster failure keeps downgraded_cards");
+
+        // Data null: both fields fail and Data is never initialized.
+        BeginStateWarnings();
+        var nullData = new DampenPower();
+        nullData.SetData(null);
+        var nullRow = Power(nullData);
+        Unknown(nullRow, "caster_combat_ids", "status.DampenPower");
+        Unknown(nullRow, "downgraded_cards", "status.DampenPower");
+        Check(nullData.PeekData() == null && nullRow["skip_next_duration_tick"] is false && Equals(nullRow["amount"], 1), "Dampen: null Data is not initialized; other fields kept");
+        Check(FormatPowerInternalState(nullRow).Contains("downgraded cards: null ("), "Dampen: failed markdown");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(Power(new MissingDampenDataPower()), options)))
+            Check(json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("caster_combat_ids", out _)
+                && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("downgraded_cards", out _), "Dampen: wire reasons for null Data");
+        var wrongCasters = Power(new WrongDampenCastersFieldPower());
+        Unknown(wrongCasters, "caster_combat_ids", "status.WrongDampenCastersFieldPower");
+        Check(wrongCasters["downgraded_cards"] is List<Dictionary<string, object?>> { Count: 0 }, "Dampen: a wrong casters type fails only casters");
+        var missingMap = Power(new MissingDampenMapFieldPower());
+        Unknown(missingMap, "downgraded_cards", "status.MissingDampenMapFieldPower");
+        Check(missingMap["caster_combat_ids"] is List<uint> { Count: 0 }, "Dampen: a missing map field fails only downgraded_cards");
+        Check(!Power(new ToricToughnessPower()).ContainsKey("caster_combat_ids") && !Power(new PanachePower()).ContainsKey("downgraded_cards"), "other powers carry no Dampen keys");
+    }
+
     public static void Main()
     {
         BeginStateWarnings();
@@ -630,6 +746,7 @@ public static partial class McpMod
                 "failed Vigor survives production wire as readable=false, null and row reason");
         }
         RunCardEffectPowerContract();
+        RunDampenContract();
         var response = new Dictionary<string, object?>();
         EndStateWarnings(response);
         Check(response.ContainsKey("warnings"), "warnings attached to surviving response");
@@ -643,7 +760,7 @@ public static partial class McpMod
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 7;"), "current schema is 7 (sts2#1019)");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 8;"), "current schema is 8 (sts2#1031)");
         Console.WriteLine($"PASS: {Checks} power/relic internal-state contract checks");
     }
 }

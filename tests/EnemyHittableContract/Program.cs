@@ -68,7 +68,7 @@ namespace STS2_MCP
             Check(list[..list.IndexOf("return enemies;", StringComparison.Ordinal)].Contains("enemies.Add(BuildEnemyState(creature))"), "列挙される全ての敵（復活待ちの死亡個体を含む）が同じ builder を通る");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("battle[\"enemies\"] = BuildEnemyList(combatState)"), "マルチも同じ");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("{FormatEnemyHittable(enemy)}"), "Markdown の HP 行に配線");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 7;"), "現行の schema は 7（sts2#1019）");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 8;"), "現行の schema は 8（sts2#1031）");
             Console.WriteLine($"EnemyHittableContract: {Checks} checks passed");
         }
     }

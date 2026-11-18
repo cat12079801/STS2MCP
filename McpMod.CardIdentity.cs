@@ -23,6 +23,13 @@ public static partial class McpMod
     /// </summary>
     internal static string GetStableCardUid(CardModel card) => _cardUidRegistry.GetUid(card);
 
+    /// <summary>
+    /// The uid this combat's registry already gave the instance, without assigning one.
+    /// For references that must not mint a uid for a card no state row has shown.
+    /// </summary>
+    internal static bool TryGetRegisteredCardUid(CardModel card, out string uid) =>
+        _cardUidRegistry.TryGetUid(card, out uid);
+
     internal static void RefreshCardUidRegistry(ICombatState combatState) =>
         _cardUidRegistry.RefreshCombat(combatState);
 
@@ -79,6 +86,13 @@ public static partial class McpMod
             } while (!_issuedUids.Add(uid));
             _uids.Add(card, uid);
             return uid;
+        }
+
+        internal bool TryGetUid(CardModel card, out string uid)
+        {
+            if (_uids.TryGetValue(card, out var existing)) { uid = existing; return true; }
+            uid = "";
+            return false;
         }
 
         internal void RefreshCombat(ICombatState combatState)

@@ -275,7 +275,7 @@ namespace STS2_MCP
             int nullGuard = actions.IndexOf("if (holders[index].CardModel == null)", StringComparison.Ordinal);
             int reveal = actions.IndexOf("RevealCardSelectScreen(chooseScreen, revealed)", StringComparison.Ordinal);
             Check(nullGuard > 0 && nullGuard < reveal, "CardModel の無い holder は覆いを外す前に拒否する");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 7;"), "現行の schema は 7（sts2#1019）");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 8;"), "現行の schema は 8（sts2#1031）");
             Console.WriteLine($"ChooseCardContract: {Checks} checks passed");
         }
     }

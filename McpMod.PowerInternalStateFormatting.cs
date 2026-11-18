@@ -45,7 +45,25 @@ public static partial class McpMod
         }
         if (state.GetValueOrDefault("vigor_attack") is Dictionary<string, object?> vigor)
             parts.Add("vigor attack: " + FormatVigorAttack(vigor, reasons));
+        // Dampen: an empty set/map is shown as "none", a failed read as "null (reason)".
+        if (state.TryGetValue("caster_combat_ids", out var casters))
+            parts.Add("caster combat ids: " + (casters is List<uint> ids
+                ? (ids.Count == 0 ? "none" : string.Join(", ", ids.Select(id => id.ToString(CultureInfo.InvariantCulture))))
+                : $"null ({reasons?.GetValueOrDefault("caster_combat_ids") ?? "unavailable"})"));
+        if (state.TryGetValue("downgraded_cards", out var downgraded))
+            parts.Add("downgraded cards: " + (downgraded is List<Dictionary<string, object?>> rows
+                ? (rows.Count == 0 ? "none" : string.Join(", ", rows.Select(FormatDampenDowngradedCard)))
+                : $"null ({reasons?.GetValueOrDefault("downgraded_cards") ?? "unavailable"})"));
         return parts.Count == 0 ? "" : " (" + string.Join("; ", parts) + ")";
+    }
+
+    // "STRIKE_R#0 from +1"; a card the uid registry has not seen shows its id and "uid unknown".
+    private static string FormatDampenDowngradedCard(Dictionary<string, object?> row)
+    {
+        string level = Convert.ToString(row.GetValueOrDefault("original_upgrade_level"), CultureInfo.InvariantCulture) ?? "?";
+        return row.GetValueOrDefault("uid") is string uid
+            ? $"{uid} from +{level}"
+            : $"{row.GetValueOrDefault("card_id") ?? "unknown"} (uid unknown) from +{level}";
     }
 
     // Unbound reads as "has command: no, attacker is owner: none"; a failed read shows

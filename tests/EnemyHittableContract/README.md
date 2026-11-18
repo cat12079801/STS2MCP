@@ -11,7 +11,7 @@ HP・alive と独立に設定して、builder が getter を 1 回読んだ値�
 （生存で false、死亡で true の組み合わせも本体の答えのまま）、読取失敗の null・理由（既存の理由を保つ）・敵ごとの warning、
 wire の true / false / null、Markdown の yes / no / null（理由）と旧 state で何も補わないことを検査する。
 `BuildEnemyState` が生死の分岐の前に全行へ付けること、`BuildEnemyList` の全行とマルチが同じ builder を通ること、
-Markdown の配線、schema 7 は本番ソースの文字列検査。
+Markdown の配線、schema 8 は本番ソースの文字列検査。
 
 実機（調整役が v0.113.1 の検証用ランで確認する）:
 

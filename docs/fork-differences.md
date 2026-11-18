@@ -20,11 +20,12 @@
 
 - **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6 と 7）。現在は `7`。
+- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6・7・8）。現在は `8`。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
   5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
   6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）、
-  7 = 札の効果の入力契約（同じく追加だけ。`cat12079801/sts2#1019`）
+  7 = 札の効果の入力契約（同じく追加だけ。`cat12079801/sts2#1019`）、
+  8 = 弱化（Dampen）の入力契約（同じく追加だけ。`cat12079801/sts2#1031`）
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
@@ -105,7 +106,7 @@
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
-  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。爆弾の `damage`（`SetDamage` の威力）、インフェルノ・深紅の衣の `self_damage`、威風堂々（Panache）の `cards_left` / `already_applied`（`cat12079801/sts2#1019`、schema 7）も可視性によらず付ける。版は上げていない（schema 4 のときの追加）。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
+  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。爆弾の `damage`（`SetDamage` の威力）、インフェルノ・深紅の衣の `self_damage`、威風堂々（Panache）の `cards_left` / `already_applied`（`cat12079801/sts2#1019`、schema 7）も可視性によらず付ける。マギナイトの弱化（`DAMPEN_POWER`）の private `DampenPower.Data` を、付与した敵の `caster_combat_ids`（`enemies[].combat_id`、昇順）と、弱化で下げた札の `downgraded_cards`（戦闘の uid registry の uid と元の強化段階。registry に無い札は uid を新たに振らず、行ごとに `uid_known=false` と理由）として可視性によらず付ける（`cat12079801/sts2#1031`、schema 8）。版は上げていない（schema 4 のときの追加）。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）。
   この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#95、`cat12079801/sts2#937`）
 - **生成の候補**:

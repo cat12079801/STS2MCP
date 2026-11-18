@@ -82,14 +82,14 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 7       // Contract version — see below
+  "schema_version": 8       // Contract version — see below
 }
 ```
 
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The exceptions are **6** and **7**: additive contracts that a client treats as required as a whole, so
+The exceptions are **6**, **7** and **8**: additive contracts that a client treats as required as a whole, so
 they are gated on the version instead of probing each field.
 
 `game_version` and `game_commit` come from the game's `ReleaseInfoManager`, which reads
@@ -98,6 +98,12 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **8** — the Dampen input contract (`cat12079801/sts2#1031`). `DAMPEN_POWER` status rows carry
+  `caster_combat_ids` (the casters in private `DampenPower.Data.casters`, as `enemies[].combat_id`)
+  and `downgraded_cards` (Data's card → original upgrade level map, as combat uids; a card the uid
+  registry has not seen is reported per row with `uid_known: false`, never given a new uid).
+  Existing fields keep their meaning (additive); the version is bumped so a client can require the
+  whole contract. See [弱化の入力](#弱化dampen_powerの入力schema-8).
 - **7** — the card-effect input contract (`cat12079801/sts2#1019`). Every combat card row (hand, the
   four piles, choose rows) and the `ready` combat `upgrade_preview` carry `retain_this_turn`,
   `single_turn_retain`, `sly_this_turn`, `single_turn_sly`, `base_replay_count`,
@@ -866,7 +872,7 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 本節の項目は schema 4 で追加した（追加時に版は上げていない）。
-同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **7**。
+同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **8**。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
@@ -1309,7 +1315,7 @@ Pets also share the same builder.
 画面に見えるパワーには次の内部状態を追加する（schema 4）。
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
 ただし `THIEVERY_POWER` / `HEIST_POWER` の項目、`VIGOR_POWER` の `vigor_attack`、`HEX_POWER` の付与元、`RITUAL_POWER` の印と、
-schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANACHE_POWER` の項目は、`status[]` に出る行なら可視性によらず付ける。
+schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANACHE_POWER` の項目、schema 8 の `DAMPEN_POWER` の項目は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
@@ -1337,6 +1343,8 @@ schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANA
 | `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` | `self_damage` | decimal（schema 7。同上） |
 | `PANACHE_POWER` | `cards_left` | int（schema 7。同上） |
 | `PANACHE_POWER` | `already_applied` | bool（schema 7。同上） |
+| `DAMPEN_POWER` | `caster_combat_ids` | uint の配列（昇順）/ null（schema 8。可視性によらず付ける） |
+| `DAMPEN_POWER` | `downgraded_cards` | `[{"uid","uid_known","card_id","original_upgrade_level"}]` / null（schema 8。同上） |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1422,6 +1430,40 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 拘束の鎖の使用済みフラグは false も `(bound card played: no)`、true は `yes` と表示する。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
 既存項目の意味を変えない追加のため版は上げていない（schema 4 のときの追加）。
+
+#### 弱化（`DAMPEN_POWER`）の入力（schema 8）
+
+マギナイト（`MagiKnight`）の `DAMPEN_MOVE` が付ける弱化の private `DampenPower.Data`（出典は v0.113.1 `sts2-a671e9ef`、
+`cat12079801/sts2#1031`）。`PowerModel._internalData` を `ReadPowerData` で読み、`GetInternalData` / `InitInternalData`・フック・乱数は呼ばない。
+
+- `caster_combat_ids` — `Data.casters`（`HashSet<Creature>`）の各 `Creature.CombatId`（`enemies[].combat_id` と同じ。0 も実在する ID）を昇順にした配列。
+  `CombatId` の無い caster が居れば項目全体を読取失敗にする（ID を補わず、caster を落とさない）。
+- `downgraded_cards` — `Data.downgradedCardsToOldUpgradeLevels`（`Dictionary<CardModel, int>`）の各組を
+  `{ uid, uid_known, card_id, original_upgrade_level }` の行にした配列。`uid` は戦闘の uid registry が既に振った値
+  （パイルの行は status の行より先に組むので、戦闘のパイルにある札は振られている）。registry に無い札は新たに採番せず、
+  `uid: null`・`uid_known: false`・`uid_unavailable_reason` とし、`warnings` に `status.DAMPEN_POWER.downgraded_cards.uid` を出す。
+  `card_id` は `CardModel.Id.Entry`。行は `uid` の順（uid の無い行は後ろで `card_id`・段階の順）。辞書の挿入順は
+  `PlayerCombatState.AllCards`（山札の順を含む）なので出さない。
+
+ゲーム側の意味:
+
+- `MagiKnight.DampenMove` は対象ごとに、既存の弱化があればその `AddCaster(base.Creature)` だけを呼び（`PowerCmd.Apply` はしない）、
+  無ければ新しいインスタンスに `AddCaster` してから `PowerCmd.Apply`（amount 1）する。`StackType` は `None`。
+- `DampenPower.AfterApplied` は所有者の `PlayerCombatState.AllCards`（手札・山札・捨て札・廃棄札・プレイ中）のうち `IsUpgraded` の札ごとに、
+  `CurrentUpgradeLevel` を記録して `CardCmd.Downgrade`（`DowngradeInternal`。段階 0 に戻し、数値・コスト・キーワードを基底に戻す）する。
+  付与後に手に入った札・付与後に強化された札は記録されない。
+- `DampenPower.AfterDeath` は死んだ creature が caster で、除去が防がれていなければ caster から外し、caster が空になれば弱化を外す。
+- `DampenPower.AfterRemoved` は記録した各札を元の段階の回数だけ `CardCmd.Upgrade` する。
+
+空の配列は読めた空（理由・警告なし）。Data が無い・型違い・フィールドの欠落は、項目を null・行の `unavailable_reasons.<key>`・
+`warnings` の `status.DAMPEN_POWER.<key>` にする。Markdown は
+`(caster combat ids: 3; downgraded cards: BASH#1 from +1, STRIKE_R#0 from +1)` の形で、空は `none`、
+registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null (理由)`。
+
+```json
+{ "id": "DAMPEN_POWER", "amount": 1, "caster_combat_ids": [3],
+  "downgraded_cards": [ { "uid": "BASH#1", "uid_known": true, "card_id": "BASH", "original_upgrade_level": 1 } ] }
+```
 
 ### Keyword Object
 
