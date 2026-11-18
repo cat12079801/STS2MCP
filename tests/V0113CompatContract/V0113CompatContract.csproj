@@ -10,7 +10,7 @@
     <Compile Include="../../McpMod.StateStamp.cs" Link="StateStamp.cs" />
     <Compile Include="../../McpMod.ScenarioGuard.cs" Link="ScenarioGuard.cs" />
     <Compile Include="../../McpMod.ShopPurchase.cs" Link="ShopPurchase.cs" />
-    <Content Include="../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs;../../McpMod.cs;../../McpMod.MultiplayerState.cs;../../McpMod.Formatting.cs"
+    <Content Include="../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs;../../McpMod.cs;../../McpMod.MultiplayerState.cs;../../McpMod.Formatting.cs;../../Recorder/CombatRecorder.cs"
              Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

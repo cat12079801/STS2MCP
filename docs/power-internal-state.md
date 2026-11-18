@@ -10,7 +10,7 @@
 全パワーの `type_for_current_amount` / `is_temporary_power`（schema 9）と `dynamic_vars`、下表の schema 12 の private Data・フィールドの項目で、
 `status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
-schema 4 の項目は版を上げずに足したので、項目の有無で利用可否を判別する。schema 6・7・8・9・12 の項目は版を上げて足したので、版で必須にしてよい。
+schema 4 の項目は整数の版を上げずに足した。schema 6・7・8・9・12 の項目は整数の版を上げて足した。これらはすべて `schema` 1.x（1.0.0 は整数の版 12 と同じ契約）に揃っているので、`schema` の MAJOR が 1 なら必須として読んでよい。
 
 以下の出典は v0.113.0 のデコンパイル `sts2-d009478a`。
 人間の観測可能性は画面表示または画面で起きた出来事の計数に基づく。

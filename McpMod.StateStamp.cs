@@ -33,4 +33,22 @@ public static partial class McpMod
             ["scenario_capabilities"] = BuildScenarioCapabilities()
         };
     }
+
+    /// <summary>
+    /// The Markdown header line naming the build: `mod 0.4.0+&lt;commit&gt; · schema 1.0.0 (schema_version 12)`.
+    /// The deprecated integer is shown only beside the semver, until it is removed in schema 2.0.0.
+    /// </summary>
+    internal static string FormatStampLine(Dictionary<string, object?> state)
+    {
+        string modVersion = state.TryGetValue("mod_version", out var mv) ? mv?.ToString() ?? Version : Version;
+        string modCommit = state.TryGetValue("mod_commit", out var mc) ? mc?.ToString() ?? "" : "";
+        string schema = state.TryGetValue("schema", out var sc) ? sc?.ToString() ?? "" : "";
+        string schemaVersion = state.TryGetValue("schema_version", out var sv) ? sv?.ToString() ?? "" : "";
+        string line = $"mod {modVersion}{(modCommit.Length > 0 ? "+" + modCommit : "")}";
+        if (schema.Length > 0)
+            line += $" · schema {schema}{(schemaVersion.Length > 0 ? " (schema_version " + schemaVersion + ")" : "")}";
+        else if (schemaVersion.Length > 0)
+            line += $" · schema_version {schemaVersion}";
+        return line;
+    }
 }

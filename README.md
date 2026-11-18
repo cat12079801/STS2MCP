@@ -63,12 +63,13 @@ A successful response looks like:
 ```
 
 `commit` is the git revision the mod was built from (`null` if the build could not determine one) —
-quote it when reporting a bug. `schema` is the state/action contract version as semantic versioning:
-MAJOR for a backward-incompatible change (a field's meaning, type or shape changes, a field or action is
-removed or renamed), MINOR for a backward-compatible addition (new fields, actions, optional parameters;
-detect them by field presence), PATCH for a fix that does not change the contract. `schema_version` is
-the deprecated integer predecessor, frozen at `12` (= `schema` `1.0.0`) and removed in `2.0.0`.
-Every state payload carries the same values as `mod_version`, `mod_commit`, `schema` and `schema_version`.
+quote it when reporting a bug. `schema` is the state/action contract version as semantic versioning
+(MAJOR = backward-incompatible change, MINOR = backward-compatible addition, PATCH = fix that does not change
+the contract). The rules — including that new enum values are MINOR and an unknown value must be treated as
+unobserved — are in [docs/raw-full.md](docs/raw-full.md#common-top-level-fields). `schema_version` is the deprecated
+integer predecessor, frozen at `12` (= `schema` `1.0.0`) and removed in `2.0.0`.
+Every state response (anything with a `state_type`) carries the same values as `mod_version`, `mod_commit`, `schema`
+and `schema_version`; error responses (500, 503, POST errors) do not.
 State also reports `game_version` and `game_commit` from the game's `release_info.json`
 (`null` when unavailable), so reports can identify the game separately from the mod build.
 

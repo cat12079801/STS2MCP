@@ -30,13 +30,19 @@ public static partial class McpMod
     /// state payload, on `GET /` and in the Markdown header.
     ///
     /// MAJOR: a backward-incompatible change - an existing field's meaning, type or shape changes,
-    ///        a field or action is removed or renamed, or the structure changes. A client requires
-    ///        only the MAJOR it was written against.
-    /// MINOR: a backward-compatible addition - new fields, actions, optional parameters or
-    ///        state_types. Clients detect added features by field presence and by the existing
-    ///        unavailable_reasons / warnings conventions, not by comparing versions.
+    ///        a field, action, enum value or state_type is removed or renamed, or the structure
+    ///        changes. A client requires only the MAJOR it was written against.
+    /// MINOR: a backward-compatible addition - new fields, actions, optional parameters,
+    ///        state_types, or new values of an existing enum-like field (resolving_reasons,
+    ///        upgrade_preview.status, can_use_now_reason, ...). Clients detect added features by
+    ///        field presence and by the existing unavailable_reasons / warnings conventions, not by
+    ///        comparing versions, and treat an unknown value as unobserved, never as a known one.
     /// PATCH: a fix that does not change the contract - a value that was wrong per the documented
     ///        meaning becomes right, or a docs / formatting fix.
+    ///
+    /// Partial contracts with their own version (generation_pool.filter_version, the values of
+    /// scenario_capabilities, the recorder's sts2-mod-record/N) are judged by that version; this
+    /// still moves by the rules above for what changed. Canonical rules: docs/raw-full.md.
     ///
     /// 1.0.0 is exactly the contract of the deprecated integer schema_version 12.
     /// </summary>

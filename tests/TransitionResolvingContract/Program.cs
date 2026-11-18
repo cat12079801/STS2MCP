@@ -173,7 +173,7 @@ namespace STS2_MCP
 
             // POST の wait: true は is_resolving で待つ（理由を足せば落ち着かない）。schema は 4 のまま。
             Check(modSource.Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
-            Check(modSource.Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
+            Check(System.Text.RegularExpressions.Regex.IsMatch(modSource, @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
             int settled = modSource.IndexOf("internal static bool IsSettledState(", StringComparison.Ordinal);
             Check(settled >= 0 && modSource.IndexOf("state.TryGetValue(\"is_resolving\"", settled, StringComparison.Ordinal) > settled,
                 "POST wait still settles on is_resolving");

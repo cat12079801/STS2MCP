@@ -39,9 +39,19 @@ namespace STS2_MCP
             // GET / and the Markdown header carry the same constant.
             Check(mod.Contains("[\"schema\"] = StateSchema,") && mod.Contains("[\"schema_version\"] = StateSchemaVersion,"),
                 "GET / hello carries schema and the deprecated schema_version");
+            // The Markdown header line, built by the production helper from a stamped state.
+            Check(FormatStampLine(NewStateResult("menu")) == $"mod {Version}+{BuildCommit} · schema 1.0.0 (schema_version 12)",
+                "Markdown header line shows the semver and the deprecated integer");
+            Check(FormatStampLine(new() { ["mod_version"] = "0.4.0", ["schema"] = "1.2.3" }) == "mod 0.4.0 · schema 1.2.3",
+                "Markdown header without the integer or commit");
+            Check(FormatStampLine(new() { ["mod_version"] = "0.4.0", ["schema_version"] = 12 }) == "mod 0.4.0 · schema_version 12",
+                "Markdown header never labels the integer as the semver schema");
             string formatting = File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs"));
-            Check(formatting.Contains("state.TryGetValue(\"schema\", out var sc)") && formatting.Contains("\" · schema \" + schema"),
-                "Markdown header shows the semver schema");
+            Check(formatting.Contains("sb.AppendLine(FormatStampLine(state));"), "FormatAsMarkdown writes the stamp line");
+            string recorder = File.ReadAllText(Path.Combine(sources, "CombatRecorder.cs"));
+            Check(recorder.Contains("[\"state_schema_semver\"] = McpMod.StateSchema,")
+                && recorder.Contains("[\"state_schema\"] = McpMod.StateSchemaVersion,"),
+                "record_open.mod carries state_schema_semver beside the deprecated state_schema");
         }
 
         public static async Task RunCompatContract()

@@ -75,7 +75,10 @@ error responses. It has no effect on `format=markdown`.
 
 ### Common Top-Level Fields
 
-Every response — `menu` and error-ish states included — carries the build stamp:
+Every state response (anything with a `state_type`: `menu`, the multiplayer `error` state, and the `state` a
+`wait: true` POST returns included) carries the build stamp below; `GET /` carries `version` / `commit` / `schema` /
+`schema_version` / `scenario_capabilities`. Other responses do not: the 500 of a failed state read, the 503
+`retry: true`, POST action results and errors, and the profile / compendium / wiki endpoints.
 
 ```jsonc
 {
@@ -98,14 +101,24 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.0.0"`):
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.0.0"`). This section is
+the canonical statement of the rules; the other documents point here.
 
-- **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes, a field or action is
-  removed or renamed, or the structure changes. A client requires only the MAJOR it was written against.
-- **MINOR** — a backward-compatible addition: new fields, actions, optional parameters or `state_type`s. Clients detect
-  added features by field presence and the existing `unavailable_reasons` / `warnings` conventions, not by comparing versions.
+- **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
+  value or `state_type` is removed or renamed; or the structure changes (a field moves, an object becomes a list, a
+  per-screen object is split or merged). A client requires only the MAJOR it was written against.
+- **MINOR** — a backward-compatible addition: new fields, actions, optional parameters or `state_type`s, and new values
+  of an existing enum-like field (`state_type`, `resolving_reasons`, `upgrade_preview.status`, `can_use_now_reason`,
+  `unavailable_reasons` codes and the like). Clients detect added features by field presence and the existing
+  `unavailable_reasons` / `warnings` conventions, not by comparing versions. **A client must treat a value it does not
+  know as unobserved** — stop or fall back on the safe side — and never map it to a known value.
 - **PATCH** — a fix that does not change the contract: a value that was wrong per the documented meaning becomes right,
   or a docs / formatting fix.
+
+Partial contracts that carry their own version — `generation_pool.filter_version`, each value of
+`scenario_capabilities`, and the recorder's `sts2-mod-record/N` — are judged by that version, not by `schema`. A change
+to one of them still moves `schema` by the ordinary rules for what changed: adding fields or a new capability is MINOR,
+and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
 `mod 0.4.0+<commit> · schema 1.0.0 (schema_version 12)`.
@@ -334,7 +347,9 @@ state にゲームモードが無くても Blitz の除外は反映される。
 **版 2 は候補の条件の意味を変えた**（版 1 は人数の条件だけを MOD に写し、`filter_source` に
 `CardFactory.FilterForPlayerCount` と書いていた。v0.113.1 の本体の `FilterForRun` とは Blitz の条件が違う）。
 利用側は `filter_version` と `filter_source` の完全一致で契約を判定し、版 1 の観測を版 2 として扱わない。
-state 全体の `schema_version` は上げない（版付きの pool の更新として扱う）。
+利用側はこの契約を `filter_version` で判定する。`filter_version` が変わる更新でも、state の `schema` は
+[通常の規則](#common-top-level-fields)で動かす（項目の追加は MINOR、既存の項目の意味・形の変更は MAJOR）。
+非推奨の整数 `schema_version` は 12 で固定している（版 2 のときも上げなかった）。
 
 取得中に例外が出た場合は `known: false, cards: []` と `reason`（例外の型とメッセージ）、
 state の `warnings` を返す。取得前に失敗したメタデータは欠落しうる。部分一覧を known=true にしない。

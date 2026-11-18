@@ -18,12 +18,14 @@
 
 ## HTTP・応答の共通
 
-- **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
+- **版の情報**: state の応答（`state_type` を持つもの。`menu`、マルチの `error`、`wait: true` の POST が返す `state` を含む）と `GET /` が `mod_version`（`GET /` は `version`）/ `mod_commit`（同 `commit`）/ `schema` / `schema_version` を返す。state の読み取りに失敗した 500、503 の `retry: true`、POST のアクションの結果とエラー、profile・図鑑・wiki のエンドポイントは返さない。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
 - **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.0.0"`（整数の `schema_version` 12 の契約そのもの）。Markdown は先頭の行に `mod … · schema 1.0.0 (schema_version 12)` と出す。
-  - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクションを消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
-  - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type` を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する
+  - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクション・列挙の値・`state_type` を消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
+  - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type`、既存の列挙の項目〔`resolving_reasons`・`upgrade_preview.status`・`can_use_now_reason` など〕の新しい値を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する。知らない値は未観測として安全側で止め、既知の値に読み替えない
   - PATCH: 契約を変えない直し（文書の意味のとおりでなかった値を正す、文書・表示の直し）
+  - 版を独自に持つ部分契約（`generation_pool.filter_version`・`scenario_capabilities` の各値・Recorder の `sts2-mod-record/N`）は、その版で判定する。それらの版が変わる更新でも、`schema` は変更の中身で通常どおり動かす（項目の追加は MINOR、意味の変更は MAJOR）
+  - 規則の正本は [`raw-full.md`](raw-full.md#common-top-level-fields)
 - **`schema_version`（非推奨）**: 整数の版。12 で固定し、もう上げない。sts2 が `schema` を読むようになったあと、次の MAJOR（2.0.0）で消す。
   以下は整数の版の履歴（既存の項目・アクションの意味を変えたり消したりしたときに上げた。6〜12 は追加だけでも、読み手が一式を必須として扱えるように上げた）。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、

@@ -1231,7 +1231,8 @@ internal static class CombatRecorder
             {
                 ["version"] = McpMod.Version,
                 ["commit"] = McpMod.BuildCommit,
-                ["state_schema"] = McpMod.StateSchemaVersion, // deprecated integer, frozen at 12
+                // Deprecated integer, frozen at 12: removed with the state's schema_version in schema 2.0.0.
+                ["state_schema"] = McpMod.StateSchemaVersion,
                 ["state_schema_semver"] = McpMod.StateSchema,
             },
             ["game"] = new JsonObject
