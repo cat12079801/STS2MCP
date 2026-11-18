@@ -9,7 +9,7 @@ namespace STS2_MCP
     {
         private const string Version = "test-mod";
         private const string BuildCommit = "test-mod-commit";
-        private const int StateSchemaVersion = 11;
+        private const int StateSchemaVersion = 12;
         private static int Checks;
         private static void Check(bool condition, string message)
         {
@@ -104,7 +104,7 @@ namespace STS2_MCP
                 var state = NewStateResult(type);
                 Check(Equals(state["game_version"], "v0.113.0") && Equals(state["game_commit"], "16ac0fe3"), "release stamp " + type);
                 Check(Equals(state["mod_version"], Version) && Equals(state["mod_commit"], BuildCommit)
-                    && Equals(state["schema_version"], 11), "independent mod/schema stamp");
+                    && Equals(state["schema_version"], 12), "independent mod/schema stamp");
                 Check(state["scenario_capabilities"] is Dictionary<string, object?> caps && Equals(caps["setup_guard"], 1)
                     && Equals(caps["selection_uid"], 1) && Equals(caps["potion_availability"], 1), "every stamped state carries scenario_capabilities (sts2#1037, potion_availability sts2#1012)");
             }
@@ -119,7 +119,7 @@ namespace STS2_MCP
                 Check(state["game_version"] == null && state["game_commit"] == null,
                     "release exception leaves nullable metadata");
                 Check(Equals(state["state_type"], "menu") && Equals(state["mod_version"], Version)
-                    && Equals(state["schema_version"], 11), "release exception preserves state response");
+                    && Equals(state["schema_version"], 12), "release exception preserves state response");
                 ReleaseInfoManager.FailInstance = ReleaseInfoManager.FailReleaseInfo = false;
             }
             ReleaseInfoManager.Instance.ReleaseInfo = new("v0.113.0", "16ac0fe3");
@@ -148,7 +148,7 @@ namespace STS2_MCP
                 && actionSource.Contains("RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry)"), "new merchant API wired");
             Check(stateSource.Contains("var result = NewStateResult();") &&
                 File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("var result = NewStateResult();"), "both state builders stamped");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 11;"), "published schema is 11 (sts2#1012)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
             Console.WriteLine($"v0.113 compatibility contract: {Checks} checks passed");
         }
     }

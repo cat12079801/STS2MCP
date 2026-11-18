@@ -29,7 +29,7 @@ move の実行・`TriggerAboutToBlowState`・乱数・Ascension の判定は用�
   人数・遭遇の ID・`Slots` の順と `Enemies` 全体の占有個体。ラン外は Ascension・Dread・Slots を読まず理由付きの null、
   遭遇なしは `[]`、遭遇・Slots・占有個体の読取失敗は項目ごとの null と理由（途中までの列を返さない）。Markdown の 1 行。
 - 敵の行の `slot_name`（実値・スロット無しの null・読取失敗）と Markdown の `| Slot:`。
-- 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・現行の schema 11 をソース文字列で確認。
+- 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・現行の schema 12 をソース文字列で確認。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `WaterfallGiant._isAboutToBlow` / `_steamEruptionDamage`、
 `WaterfallGiant.TriggerAboutToBlowState` / `AboutToBlowMove` / `ExplodeMove`、`SteamEruptionPower.AfterDeath`、

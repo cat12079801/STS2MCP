@@ -198,7 +198,7 @@ namespace STS2_MCP
                 return text[from..to];
             }
             string mod = Source("McpMod.cs");
-            Check(mod.Contains("public const int StateSchemaVersion = 11;"), "published schema is 11 (sts2#1012)");
+            Check(mod.Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
             string getState = Slice(mod, "private static void HandleGetState", "if (format == \"markdown\")");
             Check(getState.Contains("bool setupGuard = passive\n") && getState.Contains("ScenarioSetupGuardKey, false)")
                 && getState.Contains("built[ScenarioSetupGuardKey] = BuildScenarioSetupGuard(built);"),

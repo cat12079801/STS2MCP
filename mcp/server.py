@@ -203,9 +203,13 @@ async def get_game_state(format: str = "markdown") -> str:
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
     hidden_in_ui の行にも付く。Target が無い・読めないときは null・理由・warnings。
     所有レリックは戦闘中・戦闘外とも vars（変数名→数値の現在の BaseValue）を含む。
-    小数は保持し表示文字列は除外する。取得失敗時は vars を省略して warnings に記録する。
+    小数は保持し表示文字列は除外する。取得失敗時は vars を null にし、
+    unavailable_reasons.vars と warnings に記録する（schema 12。1 変数の失敗はその名前だけ null）。
     During combat, allowlisted owned relics also include combat_state (usage flags
     and counters); absent fields are unknown, not false. Markdown adds short notes.
+    schema 12 で苦無・手裏剣・扇子・鎖鎌・レターオープナー・懐中時計の手番の数と
+    オリハルコンの should_trigger を combat_state に足した。戦闘をまたぐ保存カウンタ
+    （ヌンチャク・音叉・Happy Flower など）は戦闘中・戦闘外とも relics[].run_state に出す。
     戦闘中の player.combat_history.any_manual_cards_played_this_turn は所有者の
     この手番の手動プレイ完了の有無（bool）。取得失敗は null・理由・warnings。
     パエルの眼はレリック側の使用・参加フラグも使い、WhisperingEarring 所持の
@@ -234,6 +238,17 @@ async def get_game_state(format: str = "markdown") -> str:
     valid_target_entity_ids（敵の entity_id、プレイヤーは player:<player_id>、対象を指定しない瓶は []、
     読めなければ null）・can_use_now_reason（使用可は null、禁止の理由、読めなければ unobserved:<段>）を
     足した。use_potion の expected_potion_id で使う直前に照合する。potion_availability は 1。
+    schema 12 ですべての status 行（player・敵・ペット、hidden_in_ui・最小行も）に dynamic_vars
+    （パワー自身の DynamicVars の {変数名: BaseValue}。StringVar は除く。変数が無ければ {}、
+    読めなければ null・理由・warnings、変数ごとの失敗はその名前だけ null）を足した。パワーの量は
+    説明文でなくこれを読む。型ごとの damage・self_damage・cards_left などは従来どおり。
+    同じく private Data・フィールドの値を型ごとに足した（血の沸騰 played_cards、カラミティ・
+    絞殺 amounts_for_played_cards、ヘル・レイザー infinite_auto_plays_this_turn・
+    auto_playing_cards、オートメーション cards_left、闇の抱擁 ethereal_count、巨大化
+    has_command_to_modify、硬い殻 damage_received_this_turn、適応・再結合・幻影 is_reviving、
+    幻影 follow_up_state_id、ネメシス should_apply_intangible、怠惰・軟化 cards_played_this_turn、
+    希望の道標 has_already_been_given_block、盗む stolen_card）。札は既存の uid registry の uid で、
+    無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 

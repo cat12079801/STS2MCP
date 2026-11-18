@@ -13,7 +13,9 @@ public static partial class McpMod
     {
         ["card_to_clone_uid"] = "card_to_clone_readable",
         ["played_card_uid"] = "played_card_readable",
-        ["applier_combat_id"] = "applier_readable"
+        ["applier_combat_id"] = "applier_readable",
+        ["follow_up_state_id"] = "follow_up_state_readable",
+        ["stolen_card"] = "stolen_card_readable"
     };
 
     private static string FormatPowerInternalState(Dictionary<string, object?> state)
@@ -30,7 +32,10 @@ public static partial class McpMod
             "stolen_strength", "stolen_dexterity", "has_gained_block_this_turn", "bound_card_played", "attacks_played_this_turn",
             "card_to_clone_uid", "card_to_clone_readable", "played_card_uid", "played_card_readable",
             "stolen_gold", "target_player_id", "applier_combat_id", "applier_readable", "was_just_applied_by_enemy",
-            "damage", "self_damage", "cards_left", "already_applied" })
+            "damage", "self_damage", "cards_left", "already_applied",
+            "infinite_auto_plays_this_turn", "ethereal_count", "has_command_to_modify", "damage_received_this_turn",
+            "is_reviving", "follow_up_state_id", "follow_up_state_readable", "should_apply_intangible",
+            "cards_played_this_turn", "has_already_been_given_block", "stolen_card_readable" })
         {
             if (!state.TryGetValue(key, out var value)) continue;
             if ((key == "skip_next_duration_tick" || key == "is_temporary_power") && value is false) continue;
@@ -60,8 +65,39 @@ public static partial class McpMod
             parts.Add("downgraded cards: " + (downgraded is List<Dictionary<string, object?>> rows
                 ? (rows.Count == 0 ? "none" : string.Join(", ", rows.Select(FormatDampenDowngradedCard)))
                 : $"null ({reasons?.GetValueOrDefault("downgraded_cards") ?? "unavailable"})"));
+        // sts2#1020: card-keyed Data as "STRIKE_R#0=3" ("none" when empty), the stolen card as its uid.
+        foreach (var (key, valueKey) in new[] { ("played_cards", "pending_strength"),
+            ("amounts_for_played_cards", "amount"), ("auto_playing_cards", (string?)null) })
+        {
+            if (!state.TryGetValue(key, out var cardRows)) continue;
+            parts.Add(key.Replace('_', ' ') + ": " + (cardRows is List<Dictionary<string, object?>> list
+                ? (list.Count == 0 ? "none" : string.Join(", ", list.Select(row => FormatRegisteredCardRow(row)
+                    + (valueKey == null ? "" : "=" + Convert.ToString(row.GetValueOrDefault(valueKey), CultureInfo.InvariantCulture)))))
+                : $"null ({reasons?.GetValueOrDefault(key) ?? "unavailable"})"));
+        }
+        if (state.TryGetValue("stolen_card", out var stolen))
+            parts.Add("stolen card: " + (stolen is Dictionary<string, object?> stolenRow ? FormatRegisteredCardRow(stolenRow)
+                : state.GetValueOrDefault("stolen_card_readable") is true ? "none"
+                : $"null ({reasons?.GetValueOrDefault("stolen_card") ?? "unavailable"})"));
+        // sts2#1020: "vars: SelfDamage=2, Decrement=1". An empty set (most powers) is JSON-only;
+        // a failed set or var shows null and its reason.
+        if (state.TryGetValue("dynamic_vars", out var dynamicVars))
+        {
+            if (dynamicVars is Dictionary<string, object?> vars)
+            {
+                if (vars.Count > 0)
+                    parts.Add("vars: " + string.Join(", ", vars.Select(pair => pair.Key + "=" + (pair.Value == null
+                        ? $"null ({reasons?.GetValueOrDefault("dynamic_vars." + pair.Key) ?? "unavailable"})"
+                        : Convert.ToString(pair.Value, CultureInfo.InvariantCulture)))));
+            }
+            else parts.Add($"vars: null ({reasons?.GetValueOrDefault("dynamic_vars") ?? "unavailable"})");
+        }
         return parts.Count == 0 ? "" : " (" + string.Join("; ", parts) + ")";
     }
+
+    // "STRIKE_R#0", or "CARD_ID (uid unknown)" for a card the uid registry has not seen.
+    private static string FormatRegisteredCardRow(Dictionary<string, object?> row)
+        => row.GetValueOrDefault("uid") is string uid ? uid : $"{row.GetValueOrDefault("card_id") ?? "unknown"} (uid unknown)";
 
     // "STRIKE_R#0 from +1"; a card the uid registry has not seen shows its id and "uid unknown".
     private static string FormatDampenDowngradedCard(Dictionary<string, object?> row)

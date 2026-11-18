@@ -504,7 +504,7 @@ namespace STS2_MCP
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("AttachCardDetails"), "noncombat deck and previews omit added combat fields");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCardDetailsMarkdown(sb, card)"), "hand markdown wiring");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState("), "multiplayer shares player builder");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 11;"), "current schema is 11 (sts2#1012)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
             string details = File.ReadAllText(Path.Combine(sources, "McpMod.CardDetails.cs"));
             Check(details.Contains("AttachCardTurnState(state, card, reasons);") && details.Contains("ReadEnchantmentDynamicVarSet(enchantment)"),
                 "every detail row (hand, piles, ready clone, choose rows) reads the turn state; enchantment vars come from the field");

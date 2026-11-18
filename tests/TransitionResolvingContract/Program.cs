@@ -172,7 +172,7 @@ namespace STS2_MCP
             Check(formatSource.Contains("map.GetValueOrDefault(\"travel_enabled\") is false"), "markdown says when travel is not enabled");
 
             // POST の wait: true は is_resolving で待つ（理由を足せば落ち着かない）。schema は 4 のまま。
-            Check(modSource.Contains("public const int StateSchemaVersion = 11;"), "published schema is 11 (sts2#1012)");
+            Check(modSource.Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
             int settled = modSource.IndexOf("internal static bool IsSettledState(", StringComparison.Ordinal);
             Check(settled >= 0 && modSource.IndexOf("state.TryGetValue(\"is_resolving\"", settled, StringComparison.Ordinal) > settled,
                 "POST wait still settles on is_resolving");

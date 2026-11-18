@@ -127,6 +127,374 @@ public static partial class McpMod
         }
     }
 
+    // sts2#1020: every status row carries dynamic_vars = { name -> BaseValue } from PowerModel._dynamicVars.
+    private static void RunPowerDynamicVarsContract()
+    {
+        var options = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        Dictionary<string, object?> Vars(Dictionary<string, object?> row) => (Dictionary<string, object?>)row["dynamic_vars"]!;
+        BeginStateWarnings();
+
+        // A readable empty set (most powers) is {}, not null; no reason, no warning, no markdown.
+        var plain = Power(new PowerModel());
+        Check(Vars(plain).Count == 0 && !plain.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "empty var set is {} with no reason or warning");
+        Check(FormatPowerInternalState(plain) == "", "an empty var set adds no markdown");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(plain, options)))
+            Check(json.RootElement.GetProperty("dynamic_vars").ValueKind == JsonValueKind.Object
+                && !json.RootElement.GetProperty("dynamic_vars").EnumerateObject().Any(), "wire empty object");
+
+        // Several vars: every name with its exact BaseValue, in the set's order.
+        var tank = new TankPower();
+        var tankRow = Power(tank);
+        Check(Vars(tankRow).Keys.SequenceEqual(new[] { "DamageIncrease", "DamageDecrease" })
+            && Equals(Vars(tankRow)["DamageIncrease"], 1.5m) && Equals(Vars(tankRow)["DamageDecrease"], 0.5m)
+            && !tankRow.ContainsKey("unavailable_reasons"), "two vars by name, exact decimals, set order");
+        Check(FormatPowerInternalState(tankRow).Contains("vars: DamageIncrease=1.5, DamageDecrease=0.5"), "markdown lists the vars compactly");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(tankRow, options)))
+        {
+            var vars = json.RootElement.GetProperty("dynamic_vars");
+            Check(vars.GetProperty("DamageIncrease").GetDecimal() == 1.5m && vars.GetProperty("DamageDecrease").GetDecimal() == 0.5m,
+                "wire keeps the var names as they are (no snake_case) and decimal values");
+        }
+        tank.DynamicVars["DamageIncrease"].Value = 2m;
+        Check(Equals(Vars(tankRow)["DamageIncrease"], 1.5m) && Equals(Vars(Power(tank))["DamageIncrease"], 2m), "snapshot independent of a later BaseValue write");
+        tank.DynamicVars["DamageIncrease"].Value = 0m;
+        Check(Equals(Vars(Power(tank))["DamageIncrease"], 0m), "0 is a value");
+
+        // Hidden rows carry the vars too (the effect acts whatever the HUD shows).
+        var hiddenTank = Power(tank, false);
+        Check(Vars(hiddenTank).Count == 2 && !hiddenTank.ContainsKey("skip_next_duration_tick"), "hidden rows carry dynamic_vars");
+
+        // StringVar's numeric base is a dummy: left out, like the card and enchantment dynamic_vars.
+        var barricade = Power(new BarricadePower());
+        Check(Vars(barricade).Count == 0 && !barricade.ContainsKey("unavailable_reasons"), "StringVar is left out");
+
+        // The per-type fields stay as they are and agree with the generic set.
+        var inferno = new InfernoPower();
+        inferno.IncrementSelfDamage();
+        var infernoRow = Power(inferno);
+        Check(Equals(infernoRow["self_damage"], 1m) && Equals(Vars(infernoRow)["SelfDamage"], 1m), "Inferno: self_damage kept, SelfDamage in dynamic_vars");
+        var bombRow = Power(new TheBombPower());
+        Check(Equals(bombRow["damage"], 40m) && Equals(Vars(bombRow)["Damage"], 40m), "The Bomb: damage kept, Damage in dynamic_vars");
+        var toric = new ToricToughnessPower();
+        toric.DynamicVars.Block.Value = 5m;
+        Check(Equals(Power(toric)["block_base_value"], 5m) && Equals(Vars(Power(toric))["Block"], 5m), "Toric Toughness: block_base_value kept, Block in dynamic_vars");
+
+        // One var that cannot be read: null under its name with its own reason; the others kept.
+        BeginStateWarnings();
+        tank.DynamicVars["DamageDecrease"].ThrowBase = true;
+        var partial = Power(tank);
+        Check(Vars(partial).ContainsKey("DamageDecrease") && Vars(partial)["DamageDecrease"] == null && Equals(Vars(partial)["DamageIncrease"], 0m),
+            "a failed var is null under its name; the others are kept");
+        Check(Reasons(partial).TryGetValue("dynamic_vars.DamageDecrease", out var varReason) && varReason.Contains("base failed")
+            && !Reasons(partial).ContainsKey("dynamic_vars"), "the reason is at dynamic_vars.<name>; the set itself is read");
+        Check(_stateWarnings.Any(w => w.StartsWith("status.TankPower.dynamic_vars.DamageDecrease:")), "a failed var has a path warning");
+        Check(FormatPowerInternalState(partial).Contains("vars: DamageIncrease=0, DamageDecrease=null (InvalidOperationException: base failed)"), "markdown shows the failed var and reason");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(partial, options)))
+            Check(json.RootElement.GetProperty("dynamic_vars").GetProperty("DamageDecrease").ValueKind == JsonValueKind.Null
+                && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("dynamic_vars.DamageDecrease", out _), "wire null and reason for a failed var");
+        tank.DynamicVars["DamageDecrease"].ThrowBase = false;
+
+        // A null PowerModel._dynamicVars is a failed read (never {}), and the getter does not build it.
+        BeginStateWarnings();
+        foreach (bool visible in new[] { true, false })
+        {
+            var cleared = new TankPower();
+            cleared.ClearDynamicVars();
+            var row = Power(cleared, visible);
+            Unknown(row, "dynamic_vars", "status.TankPower");
+            Check(!cleared.DynamicVarsInitialized && Reasons(row)["dynamic_vars"].Contains("_dynamicVars"), $"null _dynamicVars is not built by the read (visible={visible})");
+            Check(row["is_temporary_power"] is false && Equals(row["type_for_current_amount"], "Buff"), "a failed set keeps the other fields");
+            Check(FormatPowerInternalState(row).Contains("vars: null (InvalidOperationException"), "markdown shows the failed set");
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(row, options));
+            Check(json.RootElement.GetProperty("dynamic_vars").ValueKind == JsonValueKind.Null
+                && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("dynamic_vars", out _), "wire null and reason for a null set");
+        }
+        // The per-type readers fail the same way and do not build the set either.
+        var clearedBomb = new TheBombPower();
+        clearedBomb.ClearDynamicVars();
+        var clearedBombRow = Power(clearedBomb);
+        Unknown(clearedBombRow, "dynamic_vars", "status.TheBombPower");
+        Unknown(clearedBombRow, "damage", "status.TheBombPower");
+        Check(!clearedBomb.DynamicVarsInitialized, "The Bomb: neither read builds the set");
+
+        // A set that cannot be enumerated fails the whole key.
+        var broken = new TankPower();
+        broken.DynamicVars.ThrowEnumerate = true;
+        var brokenRow = Power(broken);
+        Unknown(brokenRow, "dynamic_vars", "status.TankPower");
+        Check(Reasons(brokenRow)["dynamic_vars"].Contains("enumerate failed"), "an enumeration failure is the set's reason");
+    }
+
+    private static void SetF(object target, string name, object? value)
+        => (target.GetType().GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(target.GetType().Name, name)).SetValue(target, value);
+    private static object? GetF(object target, string name)
+        => (target.GetType().GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(target.GetType().Name, name)).GetValue(target);
+
+    // sts2#1020: relic private counters (combat_state / run_state) and relics[].vars from _dynamicVars.
+    private static void RunRelicCounterContract()
+    {
+        BeginStateWarnings();
+        // Per-turn counters in combat_state: the private count, not the counter's display value.
+        foreach (var (relic, key, field) in new (RelicModel, string, string)[] {
+            (new Kunai(), "attacks_played_this_turn", "_attacksPlayedThisTurn"),
+            (new Shuriken(), "attacks_played_this_turn", "_attacksPlayedThisTurn"),
+            (new OrnamentalFan(), "attacks_played_this_turn", "_attacksPlayedThisTurn"),
+            (new Kusarigama(), "attacks_played_this_turn", "_attacksPlayedThisTurn"),
+            (new LetterOpener(), "skills_played_this_turn", "_skillsPlayedThisTurn"),
+            (new Pocketwatch(), "cards_played_this_turn", "_cardsPlayedThisTurn") })
+        {
+            string name = relic.GetType().Name;
+            var zero = BuildRelicCombatState(relic);
+            Check(Equals(zero[key], 0) && !zero.ContainsKey("unavailable_reasons"), $"{name}: 0 is a value");
+            SetF(relic, field, 4);
+            var four = BuildRelicCombatState(relic);
+            Check(Equals(four[key], 4), $"{name}: the raw count 4 (not 4 % threshold)");
+            Check(RelicMarkdown(four).Contains(": 4"), $"{name}: markdown");
+            SetF(relic, field, 0);
+            Check(Equals(four[key], 4) && Equals(BuildRelicCombatState(relic)[key], 0), $"{name}: snapshot independent of a reset");
+            Check(!BuildRelicRunState(relic).Any(), $"{name}: per-turn counters are not run_state");
+        }
+        Check(Equals(BuildRelicCombatState(new Pocketwatch())["cards_played_last_turn"], 0), "Pocketwatch keeps cards_played_last_turn");
+        foreach (RelicModel relic in new RelicModel[] { new Orichalcum(), new FakeOrichalcum() })
+        {
+            Check(BuildRelicCombatState(relic)["should_trigger"] is false, $"{relic.GetType().Name}: false is a value");
+            SetF(relic, "_shouldTrigger", true);
+            Check(BuildRelicCombatState(relic)["should_trigger"] is true && RelicMarkdown(BuildRelicCombatState(relic)).Contains("should trigger: yes"), $"{relic.GetType().Name}: true");
+        }
+        Check(_stateWarnings.Count == 0, "readable relic counters add no warnings");
+        var missingKunai = BuildRelicCombatState(new MissingKunaiField());
+        Unknown(missingKunai, "attacks_played_this_turn", "player.relics.MissingKunaiField.combat_state");
+        Check(RelicMarkdown(missingKunai).Contains("attacks this turn: null ("), "a missing field is null with its reason in markdown");
+
+        // Saved counters in run_state (emitted in and out of combat by the builder).
+        BeginStateWarnings();
+        foreach (var (relic, key, field, value) in new (RelicModel, string, string, object)[] {
+            (new Nunchaku(), "attacks_played", "_attacksPlayed", 7),
+            (new TuningFork(), "skills_played", "_skillsPlayed", 2),
+            (new IronClub(), "cards_played", "_cardsPlayed", 3),
+            (new HappyFlower(), "turns_seen", "_turnsSeen", 2),
+            (new FakeHappyFlower(), "turns_seen", "_turnsSeen", 4),
+            (new Pendulum(), "turns_seen", "_turnsSeen", 1),
+            (new PollinousCore(), "turns_seen", "_turnsSeen", 3),
+            (new Girya(), "times_lifted", "_timesLifted", 2),
+            (new LastingCandy(), "combat_rewards_seen", "_combatRewardsSeen", 5),
+            (new BookOfFiveRings(), "cards_added", "_cardsAdded", 9),
+            (new VenerableTeaSet(), "gain_energy_in_next_combat", "_gainEnergyInNextCombat", true),
+            (new FakeVenerableTeaSet(), "gain_energy_in_next_combat", "_gainEnergyInNextCombat", true),
+            (new PumpkinCandle(), "kindle_count", "_kindleCount", 4),
+            (new SwordOfStone(), "elites_defeated", "_elitesDefeated", 2),
+            (new WingedBoots(), "times_used", "_timesUsed", 1),
+            (new FishingRod(), "combats_seen", "_combatsSeen", 6),
+            (new ToyBox(), "combats_seen", "_combatsSeen", 3),
+            (new WongosMysteryTicket(), "combats_finished", "_combatsFinished", 4),
+            (new PaelsWing(), "rewards_sacrificed", "_rewardsSacrificed", 1),
+            (new LavaRock(), "has_triggered", "_hasTriggered", true) })
+        {
+            string name = relic.GetType().Name;
+            var initial = BuildRelicRunState(relic);
+            Check(initial.Count == 1 && initial[key] is 0 or false, $"{name}: 0 / false is a value");
+            SetF(relic, field, value);
+            var row = BuildRelicRunState(relic);
+            Check(Equals(row[key], value) && !row.ContainsKey("unavailable_reasons"), $"{name}: {key} is read");
+            Check(Equals(GetF(relic, field), value), $"{name}: the read leaves the field as it is");
+            Check(!BuildRelicCombatState(relic).Any(), $"{name}: saved counters are not combat_state");
+            var relicRow = new Dictionary<string, object?> { ["run_state"] = row };
+            Check(FormatRelicCombatState(relicRow).Contains(key.Replace('_', ' ') + ": "), $"{name}: run_state markdown");
+        }
+        var crucible = new SilverCrucible();
+        SetF(crucible, "_treasureRoomsEntered", 2);
+        var crucibleState = BuildRelicRunState(crucible);
+        Check(crucibleState.Count == 2 && Equals(crucibleState["times_used"], 0) && Equals(crucibleState["treasure_rooms_entered"], 2), "Silver Crucible: both counters");
+        Check(_stateWarnings.Count == 0, "readable run_state adds no warnings");
+        var wrongNunchaku = BuildRelicRunState(new WrongNunchakuField());
+        Unknown(wrongNunchaku, "attacks_played", "player.relics.WrongNunchakuField.run_state");
+        Check(!BuildRelicRunState(new PenNib()).Any() && !BuildRelicRunState(new Kunai()).Any(), "other relics have no run_state");
+
+        // vars from RelicModel._dynamicVars.
+        BeginStateWarnings();
+        var kunai = new Kunai();
+        kunai.DynamicVars.Vars["Cards"] = new() { Value = 3m };
+        kunai.DynamicVars.Vars["DexterityPower"] = new() { Value = 1m };
+        kunai.DynamicVars.Vars["Name"] = new MegaCrit.Sts2.Core.Localization.DynamicVars.StringVar();
+        var kunaiRow = new Dictionary<string, object?>();
+        AttachRelicDynamicVars(kunaiRow, kunai);
+        var vars = (Dictionary<string, object?>)kunaiRow["vars"]!;
+        Check(vars.Keys.SequenceEqual(new[] { "Cards", "DexterityPower" }) && Equals(vars["Cards"], 3m) && Equals(vars["DexterityPower"], 1m)
+            && !kunaiRow.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "relic vars: names, BaseValue, StringVar left out");
+        Check(FormatRelicCombatState(kunaiRow) == "", "readable relic vars are JSON-only in markdown");
+        var emptyRow = new Dictionary<string, object?>();
+        AttachRelicDynamicVars(emptyRow, new Girya());
+        Check(emptyRow["vars"] is Dictionary<string, object?> { Count: 0 } && !emptyRow.ContainsKey("unavailable_reasons"), "an empty relic set is {}");
+        kunai.DynamicVars.Vars["Cards"].ThrowBase = true;
+        var partialRow = new Dictionary<string, object?>();
+        AttachRelicDynamicVars(partialRow, kunai);
+        var partialVars = (Dictionary<string, object?>)partialRow["vars"]!;
+        Check(partialVars["Cards"] == null && Equals(partialVars["DexterityPower"], 1m)
+            && Reasons(partialRow).ContainsKey("vars.Cards") && !Reasons(partialRow).ContainsKey("vars"), "a failed relic var is null under its name; the others kept");
+        Check(_stateWarnings.Any(w => w.StartsWith("player.relics.Kunai.vars.Cards:")), "a failed relic var has a path warning");
+        Check(FormatRelicCombatState(partialRow).Contains("(vars: Cards=null (InvalidOperationException: base failed))"), "markdown shows the failed relic var");
+        kunai.DynamicVars.Vars["Cards"].ThrowBase = false;
+        var cleared = new Girya();
+        cleared.ClearDynamicVars();
+        var clearedRow = new Dictionary<string, object?> { ["id"] = "GIRYA" };
+        AttachRelicDynamicVars(clearedRow, cleared);
+        Unknown(clearedRow, "vars", "player.relics.Girya");
+        Check(!cleared.DynamicVarsInitialized && Reasons(clearedRow)["vars"].Contains("_dynamicVars") && Equals(clearedRow["id"], "GIRYA"),
+            "a null relic _dynamicVars is not built by the read; vars is null with a reason, not dropped");
+        Check(FormatRelicCombatState(clearedRow).Contains("(vars: null (InvalidOperationException"), "markdown shows the failed relic vars");
+    }
+
+    // sts2#1020: power private Data / fields that neither Amount nor DynamicVars hold.
+    private static void RunPowerPrivateDataContract()
+    {
+        var options = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        BeginStateWarnings();
+        var deckStrike = new CardModel("STRIKE_R");
+        var deckBash = new CardModel("BASH");
+        var owner = new Player();
+        owner.Deck.Cards.Add(deckStrike);
+        owner.Deck.Cards.Add(deckBash);
+        RefreshCardUidRegistry(new CombatState { Players = [owner] });
+        var strike = new CardModel("STRIKE_R") { DeckVersion = deckStrike };
+        var bash = new CardModel("BASH") { DeckVersion = deckBash };
+        string strikeUid = GetStableCardUid(strike), bashUid = GetStableCardUid(bash);
+        var unseen = new CardModel("ANGER");
+
+        // Card -> int maps: Rupture (pending Strength), Calamity / Strangle (amount at play).
+        foreach (var (power, key, valueKey, field) in new (PowerModel, string, string, string)[] {
+            (new RupturePower(), "played_cards", "pending_strength", "playedCards"),
+            (new CalamityPower(), "amounts_for_played_cards", "amount", "amountsForPlayedCards"),
+            (new StranglePower(), "amounts_for_played_cards", "amount", "amountsForPlayedCards") })
+        {
+            string name = power.GetType().Name;
+            object data = power.PeekData()!;
+            var empty = Power(power, false);
+            Check(empty[key] is List<Dictionary<string, object?>> { Count: 0 } && !empty.ContainsKey("unavailable_reasons"), $"{name}: an empty map is [] on hidden rows too");
+            Check(FormatPowerInternalState(empty).Contains(key.Replace('_', ' ') + ": none"), $"{name}: empty markdown");
+            var map = (Dictionary<CardModel, int>)GetF(data, field)!;
+            map.Add(strike, 3);
+            map.Add(bash, 0);
+            var row = Power(power);
+            var rows = (List<Dictionary<string, object?>>)row[key]!;
+            Check(rows.Count == 2 && Equals(rows[0]["uid"], bashUid) && Equals(rows[0][valueKey], 0) && Equals(rows[1]["uid"], strikeUid) && Equals(rows[1][valueKey], 3)
+                && rows.All(r => r["uid_known"] is true) && Equals(rows[1]["card_id"], "STRIKE_R"), $"{name}: registry uids sorted, values kept (0 too)");
+            Check(FormatPowerInternalState(row).Contains($"{key.Replace('_', ' ')}: {bashUid}=0, {strikeUid}=3"), $"{name}: markdown");
+            map.Add(unseen, 2);
+            var withUnseen = (List<Dictionary<string, object?>>)Power(power)[key]!;
+            Check(withUnseen.Count == 3 && withUnseen[2]["uid"] == null && withUnseen[2]["uid_known"] is false && Equals(withUnseen[2][valueKey], 2)
+                && withUnseen[2]["uid_unavailable_reason"] is string r && r.Contains("ANGER") && !TryGetRegisteredCardUid(unseen, out _),
+                $"{name}: an unregistered card is uid_known=false with a reason; no uid is minted");
+            Check(_stateWarnings.Any(w => w.StartsWith($"status.{name}.{key}.uid:")), $"{name}: an unregistered card warns");
+            Check(ReferenceEquals(power.PeekData(), data) && map.Count == 3 && rows.Count == 2, $"{name}: Data untouched; snapshot independent");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(row, options)))
+                Check(json.RootElement.GetProperty(key)[1].GetProperty(valueKey).GetInt32() == 3, $"{name}: wire int");
+            power.SetData(null);
+            Unknown(Power(power), key, $"status.{name}");
+            Check(power.PeekData() == null, $"{name}: null Data is never initialized");
+        }
+
+        // Hellraiser: the infinite-HP auto-play count and the Strike being auto-played.
+        BeginStateWarnings();
+        var hell = new HellraiserPower();
+        var hellData = hell.PeekData()!;
+        var hellRow = Power(hell);
+        Check(Equals(hellRow["infinite_auto_plays_this_turn"], 0) && hellRow["auto_playing_cards"] is List<Dictionary<string, object?>> { Count: 0 }
+            && !hellRow.ContainsKey("showed_cap_reached_message"), "Hellraiser: 0 and [] are values; the message flag is left out");
+        SetF(hellData, "infiniteAutoPlaysThisTurn", 9);
+        ((HashSet<CardModel>)GetF(hellData, "autoPlayingCards")!).Add(strike);
+        var hellBusy = Power(hell, false);
+        Check(Equals(hellBusy["infinite_auto_plays_this_turn"], 9) && hellBusy["auto_playing_cards"] is List<Dictionary<string, object?>> busy && busy.Count == 1
+            && Equals(busy[0]["uid"], strikeUid) && !busy[0].ContainsKey("amount"), "Hellraiser: hidden row carries the count and the auto-played uid");
+        Check(FormatPowerInternalState(hellBusy).Contains("infinite auto plays this turn: 9") && FormatPowerInternalState(hellBusy).Contains($"auto playing cards: {strikeUid}"), "Hellraiser markdown");
+
+        // Scalar Data fields.
+        foreach (var (power, key, field, value) in new (PowerModel, string, string, object)[] {
+            (new AutomationPower(), "cards_left", "cardsLeft", 3),
+            (new DarkEmbracePower(), "ethereal_count", "etherealCount", 2),
+            (new HardenedShellPower(), "damage_received_this_turn", "damageReceivedThisTurn", 7.5m),
+            (new AdaptablePower(), "is_reviving", "isReviving", true),
+            (new ReattachPower(), "is_reviving", "isReviving", true),
+            (new IllusionPower(), "is_reviving", "isReviving", true) })
+        {
+            string name = power.GetType().Name;
+            object data = power.PeekData()!;
+            var before = Power(power, false);
+            Check(before.ContainsKey(key) && !before.ContainsKey("unavailable_reasons"), $"{name}: hidden row carries {key}");
+            SetF(data, field, value);
+            var row = Power(power);
+            Check(Equals(row[key], value) && ReferenceEquals(power.PeekData(), data), $"{name}: {key} is read; Data untouched");
+            Check(FormatPowerInternalState(row).Contains(key.Replace('_', ' ') + ": "), $"{name}: markdown");
+            power.SetData(null);
+            Unknown(Power(power), key, $"status.{name}");
+            Check(power.PeekData() == null, $"{name}: null Data is never initialized");
+        }
+        var automation = new AutomationPower();
+        Check(Equals(Power(automation)["cards_left"], 10) && Equals(((Dictionary<string, object?>)Power(automation)["dynamic_vars"]!)["BaseCards"], 10m),
+            "Automation: the countdown is cards_left; BaseCards stays the text's 10");
+
+        // Gigantification: bound / unbound command.
+        var giant = new GigantificationPower();
+        Check(Power(giant)["has_command_to_modify"] is false, "Gigantification: unbound is a readable false");
+        SetF(giant.PeekData()!, "commandToModify", new AttackCommand());
+        Check(Power(giant, false)["has_command_to_modify"] is true, "Gigantification: bound, hidden row too");
+        giant.SetData(null);
+        Unknown(Power(giant), "has_command_to_modify", "status.GigantificationPower");
+
+        // Illusion: the follow-up move id (readable null = none).
+        BeginStateWarnings();
+        var illusion = new IllusionPower();
+        var noFollow = Power(illusion);
+        Check(noFollow["follow_up_state_id"] == null && noFollow["follow_up_state_readable"] is true && !noFollow.ContainsKey("unavailable_reasons"), "Illusion: readable none");
+        Check(FormatPowerInternalState(noFollow).Contains("follow up state id: none") && !FormatPowerInternalState(noFollow).Contains("readable"), "Illusion: none markdown");
+        illusion.FollowUpValue = "SLASH_MOVE";
+        Check(Equals(Power(illusion, false)["follow_up_state_id"], "SLASH_MOVE"), "Illusion: the id, hidden row too");
+        illusion.ThrowFollowUp = true;
+        var failedFollow = Power(illusion);
+        Unknown(failedFollow, "follow_up_state_id", "status.IllusionPower");
+        Check(failedFollow["follow_up_state_readable"] is false && FormatPowerInternalState(failedFollow).Contains("follow up state readable: no"), "Illusion: failed read differs from none");
+
+        // Declared private fields.
+        foreach (var (power, key, field, value) in new (PowerModel, string, string, object)[] {
+            (new NemesisPower(), "should_apply_intangible", "_shouldApplyIntangible", true),
+            (new SlothPower(), "cards_played_this_turn", "_cardsPlayedThisTurn", 2),
+            (new TenderPower(), "cards_played_this_turn", "_cardsPlayedThisTurn", 3),
+            (new BeaconOfHopePower(), "has_already_been_given_block", "_hasAlreadyBeenGivenBlock", true) })
+        {
+            string name = power.GetType().Name;
+            Check(Power(power, false)[key] is 0 or false, $"{name}: 0 / false is a value on hidden rows");
+            SetF(power, field, value);
+            Check(Equals(Power(power)[key], value) && Equals(GetF(power, field), value), $"{name}: {key} is read and left as it is");
+        }
+
+        // Swipe: the stolen card as a registry uid (readable null = nothing stolen).
+        BeginStateWarnings();
+        var swipe = new SwipePower();
+        var nothing = Power(swipe, false);
+        Check(nothing["stolen_card"] == null && nothing["stolen_card_readable"] is true && !nothing.ContainsKey("unavailable_reasons"), "Swipe: nothing stolen is a readable null");
+        Check(FormatPowerInternalState(nothing).Contains("stolen card: none"), "Swipe: none markdown");
+        SetF(swipe, "_stolenCard", bash);
+        var stolen = Power(swipe);
+        Check(stolen["stolen_card"] is Dictionary<string, object?> stolenRow && Equals(stolenRow["uid"], bashUid) && stolenRow["uid_known"] is true
+            && Equals(stolenRow["card_id"], "BASH") && stolen["stolen_card_readable"] is true, "Swipe: the stolen card's registry uid");
+        Check(FormatPowerInternalState(stolen).Contains($"stolen card: {bashUid}"), "Swipe markdown");
+        SetF(swipe, "_stolenCard", unseen);
+        Check(Power(swipe)["stolen_card"] is Dictionary<string, object?> unseenRow && unseenRow["uid_known"] is false && !TryGetRegisteredCardUid(unseen, out _),
+            "Swipe: an unregistered stolen card is not given a uid");
+        Check(!Power(new ToricToughnessPower()).ContainsKey("stolen_card") && !Power(new PanachePower()).ContainsKey("played_cards"), "other powers carry none of these keys");
+    }
+
     // sts2#1034: Rend counts a power when TypeForCurrentAmount == Debuff && !(power is ITemporaryPower).
     private static void RunRendInputContract()
     {
@@ -331,8 +699,8 @@ public static partial class McpMod
         plain.Skip = true;
         Check(Power(plain)["skip_next_duration_tick"] is true, "true skip read");
         Check(FormatPowerInternalState(Power(plain)).Contains("skip next duration tick: yes"), "true skip markdown");
-        Check(Power(plain, false).Count == 5 && Power(plain, false).ContainsKey("type_for_current_amount") && Power(plain, false).ContainsKey("is_temporary_power"),
-            "hidden or visibility-unknown powers carry only the Rend inputs (sts2#1034)");
+        Check(Power(plain, false).Count == 6 && Power(plain, false).ContainsKey("type_for_current_amount") && Power(plain, false).ContainsKey("is_temporary_power") && Power(plain, false)["dynamic_vars"] is Dictionary<string, object?> { Count: 0 },
+            "hidden or visibility-unknown powers carry only the Rend inputs (sts2#1034) and dynamic_vars (sts2#1020)");
         plain.ThrowSkip = true;
         var failedSkip = Power(plain);
         Unknown(failedSkip, "skip_next_duration_tick", "status.PowerModel");
@@ -377,7 +745,7 @@ public static partial class McpMod
         var boundSnapshot = Power(chains);
         chains.Set(false);
         Check(boundSnapshot["bound_card_played"] is true && Power(chains)["bound_card_played"] is false, "Bound snapshot stays independent of game reset");
-        Check(Power(chains, false).Count == 5, "hidden Bound power omits internal state (only the Rend inputs)");
+        Check(Power(chains, false).Count == 6, "hidden Bound power omits internal state (only the Rend inputs and dynamic_vars)");
         foreach (object? invalidData in new object?[] { null, new object() })
         {
             chains.SetData(invalidData);
@@ -827,6 +1195,9 @@ public static partial class McpMod
                 "failed Vigor survives production wire as readable=false, null and row reason");
         }
         RunCardEffectPowerContract();
+        RunPowerDynamicVarsContract();
+        RunPowerPrivateDataContract();
+        RunRelicCounterContract();
         RunDampenContract();
         RunRendInputContract();
         var response = new Dictionary<string, object?>();
@@ -841,6 +1212,15 @@ public static partial class McpMod
         Check(builder.Contains("[\"status\"] = BuildPowersState(creature)") && builder.Contains("[\"status\"] = BuildPowersState(osty)") && builder.Contains("state[\"status\"] = BuildPowersState(creature);"), "player, enemy and pet share builder");
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
         {
+            // sts2#1020: vars and run_state are attached for every relic, before (outside) the combat guard.
+            int vars = builder.IndexOf("try { AttachRelicDynamicVars(relicState, relic); }", StringComparison.Ordinal);
+            int run = builder.IndexOf("var relicRunState = BuildRelicRunState(relic);", StringComparison.Ordinal);
+            int guard = builder.IndexOf("var relicCombatState = BuildRelicCombatState(relic);", StringComparison.Ordinal);
+            Check(vars > 0 && run > vars && guard > run && builder.LastIndexOf("if (inCombat)", guard, StringComparison.Ordinal) > run
+                && !builder.Contains("ReadRelicDynamicVarValues") && builder.Contains("relicState[\"run_state\"] = relicRunState;"),
+                "relic vars (field read) and run_state are wired outside the combat guard");
+        }
+        {
             // Dampen's downgraded_cards only looks up uids (TryGetRegisteredCardUid): in BuildPlayerState
             // the hand and pile rows, which register them, must be built before the status rows.
             int playerStart = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState(Player player)", StringComparison.Ordinal);
@@ -852,7 +1232,7 @@ public static partial class McpMod
         }
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 11;"), "current schema is 11 (sts2#1012)");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
         Check(Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = power.Type.ToString(),")
             && Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = SafeGetText(() => power.Type.ToString()),"),
             "status type stays PowerModel.Type in full and minimal rows (TypeForCurrentAmount is the new key)");

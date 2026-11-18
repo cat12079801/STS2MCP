@@ -72,12 +72,37 @@ Data が null・フィールドの欠落・型違いは null・理由・warnings
 `SpeedPotionPower`）が非表示の行でも true、`type` と同じ値・false は Markdown に出さないこと、wire の文字列と bool、
 getter の失敗は `type` で補わず null・理由・warnings で他の項目を保持すること、読取が getter 1 回だけで Data・`_dynamicVars`・
 `Applier` に触れないこと、`BuildPowersState` が非表示・量 0 でも現在の型が Debuff（または読めない）の行を落とさないこと（ソース文字列）を検査する。ダブルは `GetTypeForAmount` を計算せず、ゲームが返す値を fixture が与える。
-内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること（破壊の入力は除く）、
+パワーの量の入力（`cat12079801/sts2#1020`、schema 12）: 全パワーの `dynamic_vars`（private `PowerModel._dynamicVars` の `{変数名: BaseValue}`）。
+変数の無いパワーは理由・warnings の無い `{}`（Markdown に出さない、wire は空 object）、2 変数（`TankPower`）の名前・小数の値・集合の順、
+wire で変数名を snake_case にしないこと、snapshot の独立と 0 の実値、非表示の行にも付くこと、`StringVar` を出さないこと、
+型ごとの既存項目（`self_damage`・`damage`・`block_base_value`）が残り同じ値になること、1 変数の読取失敗はその名前だけ null で
+`unavailable_reasons["dynamic_vars.<名前>"]`・warnings・他の変数を保持（Markdown・wire も）、`_dynamicVars` が null なら
+可視・非表示の行とも getter で作らず項目ごと null・理由・warnings で他の項目を保持（`{}` にしない。爆弾の `damage` も同じく失敗）、
+列挙の失敗も項目ごとの失敗になることを検査する。
+パワーの private Data・フィールド（`cat12079801/sts2#1020`、schema 12）: 血の沸騰（`played_cards` / `pending_strength`）・カラミティ・絞殺
+（`amounts_for_played_cards` / `amount`）の札→数の辞書を、空は `[]`（非表示の行にも付く・Markdown は `none`）、registry の uid で uid 順・0 も実値、
+registry に無い札は `uid_known=false`・理由・warnings で uid を採番しないこと、Data を変えず snapshot が独立、wire の int、Data が null なら初期化せず
+null・理由・warnings で検査する。ヘル・レイザーの `infinite_auto_plays_this_turn` と `auto_playing_cards`（`showedCapReachedMessage` は出さない）、
+オートメーションの `cards_left`（`dynamic_vars.BaseCards` は 10 のまま）、闇の抱擁の `ethereal_count`、硬い殻の `damage_received_this_turn`（decimal）、
+適応・再結合・幻影の `is_reviving` の読取・非表示の行・Markdown・Data が null の失敗、巨大化の `has_command_to_modify`（未結合の false・結合の true・失敗）、
+幻影の `follow_up_state_id`（記録なしは readable=true の null と Markdown の `none`、getter の失敗は readable=false）、
+ネメシス・怠惰・軟化・希望の道標の private フィールドの 0 / false と値、盗む（`SWIPE_POWER`）の `stolen_card`（なしは readable=true の null、
+registry の uid、無い札は採番しない）、他のパワーにキーが無いことも確かめる。
+レリックの手番の数と保存カウンタ（schema 12）: 苦無・手裏剣・扇子・鎖鎌の `attacks_played_this_turn`、レターオープナーの `skills_played_this_turn`、
+懐中時計の `cards_played_this_turn` が private の数そのもの（表示値の剰余でない）で 0 も実値、snapshot の独立、`run_state` に出ないこと、
+オリハルコン（偽物も）の `should_trigger` の false / true、フィールド欠落の null・理由・warnings。`run_state` は 20 種
+（ヌンチャク・音叉・IronClub・HappyFlower・偽 HappyFlower・Pendulum・PollinousCore・Girya・LastingCandy・BookOfFiveRings・VenerableTeaSet・偽物・
+PumpkinCandle・SwordOfStone・WingedBoots・SilverCrucible〔2 項目〕・FishingRod・ToyBox・WongosMysteryTicket・PaelsWing・LavaRock）の
+初期値と値の読取、読取でフィールドを変えないこと、`combat_state` に出ないこと、Markdown、型違いのフィールドの null・理由・warnings、他のレリックに付かないことを検査する。
+レリックの `vars` は private `RelicModel._dynamicVars` から名前・BaseValue・StringVar を除くこと、空の `{}`、1 変数の失敗はその名前だけ null で
+`unavailable_reasons["vars.<名前>"]`・warnings・他の変数を保持、集合が null なら getter で作らず `vars: null`・理由・warnings で行を保つこと、
+Markdown は失敗だけを表示することを検査する。state builder の配線（`vars` と `run_state` が戦闘の条件の外、旧 `ReadRelicDynamicVarValues` が無い）はソース文字列で確かめる。
+内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること（破壊の入力と `dynamic_vars` は除く）、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。
 
 巨大な state builder はソース文字列で、通常行・説明失敗時の最小行、player・敵・ペット、
-マルチの共通経路、戦闘中だけのレリック出力、Markdown の配線、schema 11 を検査する。
+マルチの共通経路、戦闘中だけのレリック出力、Markdown の配線、schema 12 を検査する。
 フィールドと getter はゲーム境界のダブル。効果の適用やリセットを MOD 側では模倣しない。
 毛皮のコートは v0.113.0 の戦闘フックどおり、座標を比較し act の条件を足さない。
 実ゲームに対する 0警告0エラーのビルドを別途実行し、ゲーム起動・mods への配置はしない。

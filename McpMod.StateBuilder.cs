@@ -1723,14 +1723,23 @@ public static partial class McpMod
                 ["melted"] = relic.IsMelted,
                 ["keywords"] = BuildHoverTips(relic.HoverTipsExcludingRelic)
             };
+            // sts2#1020: vars (RelicModel._dynamicVars; a failure is null with unavailable_reasons.vars)
+            // and run_state (saved counters, in and out of combat). JIT / call failures stay in the key.
+            try { AttachRelicDynamicVars(relicState, relic); }
+            catch (Exception ex)
+            {
+                relicState["vars"] = null;
+                RecordInternalStateFailure(relicState, "vars", ex, $"player.relics.{relic.Id.Entry}");
+            }
             try
             {
-                relicState["vars"] = ReadRelicDynamicVarValues(relic);
+                var relicRunState = BuildRelicRunState(relic);
+                if (relicRunState.Count > 0)
+                    relicState["run_state"] = relicRunState;
             }
             catch (Exception ex)
             {
-                // 読取／初期化／JIT の失敗は、このレリックの vars だけに留める。
-                Warn($"player.relics.{relic.Id.Entry}.vars", ex);
+                Warn($"player.relics.{relic.Id.Entry}.run_state", ex);
             }
             if (inCombat)
             {
@@ -1974,19 +1983,6 @@ public static partial class McpMod
         return previews;
     }
 
-    // カードの対象別 values と同じ名前→数値の形。レリックはプレビューを更新せず、
-    // 現在の BaseValue を小数のまま読む（例: BowlerHat.GoldIncrease = 1.25）。
-    // StringVar の基底値 0 は文字列のダミーなので出さない。
-    private static Dictionary<string, object?> ReadRelicDynamicVarValues(RelicModel relic)
-    {
-        var values = new Dictionary<string, object?>();
-        foreach (var (name, dynamicVar) in relic.DynamicVars)
-        {
-            if (dynamicVar is not StringVar)
-                values[name] = dynamicVar.BaseValue;
-        }
-        return values;
-    }
 
     /// <summary>
     /// Every dynamic var on this card, by name, at its previewed value.

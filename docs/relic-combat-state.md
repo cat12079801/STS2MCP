@@ -123,23 +123,73 @@ Markdown は `(attacks played: 9)`、`(cards exhausted: 4, ethereal count: 0)`�
 `(affects current room: yes)` のように既存レリック行に付ける。
 失敗時は `null (理由)`、空の `combat_state` は追記しない。
 
+## 手番の数・オリハルコン（schema 12）
+
+v0.113.1（`sts2-a671e9ef`）の同名クラスを出典とする（`cat12079801/sts2#1020`）。private フィールドを名前・宣言型で読み、
+失敗はキーを `null`・`combat_state.unavailable_reasons.<key>`・`warnings` の `player.relics.<ID>.combat_state.<key>` にする。
+`counter` は `DisplayAmount` の表示値（数 % 閾値、`_isActivating` の演出中は閾値）なので、数そのものはこちらを読む。閾値・量は `vars`。
+
+| レリック | 出す項目 ← 元の値 | 意味・戻る時機 |
+|---|---|---|
+| 苦無 `Kunai`・手裏剣 `Shuriken`・扇子 `OrnamentalFan`・鎖鎌 `Kusarigama` | `attacks_played_this_turn` ← `_attacksPlayedThisTurn` | `AfterCardPlayed` が戦闘中の所有者のアタックを数え、`vars.Cards` の倍数で発動。所有者が参加する `BeforeSideTurnStart` と `AfterCombatEnd` で 0。 |
+| レターオープナー `LetterOpener` | `skills_played_this_turn` ← `_skillsPlayedThisTurn` | 同じ形でスキルを数える。 |
+| 懐中時計 `Pocketwatch` | `cards_played_this_turn` ← `_cardsPlayedThisTurn` | `AfterCardPlayed` が戦闘中の所有者の札を数える。所有者が参加する `BeforeSideTurnStart` で `_cardsPlayedLastTurn`（既存の `cards_played_last_turn`）へ移して 0。`ModifyHandDraw` は 2 手番目以降、前手番の数が `vars.CardThreshold` 以下なら `vars.Cards` を足す。 |
+| オリハルコン `Orichalcum`・偽物 `FakeOrichalcum` | `should_trigger` ← `_shouldTrigger` | `BeforeSideTurnEndVeryEarly` が所有者のブロック 0 を見て true、`BeforeSideTurnEnd` が `vars.Block` を得て false、`BeforeSideTurnStart` も false。プレイヤーが行動する間は false で、true は手番終了の 2 つのフックの間だけ。 |
+
+## 保存カウンタ（`run_state`、schema 12）
+
+戦闘をまたいで残る `[SavedProperty]` の数・印は、戦闘中・戦闘外とも `player.relics[].run_state` に出す（`combat_state` は戦闘中だけ）。
+private の裏のフィールドを名前・宣言型で読み、getter・setter・フック・乱数は呼ばない。失敗はキーを `null`・`run_state.unavailable_reasons.<key>`・
+`warnings` の `player.relics.<ID>.run_state.<key>` にする。出典は v0.113.1（`sts2-a671e9ef`）の同名クラス。
+
+| レリック | 出す項目 ← 元の値 | 意味・戻る時機 |
+|---|---|---|
+| ヌンチャク `Nunchaku` | `attacks_played` ← `_attacksPlayed` | `AfterCardPlayed` が所有者のアタックを数え、戦闘中に `vars.Cards` の倍数でエナジー。戦闘の終わりに戻さない。 |
+| 音叉 `TuningFork` | `skills_played` ← `_skillsPlayed` | 所有者のスキルを数え、`vars.Cards`（`SkillsThreshold`）に届いたらブロックを得て閾値を引く。 |
+| `IronClub` | `cards_played` ← `_cardsPlayed` | 所有者の札を数え、戦闘中に `vars.Cards` の倍数で 1 枚引く。 |
+| `HappyFlower`・`FakeHappyFlower` | `turns_seen` ← `_turnsSeen` | 所有者の `AfterSideTurnStart` で `(数 + 1) % vars.Turns`、0 でエナジー。戦闘の終わりに戻さない。 |
+| `Pendulum` | `turns_seen` ← `_turnsSeen` | `BeforeHandDraw` で `(数 + 1) % vars.Turns`、0 の手番の `ModifyHandDraw` で `vars.Cards` を足す。 |
+| `PollinousCore` | `turns_seen` ← `_turnsSeen` | `BeforeHandDraw` で 1 足し、`vars.Turns` 以上なら `ModifyHandDraw` で `vars.Cards` を足し、`AfterModifyingHandDraw` で 0。 |
+| `Girya` | `times_lifted` ← `_timesLifted` | 休憩所で持ち上げた回数。戦闘部屋に入ると同じ量の筋力を得る。3 未満の間は休憩所に選択肢を足す。 |
+| `LastingCandy` | `combat_rewards_seen` ← `_combatRewardsSeen` | カード報酬のある戦闘報酬ごとに 1 足す（`BeforeCombatRewardOffered`）。奇数の間はカード報酬に 1 枚足す。 |
+| `BookOfFiveRings` | `cards_added` ← `_cardsAdded` | デッキに入った札を数え（`AfterCardChangedPiles`）、`vars.Cards` の倍数で回復。 |
+| `VenerableTeaSet`・`FakeVenerableTeaSet` | `gain_energy_in_next_combat` ← `_gainEnergyInNextCombat` | 休憩所に入ると true、次の戦闘の `AfterEnergyReset` で `vars.Energy` を得て false。 |
+| `PumpkinCandle` | `kindle_count` ← `_kindleCount` | 0 より大きい間 `ModifyMaxEnergy` が `vars.Energy` を足す。`AfterCombatEnd` で 1 減る。 |
+| `SwordOfStone` | `elites_defeated` ← `_elitesDefeated` | 倒したエリートの数。 |
+| `WingedBoots` | `times_used` ← `_timesUsed` | 使った回数（`counter` は残り回数）。 |
+| `SilverCrucible` | `times_used` ← `_timesUsed`、`treasure_rooms_entered` ← `_treasureRoomsEntered` | 使った回数と、入った宝箱部屋の数。 |
+| `FishingRod`・`ToyBox` | `combats_seen` ← `_combatsSeen` | 経た戦闘の数（`counter` は剰余か非表示）。 |
+| `WongosMysteryTicket` | `combats_finished` ← `_combatsFinished` | 終えた戦闘の数（`counter` は残り）。 |
+| `PaelsWing` | `rewards_sacrificed` ← `_rewardsSacrificed` | 捧げた報酬の数（`counter` は `vars.Sacrifices` の剰余）。 |
+| `LavaRock` | `has_triggered` ← `_hasTriggered` | 第 1 層ボスのレリック報酬を足し終えたか（`TryModifyRewards`）。 |
+
+`_isActivating` は演出用なので出さない。Markdown は `(attacks played: 7)` の形で、`combat_state` の後に足す。
+
+## `vars` の読み方（schema 12）
+
+`vars` は private `RelicModel._dynamicVars` をそのまま読む（null なら作る `DynamicVars` の getter は呼ばない）。
+集合が null・列挙の失敗は `vars: null`・行の `unavailable_reasons.vars`・`warnings` の `player.relics.<ID>.vars`、
+1 変数の失敗はその名前だけ null・`unavailable_reasons["vars.<名前>"]`。以前はキーごと省略していた。
+
 ## 出さない値
 
 | レリック／値 | 理由と出典 |
 |---|---|
-| オリハルコン `Orichalcum._shouldTrigger` | 手番終了中の二つのフック間だけの予約。`BeforeSideTurnEndVeryEarly` がブロック 0 を確認して true、`BeforeSideTurnEnd` が消費して false。所有者の `BeforeSideTurnStart` も false。行動選択時点の条件は現在ブロックで判断できる。 |
-| オリハルコン？ `FakeOrichalcum._shouldTrigger` | 本物と同じ予約・リセット順。`BeforeSideTurnEndVeryEarly`／`BeforeSideTurnEnd`／`BeforeSideTurnStart`。 |
 | パエルの肉兵 `PaelsLegion._triggeredBlockLastTurn` | `AfterCardPlayed` で true、`AfterSideTurnStart` で睡眠アニメーションの要否だけを判定して false。`AfterCombatEnd` も false。倍化判定に効くのは出力した `cooldown`。 |
 | Vambrace／UnsettlingLamp の `_triggeringCard`、MusicBox の `_cardBeingPlayed`、PaelsLegion の `_affectedCardPlay`、UnsettlingLamp の `_doubledPowers` | 同じカードの解決中に効果をまとめる参照。各クラスの `BeforeCardPlayed`／`BeforePowerAmountChanged`／`AfterModifyingBlockAmount`／`AfterCardPlayed`、UnsettlingLamp の `HasDoubledTemporaryPowerSource`。次の行動用の消費フラグだけを出す。 |
 | `_isActivating`（JossPaper、PenNib 等） | `DoActivateVisuals` の待機中の表示切替。戦闘能力の未使用／使用済みフラグではない。PenNib の `_attackToDouble` も `BeforeCardPlayed`〜`AfterCardPlayed` の解決中参照。 |
-| 古びたティーセット `VenerableTeaSet._gainEnergyInNextCombat` と偽物 `FakeVenerableTeaSet` | `AfterRoomEntered(RestSiteRoom)` で予約、`AfterEnergyReset` でエナジー付与後 false。最初の行動選択では付与済みで既存 `energy` に反映済み。戦闘外の次戦闘開始条件は今回の戦闘中状態の対象外。公開 `GainEnergyInNextCombat` があることも確認。 |
 | 黄金の羅針盤 `GoldenCompass._goldenPathAct` | `AfterObtained`／`ModifyGeneratedMap`／`ModifyUnknownMapPointRoomTypes` のマップ・部屋設定用。戦闘中の行動に応じた消費状態ではない。 |
-| 溶岩石 `LavaRock._hasTriggered` | `TryModifyRewards` の第 1 層ボス報酬を一度だけ追加する保存フラグ。戦闘行動の結果による分岐ではない。 |
-| `VelvetChoker._cardsPlayedThisTurn` 等、既存カウンタに出る数 | `DisplayAmount` で取得済み。鮮やかなスカーフの非表示後の枚数は上記の専用項目で扱う。 |
+| `VelvetChoker` の手番の枚数 | private の数を持たず、`GetCardsPlayedThisTurn` が戦闘履歴から数える（v0.113.1）。`player.combat_history` と `counter` で読める。 |
+| `StoneCalendar` | `_isActivating`（演出）しか無い。発動の手番は公開の `TurnNumber`（`combat_history.turn_number`）と `vars.DamageTurn` で決まる。 |
+| `BoneTea`・`EmberTea`・`TeaOfDiscourtesy` の `_combatsLeft` | setter が `vars.Combats` に同じ値を書くので `vars` で読める（v0.113.1 の `CombatsLeft`）。 |
+| `MawBank._hasItemBeenBought`、`BathRobes._wasUsed` | `IsUsedUp` が既存 `used_up` に出る。 |
+| `Byrdpip._swoopsPlayed`・`_skin`、`Byrdine._hair`、`PaelsLegion._skin`、`Wuppy` の HP（`_currentHp` / `_maxHp`。`counter` に出る）・`_combatWuppy` | ペットの外見・演出と、ペットの生き物そのもの（`pets[]` の対象外）。 |
+| `ArchaicTooth`・`DustyTome`・`PaelsTooth`・`TouchOfOrobas`・`SeaGlass` の保存データ | 取得時のカード・レリックの選択の記録。戦闘・報酬の判断の入力ではない。 |
+| `SneckoEye`・`FakeSneckoEye._testEnergyCostOverride` | テスト用のコスト上書き。 |
 | `SilkenTress._isUsed`、`WongosMysteryTicket._gaveRelic`、`LizardTail._wasUsed` | それぞれの `IsUsedUp` が既存 `used_up` に出るため重複追加しない。 |
 
-全レリッククラスの private フィールド宣言と自動プロパティを横断して候補を再確認した。
-上記以外の保存カウンタ、外見、カード選択の保存データ、テスト用コスト上書きは対象外。
+v0.113.1（`sts2-a671e9ef`）のアイアンクラッド・共通・イベントの pool の全レリックで、private フィールド宣言と自動プロパティを横断して候補を再確認した
+（`cat12079801/sts2#1020`）。上記以外は `combat_state` か `run_state` に出す。他キャラの pool のレリックは対象外。
 解決中（`is_resolving: true`）は各フック間の状態が見え得るため、行動計画には解決後の
 snapshot を使う。これはゲームの全内部状態を復元する契約ではない。
 

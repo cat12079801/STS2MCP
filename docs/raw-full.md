@@ -84,7 +84,7 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 11,     // Contract version — see below
+  "schema_version": 12,     // Contract version — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
 ```
@@ -100,7 +100,7 @@ sent to one would run unchecked.
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The exceptions are **6**, **7**, **8**, **9**, **10** and **11**: additive contracts that a client treats as required as a whole, so
+The exceptions are **6**, **7**, **8**, **9**, **10**, **11** and **12**: additive contracts that a client treats as required as a whole, so
 they are gated on the version instead of probing each field. **10** (`cat12079801/sts2#1037`, the verification-capture
 contract) also changes two `hand_select` meanings: `cards[].index` is now the `NPlayerHand.ActiveHolders` position that
 `combat_select_card` presses (a holder without a card leaves a gap instead of shifting later rows), and `selected_cards`
@@ -113,6 +113,18 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **12** — the power / relic amount input contract (`cat12079801/sts2#1020`). Every status row (player, enemy, pet;
+  `hidden_in_ui` and minimal rows too) carries `dynamic_vars`: the power's own `DynamicVars` as
+  `{ name: BaseValue }` (`StringVar` left out; `{}` for a power without vars; `null` with a reason when the set
+  cannot be read). Powers whose state lives in private Data / fields (Rupture, Calamity, Strangle, Hellraiser,
+  Automation, Dark Embrace, Gigantification, Hardened Shell, Adaptable / Reattach / Illusion, Nemesis, Sloth,
+  Tender, Beacon of Hope, Swipe) carry per-type keys. Relics: `combat_state` gains the per-turn counts of Kunai,
+  Shuriken, Ornamental Fan, Kusarigama, Letter Opener and Pocketwatch and Orichalcum's `should_trigger`; saved
+  counters that outlive a combat are `relics[].run_state`, in and out of combat. `relics[].vars` is read from
+  `RelicModel._dynamicVars` and is now `null` with `unavailable_reasons.vars` when unreadable (it used to be
+  omitted) — the one change of meaning. The per-type keys (`damage`, `self_damage`, `cards_left`,
+  `block_base_value`, `stolen_gold`) keep their meaning. See [パワーの変数](#パワーの変数dynamic_varsschema-12),
+  [レリックの保存カウンタ](#レリックの保存カウンタrun_stateschema-12).
 - **11** — the potion can-use-now contract (`cat12079801/sts2#1012`). Every held `player.potions[]` row
   carries `can_use_now`, `valid_target_entity_ids` and `can_use_now_reason`; `use_potion` takes
   `expected_potion_id`; `scenario_capabilities.potion_availability` is `1`; a `?passive=1` read no longer
@@ -466,7 +478,9 @@ Always present at the top level (except `menu`). Contains everything about the l
       "id": "BURNING_BLOOD",
       "name": "Burning Blood",
       "description": "At the end of combat, heal 6 HP.",
-      "vars": { "Heal": 6 }, // DynamicVar name -> numeric BaseValue (decimals preserved)
+      "vars": { "Heal": 6 }, // DynamicVar name -> numeric BaseValue (decimals preserved); null if unreadable (schema 12)
+      // "run_state": { "attacks_played": 7 } — saved counters of some relics, in and out of combat (schema 12)
+      // "combat_state": { ... } — in-combat internal values of allowlisted relics
       "counter": null,       // Number if relic shows a counter, null otherwise
       "used_up": false,      // RelicModel.IsUsedUp: the relic has been used up
       "melted": false,       // RelicModel.IsMelted: a separate melted-wax state
@@ -749,14 +763,16 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 `UndyingSigil` の `DamageDecrease` は `0.5`。本文では百分率などに整形されることがある。
 残り回数などゲームが更新する値も含み、初期定数だけの一覧ではない
 （例: `WingedBoots.TimesUsed` が更新する `Rooms`）。数値を読むために
-プレビュー更新・ゲームのフック・RNG・setter を呼ばない。
+プレビュー更新・ゲームのフック・RNG・setter を呼ばない。集合は private `RelicModel._dynamicVars` をそのまま読み、
+null なら作る `DynamicVars` の getter は呼ばない（schema 12、`cat12079801/sts2#1020`）。
 
 `StringVar` は表示文字列で、継承した `BaseValue` の 0 はダミーのため除く。
 数値変数がない、または文字列だけなら `vars: {}`。
-初期化・列挙・数値読み取りが失敗した場合は、そのレリックの `vars` 全体だけを省略し、
-`warnings` に `player.relics.<ID>.vars` を記録する。部分的な一覧や代用の 0 は返さない。
-欠落は unknown と扱い、空オブジェクトと区別する。旧 MOD にもこの項目はない。
-追加項目なので版は上げていない（schema 3 のときの追加）。Markdown は既存の本文表示を使う。
+集合が null・列挙の失敗のときは `vars` を null にし、レリック行の `unavailable_reasons.vars` と
+`warnings` の `player.relics.<ID>.vars` に理由を書く（schema 12。それより前はキーごと省略していた）。
+1 つの変数が読めなければその名前を null にし、`unavailable_reasons["vars.<名前>"]` と `warnings` の
+`player.relics.<ID>.vars.<名前>` に理由を書いて、他の変数は残す。代用の 0 は返さない。null は unknown と扱い、空オブジェクトと区別する。
+項目は schema 3 のときの追加。Markdown は読めた `vars` を出さず、失敗だけ `(vars: null (理由))` / `(vars: 名前=null (理由))` を付ける。
 
 出典（sts2-9cb4f1ad）: `RelicModel.DynamicVars / CanonicalVars / DynamicDescription`、
 `DynamicVar.BaseValue / IntValue / PreviewValue`、`DynamicVarSet.GetEnumerator / InitializeWithOwner`、
@@ -784,8 +800,41 @@ private フィールドが読めなければキーを省略し、`warnings` に
 Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付ける。
 虹の指輪は各種別の枚数と発動数、肉兵は cooldown、脈打つ亡骸は HP 損失累積を表示する。
 
+schema 12（`cat12079801/sts2#1020`）で、手番ごとの数（苦無・手裏剣・扇子・鎖鎌の `attacks_played_this_turn`、
+レターオープナーの `skills_played_this_turn`、懐中時計の `cards_played_this_turn`）と、オリハルコン（偽物も）の `should_trigger` を足した。
+これらは失敗時にキーを `null` にし、`combat_state.unavailable_reasons` に理由を出す。`counter` は表示値（数 % 閾値、発動演出の間は閾値）なので、数そのものはこれを読む。
+
 全項目名・意味・戻る時機と、出す／出さない判断のソース出典は
 [レリックの戦闘中の内部状態](relic-combat-state.md) を参照。
+
+### レリックの保存カウンタ（`run_state`、schema 12）
+
+戦闘をまたいで残る `[SavedProperty]` の数・印を、戦闘中・戦闘外とも `player.relics[].run_state` に出す（`cat12079801/sts2#1020`）。
+次の発動が次の戦闘・休憩所・報酬画面にあり得るため、`combat_state`（戦闘中だけ）とは分ける。
+private の裏のフィールドを名前・宣言型で読み、getter・setter・フック・乱数は呼ばない。読めなければキーを `null` にし、
+`run_state.unavailable_reasons.<key>` と `warnings` の `player.relics.<ID>.run_state.<key>` に理由を書く。対象外のレリックには付かない。
+
+| レリック | 項目 ← private フィールド |
+|---|---|
+| ヌンチャク `Nunchaku` | `attacks_played` ← `_attacksPlayed` |
+| 音叉 `TuningFork` | `skills_played` ← `_skillsPlayed` |
+| `IronClub` | `cards_played` ← `_cardsPlayed` |
+| `HappyFlower`・`FakeHappyFlower`・`Pendulum`・`PollinousCore` | `turns_seen` ← `_turnsSeen` |
+| `Girya` | `times_lifted` ← `_timesLifted` |
+| `LastingCandy` | `combat_rewards_seen` ← `_combatRewardsSeen` |
+| `BookOfFiveRings` | `cards_added` ← `_cardsAdded` |
+| `VenerableTeaSet`・`FakeVenerableTeaSet` | `gain_energy_in_next_combat` ← `_gainEnergyInNextCombat` |
+| `PumpkinCandle` | `kindle_count` ← `_kindleCount` |
+| `SwordOfStone` | `elites_defeated` ← `_elitesDefeated` |
+| `WingedBoots` | `times_used` ← `_timesUsed` |
+| `SilverCrucible` | `times_used` ← `_timesUsed`、`treasure_rooms_entered` ← `_treasureRoomsEntered` |
+| `FishingRod`・`ToyBox` | `combats_seen` ← `_combatsSeen` |
+| `WongosMysteryTicket` | `combats_finished` ← `_combatsFinished` |
+| `PaelsWing` | `rewards_sacrificed` ← `_rewardsSacrificed` |
+| `LavaRock` | `has_triggered` ← `_hasTriggered` |
+
+閾値・量は `vars`（例: ヌンチャクの `Cards`・`Energy`）にある。Markdown は `combat_state` と同じ形で `(attacks played: 7)` を足す。
+各項目の意味・リセットの時機・出典は [レリックの戦闘中の内部状態](relic-combat-state.md#保存カウンタrun_stateschema-12) を参照。
 解決中のフック間では過渡的な値が見え得るため、行動計画は解決後の snapshot を使う。
 
 ### Card Object (in hand)
@@ -1405,6 +1454,7 @@ Pets also share the same builder.
   "type": "Buff",            // PowerModel.Type: "Buff", "Debuff" or "None"
   "type_for_current_amount": "Buff", // PowerModel.TypeForCurrentAmount (schema 9; negative Strength → "Debuff")
   "is_temporary_power": false,       // implements ITemporaryPower (schema 9)
+  "dynamic_vars": {},                // the power's DynamicVars { name: BaseValue } (schema 12; {} = none)
   "description": "Increases attack damage by 3.",
   "keywords": [ /* Keyword Objects */ ]
 }
@@ -1414,7 +1464,7 @@ Pets also share the same builder.
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
 ただし `THIEVERY_POWER` / `HEIST_POWER` の項目、`VIGOR_POWER` の `vigor_attack`、`HEX_POWER` の付与元、`RITUAL_POWER` の印と、
 schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANACHE_POWER` の項目、schema 8 の `DAMPEN_POWER` の項目、
-schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power` は、`status[]` に出る行なら可視性によらず付ける。
+schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power`、schema 12 の全パワーの `dynamic_vars` と下表の schema 12 の項目は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
@@ -1422,6 +1472,7 @@ schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power` は
 |---|---|---|
 | 全パワー | `type_for_current_amount` | enum 名 `None` / `Buff` / `Debuff` / null（schema 9。可視性によらず付ける） |
 | 全パワー | `is_temporary_power` | bool（schema 9。同上） |
+| 全パワー | `dynamic_vars` | `{"SelfDamage": 2}`（変数名 → decimal。変数が無ければ `{}`、読めなければ null。schema 12。同上） |
 | 全可視パワー | `skip_next_duration_tick` | bool |
 | `TORIC_TOUGHNESS_POWER` | `block_base_value` | decimal |
 | `SURROUNDED_POWER` | `facing` | enum 名 `Right` / `Left` |
@@ -1446,6 +1497,20 @@ schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power` は
 | `PANACHE_POWER` | `already_applied` | bool（schema 7。同上） |
 | `DAMPEN_POWER` | `caster_combat_ids` | uint の配列（昇順）/ null（schema 8。可視性によらず付ける） |
 | `DAMPEN_POWER` | `downgraded_cards` | `[{"uid","uid_known","card_id","original_upgrade_level"}]` / null。uid が無い行だけ `uid_unavailable_reason`（schema 8。同上） |
+| `RUPTURE_POWER` | `played_cards` | `[{"uid","uid_known","card_id","pending_strength"}]` / null（schema 12。可視性によらず付ける。uid は弱化と同じ扱い） |
+| `CALAMITY_POWER` / `STRANGLE_POWER` | `amounts_for_played_cards` | `[{"uid","uid_known","card_id","amount"}]` / null（schema 12。同上） |
+| `HELLRAISER_POWER` | `infinite_auto_plays_this_turn` | int（schema 12。同上） |
+| `HELLRAISER_POWER` | `auto_playing_cards` | `[{"uid","uid_known","card_id"}]` / null（schema 12。同上） |
+| `AUTOMATION_POWER` | `cards_left` | int（schema 12。同上。引きの残り。`dynamic_vars.BaseCards` は本文の 10） |
+| `DARK_EMBRACE_POWER` | `ethereal_count` | int（schema 12。同上） |
+| `GIGANTIFICATION_POWER` | `has_command_to_modify` | bool（schema 12。同上） |
+| `HARDENED_SHELL_POWER` | `damage_received_this_turn` | decimal（schema 12。同上） |
+| `ADAPTABLE_POWER` / `REATTACH_POWER` / `ILLUSION_POWER` | `is_reviving` | bool（schema 12。同上） |
+| `ILLUSION_POWER` | `follow_up_state_id` / `follow_up_state_readable` | string / null と bool（schema 12。同上。readable=true の null は記録なし） |
+| `NEMESIS_POWER` | `should_apply_intangible` | bool（schema 12。同上） |
+| `SLOTH_POWER` / `TENDER_POWER` | `cards_played_this_turn` | int（schema 12。同上） |
+| `BEACON_OF_HOPE_POWER` | `has_already_been_given_block` | bool（schema 12。同上） |
+| `SWIPE_POWER` | `stolen_card` / `stolen_card_readable` | `{"uid","uid_known","card_id"}` / null と bool（schema 12。同上。readable=true の null は盗んでいない） |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1531,6 +1596,31 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 拘束の鎖の使用済みフラグは false も `(bound card played: no)`、true は `yes` と表示する。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
 既存項目の意味を変えない追加のため版は上げていない（schema 4 のときの追加）。
+
+#### パワーの変数（`dynamic_vars`、schema 12）
+
+パワーの量のうち `amount` に無いもの（インフェルノ・深紅の衣の自傷、爆弾の威力、脆弱・脱力の倍率、プレートアーマーの減り方など）を、
+説明文から読まずに済むように、player・敵・ペットのすべての `status[]` の行（`hidden_in_ui` の行・説明失敗時の最小行も）に
+パワー自身の `DynamicVars` を付ける（出典は v0.113.1 `sts2-a671e9ef`、`cat12079801/sts2#1020`）。
+
+- `dynamic_vars` — `{変数名: BaseValue}`。変数名は `CanonicalVars` の名前のまま（`SelfDamage`・`DamageIncrease` など。snake_case にしない）、
+  並びは集合の順、値は decimal。`PowerModel.DynamicVars` は `CanonicalVars`（既定は空）から作られ、生きたパワーには `DeepCloneFields` が複製を持たせる。
+  効果が読み書きするのは `DynamicVar.BaseValue`（ただのフィールド）なので、その値を出す。数値の意味を持たない `StringVar`
+  （バリケードの `ApplierName`、`CoveredPower` などの `Applier`）は出さない（札・エンチャントの `dynamic_vars` と同じ）。変数を持たないパワーは `{}`。
+- private `PowerModel._dynamicVars` をそのまま読み、null なら作る getter は呼ばない。フィールドが null なら `dynamic_vars` を null にし、
+  行の `unavailable_reasons.dynamic_vars` と `warnings` の `status.<POWER_ID>.dynamic_vars` に理由を書く（`{}` にしない）。
+  1 つの変数が読めなければ、その名前を null にして `unavailable_reasons["dynamic_vars.<名前>"]`・`warnings` の
+  `status.<POWER_ID>.dynamic_vars.<名前>` に理由を書き、他の変数は残す。
+- 型ごとの既存の項目（`damage`・`self_damage`・`cards_left`・`block_base_value`・`stolen_gold`）は同じ変数から読んだ値として残す。
+  パワーの量が private `Data` にあるもの（活力の結合・弱化の記録など）は型ごとの項目で出し、`dynamic_vars` には入らない。
+- Markdown は変数がある行だけ `(vars: SelfDamage=2)` を足す（空の `{}` は JSON だけ）。読取失敗は `vars: null (理由)`、
+  変数ごとの失敗は `名前=null (理由)`。
+
+```json
+{ "id": "INFERNO_POWER", "amount": 12, "type": "Buff",
+  "type_for_current_amount": "Buff", "is_temporary_power": false,
+  "dynamic_vars": { "SelfDamage": 2 }, "self_damage": 2 }
+```
 
 #### 破壊（`Rend`）の入力（schema 9）
 

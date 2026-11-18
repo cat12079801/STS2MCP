@@ -105,6 +105,12 @@ namespace MegaCrit.Sts2.Core.Models
     {
         public ModelId Id => new(GetType().Name);
         public Player Owner { get; set; } = new();
+        // v0.113.1 RelicModel._dynamicVars / DynamicVars: DeepCloneFields builds the set on every live
+        // relic; the getter builds it when still null (the reader must not rely on that).
+        private Localization.DynamicVars.DynamicVarSet? _dynamicVars = new();
+        public Localization.DynamicVars.DynamicVarSet DynamicVars => _dynamicVars ??= new();
+        public void ClearDynamicVars() => _dynamicVars = null;
+        public bool DynamicVarsInitialized => _dynamicVars != null;
     }
     public class Player
     {
@@ -122,26 +128,36 @@ namespace MegaCrit.Sts2.Core.Models
         public decimal BaseValue => ThrowBase ? throw new InvalidOperationException("base failed") : Value;
         public int IntValue => (int)BaseValue;
     }
+    // v0.113.1 DynamicVarSet.Block / Gold are _vars["Block"] / _vars["Gold"] (BlockVar / GoldVar),
+    // present only on powers whose CanonicalVars declare them.
     public class DynamicVars : Localization.DynamicVars.DynamicVarSet
     {
-        public DynamicVar Block { get; set; } = new();
-        public DynamicVar Gold { get; set; } = new();
+        public DynamicVar Block => Vars["Block"];
+        public DynamicVar Gold => Vars["Gold"];
     }
 }
 namespace MegaCrit.Sts2.Core.Localization.DynamicVars
 {
     // v0.113.1 DynamicVarSet: Damage is _vars["Damage"]; the indexer throws KeyNotFoundException.
-    public class DynamicVarSet
+    // It enumerates _vars (KeyValuePair<string, DynamicVar>) in insertion (CanonicalVars) order.
+    public class DynamicVarSet : IEnumerable<KeyValuePair<string, Models.DynamicVar>>
     {
         public Dictionary<string, Models.DynamicVar> Vars = new();
+        public bool ThrowEnumerate;
         public Models.DynamicVar Damage => Vars["Damage"];
         public Models.DynamicVar this[string key] => Vars[key];
+        public IEnumerator<KeyValuePair<string, Models.DynamicVar>> GetEnumerator()
+            => ThrowEnumerate ? throw new InvalidOperationException("enumerate failed") : Vars.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
+    // v0.113.1 StringVar : DynamicVar (a text var such as Barricade's ApplierName; its BaseValue is unused).
+    public class StringVar : Models.DynamicVar { }
 }
 namespace MegaCrit.Sts2.Core.Models.Powers
 {
     using MegaCrit.Sts2.Core.Entities.Creatures;
-    public class ToricToughnessPower : PowerModel { }
+    // v0.113.1 CanonicalVars: BlockVar(0m).
+    public class ToricToughnessPower : PowerModel { public ToricToughnessPower() => DynamicVars.Vars["Block"] = new(); }
     // sts2#1034, v0.113.1: StrengthPower Type => Buff, Counter, AllowNegative => true
     // (GetTypeForAmount gives Debuff below 0). WeakPower / VulnerablePower Type => Debuff.
     public class StrengthPower : PowerModel { }
@@ -155,7 +171,7 @@ namespace MegaCrit.Sts2.Core.Models.Powers
     public class ManglePower : TemporaryStrengthPower { public ManglePower() => StaticType = Entities.Powers.PowerType.Debuff; }
     public class SpeedPotionPower : TemporaryDexterityPower { }
     // v0.113.1: Instanced, per-target. Gold starts at GoldVar(0); Steal adds the real loss.
-    public class ThieveryPower : PowerModel { }
+    public class ThieveryPower : PowerModel { public ThieveryPower() => DynamicVars.Vars["Gold"] = new(); }
     public class HeistPower : PowerModel { }
     // v0.113.1 (sts2#1019): TheBombPower (Instanced) keeps SetDamage's value in DynamicVars.Damage;
     // InfernoPower / CrimsonMantlePower keep DynamicVars["SelfDamage"]; PanachePower (Instanced)
@@ -174,6 +190,20 @@ namespace MegaCrit.Sts2.Core.Models.Powers
     {
         public CrimsonMantlePower() => DynamicVars.Vars["SelfDamage"] = new() { Value = 0m };
         public void IncrementSelfDamage() => DynamicVars.Vars["SelfDamage"].Value++;
+    }
+    // v0.113.1 (sts2#1020): TankPower CanonicalVars = DamageIncrease 1.5, DamageDecrease 0.5 (two plain
+    // DynamicVars, in that order); BarricadePower's only var is StringVar("ApplierName").
+    public class TankPower : PowerModel
+    {
+        public TankPower()
+        {
+            DynamicVars.Vars["DamageIncrease"] = new() { Value = 1.5m };
+            DynamicVars.Vars["DamageDecrease"] = new() { Value = 0.5m };
+        }
+    }
+    public class BarricadePower : PowerModel
+    {
+        public BarricadePower() => DynamicVars.Vars["ApplierName"] = new Localization.DynamicVars.StringVar();
     }
     public class PanachePower : PowerModel
     {
@@ -327,6 +357,71 @@ namespace MegaCrit.Sts2.Core.Models.Powers
         private class Data { public Commands.Builders.AttackCommand? commandToModify = null; public long amountWhenAttackStarted = 4; }
         public WrongVigorAmountFieldPower() => SetData(new Data());
     }
+    // sts2#1020, v0.113.1: private Data / fields (the hooks are not simulated; fixtures set values).
+    public class RupturePower : PowerModel
+    {
+        private class Data { public readonly Dictionary<CardModel, int> playedCards = new(); }
+        public RupturePower() => SetData(new Data());
+    }
+    public class CalamityPower : PowerModel
+    {
+        private class Data { public readonly Dictionary<CardModel, int> amountsForPlayedCards = new(); }
+        public CalamityPower() => SetData(new Data());
+    }
+    public class StranglePower : PowerModel
+    {
+        private class Data { public readonly Dictionary<CardModel, int> amountsForPlayedCards = new(); }
+        public StranglePower() => SetData(new Data());
+    }
+    public class HellraiserPower : PowerModel
+    {
+        private class Data { public readonly HashSet<CardModel> autoPlayingCards = new(); public int infiniteAutoPlaysThisTurn; public bool showedCapReachedMessage; }
+        public HellraiserPower() => SetData(new Data());
+    }
+    public class AutomationPower : PowerModel
+    {
+        private class Data { public int cardsLeft = 10; }
+        public AutomationPower() { SetData(new Data()); DynamicVars.Vars["BaseCards"] = new() { Value = 10m }; }
+    }
+    public class DarkEmbracePower : PowerModel
+    {
+        private class Data { public int etherealCount; }
+        public DarkEmbracePower() => SetData(new Data());
+    }
+    public class GigantificationPower : PowerModel
+    {
+        private class Data { public Commands.Builders.AttackCommand? commandToModify; }
+        public GigantificationPower() => SetData(new Data());
+    }
+    public class HardenedShellPower : PowerModel
+    {
+        private class Data { public decimal damageReceivedThisTurn; }
+        public HardenedShellPower() => SetData(new Data());
+    }
+    public class AdaptablePower : PowerModel
+    {
+        private class Data { public bool isReviving; }
+        public AdaptablePower() => SetData(new Data());
+    }
+    public class ReattachPower : PowerModel
+    {
+        private class Data { public bool isReviving; }
+        public ReattachPower() => SetData(new Data());
+    }
+    // v0.113.1 IllusionPower.FollowUpStateId: public getter of private string? _followUpStateId.
+    public class IllusionPower : PowerModel
+    {
+        private class Data { public bool isReviving; }
+        public IllusionPower() => SetData(new Data());
+        public string? FollowUpValue;
+        public bool ThrowFollowUp;
+        public string? FollowUpStateId => ThrowFollowUp ? throw new InvalidOperationException("follow-up failed") : FollowUpValue;
+    }
+    public class NemesisPower : PowerModel { private bool _shouldApplyIntangible; }
+    public class SlothPower : PowerModel { private int _cardsPlayedThisTurn; }
+    public class TenderPower : PowerModel { private int _cardsPlayedThisTurn; }
+    public class BeaconOfHopePower : PowerModel { private bool _hasAlreadyBeenGivenBlock; }
+    public class SwipePower : PowerModel { private CardModel? _stolenCard; }
     public class MissingDataPower : JugglingPower { }
     public class MissingCloneFieldPower : JugglingPower
     {
@@ -404,7 +499,38 @@ namespace MegaCrit.Sts2.Core.Models.Relics
     public class PaelsTears : RelicModel { }
     public class Vambrace : RelicModel { }
     public class DemonTongue : RelicModel { }
-    public class Pocketwatch : RelicModel { }
+    public class Pocketwatch : RelicModel { private int _cardsPlayedThisTurn; private int _cardsPlayedLastTurn; }
+    // sts2#1020, v0.113.1: private counters / flags (fields only; the hooks are not simulated).
+    public class Kunai : RelicModel { private bool _isActivating; private int _attacksPlayedThisTurn; }
+    public class Shuriken : RelicModel { private int _attacksPlayedThisTurn; }
+    public class OrnamentalFan : RelicModel { private int _attacksPlayedThisTurn; }
+    public class Kusarigama : RelicModel { private int _attacksPlayedThisTurn; }
+    public class LetterOpener : RelicModel { private int _skillsPlayedThisTurn; }
+    public class Orichalcum : RelicModel { private bool _shouldTrigger; }
+    public class FakeOrichalcum : RelicModel { private bool _shouldTrigger; }
+    public class Nunchaku : RelicModel { private int _attacksPlayed; }
+    public class TuningFork : RelicModel { private int _skillsPlayed; }
+    public class IronClub : RelicModel { private int _cardsPlayed; }
+    public class HappyFlower : RelicModel { private int _turnsSeen; }
+    public class FakeHappyFlower : RelicModel { private int _turnsSeen; }
+    public class Pendulum : RelicModel { private int _turnsSeen; }
+    public class PollinousCore : RelicModel { private int _turnsSeen; }
+    public class Girya : RelicModel { private int _timesLifted; }
+    public class LastingCandy : RelicModel { private int _combatRewardsSeen; }
+    public class BookOfFiveRings : RelicModel { private int _cardsAdded; }
+    public class VenerableTeaSet : RelicModel { private bool _gainEnergyInNextCombat; }
+    public class FakeVenerableTeaSet : RelicModel { private bool _gainEnergyInNextCombat; }
+    public class PumpkinCandle : RelicModel { private int _kindleCount; }
+    public class SwordOfStone : RelicModel { private int _elitesDefeated; }
+    public class WingedBoots : RelicModel { private int _timesUsed; }
+    public class SilverCrucible : RelicModel { private int _timesUsed; private int _treasureRoomsEntered; }
+    public class FishingRod : RelicModel { private int _combatsSeen; }
+    public class ToyBox : RelicModel { private int _combatsSeen; }
+    public class WongosMysteryTicket : RelicModel { private int _combatsFinished; }
+    public class PaelsWing : RelicModel { private int _rewardsSacrificed; }
+    public class LavaRock : RelicModel { private bool _hasTriggered; }
+    public class MissingKunaiField : Kunai { }
+    public class WrongNunchakuField : Nunchaku { private long _attacksPlayed; }
     public class RedSkull : RelicModel { }
     public class BeltBuckle : RelicModel { }
     public class BurningSticks : RelicModel { }

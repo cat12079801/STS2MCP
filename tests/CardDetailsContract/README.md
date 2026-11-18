@@ -58,7 +58,7 @@ Markdown は4パイルの本行末尾の `[Attack/AnyEnemy]` と、
 巨大な state builder はリンクせず、ソースの文字列検査で手札と4パイルの共通経路
 （パイルも詳細の後に手札と同じ `AttachCardPlayability` を通ること）、
 パイルの共通の表示順ヘルパー（動作の検査は `CardIdentityContract`）、非戦闘の対象範囲、マルチの共通経路、
-Markdown の配線、schema 11 を確認する。
+Markdown の配線、schema 12 を確認する。
 
 ゲームの getter は境界ダブルで、返却値・例外・列挙失敗を設定する。
 実際の効果適用・パイル移動・成長処理の実機照合は調整役の検証で行う。

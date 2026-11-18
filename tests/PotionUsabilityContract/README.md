@@ -26,7 +26,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 観測の経路が popup の生成・Refresh・選択の開始・拒否の VFX・enqueue・在庫の開閉を呼ばないこと、`NPotionPopup.CanEnableUseButton` を直接使うこと、
 敵が `IsValidTarget`・操作できるノード（`NCreature.IsInteractable`。味方のクリーチャー経路も）・`Hook.ShouldAllowTargeting`・`IsHittable` を通り battle と同じ ID の registry を使うこと、
 passive の `sellable_potions` が在庫を閉じないこと、照合付きの `use_potion` が最新の判定 → 照合 → MOD の受付 → enqueue の順で、敵の補完・在庫の操作をしないこと、
-従来の呼び出しの前に分岐すること、`potion_availability: 1`、schema 11。
+従来の呼び出しの前に分岐すること、`potion_availability: 1`、schema 12。
 
 実機（調整役が v0.113.1 の検証用ランで確認する）:
 

@@ -304,7 +304,7 @@ namespace STS2_MCP
             Check(Src("McpMod.Formatting.cs").Contains("{FormatPotionUsability(p)}"), "Markdown のポーション行に配線");
             Check(Src("McpMod.ScenarioGuard.cs").Contains("[\"potion_availability\"] = 1"), "scenario_capabilities.potion_availability は 1");
             Check(Src("server.py").Contains("expected_potion_id"), "MCP サーバーの use_potion に expected_potion_id");
-            Check(Src("McpMod.cs").Contains("public const int StateSchemaVersion = 11;"), "現行の schema は 11（sts2#1012）");
+            Check(Src("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
 
             Console.WriteLine($"PotionUsabilityContract: {Checks} checks passed");
         }

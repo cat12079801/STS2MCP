@@ -7,10 +7,10 @@
 札の効果の数値（爆弾〔`THE_BOMB_POWER`〕の `damage`、`INFERNO_POWER` / `CRIMSON_MANTLE_POWER` の `self_damage`、
 `PANACHE_POWER` の `cards_left` / `already_applied`。schema 7）、
 弱化（`DAMPEN_POWER`）の `caster_combat_ids` / `downgraded_cards`（schema 8）、
-全パワーの `type_for_current_amount` / `is_temporary_power`（schema 9）で、
+全パワーの `type_for_current_amount` / `is_temporary_power`（schema 9）と `dynamic_vars`、下表の schema 12 の private Data・フィールドの項目で、
 `status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
-schema 4 の項目は版を上げずに足したので、項目の有無で利用可否を判別する。schema 6・7・8・9 の項目は版を上げて足したので、版で必須にしてよい。
+schema 4 の項目は版を上げずに足したので、項目の有無で利用可否を判別する。schema 6・7・8・9・12 の項目は版を上げて足したので、版で必須にしてよい。
 
 以下の出典は v0.113.0 のデコンパイル `sts2-d009478a`。
 人間の観測可能性は画面表示または画面で起きた出来事の計数に基づく。
@@ -20,6 +20,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 |---|---|---|
 | 全パワー `type_for_current_amount` | `PowerModel.TypeForCurrentAmount`（`GetTypeForAmount(Amount)`）の enum 名 `None` / `Buff` / `Debuff`（出典は v0.113.1 `sts2-a671e9ef`。schema 9、`cat12079801/sts2#1034`）。`GetTypeForAmount` は、`StackType` が `Counter` で `AllowNegative` のパワーの負の量を `Debuff`、`AllowNegative` でない `Debuff` 型の負の量を `Buff` とし、それ以外は `Type` を返す。`AllowNegative` なのは `StrengthPower`・`DexterityPower`・`FocusPower`（`Type` は `Buff`）と、もともと `Debuff` の `ShriekPower`・`ShrinkPower` なので、型が入れ替わるのは負の筋力・敏捷・集中（`Debuff`）。`AllowNegative` でないパワーは量が 0 以下で外れる（`ShouldRemoveDueToAmount`）。既存の `type` は従来どおり `PowerModel.Type` で、負の筋力も `Buff`。破壊（`Rend.ShouldCountPower`）は対象の `Creature.Powers` のうち、これが `Debuff` で一時パワーでないものを数える。`status[]` が落とすのは `IsVisible` が false・`Amount` が 0・現在の型が `Debuff` でない行だけ（現在の型が読めない行も残す）なので、数えるパワーは必ず行に出る。getter は `_amount` と `Type` / `StackType` / `AllowNegative` を読むだけ（`MonologuePower.StackType` は生きたパワーが持つ `DynamicVars` を読む）で、フック・乱数・書き込みは無い。読取失敗は `Type` で補わず null・理由・warnings。 | 筋力などの数字の符号と色（`AmountLabelColor` は `GetTypeForAmount(Amount)` が `Debuff` なら debuff の色）は画面に出る。 |
 | 全パワー `is_temporary_power` | パワーのインスタンスが `ITemporaryPower` を実装するか（v0.113.1、schema 9）。実装するのは `TemporaryStrengthPower`・`TemporaryDexterityPower`・`TemporaryFocusPower`・`TemporaryThornsPower` とその派生（`FlexPotionPower`・`ManglePower`・`DarkShacklesPower`・`ShacklingPotionPower` など）。これらは付与の前（`BeforeApplied`）に内部の筋力などを別の行として付け、手番の終わりに自分を外して戻す。`Rend`・`DebufferModel`・`SleightOfFleshPower`・`IllusionPower` は一時パワーを数えない。型の検査なので読取失敗は起きないが、同じ読取経路を通す。 | パワーの名前・説明と、付けた札・ポーション・レリックは画面に出る。 |
+| 全パワー `dynamic_vars` | パワー自身の `DynamicVars` を `{変数名: BaseValue}` の object で（出典は v0.113.1 `sts2-a671e9ef`。schema 12、`cat12079801/sts2#1020`）。`PowerModel.DynamicVars` は `CanonicalVars`（既定は空）から作られ、`DeepCloneFields` が生きたパワーごとに複製する。効果は `DynamicVar.BaseValue`（ただのフィールド）を読み書きする（インフェルノ・深紅の衣の `SelfDamage`、爆弾の `Damage`、威風堂々の `CardsLeft`、脆弱の `DamageIncrease`・脱力の `DamageDecrease`、プレートアーマーの `Decrement`、`SlowPower` の `SlowAmount` など）。変数名は `CanonicalVars` の名前のまま（snake_case にしない）、並びは集合の順。数値の意味を持たない `StringVar`（バリケードの `ApplierName` など）は出さない（札・エンチャントの `dynamic_vars` と同じ）。private `PowerModel._dynamicVars` をそのまま読み、作りながら返す getter は呼ばない。フィールドが null なら項目ごと null・`unavailable_reasons.dynamic_vars`・warnings（`{}` にしない）。読めた空の集合は `{}`。1 つの変数が読めなければその名前を null・`unavailable_reasons["dynamic_vars.<名前>"]`・warnings とし、他の変数は残す。型ごとの既存の項目（`damage`・`self_damage`・`cards_left`・`block_base_value`・`stolen_gold`）は同じ値をそのまま出し続ける。 | 説明文の組み立て（`PowerModel` の説明文で `DynamicVars.AddTo`）に渡される値で、ホバーの説明文の数値として画面に出る（説明文が使わない変数もある）。 |
 | 全可視パワー `skip_next_duration_tick` | `PowerModel.SkipNextDurationTick`。`PowerCmd.Apply` は敵手番中の player への Debuff の新規インスタンス付与で true（既存インスタンスへの加算は `ModifyAmount` に戻り、このフラグを変更しない）、`TickDownDuration` は true を false に戻して減算を飛ばす。`Doubt.OnTurnEndInHand` / `Shame.OnTurnEndInHand` は手番終了時に手札にあり、対応する弱体／脆弱をもともと持たず、付与に成功した場合に true にする。非 duration でも元の bool を出す。 | 表示された新規付与と既存パワーへの加算の区別、手番終了時の手札の疑念／羞恥の効果、持続数の減少を数えられる。未表示のパワーへの付与はこの根拠を満たさないため対象外。 |
 | 円環の強靭 `block_base_value` | `ToricToughnessPower.DynamicVars.Block.BaseValue`。`SetBlock` が設定し、`AfterBlockCleared` で使用。Amount は残り回数。 | `ToricToughness.OnPlay` が画面で獲得したブロック量を `SetBlock` に渡す。表示された獲得量に対応する値。decimal のまま。 |
 | 包囲 `facing` | `SurroundedPower.Facing` の enum 名。 | `FaceDirection` / `FlipScale` が player・ペットの Body と FormVfxHolder の向きを反転する。画面に向きが見える。 |
@@ -36,6 +37,19 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 爆弾（`THE_BOMB_POWER`） `damage` | `TheBombPower.DynamicVars.Damage.BaseValue`（出典は v0.113.1 `sts2-a671e9ef`。schema 7、`cat12079801/sts2#1019`）。schema 7 の 4 種の数値変数は private `PowerModel._dynamicVars` をそのまま読み、null なら getter で作らずに読取失敗（null・理由・warnings）とする。`Instanced` で、札ごとの別インスタンス。`CanonicalVars` の `DamageVar(40)` から始まり、`SetDamage` が札の威力を書く。`Amount` は爆発までの残りターンで、`BeforeSideTurnEnd` は `Amount` が 1 以下のとき全敵にこの変数のダメージを与えて外れる。decimal のまま。 | 爆弾を置いた札とその威力は画面に出る（パワーの説明にも出る）。 |
 | `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` `self_damage` | `DynamicVars["SelfDamage"].BaseValue`（v0.113.1、schema 7）。`CanonicalVars` の 0 から始まり、`IncrementSelfDamage` が 1 ずつ上げる。`AfterPlayerTurnStart` は所有者の手番の初めにこの値（Unblockable・Unpowered）で所有者を傷つける（`CrimsonMantlePower` はその後 `Amount` のブロック）。 | 札を重ねて使った回数と、手番の初めの自傷は画面に出る。 |
 | `PANACHE_POWER` `cards_left` / `already_applied` | `DynamicVars["CardsLeft"].IntValue` と private `PanachePower.Data.alreadyApplied`（v0.113.1、schema 7）。`Instanced`。`AfterCardPlayed` は所有者の札のプレイで、`alreadyApplied` が true なら `CardsLeft` を 1 減らし、0 以下で全敵に `Amount` のダメージを与えて 5 に戻す。その後 `alreadyApplied` を true にする（パワーを付けた札自身のプレイの通知は数えない）。`AfterSideTurnEnd` は `CardsLeft` を 5 に戻し、`alreadyApplied` は変えない。`DisplayAmount` は `CardsLeft`。Data は初期化しない。 | 残り枚数は画面のパワーの数字（`DisplayAmount`）で見える。付けた札のプレイ後かどうかは画面のプレイの出来事。 |
+| 血の沸騰（`RUPTURE_POWER`） `played_cards` | private `RupturePower.Data.playedCards`（`Dictionary<CardModel, int>`）を `{uid, uid_known, card_id, pending_strength}` の行に（出典は v0.113.1 `sts2-a671e9ef`。schema 12、`cat12079801/sts2#1020`）。`BeforeCardPlayed` が自分の側の手番の所有者の札を 0 で記録し、`AfterDamageReceived` はその札が源の非ブロックダメージのたびに `Amount` を足す（記録に無い源ならその場で筋力）。`AfterCardPlayed` が札を外して合計の筋力を付ける。札の解決中だけ中身がある。 | 自傷の札を撃つと、解決後に筋力が増える。 |
+| カラミティ（`CALAMITY_POWER`）・絞殺（`STRANGLE_POWER`） `amounts_for_played_cards` | private `Data.amountsForPlayedCards`（`Dictionary<CardModel, int>`）を `{uid, uid_known, card_id, amount}` の行に（v0.113.1、schema 12）。カラミティは `BeforeCardPlayed` が所有者のアタックを `Amount` で記録し、`AfterCardPlayed` が外してランダムなアタックを `Amount` 枚手札に足す。絞殺（`InstancedPerApplier`、敵側）は付与した player の札を `Amount` で記録し、`AfterCardPlayed` が外して記録の値を所有者に与える。札の解決中だけ中身がある。 | 札の解決後に札・ダメージが画面に出る。 |
+| ヘル・レイザー（`HELLRAISER_POWER`） `infinite_auto_plays_this_turn` / `auto_playing_cards` | private `HellraiserPower.Data` の `infiniteAutoPlaysThisTurn`（int）と `autoPlayingCards`（`HashSet<CardModel>` を `{uid, uid_known, card_id}` の行に）（v0.113.1、schema 12）。`AfterCardDrawnEarly` は引いたストライクを自動プレイする。当たる敵がすべて無限の HP 表示なら数を 1 足し、9 に達していれば自動プレイしない。有限の敵がいる引きと `AfterSideTurnEnd` で 0。自動プレイ中の札が集合に入る。`showedCapReachedMessage` は ThinkCmd の表示の印なので出さない。 | ストライクの自動プレイは画面に出る。 |
+| オートメーション（`AUTOMATION_POWER`） `cards_left` | private `AutomationPower.Data.cardsLeft`（int、v0.113.1、schema 12）。`Instanced`。`AfterCardDrawn` が所有者の引きごとに 1 減らし、0 で `Amount` エナジーを得て 10 に戻す。`DisplayAmount` はこの値。`dynamic_vars.BaseCards`（10）は本文の定数。 | パワーの数字として画面に出る。 |
+| 闇の抱擁（`DARK_EMBRACE_POWER`） `ethereal_count` | private `DarkEmbracePower.Data.etherealCount`（int、v0.113.1、schema 12）。`AfterCardExhausted` が所有者のエセリアルによる廃棄を数え（他の廃棄はその場で `Amount` 枚引く）、所有者の `AfterSideTurnEnd` で `Amount` × 数を引いて 0。 | 手番の終わりのエセリアルの廃棄は画面に出る。 |
+| 巨大化（`GIGANTIFICATION_POWER`） `has_command_to_modify` | private `GigantificationPower.Data.commandToModify`（`AttackCommand?`）が結合済みか（v0.113.1、schema 12）。`BeforeAttack` が所有者の powered なアタック札の最初の攻撃を結合し、`ModifyDamageMultiplicative` は結合中はその札だけ（未結合ならどれでも）3 倍、`AfterAttack` が外して 1 減らす。読めた false は未結合。 | 3 倍の攻撃は画面に出る。 |
+| 硬い殻（`HARDENED_SHELL_POWER`） `damage_received_this_turn` | private `HardenedShellPower.Data.damageReceivedThisTurn`（decimal、v0.113.1、schema 12）。`ModifyHpLostBeforeOstyLate` は HP 損失を `Amount` − この値で止め、`AfterDamageReceived` が非ブロックダメージを足し、どちらの側でも `BeforeSideTurnStart` で 0。`DisplayAmount` は残り。 | 受けたダメージは画面に出る。 |
+| 適応（`ADAPTABLE_POWER`）・再結合（`REATTACH_POWER`）・幻影（`ILLUSION_POWER`） `is_reviving` | private `Data.isReviving`（bool、v0.113.1、schema 12）。所有者が倒れて復活を待つ間 true。この間は `ShouldAllowHitting` が false（`battle.enemies[].hittable`）。 | 倒れた敵が復活を待つ様子は画面に出る。 |
+| `ILLUSION_POWER` `follow_up_state_id` / `follow_up_state_readable` | 公開 `IllusionPower.FollowUpStateId`（private `_followUpStateId` を返すだけ、v0.113.1、schema 12）。復活の後に戻る行動の ID。読めた null は「記録なし」（readable=true）で、読取失敗（readable=false・null・理由）と区別する。 | 復活後の行動は画面に出る。 |
+| ネメシス（`NEMESIS_POWER`） `should_apply_intangible` | private `NemesisPower._shouldApplyIntangible`（bool、v0.113.1、schema 12）。所有者が参加する `AfterSideTurnEnd` で反転し、true になったら霊体（`IntangiblePower`）1 を付け、false になったら外す。 | 霊体の付け外しは毎手番画面に出る。 |
+| 怠惰（`SLOTH_POWER`）・軟化（`TENDER_POWER`） `cards_played_this_turn` | private `_cardsPlayedThisTurn`（int、v0.113.1、schema 12）。怠惰は `ShouldPlay` が所有者の札をこの値が `Amount` に達したら止め、`BeforeCardPlayed` で 1 足し、`BeforeSideTurnStart` で 0。`TenderPower` は `AfterCardPlayed` で 1 足して筋力・敏捷を −1、`AfterSideTurnEnd` で同じ数だけ戻して 0。どちらも `DisplayAmount` はこの値。 | パワーの数字として画面に出る。 |
+| 希望の道標（`BEACON_OF_HOPE_POWER`） `has_already_been_given_block` | private `BeaconOfHopePower._hasAlreadyBeenGivenBlock`（bool、v0.113.1、schema 12）。`AfterBlockGained` が仲間にブロックの半分を渡す間だけ true（相互の無限の受け渡しを止める）。行動を選ぶ時点では false。 | — |
+| 盗む（`SWIPE_POWER`） `stolen_card` / `stolen_card_readable` | private `SwipePower._stolenCard`（`CardModel?`）を `{uid, uid_known, card_id}` に（v0.113.1、schema 12）。`Steal` が盗んだ札を記録してデッキ版を外し、`BeforeDeath` がデッキ版を報酬として返す。読めた null は「盗んでいない」。 | 盗まれた札は画面に出る。 |
 | 弱化（`DAMPEN_POWER`） `caster_combat_ids` | private `DampenPower.Data.casters`（`HashSet<Creature>`）の各 `Creature.CombatId` を昇順に（出典は v0.113.1 `sts2-a671e9ef`。schema 8、`cat12079801/sts2#1031`）。`MagiKnight.DampenMove` は対象に弱化があれば `AddCaster` だけ、無ければ新しいインスタンスに `AddCaster` してから `PowerCmd.Apply`。`AfterDeath` は死んだ caster を除去が防がれなければ外し、空になれば弱化を外す。`CombatId` の無い caster が居れば読取失敗（ID を補わない）。 | 弱化を使った敵の行動（マギナイトの DAMPEN）と、その敵の死亡は画面に出る。 |
 | 弱化 `downgraded_cards` | private `DampenPower.Data.downgradedCardsToOldUpgradeLevels`（`Dictionary<CardModel, int>`）を `{uid, uid_known, card_id, original_upgrade_level}` の行に（v0.113.1、schema 8）。`AfterApplied` が所有者の `PlayerCombatState.AllCards` の強化済みの札ごとに `CurrentUpgradeLevel` を記録して `CardCmd.Downgrade` し、`AfterRemoved` が記録の段階の回数だけ `CardCmd.Upgrade` する（`CombatManager.IsEnding` の間は `Downgrade`・`Upgrade` とも何もしない）。uid は registry が既に振った値だけを使い（`TryGetRegisteredCardUid`）、無ければ新たに採番せず `uid=null`・`uid_known=false`・`uid_unavailable_reason`・warnings。行は uid 順（辞書の挿入順は山札の順を含むので出さない）。 | 付与の瞬間に強化済みの札が `+` を失うのは画面（札・パイル）で見える。元の段階は付与前の札の表示。 |
 | まるくなる（`CURL_UP_POWER`） `played_card_uid` / `played_card_readable` | private `CurlUpPower.Data.playedCard` を同じ uid registry に通す（出典は v0.113.1 `sts2-a671e9ef`。v0.113.0 `sts2-d009478a` と同一）。`AfterDamageReceived` は所有者への `IsPoweredAttack` かつ `cardSource` ありの被弾で、未記録または同じ札なら記録（別の札が記録済みなら無視）。`AfterCardPlayed` は `cardPlay.Card` が記録の札と同じときに参照を消し、Amount のブロックを得てパワーを外す。 | 画面に出た、その敵へのアタック札の命中から分かる追跡状態。uid はその公開された札の個体を照合する。 |
@@ -151,6 +165,22 @@ Data が無い・型違い・フィールドの欠落・`CombatId` の無い cas
 uid registry にも書かない（`TryGetRegisteredCardUid` は既存の uid を引くだけ）。
 Markdown は `(caster combat ids: 3; downgraded cards: STRIKE_R#0 from +1)`、空は `none`、uid の無い札は
 `CARD_ID (uid unknown) from +1`、読取失敗は `null (理由)`。
+
+`dynamic_vars`（schema 12）は全パワーの行に、`hidden_in_ui`・可視性不明・説明取得失敗の最小行にも付ける
+（パワーの効果は `IsVisible` を見ずに変数を使う）。`status[]` が行ごと落とす量 0 の非表示の行には付かない。
+読取は `_dynamicVars` の `FieldInfo.GetValue` と、集合の列挙・各 `DynamicVar.BaseValue` の getter に限る。
+`DynamicVars` の getter（null なら作る）・`InitializeWithOwner`・`Clone`・フックは呼ばない。
+クライアントは説明文の数値を読まず、この値と ID でパワーの量を決める。変数を持たないパワーは `{}` で、
+量は `amount` だけ。パワーの量が `_internalData`（private `Data`）にあるものは上の型ごとの項目で出し、`dynamic_vars` には入らない。
+Markdown は変数がある行だけ `(vars: SelfDamage=2, Decrement=1)` の形で追記し、空の `{}` は省略する。
+集合の読取失敗は `vars: null (理由)`、変数ごとの失敗は `名前=null (理由)`。
+
+schema 12 の private Data・フィールドの項目（上表）は、`status[]` に出る行なら可視性によらず付ける（効果は `IsVisible` を見ない）。
+Data は `ReadPowerData`（`_internalData` と nested `Data` の型の確認）で読み、`GetInternalData`・`InitInternalData`・フックは呼ばない。
+Data が null・型違い・フィールドの欠落は、その項目を null・`unavailable_reasons.<key>`・`warnings` の `status.<POWER_ID>.<key>` にする。
+札の参照（血の沸騰・カラミティ・絞殺の記録、ヘル・レイザーの自動プレイ中の札、盗まれた札）は弱化と同じく既存の uid registry を引くだけで、
+registry に無い札は行ごとに `uid=null`・`uid_known=false`・`uid_unavailable_reason`・`warnings` の `status.<POWER_ID>.<key>.uid` にし、uid を新しく振らない。
+行は uid 順（無いものは後ろに card_id 順）。Markdown は `played cards: STRIKE_R#0=3`、空は `none`、盗まれた札は `stolen card: BASH#0`（なしは `none`）。
 
 実機の起動・照合は行っていない。契約試験はゲーム境界のダブルに対して
 本番の reader・formatter・warnings を直接実行する。

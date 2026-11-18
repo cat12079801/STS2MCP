@@ -20,7 +20,7 @@
 
 - **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6・7・8・9・10・11）。現在は `11`。
+- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6・7・8・9・10・11・12）。現在は `12`。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
   5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
   6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）、
@@ -28,7 +28,8 @@
   8 = 弱化（Dampen）の入力契約（同じく追加だけ。`cat12079801/sts2#1031`）、
   9 = 破壊（Rend）の入力契約（同じく追加だけ。`cat12079801/sts2#1034`）、
   10 = 検証用の採取の契約（`cat12079801/sts2#1037`。`hand_select.cards[].index` を holder の位置にし、`selected_cards` を常に返すよう意味を変えた）、
-  11 = ポーションの使用可否の契約（追加だけだが、読み手が所持行すべてに必須として扱えるように上げた。`cat12079801/sts2#1012`）
+  11 = ポーションの使用可否の契約（追加だけだが、読み手が所持行すべてに必須として扱えるように上げた。`cat12079801/sts2#1012`）、
+  12 = パワー・レリックの量の入力契約（全 status 行の `dynamic_vars`、パワーの private Data の項目、レリックの `run_state` と手番の数。`cat12079801/sts2#1020`。レリックの `vars` は読めないとき省略から null と理由に変えた）
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
@@ -133,7 +134,7 @@
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
-  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。爆弾の `damage`（`SetDamage` の威力）、インフェルノ・深紅の衣の `self_damage`、威風堂々（Panache）の `cards_left` / `already_applied`（`cat12079801/sts2#1019`、schema 7）も可視性によらず付ける。マギナイトの弱化（`DAMPEN_POWER`）の private `DampenPower.Data` を、付与した敵の `caster_combat_ids`（`enemies[].combat_id`、昇順）と、弱化で下げた札の `downgraded_cards`（戦闘の uid registry の uid と元の強化段階。registry に無い札は uid を新たに振らず、行ごとに `uid_known=false` と理由）として可視性によらず付ける（`cat12079801/sts2#1031`、schema 8）。破壊（`Rend`）の入力として、すべての行に `PowerModel.TypeForCurrentAmount` の `type_for_current_amount`（負の筋力・敏捷・集中は既存の `type` が `Buff` のまま `Debuff`）と、`ITemporaryPower` を実装するかの `is_temporary_power` を可視性によらず付ける（`cat12079801/sts2#1034`、schema 9）。schema 4 の項目は版を上げずに足した。schema 6・7・8・9 の項目は版を上げて足したので、版で必須にしてよい。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
+  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。爆弾の `damage`（`SetDamage` の威力）、インフェルノ・深紅の衣の `self_damage`、威風堂々（Panache）の `cards_left` / `already_applied`（`cat12079801/sts2#1019`、schema 7）も可視性によらず付ける。マギナイトの弱化（`DAMPEN_POWER`）の private `DampenPower.Data` を、付与した敵の `caster_combat_ids`（`enemies[].combat_id`、昇順）と、弱化で下げた札の `downgraded_cards`（戦闘の uid registry の uid と元の強化段階。registry に無い札は uid を新たに振らず、行ごとに `uid_known=false` と理由）として可視性によらず付ける（`cat12079801/sts2#1031`、schema 8）。破壊（`Rend`）の入力として、すべての行に `PowerModel.TypeForCurrentAmount` の `type_for_current_amount`（負の筋力・敏捷・集中は既存の `type` が `Buff` のまま `Debuff`）と、`ITemporaryPower` を実装するかの `is_temporary_power` を可視性によらず付ける（`cat12079801/sts2#1034`、schema 9）。すべての行に、パワー自身の `DynamicVars` を `{変数名: BaseValue}` にした `dynamic_vars` を可視性によらず付ける（private `PowerModel._dynamicVars` をそのまま読み、getter で作らない。`StringVar` は除く。集合が読めなければ null と理由、変数ごとの失敗はその名前だけ null と理由。`cat12079801/sts2#1020`、schema 12）。量・記録が private Data・フィールドにあるパワー（血の沸騰・カラミティ・絞殺の札ごとの記録、ヘル・レイザーの自動プレイ、オートメーションの残り枚数、闇の抱擁のエセリアルの数、巨大化の結合、硬い殻の受けたダメージ、適応・再結合・幻影の復活待ちと幻影の戻る行動、ネメシスの霊体の予定、怠惰・軟化の枚数、希望の道標の受け渡し中、盗むの盗んだ札）にも型ごとの項目を可視性によらず付ける（札は既存の uid registry を引くだけで、無い札は `uid_known=false`。同じく schema 12）。schema 4 の項目は版を上げずに足した。schema 6・7・8・9・12 の項目は版を上げて足したので、版で必須にしてよい。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）。
   この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#95、`cat12079801/sts2#937`）
 - **生成の候補**:
@@ -145,8 +146,9 @@
 ## レリック
 
 - `used_up`（`RelicModel.IsUsedUp`）と `melted`（#62）
-- `vars`: 所有レリックの `DynamicVars` の名前 → 現在の値（戦闘中・戦闘外）（#66）
-- `combat_state`: 戦闘中の内部状態（使用フラグ・カウンタ）をクラス別の許可リストで出す。詳細は [`relic-combat-state.md`](relic-combat-state.md)（#65・#78）
+- `vars`: 所有レリックの `DynamicVars` の名前 → 現在の値（戦闘中・戦闘外）（#66）。private `RelicModel._dynamicVars` を読み（getter で作らない）、読めなければ null と `unavailable_reasons.vars`、1 変数の失敗はその名前だけ null と理由（`cat12079801/sts2#1020`、schema 12）
+- `run_state`: 戦闘をまたいで残る保存カウンタ（ヌンチャク・音叉・`IronClub` の数、`HappyFlower`・`Pendulum`・`PollinousCore` の手番数、`Girya`・`LastingCandy`・`BookOfFiveRings`・`VenerableTeaSet`・`PumpkinCandle`・`SwordOfStone`・`WingedBoots`・`SilverCrucible`・`FishingRod`・`ToyBox`・`WongosMysteryTicket`・`PaelsWing`・`LavaRock`）を戦闘中・戦闘外とも出す。詳細は [`relic-combat-state.md`](relic-combat-state.md#保存カウンタrun_stateschema-12)（`cat12079801/sts2#1020`、schema 12）
+- `combat_state`: 戦闘中の内部状態（使用フラグ・カウンタ。苦無・手裏剣・扇子・鎖鎌・レターオープナー・懐中時計の手番の数とオリハルコンの予約を含む）をクラス別の許可リストで出す。詳細は [`relic-combat-state.md`](relic-combat-state.md)（#65・#78）
 - **パエルの眼の手動プレイ判定**は `player.combat_history.any_manual_cards_played_this_turn`（bool）に出す。v0.113.1 の `PaelsEye.AnyCardsPlayedThisTurn` と同じ Actor・手番・非 AutoPlay の完了履歴条件を読み、false も保持する。取得失敗は null・理由・warnings。`WhisperingEarring` 所持時の初手番の例外は所持レリック・`turn_number` と合わせて評価する。版は上げていない（schema 4 のときの追加）（#90、`cat12079801/sts2#911`）
 
 ## 報酬

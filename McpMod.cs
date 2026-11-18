@@ -107,8 +107,23 @@ public static partial class McpMod
     ///    closes the shop inventory to fill sellable_potions. Existing fields keep their meaning. Like 6 to
     ///    10, the bump is deliberate although additive: the engine requires the contract on every row and
     ///    gates on the version.
+    ///
+    /// 12: the power / relic amount input contract (sts2#1020). Every status row (player, enemy, pet; hidden
+    ///    and minimal rows too) carries dynamic_vars: the power's own DynamicVars as { name -> BaseValue },
+    ///    read from the private PowerModel._dynamicVars (StringVar left out; {} for a power without vars;
+    ///    null with unavailable_reasons.dynamic_vars when the set is unreadable; a single unreadable var
+    ///    is null with unavailable_reasons["dynamic_vars.&lt;name&gt;"]). Powers whose state lives in private
+    ///    Data or fields (Rupture, Calamity, Strangle, Hellraiser, Automation, Dark Embrace,
+    ///    Gigantification, Hardened Shell, Adaptable / Reattach / Illusion, Nemesis, Sloth, Tender, Beacon
+    ///    of Hope, Swipe) carry per-type keys. Relics: combat_state gains the per-turn counts of Kunai,
+    ///    Shuriken, Ornamental Fan, Kusarigama, Letter Opener and Pocketwatch and Orichalcum's
+    ///    should_trigger; saved counters that outlive a combat are relics[].run_state, in and out of
+    ///    combat. relics[].vars is read from RelicModel._dynamicVars and, when unreadable, is null with
+    ///    unavailable_reasons.vars instead of being omitted (the one change of meaning). The per-type keys
+    ///    (damage, self_damage, cards_left, block_base_value, stolen_gold) keep their meaning. The engine
+    ///    reads amounts and counters only from these values and gates on the version.
     /// </summary>
-    public const int StateSchemaVersion = 11;
+    public const int StateSchemaVersion = 12;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";

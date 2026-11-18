@@ -30,6 +30,10 @@ public static partial class McpMod
         // A type test on the instance: TemporaryStrength/Dexterity/Focus/ThornsPower and their
         // subclasses (FlexPotionPower, ManglePower, ...). It cannot fail; read the same way.
         Read("is_temporary_power", () => power is ITemporaryPower);
+        // sts2#1020: every power's own numbers (PowerModel.DynamicVars) by name, so a client never
+        // reads them from the description. They act whatever the HUD shows, so hidden and minimal
+        // rows carry them too.
+        AttachPowerDynamicVars(state, power, context);
         // v0.113.1 (sts2-a671e9ef): Thievery/Heist are Instanced powers, one per targeted
         // player. PowerModel.IsVisible is false when Target is another player, but the row
         // is still emitted with its live stack, so its target and stolen gold are attached
@@ -105,6 +109,107 @@ public static partial class McpMod
                 Read("caster_combat_ids", () => ReadDampenCasterCombatIds(power));
                 Read("downgraded_cards", () => ReadDampenDowngradedCards(power, context));
                 break;
+            // sts2#1020, v0.113.1 (sts2-a671e9ef): private Data / fields the effect reads that neither
+            // Amount nor DynamicVars hold. The effects do not look at the HUD, so every emitted row
+            // carries them. Data is read as is (never InitInternalData / GetInternalData); a card
+            // reference becomes the uid this combat's registry already gave it (TryGetRegisteredCardUid,
+            // never a new one), with uid_known=false and a reason for a card it has not seen.
+            case RupturePower:
+                // BeforeCardPlayed adds the owner's card (own side's turn) with 0; AfterDamageReceived adds
+                // Amount per unblocked hit whose source is that card instead of applying Strength at once;
+                // AfterCardPlayed removes the card and applies the summed Strength.
+                Read("played_cards", () => ReadPowerCardAmountRows(power, "playedCards", "pending_strength", $"{context}.played_cards"));
+                break;
+            case CalamityPower:
+            case StranglePower:
+                // Calamity: BeforeCardPlayed records the owner's Attack with Amount; AfterCardPlayed removes
+                // it and adds Amount random Attacks to the hand. Strangle (InstancedPerApplier, on the
+                // enemy): BeforeCardPlayed records each card of the applier's player with Amount;
+                // AfterCardPlayed removes it and deals the recorded value to the owner.
+                Read("amounts_for_played_cards", () => ReadPowerCardAmountRows(power, "amountsForPlayedCards", "amount",
+                    $"{context}.amounts_for_played_cards"));
+                break;
+            case HellraiserPower:
+                // AfterCardDrawnEarly auto-plays a drawn Strike; while every hittable enemy shows infinite
+                // HP it counts infiniteAutoPlaysThisTurn and stops at 9 (AfterSideTurnEnd and a draw against
+                // a finite enemy reset it). autoPlayingCards holds the Strike being auto-played.
+                // showedCapReachedMessage only gates a ThinkCmd line and is left out.
+                Read("infinite_auto_plays_this_turn", () => ReadPowerDataField<int>(power, "infiniteAutoPlaysThisTurn"));
+                Read("auto_playing_cards", () => ReadPowerCardSetRows(power, "autoPlayingCards", $"{context}.auto_playing_cards"));
+                break;
+            case AutomationPower:
+                // Instanced. AfterCardDrawn counts the owner's draws down from 10; at 0 it gains Amount
+                // energy and resets to 10 (DisplayAmount is this value; BaseCards is only the text's 10).
+                Read("cards_left", () => ReadPowerDataField<int>(power, "cardsLeft"));
+                break;
+            case DarkEmbracePower:
+                // AfterCardExhausted counts the owner's Ethereal exhausts; AfterSideTurnEnd draws
+                // Amount x the count and sets 0 (other exhausts draw at once).
+                Read("ethereal_count", () => ReadPowerDataField<int>(power, "etherealCount"));
+                break;
+            case GigantificationPower:
+                // BeforeAttack binds the owner's first powered Attack card; ModifyDamageMultiplicative
+                // triples only that card while bound (any while unbound); AfterAttack clears it and
+                // decrements. A readable false is "unbound".
+                Read("has_command_to_modify", () => ReadVigorCommand(ReadPowerData(power)) != null);
+                break;
+            case HardenedShellPower:
+                // ModifyHpLostBeforeOstyLate caps HP loss at Amount - this; AfterDamageReceived adds the
+                // unblocked damage; BeforeSideTurnStart (either side) sets 0.
+                Read("damage_received_this_turn", () => ReadPowerDataField<decimal>(power, "damageReceivedThisTurn"));
+                break;
+            case AdaptablePower:
+            case ReattachPower:
+            case IllusionPower:
+                // Set while the owner is dead and waiting to revive (ShouldAllowHitting is false then).
+                Read("is_reviving", () => ReadPowerDataField<bool>(power, "isReviving"));
+                if (power is IllusionPower illusion)
+                {
+                    // The move the revived monster returns to (a readable null is "none recorded").
+                    state["follow_up_state_readable"] = false;
+                    Read("follow_up_state_id", () =>
+                    {
+                        string? id = illusion.FollowUpStateId;
+                        state["follow_up_state_readable"] = true;
+                        return id;
+                    });
+                }
+                break;
+            case NemesisPower:
+                // AfterSideTurnEnd (owner participating) flips it, applies Intangible 1 when it becomes
+                // true and removes Intangible when it becomes false.
+                Read("should_apply_intangible", () => ReadDeclaredStateField<bool>(power, typeof(NemesisPower), "_shouldApplyIntangible"));
+                break;
+            case SlothPower:
+                // ShouldPlay refuses the owner's cards once this reaches Amount; BeforeCardPlayed adds 1,
+                // BeforeSideTurnStart sets 0 (DisplayAmount is this value).
+                Read("cards_played_this_turn", () => ReadDeclaredStateField<int>(power, typeof(SlothPower), "_cardsPlayedThisTurn"));
+                break;
+            case TenderPower:
+                // AfterCardPlayed adds 1 (and -1 Strength / Dexterity); AfterSideTurnEnd gives that much
+                // back and sets 0 (DisplayAmount is this value).
+                Read("cards_played_this_turn", () => ReadDeclaredStateField<int>(power, typeof(TenderPower), "_cardsPlayedThisTurn"));
+                break;
+            case BeaconOfHopePower:
+                // True only while AfterBlockGained hands half the Block to teammates (stops a loop).
+                Read("has_already_been_given_block", () => ReadDeclaredStateField<bool>(power, typeof(BeaconOfHopePower), "_hasAlreadyBeenGivenBlock"));
+                break;
+            case SwipePower:
+                // Steal sets the stolen card (and removes its deck version); BeforeDeath returns the deck
+                // version as a reward. A readable null is "nothing stolen".
+                state["stolen_card_readable"] = false;
+                Read("stolen_card", () =>
+                {
+                    var field = typeof(SwipePower).GetField("_stolenCard",
+                        BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+                        ?? throw new MissingFieldException(nameof(SwipePower), "_stolenCard");
+                    if (field.FieldType != typeof(CardModel))
+                        throw new InvalidOperationException("Expected CardModel field SwipePower._stolenCard");
+                    var row = field.GetValue(power) is CardModel card ? BuildRegisteredCardRow(card, $"{context}.stolen_card") : null;
+                    state["stolen_card_readable"] = true;
+                    return row;
+                });
+                break;
         }
 
         // Hidden bookkeeping powers have no observable application history.
@@ -151,6 +256,36 @@ public static partial class McpMod
                 return uid;
             });
         }
+    }
+
+    // sts2#1020, v0.113.1 (sts2-a671e9ef): PowerModel.DynamicVars is built from CanonicalVars
+    // (an empty set for the many powers without vars) and DeepCloneFields copies it to every live
+    // power; the effects read and write DynamicVar.BaseValue (a plain field: InfernoPower's
+    // SelfDamage, TheBombPower's Damage, VulnerablePower's DamageIncrease, SlowPower's SlowAmount,
+    // ...). dynamic_vars is { name -> BaseValue } in the set's own order. StringVar is left out:
+    // its numeric base is a dummy (as in the card's and the enchantment's dynamic_vars). The set
+    // is read from the private field, never the lazily-building getter: a null field fails the
+    // whole key (null, reason, warning), never {}; a readable empty set is {}. A var whose value
+    // cannot be read is null under its own name with a reason at dynamic_vars.<name>; the others
+    // are kept.
+    private static void AttachPowerDynamicVars(Dictionary<string, object?> state, PowerModel power,
+        string context)
+    {
+        ReadInternalStateValue(state, "dynamic_vars", () =>
+        {
+            var values = new Dictionary<string, object?>();
+            foreach (var (name, dynamicVar) in ReadPowerDynamicVarSet(power))
+            {
+                if (dynamicVar is StringVar) continue;
+                try { values[name] = dynamicVar.BaseValue; }
+                catch (Exception ex)
+                {
+                    values[name] = null;
+                    RecordInternalStateFailure(state, "dynamic_vars." + name, ex, context);
+                }
+            }
+            return values;
+        }, context);
     }
 
     /// <summary>PowerModel._dynamicVars as it is: never the lazily-building getter.</summary>
@@ -339,6 +474,66 @@ public static partial class McpMod
             int byId = StringComparer.Ordinal.Compare(a["card_id"] as string, b["card_id"] as string);
             return byId != 0 ? byId : ((int)a["original_upgrade_level"]!).CompareTo((int)b["original_upgrade_level"]!);
         });
+        return rows;
+    }
+
+    // { uid, uid_known, card_id } for a card the effect holds: the uid this combat's registry already
+    // gave it, or uid=null, uid_known=false and a reason (also a warning) for one it has not seen.
+    // Never mints a uid.
+    private static Dictionary<string, object?> BuildRegisteredCardRow(CardModel card, string warnPath)
+    {
+        string? cardId = SafeGetText(() => card.Id.Entry);
+        var row = new Dictionary<string, object?> { ["uid"] = null, ["uid_known"] = false, ["card_id"] = cardId };
+        if (TryGetRegisteredCardUid(card, out string uid))
+        {
+            row["uid"] = uid;
+            row["uid_known"] = true;
+        }
+        else
+        {
+            string reason = $"{cardId ?? "unknown"} は戦闘の uid registry に無い（新たに採番しない）";
+            row["uid_unavailable_reason"] = reason;
+            Warn(warnPath + ".uid", reason);
+        }
+        return row;
+    }
+
+    // Known uids first in uid order, then unknown ones by card id: dictionary / set order follows play
+    // or draw order, which the rows do not need to carry.
+    private static int CompareRegisteredCardRows(Dictionary<string, object?> a, Dictionary<string, object?> b, string? valueKey)
+    {
+        bool aKnown = a["uid_known"] is true, bKnown = b["uid_known"] is true;
+        if (aKnown != bKnown) return aKnown ? -1 : 1;
+        int byUid = StringComparer.Ordinal.Compare(a["uid"] as string, b["uid"] as string);
+        if (byUid != 0) return byUid;
+        int byId = StringComparer.Ordinal.Compare(a["card_id"] as string, b["card_id"] as string);
+        return byId != 0 || valueKey == null ? byId : ((int)a[valueKey]!).CompareTo((int)b[valueKey]!);
+    }
+
+    // A private Data Dictionary<CardModel, int> as { uid, uid_known, card_id, <valueKey> } rows.
+    private static List<Dictionary<string, object?>> ReadPowerCardAmountRows(PowerModel power, string field,
+        string valueKey, string warnPath)
+    {
+        var map = ReadPowerDataField<Dictionary<CardModel, int>>(power, field);
+        var rows = new List<Dictionary<string, object?>>(map.Count);
+        foreach (var (card, value) in map)
+        {
+            var row = BuildRegisteredCardRow(card, warnPath);
+            row[valueKey] = value;
+            rows.Add(row);
+        }
+        rows.Sort((a, b) => CompareRegisteredCardRows(a, b, valueKey));
+        return rows;
+    }
+
+    // A private Data HashSet<CardModel> as { uid, uid_known, card_id } rows.
+    private static List<Dictionary<string, object?>> ReadPowerCardSetRows(PowerModel power, string field, string warnPath)
+    {
+        var set = ReadPowerDataField<HashSet<CardModel>>(power, field);
+        var rows = new List<Dictionary<string, object?>>(set.Count);
+        foreach (var card in set)
+            rows.Add(BuildRegisteredCardRow(card, warnPath));
+        rows.Sort((a, b) => CompareRegisteredCardRows(a, b, null));
         return rows;
     }
 
