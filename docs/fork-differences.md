@@ -18,9 +18,14 @@
 
 ## HTTP・応答の共通
 
-- **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
+- **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6・7・8・9・10・11・12）。現在は `12`。
+- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.0.0"`（整数の `schema_version` 12 の契約そのもの）。Markdown は先頭の行に `mod … · schema 1.0.0 (schema_version 12)` と出す。
+  - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクションを消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
+  - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type` を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する
+  - PATCH: 契約を変えない直し（文書の意味のとおりでなかった値を正す、文書・表示の直し）
+- **`schema_version`（非推奨）**: 整数の版。12 で固定し、もう上げない。sts2 が `schema` を読むようになったあと、次の MAJOR（2.0.0）で消す。
+  以下は整数の版の履歴（既存の項目・アクションの意味を変えたり消したりしたときに上げた。6〜12 は追加だけでも、読み手が一式を必須として扱えるように上げた）。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
   5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
   6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）、

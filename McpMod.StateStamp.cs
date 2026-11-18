@@ -26,6 +26,8 @@ public static partial class McpMod
             ["mod_commit"] = BuildCommit,
             ["game_version"] = release?.Version,
             ["game_commit"] = release?.Commit,
+            ["schema"] = StateSchema,
+            // Deprecated: frozen at 12, removed in schema 2.0.0.
             ["schema_version"] = StateSchemaVersion,
             // Build-level: which verification contracts this MOD implements (sts2#1037).
             ["scenario_capabilities"] = BuildScenarioCapabilities()

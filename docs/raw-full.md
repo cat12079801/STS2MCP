@@ -3,7 +3,7 @@
 HTTP API served by the STS2_MCP mod on `localhost:15526`. No authentication. Local use only.
 
 **Endpoints:**
-- `GET  /` — health check: `{ "message", "status", "version", "commit", "schema_version", "scenario_capabilities" }`
+- `GET  /` — health check: `{ "message", "status", "version", "commit", "schema", "schema_version", "scenario_capabilities" }`
 - `GET  /api/v1/singleplayer` — read current game state
 - `POST /api/v1/singleplayer` — perform a game action
 - `GET  /api/v1/multiplayer` — read multiplayer game state
@@ -84,7 +84,8 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 12,     // Contract version — see below
+  "schema": "1.0.0",        // Contract version (semver) — see below
+  "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
 ```
@@ -97,11 +98,22 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
-Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
-feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The exceptions are **6**, **7**, **8**, **9**, **10**, **11** and **12**: additive contracts that a client treats as required as a whole, so
-they are gated on the version instead of probing each field. **10** (`cat12079801/sts2#1037`, the verification-capture
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.0.0"`):
+
+- **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes, a field or action is
+  removed or renamed, or the structure changes. A client requires only the MAJOR it was written against.
+- **MINOR** — a backward-compatible addition: new fields, actions, optional parameters or `state_type`s. Clients detect
+  added features by field presence and the existing `unavailable_reasons` / `warnings` conventions, not by comparing versions.
+- **PATCH** — a fix that does not change the contract: a value that was wrong per the documented meaning becomes right,
+  or a docs / formatting fix.
+
+`1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
+`mod 0.4.0+<commit> · schema 1.0.0 (schema_version 12)`.
+
+`schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
+MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
+was removed, and also for **6**, **7**, **8**, **9**, **10**, **11** and **12**: additive contracts that a client treated as
+required as a whole, gated on the version instead of probing each field. **10** (`cat12079801/sts2#1037`, the verification-capture
 contract) also changes two `hand_select` meanings: `cards[].index` is now the `NPlayerHand.ActiveHolders` position that
 `combat_select_card` presses (a holder without a card leaves a gap instead of shifting later rows), and `selected_cards`
 is always present (`[]` when none, `null` when unreadable) and lists the hand's `_selectedCards` (the upgrade preview's card
@@ -1020,7 +1032,7 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 本節の項目は schema 4 で追加した（追加時に版は上げていない）。
-同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **10**。
+同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、

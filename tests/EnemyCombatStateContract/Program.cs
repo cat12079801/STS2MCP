@@ -173,6 +173,7 @@ public static partial class McpMod
         Check(Source("McpMod.Formatting.cs").Contains("FormatEnemyMoveContext(battle)") && Source("McpMod.Formatting.cs").Contains("FormatEnemySlotName(enemy)"),
             "Markdown への配線");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
+        Check(Source("McpMod.cs").Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
         Console.WriteLine($"敵の戦闘内部状態の契約試験: {Checks} 件成功");
     }
 

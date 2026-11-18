@@ -179,6 +179,7 @@ public static partial class McpMod
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildEnemyList(combatState)"), "協力プレイも共通の敵 builder");
         Check(Source("McpMod.Formatting.cs").Contains("{label}{FormatEnemyAttackIntent(i)}{desc}"), "意図の Markdown 行への配線");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
+        Check(Source("McpMod.cs").Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
         Console.WriteLine($"敵の攻撃の意図の契約試験: {Checks} 件成功");
     }
 }

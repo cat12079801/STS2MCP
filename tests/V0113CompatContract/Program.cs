@@ -10,6 +10,7 @@ namespace STS2_MCP
         private const string Version = "test-mod";
         private const string BuildCommit = "test-mod-commit";
         private const int StateSchemaVersion = 12;
+        private const string StateSchema = "1.0.0";
         private static int Checks;
         private static void Check(bool condition, string message)
         {
@@ -20,6 +21,28 @@ namespace STS2_MCP
         private static void Warn(string context, Exception ex) => throw new Exception(context, ex);
         private static Dictionary<string, object?> Error(string message)
             => new() { ["status"] = "error", ["message"] = message };
+
+        // The published `schema` is semver: MAJOR.MINOR.PATCH, digits only, no leading zeros.
+        // The integer schema_version stays frozen at 12 beside it until 2.0.0.
+        private static void CheckSemverSchema(string sources)
+        {
+            var semver = new System.Text.RegularExpressions.Regex(@"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$");
+            foreach (var bad in new[] { "12", "1.0", "1.0.0.0", "01.0.0", "1.0.0-beta", "v1.0.0", " 1.0.0", "1.a.0", "" })
+                Check(!semver.IsMatch(bad), "semver check rejects " + bad);
+            string mod = File.ReadAllText(Path.Combine(sources, "McpMod.cs"));
+            var declared = System.Text.RegularExpressions.Regex.Match(mod, @"public const string StateSchema = ""([^""]*)"";");
+            Check(declared.Success, "McpMod.cs declares StateSchema");
+            string published = declared.Groups[1].Value;
+            Check(semver.IsMatch(published), "published schema is well-formed semver: " + published);
+            Check(published == StateSchema, "test stub matches the published schema");
+            Check(semver.IsMatch((string)NewStateResult()["schema"]!), "stamped schema is well-formed semver");
+            // GET / and the Markdown header carry the same constant.
+            Check(mod.Contains("[\"schema\"] = StateSchema,") && mod.Contains("[\"schema_version\"] = StateSchemaVersion,"),
+                "GET / hello carries schema and the deprecated schema_version");
+            string formatting = File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs"));
+            Check(formatting.Contains("state.TryGetValue(\"schema\", out var sc)") && formatting.Contains("\" · schema \" + schema"),
+                "Markdown header shows the semver schema");
+        }
 
         public static async Task RunCompatContract()
         {
@@ -105,6 +128,7 @@ namespace STS2_MCP
                 Check(Equals(state["game_version"], "v0.113.0") && Equals(state["game_commit"], "16ac0fe3"), "release stamp " + type);
                 Check(Equals(state["mod_version"], Version) && Equals(state["mod_commit"], BuildCommit)
                     && Equals(state["schema_version"], 12), "independent mod/schema stamp");
+                Check(Equals(state["schema"], "1.0.0"), "every stamped state carries the semver schema " + type);
                 Check(state["scenario_capabilities"] is Dictionary<string, object?> caps && Equals(caps["setup_guard"], 1)
                     && Equals(caps["selection_uid"], 1) && Equals(caps["potion_availability"], 1), "every stamped state carries scenario_capabilities (sts2#1037, potion_availability sts2#1012)");
             }
@@ -119,7 +143,8 @@ namespace STS2_MCP
                 Check(state["game_version"] == null && state["game_commit"] == null,
                     "release exception leaves nullable metadata");
                 Check(Equals(state["state_type"], "menu") && Equals(state["mod_version"], Version)
-                    && Equals(state["schema_version"], 12), "release exception preserves state response");
+                    && Equals(state["schema_version"], 12) && Equals(state["schema"], "1.0.0"),
+                    "release exception preserves state response");
                 ReleaseInfoManager.FailInstance = ReleaseInfoManager.FailReleaseInfo = false;
             }
             ReleaseInfoManager.Instance.ReleaseInfo = new("v0.113.0", "16ac0fe3");
@@ -149,6 +174,8 @@ namespace STS2_MCP
             Check(stateSource.Contains("var result = NewStateResult();") &&
                 File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("var result = NewStateResult();"), "both state builders stamped");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
+            CheckSemverSchema(sources);
             Console.WriteLine($"v0.113 compatibility contract: {Checks} checks passed");
         }
     }

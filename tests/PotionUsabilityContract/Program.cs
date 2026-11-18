@@ -305,6 +305,7 @@ namespace STS2_MCP
             Check(Src("McpMod.ScenarioGuard.cs").Contains("[\"potion_availability\"] = 1"), "scenario_capabilities.potion_availability は 1");
             Check(Src("server.py").Contains("expected_potion_id"), "MCP サーバーの use_potion に expected_potion_id");
             Check(Src("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
+            Check(Src("McpMod.cs").Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
 
             Console.WriteLine($"PotionUsabilityContract: {Checks} checks passed");
         }

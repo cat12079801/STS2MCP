@@ -251,6 +251,11 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
+    契約の版は schema（semver の文字列。現在 "1.0.0"）で返す。MAJOR は後方互換の無い変更
+    （既存の項目の意味・型・形の変更、項目・アクションの削除・改名）、MINOR は後方互換の追加
+    （足された機能は版でなく項目の有無と unavailable_reasons / warnings で検出する）、PATCH は
+    契約を変えない直し。上の「schema N」は非推奨の整数 schema_version の版で、12 で固定し
+    （= schema 1.0.0）、2.0.0 で消す。
 
     Args:
         format: "markdown" for human-readable output, "json" for structured data.

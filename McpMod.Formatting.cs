@@ -21,8 +21,12 @@ public static partial class McpMod
         // So a pasted markdown state says which build produced it, without a second request.
         string modVersion = state.TryGetValue("mod_version", out var mv) ? mv?.ToString() ?? Version : Version;
         string modCommit = state.TryGetValue("mod_commit", out var mc) ? mc?.ToString() ?? "" : "";
-        string schema = state.TryGetValue("schema_version", out var sv) ? sv?.ToString() ?? "" : "";
-        sb.AppendLine($"mod {modVersion}{(modCommit.Length > 0 ? "+" + modCommit : "")}{(schema.Length > 0 ? " · schema " + schema : "")}");
+        string schema = state.TryGetValue("schema", out var sc) ? sc?.ToString() ?? "" : "";
+        // Deprecated integer, frozen at 12; shown until it is removed in schema 2.0.0.
+        string schemaVersion = state.TryGetValue("schema_version", out var sv) ? sv?.ToString() ?? "" : "";
+        sb.AppendLine($"mod {modVersion}{(modCommit.Length > 0 ? "+" + modCommit : "")}"
+            + $"{(schema.Length > 0 ? " · schema " + schema : "")}"
+            + $"{(schemaVersion.Length > 0 ? " (schema_version " + schemaVersion + ")" : "")}");
         if (state.GetValueOrDefault("game_version") is string gameVersion)
         {
             string gameCommit = state.GetValueOrDefault("game_commit") as string ?? "";

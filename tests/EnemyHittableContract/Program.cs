@@ -69,6 +69,7 @@ namespace STS2_MCP
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("battle[\"enemies\"] = BuildEnemyList(combatState)"), "マルチも同じ");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("{FormatEnemyHittable(enemy)}"), "Markdown の HP 行に配線");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
             Console.WriteLine($"EnemyHittableContract: {Checks} checks passed");
         }
     }

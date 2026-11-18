@@ -532,6 +532,7 @@ namespace STS2_MCP
             Check(previewSource.Contains("clone.UpgradeInternal();") && previewSource.Contains("clone.FinalizeUpgradeInternal();"), "the clone gets the two calls CardCmd.Upgrade makes");
             string mod = Source("McpMod.cs");
             Check(mod.Contains("public const int StateSchemaVersion = 12;"), "combat upgrade_preview changed meaning at schema 5; current schema is 12 (sts2#1020)");
+            Check(mod.Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
             Check(mod.Contains("BuildStateMeasured(BuildGameState, perf)") && mod.Contains("BuildStateMeasured(BuildMultiplayerGameState, perf)"), "?perf=1 on both state endpoints");
             Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState(localPlayer)"), "multiplayer shares the player builder");
             Check(Source("McpMod.Formatting.cs").Contains("AppendUpgradePreviewLine(sb, card, showReady: false);"), "hand markdown prints failures only");

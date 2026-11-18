@@ -254,6 +254,7 @@ public static partial class McpMod
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer)"), "multiplayer uses same local-player history");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCombatHistoryMarkdown(sb, player)"), "battle markdown wired");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
+        Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
         Console.WriteLine($"CombatHistoryContract: {Checks} checks passed");
     }
 }

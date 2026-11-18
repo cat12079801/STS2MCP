@@ -59,13 +59,16 @@ curl -s http://localhost:15526/
 A successful response looks like:
 
 ```json
-{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema_version": 5}
+{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "1.0.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
 ```
 
 `commit` is the git revision the mod was built from (`null` if the build could not determine one) —
-quote it when reporting a bug. `schema_version` changes only when an existing state field or action
-changes meaning or is removed; new fields and actions do not bump it. Every state payload carries the
-same three values as `mod_version`, `mod_commit` and `schema_version`.
+quote it when reporting a bug. `schema` is the state/action contract version as semantic versioning:
+MAJOR for a backward-incompatible change (a field's meaning, type or shape changes, a field or action is
+removed or renamed), MINOR for a backward-compatible addition (new fields, actions, optional parameters;
+detect them by field presence), PATCH for a fix that does not change the contract. `schema_version` is
+the deprecated integer predecessor, frozen at `12` (= `schema` `1.0.0`) and removed in `2.0.0`.
+Every state payload carries the same values as `mod_version`, `mod_commit`, `schema` and `schema_version`.
 State also reports `game_version` and `game_commit` from the game's `release_info.json`
 (`null` when unavailable), so reports can identify the game separately from the mod build.
 

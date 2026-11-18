@@ -26,12 +26,29 @@ public static partial class McpMod
     public const string Version = "0.4.0";
 
     /// <summary>
-    /// Version of the state/action contract, reported as `schema_version` on every payload.
+    /// Version of the state/action contract as semantic versioning, reported as `schema` on every
+    /// state payload, on `GET /` and in the Markdown header.
     ///
-    /// Bumped only when an existing field or action changes meaning or disappears - the cases
-    /// where a client that was written against the old shape is now wrong. Adding fields,
-    /// actions, parameters or state_types does not bump it, so clients can keep feature-detecting
-    /// additions by presence and use this only to notice a breaking change.
+    /// MAJOR: a backward-incompatible change - an existing field's meaning, type or shape changes,
+    ///        a field or action is removed or renamed, or the structure changes. A client requires
+    ///        only the MAJOR it was written against.
+    /// MINOR: a backward-compatible addition - new fields, actions, optional parameters or
+    ///        state_types. Clients detect added features by field presence and by the existing
+    ///        unavailable_reasons / warnings conventions, not by comparing versions.
+    /// PATCH: a fix that does not change the contract - a value that was wrong per the documented
+    ///        meaning becomes right, or a docs / formatting fix.
+    ///
+    /// 1.0.0 is exactly the contract of the deprecated integer schema_version 12.
+    /// </summary>
+    public const string StateSchema = "1.0.0";
+
+    /// <summary>
+    /// Deprecated: the integer contract version, still reported as `schema_version` next to
+    /// `schema`. It is frozen at 12 and no longer changes; it is removed in the next MAJOR (2.0.0)
+    /// once sts2 reads `schema`. The history below is the history of this integer.
+    ///
+    /// It was bumped when an existing field or action changed meaning or disappeared, and (6 to 12)
+    /// for additive contracts that the engine required as a whole and gated on the version.
     ///
     /// 2: battle.enemies is no longer "the living enemies". A corpse the game keeps in the
     ///    fight (a Decimillipede segment waiting to reattach) is now listed with
@@ -485,7 +502,8 @@ public static partial class McpMod
                     ["status"] = "ok",
                     ["version"] = Version,
                     ["commit"] = BuildCommit,
-                    ["schema_version"] = StateSchemaVersion,
+                    ["schema"] = StateSchema,
+                    ["schema_version"] = StateSchemaVersion, // deprecated, frozen at 12
                     ["scenario_capabilities"] = BuildScenarioCapabilities()
                 }, pretty);
             }

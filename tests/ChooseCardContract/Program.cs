@@ -276,6 +276,7 @@ namespace STS2_MCP
             int reveal = actions.IndexOf("RevealCardSelectScreen(chooseScreen, revealed)", StringComparison.Ordinal);
             Check(nullGuard > 0 && nullGuard < reveal, "CardModel の無い holder は覆いを外す前に拒否する");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
             Console.WriteLine($"ChooseCardContract: {Checks} checks passed");
         }
     }

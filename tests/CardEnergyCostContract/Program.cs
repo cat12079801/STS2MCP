@@ -216,6 +216,7 @@ namespace STS2_MCP
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("energy_cost"), "common deck/preview card builder omits combat-only data");
             Check(!Slice("private static Dictionary<string, object?> BuildHandSelectState", "// Confirm button state").Contains("energy_cost"), "hand selection reads same card from hand, no extra field");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState("), "multiplayer uses shared player builder");
             Console.WriteLine($"CardEnergyCostContract: {Checks} checks passed");
         }
