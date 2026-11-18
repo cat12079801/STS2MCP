@@ -36,9 +36,12 @@ action は画面外の index 30、具体 override への一回のモデル引き
 マップと覗き見の順の解除、choose 画面の判定と解除を見る。confirm / cancel と state の配線は本番ソースの文字列検査。
 マップ・戻る矢印・capstone・覗き見ボタンは境界ダブルで、`Close` → `ShowOverlays` の実際の配線は動かさない。
 
+戦闘中の grid の全行に、その候補の `combat_instance`（`cat12079801/sts2#1019`。中身は CombatUpgradePreviewContract）が付き、
+Markdown に `instance:` の 1 行が出ること、戦闘外の行には付かないことも確認する。
+
 ゲームのモデル・ノード・combat registry・カード情報作成・強化プレビュー作成は境界ダブル。
 実ゲームのソート、描画、ハイライト、シグナル、効果適用、uid の registry 本体を動かした証拠にはならない。
-schema 6、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
+schema 7、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
 巨大な state/action 全体をリンクせず、ビルド出力へコピーした本番ソースへの文字列検査で確認する。
 choose は formatter の即時選択案内・見出しを検査し、choose action / bundle / 手札の統合回帰は実機で行う。
 

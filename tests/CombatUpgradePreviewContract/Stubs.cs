@@ -241,6 +241,11 @@ namespace MegaCrit.Sts2.Core.Models
         public event Action? StatusChanged;
         public CardModel? AttachedCard => _card;
         public int Amount { get => _amount; set { AssertMutable(); _amount = value; } }
+        // v0.113.1 EnchantmentModel._dynamicVars: DeepCloneFields clones it for the copy.
+        private DynamicVarSet? _dynamicVars = new(Array.Empty<DynamicVar>());
+        public DynamicVarSet DynamicVars => _dynamicVars ??= new DynamicVarSet(Array.Empty<DynamicVar>());
+        public void SetVars(DynamicVarSet vars) => _dynamicVars = vars;
+        public virtual int EnchantPlayCount(int originalPlayCount) => originalPlayCount;
         public CardModel? Card
         {
             get { AssertMutable(); return _card; }
@@ -255,6 +260,7 @@ namespace MegaCrit.Sts2.Core.Models
         {
             _card = null;
             StatusChanged = null;
+            _dynamicVars = DynamicVars.Clone();
         }
         public void ApplyInternal(CardModel card, decimal amount)
         {
@@ -321,6 +327,8 @@ namespace MegaCrit.Sts2.Core.Models
                 ? throw new InvalidOperationException($"{field} failed") : value;
 
         public CardPile? Pile => OwnerPlayer?.Piles.FirstOrDefault(p => p.Cards.Contains(this));
+        /// <summary>CardModel.Owner: AssertMutable, then the owner (null before one is set).</summary>
+        public Player Owner { get { AssertMutable(); return Read("owner", OwnerPlayer)!; } }
         public object? CombatState => OwnerPlayer is { InCombat: true }
             && (Pile is { IsCombatPile: true } || _upgradePreviewType == CardUpgradePreviewType.Combat) ? OwnerPlayer : null;
 
@@ -364,6 +372,26 @@ namespace MegaCrit.Sts2.Core.Models
         public IReadOnlySet<CardKeyword> Keywords => GetKeywordsWithSources(KeywordSources.All);
         public bool ShouldRetainThisTurn => Keywords.Contains(CardKeyword.Retain) || _hasSingleTurnRetain;
         public void GiveSingleTurnRetain() => _hasSingleTurnRetain = true;
+        // v0.113.1 CardModel: IsSlyThisTurn, _hasSingleTurnSly, the replay counts and
+        // GetEnchantedReplayCount (Enchantment?.EnchantPlayCount(base + extra) ?? the sum).
+        private bool _hasSingleTurnSly;
+        private int _baseReplayCount;
+        private int _extraReplayThisTurn;
+        public bool IsSlyThisTurn => Read("sly_this_turn", Keywords.Contains(CardKeyword.Sly) || _hasSingleTurnSly);
+        public void GiveSingleTurnSly() => _hasSingleTurnSly = true;
+        public int BaseReplayCount
+        {
+            get => Read("base_replay_count", _baseReplayCount);
+            set { AssertMutable(); _baseReplayCount = value; ReplayCountChanged?.Invoke(); }
+        }
+        public int ExtraReplayThisTurn
+        {
+            get => Read("extra_replay_this_turn", _extraReplayThisTurn);
+            set { AssertMutable(); _extraReplayThisTurn = value; ReplayCountChanged?.Invoke(); }
+        }
+        public int GetEnchantedReplayCount()
+            => Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn) ?? BaseReplayCount + ExtraReplayThisTurn;
+        public (bool Retain, bool Sly, int Base, int Extra) PeekTurnState() => (_hasSingleTurnRetain, _hasSingleTurnSly, _baseReplayCount, _extraReplayThisTurn);
 
         public int CanonicalStarCost => CanonicalStars;
         public bool HasStarCostX => StarX;
@@ -576,8 +604,34 @@ namespace MegaCrit.Sts2.Core.Models.Afflictions
     }
 }
 
+// v0.113.1 MadScience.TinkerTimeRider (TinkerTime.RiderEffect), copied by MemberwiseClone.
+namespace MegaCrit.Sts2.Core.Models.Events
+{
+    public sealed class TinkerTime
+    {
+        public enum RiderEffect { None, Sapping, Violence, Choking, Energized, Wisdom, Chaos, Expertise, Curious, Improvement }
+    }
+}
+namespace MegaCrit.Sts2.Core.Models.Cards
+{
+    public class MadScience : Models.CardModel
+    {
+        private Events.TinkerTime.RiderEffect _tinkerTimeRider;
+        public Events.TinkerTime.RiderEffect TinkerTimeRider { get => _tinkerTimeRider; set { AssertMutable(); _tinkerTimeRider = value; } }
+        public MadScience() { Name = "Mad Science"; CanonicalVarValues = new() { ["Damage"] = 12m, ["ViolenceHits"] = 3m, ["SappingWeak"] = 2m }; }
+        protected override void OnUpgrade() => AddKeyword(CardKeyword.Innate);
+    }
+}
+
 namespace MegaCrit.Sts2.Core.Models.Enchantments
 {
+    // v0.113.1 Glam: original + Times unless Status is Disabled.
+    public class Glam : Models.EnchantmentModel
+    {
+        public Glam() { ModelId = new("GLAM"); SetVars(new DynamicVarSet(new[] { new DynamicVar("Times", 1m) })); }
+        public override int EnchantPlayCount(int originalPlayCount)
+            => Status == EnchantmentStatus.Disabled ? originalPlayCount : originalPlayCount + (int)DynamicVars["Times"].BaseValue;
+    }
     public class Momentum : Models.EnchantmentModel
     {
         private int _extraDamage;
@@ -629,6 +683,13 @@ namespace STS2_MCP
         private static Dictionary<string, object?> BuildGameStateCore() => new();
         private static Dictionary<string, object?> BuildMultiplayerGameStateCore() => new();
         internal static string StripRichTextTags(string text) => text;
+        // McpMod.CardIdentity boundary: the pile rows' uid registry. Records who was asked.
+        internal static readonly List<MegaCrit.Sts2.Core.Models.CardModel> UidRequests = new();
+        internal static string GetStableCardUid(MegaCrit.Sts2.Core.Models.CardModel card)
+        {
+            UidRequests.Add(card);
+            return $"{card.Name}#{card.Pile?.Cards.IndexOf(card) ?? -1}";
+        }
         // StateBuilder's display helpers: CostsX ? "X" : GetAmountToSpend (GetWithModifiers(All)).
         private static string GetCostDisplay(MegaCrit.Sts2.Core.Models.CardModel card)
             => card.EnergyCost.CostsX ? "X" : card.EnergyCost.GetWithModifiers(CostModifiers.All).ToString();

@@ -166,6 +166,10 @@ namespace STS2_MCP
             var combatAgain = BuildCardSelectCardRows(current, [])!;
             Check(Equals(combatRows[30]["uid"], combatAgain[30]["uid"]), "stable instance uid across reads");
             Check(Markdown(combatRows).Contains($"`{combatRows[30]["uid"]}`") && Markdown(combatRows).Contains("[exhaust-next]"), "combat markdown attributes");
+            Check(combatRows.All(row => row["combat_instance"] is Dictionary<string, object?>) && CandidateInstanceCalls.Count == combatRows.Count + combatAgain.Count
+                && ReferenceEquals(CandidateInstanceCalls[30], cards[30]), "every combat grid row carries combat_instance for its own candidate (sts2#1019)");
+            Check(Markdown(combatRows).Contains($"  - instance: Draw `{combatRows[30]["uid"]}`"), "grid markdown shows the instance line");
+            Check(upgradeRows.All(row => !row.ContainsKey("combat_instance")), "out of combat the grid rows keep their shape");
             CombatManager.Instance.State = null;
             Check(BuildCardSelectCardRows(current, [])!.All(row => !row.ContainsKey("uid")), "live combat missing state omits uid");
             CombatManager.Instance.IsInProgress = false;
@@ -402,7 +406,7 @@ namespace STS2_MCP
             // Lightweight integration assertions for entry points not linked into this
             // small boundary project (the entire state/action builders depend on Godot).
             var sources = Path.Combine(AppContext.BaseDirectory, "Sources");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 6;"), "published schema is 6 (sts2#1018)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 7;"), "published schema is 7 (sts2#1019)");
             var stateSource = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             Check(stateSource.Contains("state[\"cards\"] = BuildCardSelectCardRows(screen, selection);") && !stateSource.Contains("selected_outside_grid"), "state uses linked rows and removes old field");
             var actionSource = File.ReadAllText(Path.Combine(sources, "McpMod.Actions.cs"));

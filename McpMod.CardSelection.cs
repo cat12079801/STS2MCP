@@ -142,6 +142,9 @@ public static partial class McpMod
                 row["uid"] = GetStableCardUid(card);
                 row["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
                 row["energy_cost"] = BuildCardEnergyCostState(card);
+                // Which instance the candidate is: a combat pile row (by uid) or a detached card
+                // with its own effect inputs (sts2#1019). Out of combat the row is unchanged.
+                row["combat_instance"] = BuildSelectionCandidateInstance(card);
             }
             if (selection != null)
             {

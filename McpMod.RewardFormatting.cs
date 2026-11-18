@@ -60,6 +60,7 @@ public static partial class McpMod
                     ? $" [{string.Join(", ", kwList)}]" : "";
                 sb.AppendLine($"- [{card["index"]}] **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]}{keywords} - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
+                AppendCombatInstanceMarkdown(sb, card);
             }
             sb.AppendLine();
         }

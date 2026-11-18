@@ -41,7 +41,7 @@ public static partial class McpMod
 
     /// <summary>
     /// Adds the combat-only upgrade fields to a hand or pile row: the live card's level, cap,
-    /// keyword sets, single-turn retain, and "upgrade_preview". Call after AttachCardDetails,
+    /// keyword sets, and "upgrade_preview". Call after AttachCardDetails,
     /// which creates the row's unavailable_reasons.
     /// </summary>
     private static void AttachCombatUpgradeState(Dictionary<string, object?> row, CardModel card, PileType pile)
@@ -55,11 +55,8 @@ public static partial class McpMod
         ReadCardDetailValue(row, reasons, "local_keyword_ids",
             () => KeywordIds(card.GetKeywordsWithSources(KeywordSources.Local)));
         ReadCardDetailValue(row, reasons, "keyword_ids", () => KeywordIds(card.Keywords));
-        // CardModel.ShouldRetainThisTurn = Retain keyword || the private _hasSingleTurnRetain
-        // (GiveSingleTurnRetain). The flag is read as a declared field: no getter, no setter.
-        ReadCardDetailValue(row, reasons, "retain_this_turn", () => card.ShouldRetainThisTurn);
-        ReadCardDetailValue(row, reasons, "single_turn_retain",
-            () => ReadDeclaredStateField<bool>(card, typeof(CardModel), "_hasSingleTurnRetain"));
+        // retain_this_turn / single_turn_retain, the Sly flags and the replay counts come with
+        // AttachCardDetails (AttachCardTurnState), so the ready clone carries them too.
         row["upgrade_preview"] = BuildCombatUpgradePreview(card, pile);
     }
 
@@ -152,8 +149,13 @@ public static partial class McpMod
         // upgrade-preview rendering and no fallback text (SafeGetCardDescription has one).
         ReadPreviewValue(preview, reasons, "description", "description",
             () => StripRichTextTags(clone.GetDescriptionForPile(pile)).Replace("\n", " "));
-        // type, target_type, is_upgraded, is_upgradable, tags, affliction, enchantment,
-        // dynamic_vars (BaseValue, StringVar excluded): the live rows' reader, on the clone.
+        // type, target_type, is_upgraded, is_upgradable, tags, affliction, enchantment (with its
+        // dynamic_vars), dynamic_vars (BaseValue, StringVar excluded), retain_this_turn,
+        // single_turn_retain, sly_this_turn, single_turn_sly, base_replay_count,
+        // extra_replay_this_turn, enchanted_replay_count (and tinker_time_rider on Mad Science):
+        // the live rows' reader, on the clone. MemberwiseClone copies the private single-turn
+        // flags and replay counts and DeepCloneFields keeps them, so an upgrade changes them
+        // only where OnUpgrade does. Any failure among them makes the preview unavailable.
         var details = new Dictionary<string, object?>();
         AttachCardDetails(details, clone);
         var detailReasons = (Dictionary<string, string>)details["unavailable_reasons"]!;

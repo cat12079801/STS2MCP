@@ -13,7 +13,7 @@
     <Compile Include="../../McpMod.CardEnergyCostFormatting.cs" Link="CardEnergyCostFormatting.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
     <Compile Include="../../McpMod.InternalState.cs" Link="InternalState.cs" />
-    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs"
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs;../../McpMod.CardDetails.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

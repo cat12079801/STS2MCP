@@ -49,6 +49,15 @@ namespace MegaCrit.Sts2.Core.Models
         public EnchantmentStatus StatusValue;
         public bool ThrowStatus;
         public EnchantmentStatus Status => ThrowStatus ? throw new InvalidOperationException("status failed") : StatusValue;
+        // v0.113.1 EnchantmentModel._dynamicVars: set by DeepCloneFields on every mutable
+        // enchantment; the public getter builds it when null. Tests set it directly.
+        private DynamicVarSet? _dynamicVars = new();
+        public void SetVars(DynamicVarSet? vars) => _dynamicVars = vars;
+        public bool VarsInitialized => _dynamicVars != null;
+        public int GetterReads;
+        public DynamicVarSet DynamicVars { get { GetterReads++; return _dynamicVars ??= new DynamicVarSet(); } }
+        public int PlayCountCalls;
+        public virtual int EnchantPlayCount(int originalPlayCount) { PlayCountCalls++; return originalPlayCount; }
     }
     public class CardModel
     {
@@ -79,6 +88,26 @@ namespace MegaCrit.Sts2.Core.Models
         public bool IsUpgraded => Read("is_upgraded", UpgradeLevel > 0);
         public bool IsUpgradable => Read("is_upgradable", UpgradeLevel < MaxLevel);
         public IEnumerable<CardTag> Tags => Read("tags", TagSet);
+        // v0.113.1 CardModel: ShouldRetainThisTurn / IsSlyThisTurn = keyword || private flag;
+        // BaseReplayCount / ExtraReplayThisTurn are plain getters; GetEnchantedReplayCount =
+        // Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn) ?? the sum.
+        private bool _hasSingleTurnRetain;
+        private bool _hasSingleTurnSly;
+        public void GiveSingleTurnRetain() => _hasSingleTurnRetain = true;
+        public void GiveSingleTurnSly() => _hasSingleTurnSly = true;
+        public (bool Retain, bool Sly) PeekSingleTurn() => (_hasSingleTurnRetain, _hasSingleTurnSly);
+        public void EndOfTurnCleanup() { _hasSingleTurnRetain = false; _hasSingleTurnSly = false; Extra = 0; }
+        public bool ShouldRetainThisTurn => Read("retain_this_turn", LocalKeywordSet.Contains(CardKeyword.Retain) || GlobalKeywordSet.Contains(CardKeyword.Retain) || _hasSingleTurnRetain);
+        public bool IsSlyThisTurn => Read("sly_this_turn", LocalKeywordSet.Contains(CardKeyword.Sly) || GlobalKeywordSet.Contains(CardKeyword.Sly) || _hasSingleTurnSly);
+        public int BaseReplay;
+        public int Extra;
+        public int BaseReplayCount => Read("base_replay_count", BaseReplay);
+        public int ExtraReplayThisTurn => Read("extra_replay_this_turn", Extra);
+        public int GetEnchantedReplayCount()
+        {
+            Read("enchanted_replay_count", 0);
+            return Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn) ?? BaseReplayCount + ExtraReplayThisTurn;
+        }
         // Boundary double of CardModel.GetKeywordsWithSources: Local is the card's own set,
         // Global the keywords other models add in combat (HexPower's Ethereal on Hexed).
         public HashSet<CardKeyword> LocalKeywordSet = [];
@@ -99,10 +128,48 @@ namespace MegaCrit.Sts2.Core.Models.Afflictions
 {
     public sealed class Hexed : AfflictionModel { }
 }
+// v0.113.1 MegaCrit.Sts2.Core.Models.Events.TinkerTime.RiderEffect and
+// MegaCrit.Sts2.Core.Models.Cards.MadScience.TinkerTimeRider (saved per instance).
+namespace MegaCrit.Sts2.Core.Models.Events
+{
+    public sealed class TinkerTime
+    {
+        public enum RiderEffect { None, Sapping, Violence, Choking, Energized, Wisdom, Chaos, Expertise, Curious, Improvement }
+    }
+}
+namespace MegaCrit.Sts2.Core.Models.Cards
+{
+    public sealed class MadScience : CardModel
+    {
+        public Events.TinkerTime.RiderEffect Rider;
+        public bool ThrowRider;
+        public Events.TinkerTime.RiderEffect TinkerTimeRider => ThrowRider ? throw new InvalidOperationException("rider failed") : Rider;
+    }
+}
 // Mirrors v0.113.1 MegaCrit.Sts2.Core.Models.Enchantments.Momentum: a private int _extraDamage
 // that OnPlay grows by Amount. The real class is sealed; the subclasses model a moved or retyped field.
 namespace MegaCrit.Sts2.Core.Models.Enchantments
 {
+    // v0.113.1 Glam.EnchantPlayCount: original + Times while Status is not Disabled
+    // (Glam.AfterCardPlayed disables it after the card's first play). Spiral: original + Times.
+    public sealed class Glam : EnchantmentModel
+    {
+        public Glam() { ModelId = new("GLAM"); SetVars(new DynamicVarSet(new DynamicVar(1m) { Name = "Times" })); }
+        public override int EnchantPlayCount(int originalPlayCount)
+        {
+            base.EnchantPlayCount(originalPlayCount);
+            return Status == EnchantmentStatus.Disabled ? originalPlayCount : originalPlayCount + (int)DynamicVars["Times"].BaseValue;
+        }
+    }
+    public sealed class Spiral : EnchantmentModel
+    {
+        public Spiral() { ModelId = new("SPIRAL"); SetVars(new DynamicVarSet(new DynamicVar(1m) { Name = "Times" })); }
+        public override int EnchantPlayCount(int originalPlayCount)
+        {
+            base.EnchantPlayCount(originalPlayCount);
+            return originalPlayCount + (int)DynamicVars["Times"].BaseValue;
+        }
+    }
     public class Momentum : EnchantmentModel
     {
         private int _extraDamage;
@@ -121,6 +188,7 @@ namespace MegaCrit.Sts2.Core.Localization.DynamicVars
 {
     public class DynamicVar(decimal value)
     {
+        public string Name = "Var";
         public decimal Value = value;
         public decimal PreviewValue = 999m;
         public decimal EnchantedValue = 888m;
@@ -128,6 +196,16 @@ namespace MegaCrit.Sts2.Core.Localization.DynamicVars
         public decimal BaseValue => ThrowBase ? throw new InvalidOperationException("base failed") : Value;
     }
     public class StringVar() : DynamicVar(0m);
+    public class DynamicVarSet(params DynamicVar[] vars) : IEnumerable<KeyValuePair<string, DynamicVar>>
+    {
+        private readonly Dictionary<string, DynamicVar> _vars = vars.ToDictionary(v => v.Name);
+        public bool ThrowEnumeration;
+        public DynamicVar this[string key] => _vars[key];
+        public void Add(DynamicVar var) => _vars[var.Name] = var;
+        public IEnumerator<KeyValuePair<string, DynamicVar>> GetEnumerator()
+            => ThrowEnumeration ? throw new InvalidOperationException("vars failed") : _vars.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 }
 namespace STS2_MCP
 {

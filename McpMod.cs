@@ -61,8 +61,20 @@ public static partial class McpMod
     ///    rows carry was_just_applied_by_enemy. Existing fields keep their meaning. The bump is
     ///    deliberate although the change is additive: the planner treats these inputs as required
     ///    for every enemy and gates on the version instead of probing each field.
+    ///
+    /// 7: the card-effect input contract (sts2#1019). Every combat card row (hand, the four
+    ///    piles, choose rows) and the ready combat upgrade_preview carry retain_this_turn,
+    ///    single_turn_retain, sly_this_turn, single_turn_sly, base_replay_count,
+    ///    extra_replay_this_turn and enchanted_replay_count (Mad Science rows also
+    ///    tinker_time_rider); enchantment objects carry their dynamic_vars; The Bomb, Inferno,
+    ///    Crimson Mantle and Panache status rows carry damage / self_damage / cards_left and
+    ///    already_applied; in-combat selection rows (card_select, choose, hand_select, a
+    ///    card_reward during combat) carry combat_instance (a pile uid, or the detached
+    ///    candidate's own values). Existing fields keep their meaning. Like 6, the bump is
+    ///    deliberate although additive: the engine requires these inputs on every row and gates
+    ///    on the version.
     /// </summary>
-    public const int StateSchemaVersion = 6;
+    public const int StateSchemaVersion = 7;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";

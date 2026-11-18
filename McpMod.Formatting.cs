@@ -1051,6 +1051,7 @@ public static partial class McpMod
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
                 sb.AppendLine($"- [{card["index"]}] **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
+                AppendCombatInstanceMarkdown(sb, card);
             }
             sb.AppendLine();
         }

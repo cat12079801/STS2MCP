@@ -210,6 +210,13 @@ async def get_game_state(format: str = "markdown") -> str:
     この手番の手動プレイ完了の有無（bool）。取得失敗は null・理由・warnings。
     パエルの眼はレリック側の使用・参加フラグも使い、WhisperingEarring 所持の
     turn_number == 1 をプレイ済み扱いにする。旧 MOD の欠落は unknown と扱う。
+    schema 7 で戦闘の札の行（手札・4 パイル・choose の候補）と ready の upgrade_preview に
+    retain_this_turn・single_turn_retain・sly_this_turn・single_turn_sly・base_replay_count・
+    extra_replay_this_turn・enchanted_replay_count（Mad Science は tinker_time_rider）、enchantment に
+    dynamic_vars を足した。爆弾の status 行は damage、インフェルノ・深紅の衣は self_damage、
+    威風堂々は cards_left と already_applied。戦闘中の選択画面の候補行は combat_instance
+    （パイルの札は source=pile と uid、パイルに無い候補は source=detached と values）。
+    false・0 は実値、読めない値は null・理由・warnings。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 

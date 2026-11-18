@@ -7,6 +7,8 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Enchantments;
 using MegaCrit.Sts2.Core.Models.Afflictions;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Models.Enchantments;
 
 STS2_MCP.McpMod.RunCardDetailsContract();
@@ -47,6 +49,146 @@ namespace STS2_MCP
             yield return CardTag.Strike;
             throw new InvalidOperationException("tags enumeration failed");
         }
+        // sts2#1019: single-turn Retain / Sly, replay counts, enchantment vars and the Mad Science rider.
+        private static void RunCardTurnStateContract(JsonSerializerOptions options)
+        {
+            string[] turnKeys = { "retain_this_turn", "single_turn_retain", "sly_this_turn", "single_turn_sly",
+                "base_replay_count", "extra_replay_this_turn", "enchanted_replay_count" };
+            BeginStateWarnings();
+            var card = new CardModel();
+            var plain = Details(card);
+            Check(turnKeys.All(plain.ContainsKey) && plain["retain_this_turn"] is false && plain["single_turn_retain"] is false
+                && plain["sly_this_turn"] is false && plain["single_turn_sly"] is false, "every row carries the turn flags; false is a read value");
+            Check(Equals(plain["base_replay_count"], 0) && Equals(plain["extra_replay_this_turn"], 0) && Equals(plain["enchanted_replay_count"], 0)
+                && Reasons(plain).Count == 0 && _stateWarnings.Count == 0, "zero replays are read values without reasons");
+            Check(!plain.ContainsKey("tinker_time_rider"), "only Mad Science rows carry tinker_time_rider");
+            Check(!Markdown(plain).Contains("replays") && !Markdown(plain).Contains("this turn only"), "markdown omits default turn state");
+
+            // Single-turn grants are the private flags, distinct from the keyword.
+            card.GiveSingleTurnSly();
+            card.GiveSingleTurnRetain();
+            var granted = Details(card);
+            Check(granted["sly_this_turn"] is true && granted["single_turn_sly"] is true && granted["retain_this_turn"] is true && granted["single_turn_retain"] is true,
+                "GiveSingleTurnSly / GiveSingleTurnRetain set both the effective and the single-turn flag");
+            Check(card.PeekSingleTurn() == (true, true), "reading leaves the flags as they are");
+            Check(Markdown(granted).Contains("  - this turn only: retain, sly"), "markdown names the single-turn grants");
+            card.EndOfTurnCleanup();
+            var cleaned = Details(card);
+            Check(cleaned["sly_this_turn"] is false && cleaned["single_turn_sly"] is false && cleaned["single_turn_retain"] is false,
+                "EndOfTurnCleanup clears them; the next read follows");
+            Check(granted["sly_this_turn"] is true, "earlier snapshot independent of the cleanup");
+            card.LocalKeywordSet.Add(CardKeyword.Sly);
+            card.GlobalKeywordSet.Add(CardKeyword.Retain);
+            var keyword = Details(card);
+            Check(keyword["sly_this_turn"] is true && keyword["single_turn_sly"] is false && keyword["retain_this_turn"] is true && keyword["single_turn_retain"] is false,
+                "a keyword Sly / Retain is effective but not single-turn");
+            card.LocalKeywordSet.Clear();
+            card.GlobalKeywordSet.Clear();
+
+            // Replays: BaseReplayCount + ExtraReplayThisTurn through the enchantment's EnchantPlayCount.
+            card.BaseReplay = 2;
+            card.Extra = 1;
+            var replays = Details(card);
+            Check(Equals(replays["base_replay_count"], 2) && Equals(replays["extra_replay_this_turn"], 1) && Equals(replays["enchanted_replay_count"], 3),
+                "without an enchantment the enchanted count is the sum");
+            Check(Markdown(replays).Contains("  - replays: base 2, extra this turn 1, with enchantment 3"), "markdown replay line");
+            var spiral = new Spiral { Value = 1 };
+            card.Enchanted = spiral;
+            var spiralRow = Details(card);
+            Check(Equals(spiralRow["enchanted_replay_count"], 4) && spiral.PlayCountCalls == 1, "Spiral adds Times through the game's EnchantPlayCount");
+            Check(Object(spiralRow, "enchantment")["dynamic_vars"] is Dictionary<string, object?> spiralVars && spiralVars.Count == 1 && Equals(spiralVars["Times"], 1m),
+                "enchantment dynamic_vars carry Times as BaseValue");
+            Check(Markdown(spiralRow).Contains("enchantment SPIRAL (amount 1, Times 1)"), "markdown shows the enchantment's vars on its line");
+            var glam = new Glam { Value = 1 };
+            card.Enchanted = glam;
+            card.BaseReplay = 0;
+            card.Extra = 0;
+            var glamRow = Details(card);
+            Check(Equals(glamRow["enchanted_replay_count"], 1) && Equals(Object(glamRow, "enchantment")["status"], "Normal"), "Glam adds Times while Normal");
+            glam.StatusValue = EnchantmentStatus.Disabled;
+            var glamDisabled = Details(card);
+            Check(Equals(glamDisabled["enchanted_replay_count"], 0) && Equals(Object(glamDisabled, "enchantment")["status"], "Disabled")
+                && Equals(((Dictionary<string, object?>)Object(glamDisabled, "enchantment")["dynamic_vars"]!)["Times"], 1m),
+                "a Disabled Glam keeps its Times but the count no longer includes it");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(glamRow, options)))
+            {
+                Check(json.RootElement.GetProperty("enchanted_replay_count").GetInt32() == 1 && json.RootElement.GetProperty("single_turn_sly").ValueKind == JsonValueKind.False,
+                    "wire counts are numbers and flags booleans");
+                Check(json.RootElement.GetProperty("enchantment").GetProperty("dynamic_vars").GetProperty("Times").GetDecimal() == 1m, "wire keeps the var name casing");
+            }
+            var plainEnchant = new EnchantmentModel { ModelId = new("SHARP"), Value = 3 };
+            card.Enchanted = plainEnchant;
+            var noVars = Details(card);
+            Check(Object(noVars, "enchantment")["dynamic_vars"] is Dictionary<string, object?> none && none.Count == 0 && Reasons(noVars).Count == 0,
+                "an enchantment without vars has {} (a read value)");
+            plainEnchant.SetVars(new DynamicVarSet(new DynamicVar(2m) { Name = "Block" }, new StringVar { Name = "Text" }, new DynamicVar(0m) { Name = "Broken", ThrowBase = true }));
+            BeginStateWarnings();
+            var partialVars = Details(card);
+            var partialMap = (Dictionary<string, object?>)Object(partialVars, "enchantment")["dynamic_vars"]!;
+            Check(Equals(partialMap["Block"], 2m) && !partialMap.ContainsKey("Text") && partialMap.ContainsKey("Broken") && partialMap["Broken"] == null
+                && Reasons(partialVars).ContainsKey("enchantment.dynamic_vars.Broken"), "StringVar excluded; a single var failure keeps the others");
+            plainEnchant.SetVars(new DynamicVarSet { ThrowEnumeration = true });
+            var enumFailed = Details(card);
+            Check(Object(enumFailed, "enchantment")["dynamic_vars"] == null && Reasons(enumFailed).ContainsKey("enchantment.dynamic_vars")
+                && Equals(Object(enumFailed, "enchantment")["id"], "SHARP"), "unreadable var set is null with its reason; id/amount kept");
+            Check(Markdown(enumFailed).Contains("vars null (InvalidOperationException: vars failed)"), "markdown shows the vars failure");
+
+            // A null _dynamicVars is refused, not built by the getter.
+            BeginStateWarnings();
+            plainEnchant.SetVars(null);
+            int getterReads = plainEnchant.GetterReads, playCountCalls = plainEnchant.PlayCountCalls;
+            var uninitialized = Details(card);
+            Check(Object(uninitialized, "enchantment")["dynamic_vars"] == null && Reasons(uninitialized).ContainsKey("enchantment.dynamic_vars")
+                && uninitialized["enchanted_replay_count"] == null && Reasons(uninitialized).ContainsKey("enchanted_replay_count"),
+                "uninitialized enchantment vars make both reads unavailable");
+            Check(!plainEnchant.VarsInitialized && plainEnchant.GetterReads == getterReads && plainEnchant.PlayCountCalls == playCountCalls,
+                "no read initialized the set or called EnchantPlayCount");
+            Check(Equals(uninitialized["base_replay_count"], 0) && Equals(uninitialized["extra_replay_this_turn"], 0), "the other counts stay readable");
+            var warned = new Dictionary<string, object?>();
+            EndStateWarnings(warned);
+            Check(warned["warnings"] is List<string> nullVarWarnings && nullVarWarnings.Any(w => w.StartsWith("card.enchanted_replay_count:"))
+                && nullVarWarnings.Any(w => w.StartsWith("card.enchantment.dynamic_vars:")), "both failures reach warnings");
+            card.Enchanted = null;
+
+            // Each getter failure is null with its own reason; the rest of the row survives.
+            foreach (string field in new[] { "retain_this_turn", "sly_this_turn", "base_replay_count", "extra_replay_this_turn", "enchanted_replay_count" })
+            {
+                BeginStateWarnings();
+                card.ThrowOn.Add(field);
+                var broken = Details(card);
+                Check(broken.ContainsKey(field) && broken[field] == null && Reasons(broken)[field].Contains($"{field} failed"), $"{field} failure is null with reason");
+                Check(broken["single_turn_sly"] is false && Equals(broken["type"], "Attack"), $"{field} failure keeps the other values");
+                Check(Markdown(broken).Contains($"  - {field} null (InvalidOperationException: {field} failed)"), $"{field} failure reason in markdown");
+                var response = new Dictionary<string, object?>();
+                EndStateWarnings(response);
+                Check(response["warnings"] is List<string> warnings && warnings.Any(w => w.StartsWith($"card.{field}:")), $"{field} failure warns");
+                using var json = JsonDocument.Parse(JsonSerializer.Serialize(broken, options));
+                Check(json.RootElement.GetProperty(field).ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty(field, out _),
+                    $"{field} wire null and reason");
+                card.ThrowOn.Clear();
+            }
+
+            // Mad Science: the rider enum name, None included.
+            BeginStateWarnings();
+            var mad = new MadScience();
+            Check(Equals(Details(mad)["tinker_time_rider"], "None") && Reasons(Details(mad)).Count == 0, "no rider is the real value None");
+            foreach (var rider in Enum.GetValues<TinkerTime.RiderEffect>())
+            {
+                mad.Rider = rider;
+                Check(Equals(Details(mad)["tinker_time_rider"], rider.ToString()), $"rider {rider} uses the game enum name");
+            }
+            mad.Rider = TinkerTime.RiderEffect.Violence;
+            Check(Markdown(Details(mad)).Contains("  - tinker time rider Violence"), "markdown shows the rider");
+            mad.ThrowRider = true;
+            var madFailed = Details(mad);
+            Check(madFailed.ContainsKey("tinker_time_rider") && madFailed["tinker_time_rider"] == null && Reasons(madFailed).ContainsKey("tinker_time_rider"),
+                "rider failure is null with its reason");
+            Check(Markdown(madFailed).Contains("  - tinker time rider null (InvalidOperationException: rider failed)"), "rider failure in markdown");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(madFailed, options)))
+                Check(json.RootElement.GetProperty("tinker_time_rider").ValueKind == JsonValueKind.Null, "wire rider null");
+            BeginStateWarnings();
+        }
+
         public static void RunCardDetailsContract()
         {
             BeginStateWarnings();
@@ -326,6 +468,8 @@ namespace STS2_MCP
             using (var json = JsonDocument.Parse(JsonSerializer.Serialize(plain, options)))
                 Check(!json.RootElement.TryGetProperty("local_ethereal", out _), "wire omits local_ethereal without Hexed");
 
+            RunCardTurnStateContract(options);
+
             BeginStateWarnings();
             var recovered = Details(new());
             Check(Reasons(recovered).Count == 0 && _stateWarnings.Count == 0, "later clean snapshot has no stale errors");
@@ -360,7 +504,12 @@ namespace STS2_MCP
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("AttachCardDetails"), "noncombat deck and previews omit added combat fields");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCardDetailsMarkdown(sb, card)"), "hand markdown wiring");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState("), "multiplayer shares player builder");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 6;"), "current schema is 6 (sts2#1018)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 7;"), "current schema is 7 (sts2#1019)");
+            string details = File.ReadAllText(Path.Combine(sources, "McpMod.CardDetails.cs"));
+            Check(details.Contains("AttachCardTurnState(state, card, reasons);") && details.Contains("ReadEnchantmentDynamicVarSet(enchantment)"),
+                "every detail row (hand, piles, ready clone, choose rows) reads the turn state; enchantment vars come from the field");
+            Check(!details.Contains("enchantment.DynamicVars") && !details.Contains(".GiveSingleTurn") && !details.Contains(".EndOfTurnCleanup("),
+                "the reader never uses the lazily-building getter or a setter");
             Console.WriteLine($"CardDetailsContract: {Checks} checks passed");
         }
     }

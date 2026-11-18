@@ -20,10 +20,11 @@
 
 - **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6）。現在は `6`。
+- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6 と 7）。現在は `7`。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
   5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
-  6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）
+  6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）、
+  7 = 札の効果の入力契約（同じく追加だけ。`cat12079801/sts2#1019`）
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
@@ -70,11 +71,21 @@
   - `type` / `target_type`、`affliction`、`enchantment`（`{id, amount, status}`。モメンタムは `extra_damage` も）、`dynamic_vars`（現在の `BaseValue`）（#77・#83）
   - 呪詛（`HEXED`）の札だけ `local_ethereal`: 札自身のエセリアル（`GetKeywordsWithSources(KeywordSources.Local)`）。呪術が Global に足すエセリアルを含まないので、呪術が外れた後も残るかが分かる。読取失敗は null・理由・warnings（`cat12079801/sts2#990`）
   - `is_upgraded` / `is_upgradable`、`tags`、パイルにも `can_play` / `unplayable_reason`（#82）
+  - 札の効果の入力: `retain_this_turn` / `single_turn_retain` / `sly_this_turn` / `single_turn_sly`（単ターンの保留・Sly の期限。private のフラグ）、
+    `base_replay_count` / `extra_replay_this_turn` / `enchanted_replay_count`（`GetEnchantedReplayCount`。Glam の `Disabled` は回数に反映済み）、
+    Mad Science の行だけ `tinker_time_rider`、`enchantment` に付与自身の `dynamic_vars`（Glam / Spiral の `Times`）。全行・`ready` に必ずあり、
+    false・0 は実値、読取失敗は null・理由・warnings（`ready` は `unavailable`）。読むだけで、付与の数値変数が未作成なら作らずに失敗とする。
+    [入力契約と出典](raw-full.md#札の効果の入力schema-7)（schema 7、`cat12079801/sts2#1019`）
   - `energy_cost`: コストの修正（local / global、種別・期限）と、素のコスト・X の捕捉値（#75・#80）
   - `exhaust_on_next_play`（#72）
   - `star_cost_state`: スターコストの基底・canonical・X か・現在値と、一時コストの列（`TemporaryCardCost` の値・ターン終了/プレイで消えるか）を順に。履歴から作らない。[入力契約と出典](raw-full.md#star-cost-state-object追加schema-4)（#95、`cat12079801/sts2#958`）
   - 山札の表示順はゲームの並べ方（`Rarity` → `CardModel.CompareTo`）で、同順位は uid の順。引く順を漏らさない（#79）
 - **戦闘中の `card_select`**: 戦闘のパイルから選ぶ行に、戦闘中の `uid` を出す（#70）
+- **戦闘中の選択候補の個体（`combat_instance`）**: 戦闘中の `card_select`（grid・choose）・`hand_select`・`card_reward` の候補行に、
+  戦闘のパイルのちょうど1つにある札は `{source: "pile", pile, uid}`（パイルの行と同じ uid）、パイルに無い候補（3 択の生成札など）は
+  `{source: "detached", pile, values}`（uid を発行せず、型・段階・数値・付与・キーワード・単ターンの期限・リプレイ・コストを候補から直接読む。
+  可否・対象は評価しない）を付ける。2 つのパイルにある札は対応付けず理由付きの null。`index` と画面の識別は変えない。戦闘外の画面は従来どおり。
+  [入力契約と出典](raw-full.md#選択候補の個体combat_instanceschema-7)（schema 7、`cat12079801/sts2#1019`）
 - **戦闘中の choose-a-card（3 択ポーションなど）**: 候補の実個体に手札と同じ `uid`・`energy_cost`・`star_cost_state`・札の詳細と `can_play`・`exhaust_on_next_play` を付け、画面に `battle` を付ける。
   選択後の継続（生成時・使用後・空手札の通知）に参加する listener を `card_select.continuation_context` に、候補自身の override を `cards[].continuation_listeners` に出す（通知の hook は呼ばない）。山札にある listener は引く順を漏らさないよう `order: null` と山札のまとまりの開始位置で出し、表示順に並べる。候補の `energy_cost` には `global_modifiers_applied`（パイルに入る前は false）を付ける。
   GET で選択・無料化・生成・抽選をしない。`index` は `select_card` と同じ holder の位置で、札の無い holder は選ばない。版は上げていない（schema 4 のときの追加）。[入力契約と出典](raw-full.md#戦闘中の-choose-a-card追加schema-4)（#95、`cat12079801/sts2#958`）
@@ -94,7 +105,7 @@
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
-  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。版は上げていない（schema 4 のときの追加）。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
+  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。爆弾の `damage`（`SetDamage` の威力）、インフェルノ・深紅の衣の `self_damage`、威風堂々（Panache）の `cards_left` / `already_applied`（`cat12079801/sts2#1019`、schema 7）も可視性によらず付ける。版は上げていない（schema 4 のときの追加）。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）。
   この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#95、`cat12079801/sts2#937`）
 - **生成の候補**:

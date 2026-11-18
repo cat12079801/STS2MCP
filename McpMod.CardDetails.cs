@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Afflictions;
+using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Enchantments;
 
 namespace STS2_MCP;
@@ -76,7 +77,56 @@ public static partial class McpMod
             }
             return values;
         });
+        AttachCardTurnState(state, card, reasons);
     }
+
+    /// <summary>
+    /// The card's per-instance play inputs that the text does not carry (sts2#1019): single-turn
+    /// Retain / Sly, the replay counts, and the Mad Science rider. Every key is present on every
+    /// row; a failed read is null with its reason (a read 0 / false is a real value).
+    ///
+    /// Sources (v0.113.1, sts2-a671e9ef), all plain getters or private fields:
+    /// CardModel.ShouldRetainThisTurn = Keywords has Retain || _hasSingleTurnRetain;
+    /// CardModel.IsSlyThisTurn = Keywords has Sly || _hasSingleTurnSly (GiveSingleTurnSly, i.e.
+    /// CardCmd.ApplySingleTurnSly). EndOfTurnCleanup clears both private flags and resets
+    /// ExtraReplayThisTurn to 0; BaseReplayCount stays (SoldiersStew, Transfigure, HiddenGem,
+    /// SwordSagePower raise it). CardModel.GetEnchantedReplayCount =
+    /// Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn) ?? the sum: the
+    /// extra executions OnPlay gets from the card and its enchantment (Glam adds its Times
+    /// while its Status is not Disabled, Spiral always adds Times), before other models'
+    /// ModifyCardPlayCount hooks. The private flags are read as declared fields: no getter with
+    /// AssertMutable, no setter, no hook.
+    /// </summary>
+    private static void AttachCardTurnState(Dictionary<string, object?> state, CardModel card,
+        Dictionary<string, string> reasons)
+    {
+        ReadCardDetailValue(state, reasons, "retain_this_turn", () => card.ShouldRetainThisTurn);
+        ReadCardDetailValue(state, reasons, "single_turn_retain",
+            () => ReadDeclaredStateField<bool>(card, typeof(CardModel), "_hasSingleTurnRetain"));
+        ReadCardDetailValue(state, reasons, "sly_this_turn", () => card.IsSlyThisTurn);
+        ReadCardDetailValue(state, reasons, "single_turn_sly",
+            () => ReadDeclaredStateField<bool>(card, typeof(CardModel), "_hasSingleTurnSly"));
+        ReadCardDetailValue(state, reasons, "base_replay_count", () => card.BaseReplayCount);
+        ReadCardDetailValue(state, reasons, "extra_replay_this_turn", () => card.ExtraReplayThisTurn);
+        ReadCardDetailValue(state, reasons, "enchanted_replay_count", () =>
+        {
+            // EnchantPlayCount reads the enchantment's DynamicVars ("Times"), whose getter builds
+            // the set when it is still null. A live (mutable) enchantment always has it
+            // (EnchantmentModel.DeepCloneFields); refuse instead of letting the read create it.
+            if (card.Enchantment is { } enchantment)
+                _ = ReadEnchantmentDynamicVarSet(enchantment);
+            return card.GetEnchantedReplayCount();
+        });
+        // MadScience.TinkerTimeRider (TinkerTime.RiderEffect, saved per instance): OnPlay picks the
+        // rider's branch, and DynamicVars holds every rider's numbers, so the vars alone cannot say
+        // which applies. Only Mad Science rows carry the key; None is a real value.
+        if (card is MadScience madScience)
+            ReadCardDetailValue(state, reasons, "tinker_time_rider", () => madScience.TinkerTimeRider.ToString());
+    }
+
+    /// <summary>EnchantmentModel._dynamicVars as it is: never the lazily-building getter.</summary>
+    private static DynamicVarSet ReadEnchantmentDynamicVarSet(EnchantmentModel enchantment)
+        => ReadDeclaredStateField<DynamicVarSet>(enchantment, typeof(EnchantmentModel), "_dynamicVars");
 
     private static Dictionary<string, object?> BuildCardAttachmentState(AbstractModel model,
         Func<int> readAmount, Dictionary<string, string> reasons, string field)
@@ -85,7 +135,23 @@ public static partial class McpMod
         ReadCardDetailValue(state, reasons, "id", () => model.Id.Entry, $"{field}.id");
         ReadCardDetailValue(state, reasons, "amount", () => readAmount(), $"{field}.amount");
         if (model is EnchantmentModel enchantment)
+        {
             ReadCardDetailValue(state, reasons, "status", () => enchantment.Status.ToString(), "enchantment.status");
+            // The enchantment's own numbers, by name (Glam / Spiral "Times": the extra plays
+            // EnchantPlayCount adds; Glam adds them only while status is not Disabled, which
+            // Glam.AfterCardPlayed sets after the card's first play). BaseValue, StringVar
+            // excluded, as in the card's dynamic_vars. An enchantment without vars is {}.
+            ReadCardDetailValue(state, reasons, "dynamic_vars", () =>
+            {
+                var values = new Dictionary<string, object?>();
+                foreach (var (name, dynamicVar) in ReadEnchantmentDynamicVarSet(enchantment))
+                {
+                    if (dynamicVar is StringVar) continue;
+                    ReadCardDetailValue(values, reasons, name, () => dynamicVar.BaseValue, $"{field}.dynamic_vars.{name}");
+                }
+                return values;
+            }, $"{field}.dynamic_vars");
+        }
         // sts2-a671e9ef: Momentum.EnchantDamageAdditive returns the private _extraDamage
         // (PoweredAttack only) and Momentum.OnPlay adds Amount to it after each play.
         // Read the declared field only: no private getter, setter (AssertMutable) or hook.

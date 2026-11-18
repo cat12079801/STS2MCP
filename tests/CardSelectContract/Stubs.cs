@@ -253,6 +253,14 @@ namespace STS2_MCP
             if (!Uids.TryGetValue(card, out var uid)) Uids[card] = uid = $"c{Uids.Count}";
             return uid;
         }
+        // McpMod.SelectionCandidate is a boundary (CombatUpgradePreviewContract tests it):
+        // record that the grid asks for it, per candidate, during a live combat.
+        private static readonly List<CardModel> CandidateInstanceCalls = new();
+        private static Dictionary<string, object?> BuildSelectionCandidateInstance(CardModel card)
+        {
+            CandidateInstanceCalls.Add(card);
+            return new() { ["source"] = CandidateSourcePile, ["pile"] = "Draw", ["uid"] = GetStableCardUid(card), ["unavailable_reasons"] = new Dictionary<string, string>() };
+        }
         private static Dictionary<string, object?> BuildCardInfo(CardModel card) => new()
         {
             ["id"] = card.Id, ["name"] = card.Title, ["cost"] = "1", ["type"] = "Attack",

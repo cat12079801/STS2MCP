@@ -3,7 +3,8 @@
 本番の `McpMod.CombatUpgradePreview.cs` と、それが使う `McpMod.CardDetails.cs` /
 `McpMod.CardEnergyCost.cs` / `McpMod.CardStarCost.cs` / `McpMod.InternalState.cs` /
 `McpMod.Warnings.cs`、表示の `McpMod.UpgradePreviewFormatting.cs` / `McpMod.PileFormatting.cs` /
-`McpMod.CardDetailsFormatting.cs` / `McpMod.CardEnergyCostFormatting.cs` を直接リンクする。
+`McpMod.CardDetailsFormatting.cs` / `McpMod.CardEnergyCostFormatting.cs`、選択候補の
+`McpMod.SelectionCandidate.cs` / `McpMod.SelectionCandidateFormatting.cs` を直接リンクする（uid の registry は境界ダブル）。
 追加パッケージ・ゲーム・Godot は不要。
 
 ```fish
@@ -45,6 +46,23 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
   追加の項目が増やすバイト数を出力する（実機の本文・キーワードは長いので、実測は調整役が実機で行う）。
 - ソースの配線: 手札と 4 パイルの共通経路、条件付きの手札だけのプレビューが残っていないこと、
   `hand_select` と報酬は従来の契約、戦闘外のプレビューも隔離した複製を使うこと、プレビューのコードが
-  UID・`CardCmd`・`CloneCard`・乱数・履歴を呼ばないこと、schema 6、`?perf=1` の配線。
+  UID・`CardCmd`・`CloneCard`・乱数・履歴を呼ばないこと、schema 7、`?perf=1` の配線。
+
+札の効果の入力（`cat12079801/sts2#1019`、schema 7）:
+
+- `ready` に `retain_this_turn` / `single_turn_retain` / `sly_this_turn` / `single_turn_sly` / `base_replay_count` /
+  `extra_replay_this_turn` / `enchanted_replay_count` があり、単ターンのフラグ・リプレイ回数・Glam の Times が複製に残ること
+  （Disabled の Glam は複製でも数えない）、付与の `dynamic_vars`、Mad Science の `tinker_time_rider`（複製でも同じ、強化の Innate は複製だけ）。
+  読取で購読が呼ばれず、現物が変わらないこと。0 と false も `ready` の値。複製でこれらが読めなければ `unavailable` と項目のパス。
+- 選択候補の `combat_instance`（`McpMod.SelectionCandidate.cs`）: 5 パイルの札は `source: "pile"`・`pile`・その行と同じ `uid`
+  （`values` なし）。パイルに無い生成候補は `source: "detached"`・`pile: null`・uid を発行しない（uid の registry を呼ばない）。
+  `values` に id・型・対象・段階・数値・付与・Mad Science の rider・単ターンの期限・リプレイ・両方のキーワード・
+  `exhaust_on_next_play`・`energy_cost`（`with_all_modifiers` は null と `detached_preview_context`）・`star_cost_state` があり、
+  `can_play` / `unplayable_reason` / `vs_targets` / `upgrade_preview` は無い。デッキ（戦闘のパイル以外）の札は detached で `pile: "Deck"`。
+  2 つのパイルにある札は対応付けず null と `ambiguous` の理由・warning、所有者の読取失敗は null と理由、値の失敗は `values` の理由。
+  読取でパイルと札を変えないこと、wire と Markdown の 1 行（戦闘外は出さない）。
+- 配線（ソース文字列）: `hand_select` と戦闘中の `card_reward` は `GetLiveCombatStateForSelection` が非 null のときだけ
+  registry を更新して `combat_instance` を付ける。`card_select` と choose は戦闘の分岐の中だけ。候補の読取が
+  `CanPlay`・可否・対象のプレビュー・`CardCmd`・複製・乱数・`AddCard` を呼ばず、uid はパイルの札にだけ求めること。
 
 実際の札の `OnUpgrade`・ローカライズの本文・購読の付いた UI の実機照合は、調整役の検証で行う。

@@ -82,15 +82,15 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 6       // Contract version — see below
+  "schema_version": 7       // Contract version — see below
 }
 ```
 
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The one exception is **6**: an additive contract that a client treats as required as a whole, so it
-is gated on the version instead of probing each field.
+The exceptions are **6** and **7**: additive contracts that a client treats as required as a whole, so
+they are gated on the version instead of probing each field.
 
 `game_version` and `game_commit` come from the game's `ReleaseInfoManager`, which reads
 `release_info.json` (`.app/Contents/Resources/release_info.json` on macOS). They identify the
@@ -98,6 +98,16 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **7** — the card-effect input contract (`cat12079801/sts2#1019`). Every combat card row (hand, the
+  four piles, choose rows) and the `ready` combat `upgrade_preview` carry `retain_this_turn`,
+  `single_turn_retain`, `sly_this_turn`, `single_turn_sly`, `base_replay_count`,
+  `extra_replay_this_turn` and `enchanted_replay_count` (Mad Science rows also `tinker_time_rider`);
+  `enchantment` objects carry their `dynamic_vars`; The Bomb, Inferno, Crimson Mantle and Panache
+  status rows carry `damage` / `self_damage` / `cards_left` and `already_applied`; in-combat selection
+  rows (`card_select`, choose, `hand_select`, a `card_reward` during combat) carry `combat_instance`.
+  Existing fields keep their meaning (additive); the version is bumped so a client can require the
+  whole contract. See [札の効果の入力](#札の効果の入力schema-7) and
+  [選択候補の個体](#選択候補の個体combat_instanceschema-7).
 - **6** — the enemy-move input contract (`cat12079801/sts2#1018`). `battle.enemies[].move_state`
   gains the full move log, the state machine's current/initial state, the first-move and
   spawned-this-turn flags, the terminal-move flag and the `CreatureCmd.Stun` handler; every enemy
@@ -856,7 +866,7 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 本節の項目は schema 4 で追加した（追加時に版は上げていない）。
-同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次節）。現在の `schema_version` は **6**。
+同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **7**。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
@@ -870,6 +880,56 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `Clash.IsPlayable`、`GrandFinale.IsPlayable`、`Normality.ShouldPlay`、`Enthralled.ShouldPlay`、
 `ChainsOfBindingPower.ShouldPlay`、`RingingPower.ShouldPlay`、`SmoggyPower.ShouldPlay`。
 [CardDetailsContract](../tests/CardDetailsContract/README.md)
+
+### 札の効果の入力（schema 7）
+
+戦闘中の札の行（`player.hand[]` と4パイル、戦闘中の choose の候補行、`upgrade_preview` の `ready`、
+選択候補の `combat_instance.values`）は、[戦闘カードの詳細](#戦闘カードの詳細追加schema-4)と同じ読取で
+次の項目も出す（`cat12079801/sts2#1019`）。本文・キーワードの表示からは分からない、その個体のプレイの入力。
+どのキーも**全行に必ずあり**、読めた false・0 は実値、読取失敗は null と行の `unavailable_reasons.<key>`・`warnings`
+（`ready` では失敗が1つでもあれば `unavailable`）。
+
+| キー | 型 | 出典（v0.113.1、`sts2-a671e9ef`） |
+|---|---|---|
+| `retain_this_turn` | bool | `CardModel.ShouldRetainThisTurn`（Retain キーワード〔実効〕、または単ターン保留） |
+| `single_turn_retain` | bool | private `CardModel._hasSingleTurnRetain`（`GiveSingleTurnRetain` が立てる） |
+| `sly_this_turn` | bool | `CardModel.IsSlyThisTurn`（Sly キーワード〔実効〕、または単ターンの Sly） |
+| `single_turn_sly` | bool | private `CardModel._hasSingleTurnSly`（`GiveSingleTurnSly`。`CardCmd.ApplySingleTurnSly`〔`HandTrick`〕が呼ぶ） |
+| `base_replay_count` | int | `CardModel.BaseReplayCount`（`SoldiersStew`・`Transfigure`・`HiddenGem`・`SwordSagePower` が足す。ターン終わりに戻らない） |
+| `extra_replay_this_turn` | int | `CardModel.ExtraReplayThisTurn`（今ターンだけの追加。v0.113.1 では書き手が本体に無く、常に 0 の実値） |
+| `enchanted_replay_count` | int | `CardModel.GetEnchantedReplayCount()` = `Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn)`、付与が無ければその和 |
+| `tinker_time_rider` | enum 名 | `MadScience.TinkerTimeRider`（`TinkerTime.RiderEffect`: `None` / `Sapping` / `Violence` / `Choking` / `Energized` / `Wisdom` / `Chaos` / `Expertise` / `Curious` / `Improvement`）。Mad Science（`MAD_SCIENCE`）の行だけ |
+
+- 単ターンの2つは private フィールドをそのまま読む（getter の `AssertMutable`・setter・フックを呼ばない）。
+  `EndOfTurnCleanup` が両方を false に戻し、`ExtraReplayThisTurn` を 0 にする。`BaseReplayCount` は戻らない。
+  キーワードの Sly / Retain による実効の true と、単ターンだけの true は `single_turn_*` で区別する。
+- `enchanted_replay_count` は、`CardModel.OnPlayWrapper` の再演の回数（`GetEnchantedReplayCount() + 1` 回のうち追加分）のうち、
+  札自身と付与の分。他のモデルの `ModifyCardPlayCount`（パワー・レリック）は含まない。
+  `Glam.EnchantPlayCount`は `Status` が `Disabled` でなければ `Times` を足す。`Glam.AfterCardPlayed` が
+  その札の最初のプレイの後に `Disabled` にするので、同じ戦闘の2回目以降は足さない。`Spiral.EnchantPlayCount` は常に `Times` を足す。
+  付与の数値変数を読む前に private `EnchantmentModel._dynamicVars` が作成済みか確かめ、未作成なら getter で作らずに失敗とする
+  （戦闘中の付与は `EnchantmentModel.DeepCloneFields` で必ず作成済み）。
+- `enchantment` の行に `dynamic_vars` を足す: 付与自身の数値変数の名前から現在の `BaseValue` への辞書
+  （`StringVar` を除く。変数の無い付与は `{}`）。`GLAM` / `SPIRAL` の `Times` は、上の回数に足される値で、
+  公開の `status`（`Normal` / `Disabled`）と合わせて読む（`GLAM` の `Disabled` は `Times` が残っていても足されない）。
+  private `_dynamicVars` を読み、未作成なら null と `enchantment.dynamic_vars` の理由。1変数の失敗は
+  `enchantment.dynamic_vars.<名前>`。例は `{ "id": "GLAM", "amount": 1, "status": "Normal", "dynamic_vars": { "Times": 1 } }`。
+- `tinker_time_rider` は、Mad Science の `dynamic_vars` が全ライダーの変数（`ViolenceHits`・`SappingWeak` など）を持つので、
+  どれが効くかを決めるために出す（`MadScience.OnPlay` / `ExecuteAttack` / `ExecutePower` がこの値で分岐する）。
+  型は既存の `type`（`TinkerTimeType`）。他の札にはキーが無い。
+- 複製（`ready`）は `MemberwiseClone` で単ターンのフラグ・リプレイ回数・ライダーを写し、`DeepCloneFields` で付与の変数も複製する。
+  強化が変えるのは `OnUpgrade` が変える分だけ。
+- Markdown は、単ターンの付与があれば `  - this turn only: retain, sly`、リプレイのどれかが 0 でなければ
+  `  - replays: base 1, extra this turn 0, with enchantment 2`、Mad Science は `  - tinker time rider Violence`、
+  付与の行に `Times 1` を付ける。読取失敗は理由付きの子行。
+
+出典: `CardModel.ShouldRetainThisTurn` / `HasSingleTurnRetain` / `_hasSingleTurnRetain` / `IsSlyThisTurn` / `HasSingleTurnSly` /
+`_hasSingleTurnSly` / `GiveSingleTurnRetain` / `GiveSingleTurnSly` / `BaseReplayCount` / `ExtraReplayThisTurn` /
+`GetEnchantedReplayCount` / `EndOfTurnCleanup` / `OnPlayWrapper` / `DeepCloneFields`、`CardCmd.ApplySingleTurnSly`、
+`EnchantmentModel.DynamicVars` / `_dynamicVars` / `DeepCloneFields` / `EnchantPlayCount`、`Glam.EnchantPlayCount` / `AfterCardPlayed`、
+`Spiral.EnchantPlayCount`、`MadScience.TinkerTimeRider` / `OnPlay` / `CanonicalVars`、`TinkerTime.RiderEffect`、
+`SoldiersStew.OnUse`、`Transfigure`、`HiddenGem`、`SwordSagePower`。
+[CardDetailsContract](../tests/CardDetailsContract/README.md)・[CombatUpgradePreviewContract](../tests/CombatUpgradePreviewContract/README.md)
 
 ### 戦闘の強化結果（`upgrade_preview`、schema 5）
 
@@ -887,9 +947,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 - `keyword_ids`: `CardModel.Keywords`（`KeywordSources.All`）。戦闘中の `Hook.ModifyKeywordsInCombat`
   （呪術の付いた札の Ethereal、ファントムブレードの Shiv の Retain など）を含む実効のキーワード。
   hover tips（`keywords`）とは別物で、関連札の説明に出る「保留」「廃棄」を対象札に付けない。
-- `retain_this_turn`: `CardModel.ShouldRetainThisTurn`（Retain キーワード、または単ターン保留）。
-- `single_turn_retain`: 単ターン保留の private `_hasSingleTurnRetain`（`GiveSingleTurnRetain` が立てる）。
-  宣言されたフィールドを読むだけ。キーワードの Retain とは別に、今ターンだけ保留される札を区別する。
+- `retain_this_turn` / `single_turn_retain` と Sly・リプレイの項目は、詳細と同じ読取で全行に出る
+  （[札の効果の入力](#札の効果の入力schema-7)）。
 
 `upgrade_preview` はどの行にも必ずあり、`status` が次の3値のどれかになる。
 `from_level` は強化の始点（親の段階）、`unavailable_reasons` はプレビュー自身の失敗理由（正常時 `{}`）。
@@ -918,6 +977,9 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
   "dynamic_vars": { "Damage": 9 },              // 全数値変数の BaseValue（StringVar を除く）
   "local_keyword_ids": [], "keyword_ids": [],
   "affliction": null, "enchantment": null,      // 戦闘カードの詳細と同じ形
+  "retain_this_turn": false, "single_turn_retain": false, // 札の効果の入力（schema 7）
+  "sly_this_turn": false, "single_turn_sly": false,
+  "base_replay_count": 0, "extra_replay_this_turn": 0, "enchanted_replay_count": 0,
   "energy_cost": { "base": 1, "with_local_modifiers": 1, "with_all_modifiers": null,
                    "unavailable_reasons": { "with_all_modifiers": "detached_preview_context", ... }, ... },
   "star_cost_state": { "base": -1, "current": -1, "temporary_costs": [], ... },
@@ -927,7 +989,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 ```
 
 - 機械が読むのは `dynamic_vars`・`type`・`target_type`・`tags`・`local_keyword_ids`・`keyword_ids`・
-  `energy_cost`・`star_cost_state`・`affliction`・`enchantment`・段階と可否。どれも複製の現在値で、差分ではない。
+  `energy_cost`・`star_cost_state`・`affliction`・`enchantment`・段階と可否と、schema 7 の単ターンの期限・リプレイ回数
+  （Mad Science は `tinker_time_rider`）。どれも複製の現在値で、差分ではない。
   `dynamic_vars` は空の `{}` も正常（数値の無い強化、たとえば幻影の Ethereal を外す強化）。
 - `energy_cost` は [Energy Cost Object](#energy-cost-object追加schema-4) と同じ形・同じ読取。
   `CardEnergyCost.UpgradeBy` による基礎の低下と、Absolute の修正の切り詰めが入った値になる。
@@ -952,7 +1015,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 - 戦闘の `ready` の `description`（と `name`）も、パイルの無い複製の素の本文で、筋力・脱力・札自身のエンチャント（例: テスカタラの残り火）の加算を含まない。強化後に読み直した手札の行の本文とは違い得る。機械が読む値は `dynamic_vars` を使う（2026-11-18 の実機確認で 85 組中 11 組がこの差）。
 - 戦闘外の画面（報酬・鍛冶の `card_select`・`hand_select` の `upgrade_select`・図鑑）の `upgrade_preview` は
   従来どおり `{ name, cost, star_cost, description, keywords }` で、`status` を持たない。
-  戦闘中の `hand_select` の候補行も同じ従来の形のまま（同じ札の機械向けの値は `player.hand[]` にある）。
+  戦闘中の `hand_select` の候補行も同じ従来の形のまま（同じ札の機械向けの値は `player.hand[]` にある。
+  候補とその行は `combat_instance` で結ぶ。[選択候補の個体](#選択候補の個体combat_instanceschema-7)）。
 
 **複製と隔離。** 強化はゲームの `CardCmd.Upgrade` と同じく `CardModel.UpgradeInternal` →
 `FinalizeUpgradeInternal` を複製に1回ずつ適用する。現物には何もしない（`CardCmd.Upgrade`・
@@ -1244,7 +1308,8 @@ Pets also share the same builder.
 
 画面に見えるパワーには次の内部状態を追加する（schema 4）。
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
-ただし `THIEVERY_POWER` / `HEIST_POWER` の項目、`VIGOR_POWER` の `vigor_attack`、`HEX_POWER` の付与元は、`status[]` に出る行なら可視性によらず付ける。
+ただし `THIEVERY_POWER` / `HEIST_POWER` の項目、`VIGOR_POWER` の `vigor_attack`、`HEX_POWER` の付与元、`RITUAL_POWER` の印と、
+schema 7 の `THE_BOMB_POWER` / `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` / `PANACHE_POWER` の項目は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
@@ -1268,6 +1333,10 @@ Pets also share the same builder.
 | `VIGOR_POWER` | `vigor_attack` | `{"readable":true,"has_command":false,"attacker_is_owner":null,"amount_when_started":0}` |
 | `HEX_POWER` | `applier_combat_id` | uint / null（`enemies[].combat_id` と同じ） |
 | `HEX_POWER` | `applier_readable` | bool |
+| `THE_BOMB_POWER` | `damage` | decimal（schema 7。可視性によらず付ける） |
+| `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` | `self_damage` | decimal（schema 7。同上） |
+| `PANACHE_POWER` | `cards_left` | int（schema 7。同上） |
+| `PANACHE_POWER` | `already_applied` | bool（schema 7。同上） |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1955,7 +2024,8 @@ Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". *
         "star_cost": null,       // Regent star cost as string, null if N/A
         "description": "Deal 6 damage.",
         "is_upgraded": false,
-        "keywords": [ /* Keyword Objects */ ]
+        "keywords": [ /* Keyword Objects */ ],
+        "combat_instance": { "source": "pile", "pile": "Hand", "uid": "STRIKE_R#0", "unavailable_reasons": {} } // schema 7
       }
     ],
     "selected_cards": [          // Only present if cards have been selected
@@ -2061,6 +2131,7 @@ Pick one card to add to your deck. Appears after claiming a card reward, or dire
         "rarity": "Uncommon",
         "is_upgraded": false,
         "keywords": [ /* Keyword Objects */ ]
+        // 戦闘中に開いた報酬だけ "combat_instance"（schema 7。選択候補の個体）
       }
     ],
     "can_skip": true
@@ -2335,6 +2406,39 @@ list could not be read; do not select using a partial or stale list. Schema 4 re
 produces a `card_select.selected` warning without rewriting the game's selection.
 Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
 
+#### 選択候補の個体（`combat_instance`、schema 7）
+
+戦闘中（`CombatManager.IsInProgress` で combat state が取れる間）の選択画面の候補行（`card_select` の grid・choose、
+`hand_select`、戦闘中に開いた `card_reward`）に、その候補がどの個体かを示す `combat_instance` を付ける（`cat12079801/sts2#1019`）。
+行の `index` と画面の識別（`screen_type` / `mode`）はそのまま。戦闘外の画面の行には付けず、形も変えない。
+
+```jsonc
+"combat_instance": { "source": "pile", "pile": "Draw", "uid": "STRIKE_IRONCLAD#3", "unavailable_reasons": {} }
+"combat_instance": { "source": "detached", "pile": null, "values": { /* 下記 */ }, "unavailable_reasons": {} }
+```
+
+- 所有者の全パイル（`Player.Piles`）を参照の一致で数え、**戦闘のパイル（Hand / Draw / Discard / Exhaust / Play）のちょうど1つ**に
+  あれば `source: "pile"`。`pile` はそのパイル、`uid` はそのパイルの行と同じ uid（手札・パイルと共通の registry）。
+  効果の入力はそのパイルの行で読む（`values` は付けない）。
+- どの戦闘のパイルにも無ければ `source: "detached"`（3 択の生成候補など）。uid は**発行しない**。デッキなど戦闘外のパイルにある札は
+  `pile` にその名前（`"Deck"`）、どこにも無ければ null。`values` に、候補の `CardModel` から直接読んだ効果の入力を出す:
+  `id`、[戦闘カードの詳細](#戦闘カードの詳細追加schema-4)の全項目（`type` / `target_type` / `is_upgraded` / `is_upgradable` / `tags` /
+  `affliction` / `local_ethereal` / `enchantment` / `dynamic_vars`）、[札の効果の入力](#札の効果の入力schema-7)の全項目
+  （単ターンの保留・Sly の期限、リプレイ回数、Mad Science のライダー）、`upgrade_level` / `max_upgrade_level`、
+  `local_keyword_ids` / `keyword_ids`、`exhaust_on_next_play`、`energy_cost`（パイルが無いので `with_all_modifiers` は null と
+  `detached_preview_context`。[Energy Cost Object](#energy-cost-object追加schema-4)）、`star_cost_state`、`unavailable_reasons`。
+  合法な対象・使用可否（`can_play`）・対象別のプレビュー・強化結果は detached の候補では評価しない。
+- 2つ以上のパイルにある札は対応付けず、`source` / `pile` を null にして理由 `ambiguous: in N piles (…)` と warning。
+  所有者・パイルが読めなければ同じく null と理由。
+- 読むだけ: パイル・札を動かさず、複製・プレイ・フック・乱数を使わない（`Player.Piles` の getter はデッキの配列を一度だけ作って持つ）。
+- Markdown は候補の行の下に `  - instance: Draw `STRIKE_IRONCLAD#3`` / `  - instance: detached, values in JSON` /
+  `  - instance: unknown (理由)` の1行。
+
+選ばれた候補の取得後の効果は、ready な戦闘 state のパイルの行で（uid で）照合する。
+出典（v0.113.1、`sts2-a671e9ef`）: `CardModel.Owner` / `Pile`、`Player.Piles`、`PlayerCombatState.AllPiles`、`CardPile.Cards` / `IsCombatPile`、
+`AttackPotion.OnUse`（`CardFactory.GetDistinctForCombat` の候補を `CardSelectCmd.FromChooseACardScreen` に渡す）。
+[CombatUpgradePreviewContract](../tests/CombatUpgradePreviewContract/README.md)
+
 #### 隠れている選択画面（`screen_visible` / `hidden_by` / `reveal_on_action`、追加、schema 4）
 
 選択画面は overlay stack の一番上にあっても見えていないことがある。`state_type` は `card_select` のまま、
@@ -2455,6 +2559,8 @@ described below. Selection actions still use `index`.
 | `energy_cost` | `BuildCardEnergyCostState`（[Energy Cost Object](#energy-cost-object追加schema-4)） |
 | `star_cost_state` | [Star Cost State Object](#star-cost-state-object追加schema-4) |
 | `continuation_listeners` | 候補自身・その affliction・enchantment が下記 4 通知を override していれば `{notification, kind, model_type, model_id, declared_by}`。無ければ `[]`、読めなければ `null` |
+| `retain_this_turn` / `single_turn_retain` / `sly_this_turn` / `single_turn_sly` / `base_replay_count` / `extra_replay_this_turn` / `enchanted_replay_count`（Mad Science は `tinker_time_rider`） | `AttachCardDetails`（[札の効果の入力](#札の効果の入力schema-7)、schema 7） |
+| `combat_instance` | [選択候補の個体](#選択候補の個体combat_instanceschema-7)（schema 7。生成候補は `detached` と `values`） |
 
 値は**選択前**の候補のもの。`cost` / `energy_cost` を 0 に加工しない（無料化は選択の後）。
 候補はまだ戦闘のパイルに無いため `CardModel.CombatState` が null で、`CardEnergyCost.GetWithModifiers` は

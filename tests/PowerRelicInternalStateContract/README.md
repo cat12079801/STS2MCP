@@ -54,12 +54,18 @@ wire の bool / null / int と行の理由、Markdown の `none`・`readable: no
 （readable=false・null・理由・warnings・Markdown の `null (理由)` と `applier readable: no`、他項目の保持）、
 読取で付与元を変えないこと、snapshot の独立、HUD 非表示の行にも付くこと、他のパワーには付かないこと、
 wire の uint 0・null と readable の bool を確認する。
+札の効果の入力（`cat12079801/sts2#1019`、schema 7）: 爆弾（`TheBombPower`）の `damage`（`DynamicVars.Damage.BaseValue`。
+正準の 40・`SetDamage` 後の値・0、Instanced の行ごとの値、非表示の行にも付く、snapshot の独立、変数の欠落・読取失敗は null・理由・warnings で 0 にしない）、
+インフェルノ・深紅の衣の `self_damage`（`DynamicVars["SelfDamage"].BaseValue`。0 と `IncrementSelfDamage` 後の値、wire の decimal、失敗）、
+威風堂々（Panache）の `cards_left`（`DynamicVars["CardsLeft"].IntValue`）と `already_applied`（private Data の bool。新規の 5・false、
+適用後の値、Instanced の独立、非表示の行、Data が null なら初期化せずに null・理由・warnings で `cards_left` は保持）、
+Markdown の `damage:` / `self damage:` / `cards left:` / `already applied: yes`、他のパワーにキーが無いことを検査する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。
 
 巨大な state builder はソース文字列で、通常行・説明失敗時の最小行、player・敵・ペット、
-マルチの共通経路、戦闘中だけのレリック出力、Markdown の配線、schema 6 を検査する。
+マルチの共通経路、戦闘中だけのレリック出力、Markdown の配線、schema 7 を検査する。
 フィールドと getter はゲーム境界のダブル。効果の適用やリセットを MOD 側では模倣しない。
 毛皮のコートは v0.113.0 の戦闘フックどおり、座標を比較し act の条件を足さない。
 実ゲームに対する 0警告0エラーのビルドを別途実行し、ゲーム起動・mods への配置はしない。

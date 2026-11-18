@@ -50,6 +50,9 @@ public static partial class McpMod
                 row["energy_cost"] = energyCost;
                 row["star_cost_state"] = BuildCardStarCostState(card);
                 AttachCardPlayability(row, card);
+                // Generated candidates are in no pile yet: combat_instance carries their effect
+                // inputs as "detached" (sts2#1019); a candidate already in a pile names its uid.
+                row["combat_instance"] = BuildSelectionCandidateInstance(card);
             }
             row["index"] = index;
             rows.Add(row);

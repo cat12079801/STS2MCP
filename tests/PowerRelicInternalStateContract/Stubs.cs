@@ -47,6 +47,8 @@ namespace MegaCrit.Sts2.Core.Models
     public class PowerModel
     {
         private object? _internalData;
+        // v0.113.1 PowerModel.DynamicVars: built by DeepCloneFields on every live power.
+        public DynamicVars DynamicVars { get; } = new();
         public void SetData(object? data) => _internalData = data;
         public object? PeekData() => _internalData;
         public bool Skip;
@@ -97,15 +99,45 @@ namespace MegaCrit.Sts2.Core.Models
     {
         public DynamicVar Block { get; set; } = new();
         public DynamicVar Gold { get; set; } = new();
+        // DynamicVarSet.Damage is _vars["Damage"]; the indexer throws KeyNotFoundException.
+        public Dictionary<string, DynamicVar> Vars = new();
+        public DynamicVar Damage => Vars["Damage"];
+        public DynamicVar this[string key] => Vars[key];
     }
 }
 namespace MegaCrit.Sts2.Core.Models.Powers
 {
     using MegaCrit.Sts2.Core.Entities.Creatures;
-    public class ToricToughnessPower : PowerModel { public DynamicVars DynamicVars { get; } = new(); }
+    public class ToricToughnessPower : PowerModel { }
     // v0.113.1: Instanced, per-target. Gold starts at GoldVar(0); Steal adds the real loss.
-    public class ThieveryPower : PowerModel { public DynamicVars DynamicVars { get; } = new(); }
+    public class ThieveryPower : PowerModel { }
     public class HeistPower : PowerModel { }
+    // v0.113.1 (sts2#1019): TheBombPower (Instanced) keeps SetDamage's value in DynamicVars.Damage;
+    // InfernoPower / CrimsonMantlePower keep DynamicVars["SelfDamage"]; PanachePower (Instanced)
+    // keeps DynamicVars["CardsLeft"] and a private Data { bool alreadyApplied }.
+    public class TheBombPower : PowerModel
+    {
+        public TheBombPower() => DynamicVars.Vars["Damage"] = new() { Value = 40m };
+        public void SetDamage(decimal damage) => DynamicVars.Vars["Damage"].Value = damage;
+    }
+    public class InfernoPower : PowerModel
+    {
+        public InfernoPower() => DynamicVars.Vars["SelfDamage"] = new() { Value = 0m };
+        public void IncrementSelfDamage() => DynamicVars.Vars["SelfDamage"].Value++;
+    }
+    public class CrimsonMantlePower : PowerModel
+    {
+        public CrimsonMantlePower() => DynamicVars.Vars["SelfDamage"] = new() { Value = 0m };
+        public void IncrementSelfDamage() => DynamicVars.Vars["SelfDamage"].Value++;
+    }
+    public class PanachePower : PowerModel
+    {
+        private class Data { public bool alreadyApplied; }
+        public PanachePower() { SetData(new Data()); DynamicVars.Vars["CardsLeft"] = new() { Value = 5m }; }
+        public void Applied() => ((Data)PeekData()!).alreadyApplied = true;
+        public bool PeekApplied() => ((Data)PeekData()!).alreadyApplied;
+    }
+    public class MissingPanacheDataPower : PanachePower { public MissingPanacheDataPower() => SetData(null); }
     // v0.113.1: sealed, Single; AfterDeath removes it when the dying creature is Applier.
     public class HexPower : PowerModel { }
     // v0.113.1 RitualPower: private bool _wasJustAppliedByEnemy（AfterApplied で true、AfterSideTurnEnd で false）。

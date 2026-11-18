@@ -36,6 +36,83 @@ public static partial class McpMod
         Check(Reasons(state).ContainsKey(key) && Reasons(state)[key].Length > 0, $"{key} has reason");
         Check(_stateWarnings.Any(s => s.StartsWith(context + "." + key + ":")), $"{key} has path warning");
     }
+    // sts2#1019: The Bomb's damage, Inferno / Crimson Mantle self-damage, Panache's countdown.
+    private static void RunCardEffectPowerContract()
+    {
+        var options = new JsonSerializerOptions
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        BeginStateWarnings();
+        var bomb = new TheBombPower();
+        Check(Equals(Power(bomb)["damage"], 40m) && !Power(bomb).ContainsKey("unavailable_reasons"), "Bomb canonical damage 40 is read");
+        bomb.SetDamage(50m);
+        var bombRow = Power(bomb);
+        Check(Equals(bombRow["damage"], 50m), "Bomb damage follows SetDamage, not Amount");
+        var otherBomb = new TheBombPower();
+        otherBomb.SetDamage(0m);
+        Check(Equals(Power(otherBomb)["damage"], 0m) && Equals(Power(bomb)["damage"], 50m), "each Instanced Bomb row has its own damage; 0 is a value");
+        Check(Equals(Power(bomb, false)["damage"], 50m) && !Power(bomb, false).ContainsKey("skip_next_duration_tick"), "hidden rows carry the damage too");
+        bomb.SetDamage(60m);
+        Check(Equals(bombRow["damage"], 50m), "snapshot independent of later SetDamage");
+        Check(FormatPowerInternalState(bombRow).Contains("damage: 50"), "markdown shows the Bomb damage");
+        bomb.DynamicVars.Damage.ThrowBase = true;
+        Unknown(Power(bomb), "damage", "status.TheBombPower");
+        bomb.DynamicVars.Damage.ThrowBase = false;
+        var noDamage = new TheBombPower();
+        noDamage.DynamicVars.Vars.Clear();
+        var noDamageRow = Power(noDamage);
+        Unknown(noDamageRow, "damage", "status.TheBombPower");
+        Check(noDamageRow["skip_next_duration_tick"] is false && FormatPowerInternalState(noDamageRow).Contains("damage: null ("), "a missing var is unknown, not 0; other fields kept");
+
+        foreach (PowerModel power in new PowerModel[] { new InfernoPower(), new CrimsonMantlePower() })
+        {
+            string name = power.GetType().Name;
+            Check(Equals(Power(power)["self_damage"], 0m), $"{name}: initial self damage 0 is a value");
+            if (power is InfernoPower inferno) { inferno.IncrementSelfDamage(); inferno.IncrementSelfDamage(); }
+            else ((CrimsonMantlePower)power).IncrementSelfDamage();
+            decimal expected = power is InfernoPower ? 2m : 1m;
+            var row = Power(power);
+            Check(Equals(row["self_damage"], expected) && !row.ContainsKey("damage") && !row.ContainsKey("cards_left"), $"{name}: IncrementSelfDamage is read; no other power's keys");
+            Check(FormatPowerInternalState(row).Contains($"self damage: {expected}"), $"{name}: markdown");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(row, options)))
+                Check(json.RootElement.GetProperty("self_damage").GetDecimal() == expected, $"{name}: wire decimal");
+            power.DynamicVars["SelfDamage"].ThrowBase = true;
+            Unknown(Power(power), "self_damage", $"status.{name}");
+            power.DynamicVars["SelfDamage"].ThrowBase = false;
+        }
+
+        BeginStateWarnings();
+        var panache = new PanachePower();
+        var fresh = Power(panache);
+        Check(Equals(fresh["cards_left"], 5) && fresh["already_applied"] is false && !fresh.ContainsKey("unavailable_reasons"), "fresh Panache: 5 left, not yet applied (real false)");
+        panache.Applied();
+        panache.DynamicVars["CardsLeft"].Value = 3m;
+        var counting = Power(panache);
+        Check(Equals(counting["cards_left"], 3) && counting["already_applied"] is true, "Panache countdown and the applied phase are read");
+        Check(panache.PeekApplied() && Equals(fresh["cards_left"], 5), "reading leaves Data as it is; snapshot independent");
+        Check(Equals(Power(panache, false)["cards_left"], 3) && Power(panache, false)["already_applied"] is true, "hidden Panache rows carry both");
+        var secondPanache = new PanachePower();
+        Check(Equals(Power(secondPanache)["cards_left"], 5) && Power(secondPanache)["already_applied"] is false, "Instanced Panache rows are independent");
+        Check(FormatPowerInternalState(counting).Contains("cards left: 3") && FormatPowerInternalState(counting).Contains("already applied: yes"), "Panache markdown");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(counting, options)))
+            Check(json.RootElement.GetProperty("cards_left").GetInt32() == 3 && json.RootElement.GetProperty("already_applied").ValueKind == JsonValueKind.True, "Panache wire int and bool");
+        var noData = new MissingPanacheDataPower();
+        var noDataRow = Power(noData);
+        Unknown(noDataRow, "already_applied", "status.MissingPanacheDataPower");
+        Check(Equals(noDataRow["cards_left"], 5) && noData.PeekData() == null, "missing Data is unknown (never initialized); cards_left kept");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noDataRow, options)))
+            Check(json.RootElement.GetProperty("already_applied").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("already_applied", out _),
+                "wire null and reason for already_applied");
+        panache.DynamicVars["CardsLeft"].ThrowBase = true;
+        var failedLeft = Power(panache);
+        Unknown(failedLeft, "cards_left", "status.PanachePower");
+        Check(failedLeft["already_applied"] is true, "cards_left failure keeps already_applied");
+        Check(!Power(new ToricToughnessPower()).ContainsKey("damage") && !Power(new ToricToughnessPower()).ContainsKey("cards_left"), "other powers carry none of these keys");
+    }
+
     public static void Main()
     {
         BeginStateWarnings();
@@ -539,6 +616,7 @@ public static partial class McpMod
                 && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("vigor_attack.has_command", out _),
                 "failed Vigor survives production wire as readable=false, null and row reason");
         }
+        RunCardEffectPowerContract();
         var response = new Dictionary<string, object?>();
         EndStateWarnings(response);
         Check(response.ContainsKey("warnings"), "warnings attached to surviving response");
@@ -552,7 +630,7 @@ public static partial class McpMod
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 6;"), "current schema is 6 (sts2#1018)");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 7;"), "current schema is 7 (sts2#1019)");
         Console.WriteLine($"PASS: {Checks} power/relic internal-state contract checks");
     }
 }

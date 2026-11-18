@@ -13,7 +13,7 @@ Blitz（`IsAllowedInBlitz=false` の除外）・複数人（SingleplayerOnly の
 酸液の Attack/Skill/Power の型 filter、何でも屋の自己除外と型で絞らないこと、
 GetUnlockedCards の例外・遅延列挙の途中失敗での `known: false`・`cards: []`・`reason`・warning、無色の失敗がキャラ pool に波及しないこと、
 run にいない player の拒否を検査する。state builder とはソースの文字列検査で、無色の候補が戦闘中だけ、酸液の pool は従来どおり、
-Markdown の 1 行、schema 6 を確認する。境界ダブルの判定は本体の `IsAllowedInRun` を写したもので、本体の判定を動かした証拠ではない。
+Markdown の 1 行、schema 7 を確認する。境界ダブルの判定は本体の `IsAllowedInRun` を写したもので、本体の判定を動かした証拠ではない。
 
 実機（調整役が v0.113.1 の検証用ランで確認する）:
 

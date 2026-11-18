@@ -63,6 +63,7 @@ public static partial class McpMod
                 sb.AppendLine($"- {selected}[{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {card["rarity"]}{exhaustNext} - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
                 AppendCardEnergyCostMarkdown(sb, card);
+                AppendCombatInstanceMarkdown(sb, card);
             }
             sb.AppendLine();
         }

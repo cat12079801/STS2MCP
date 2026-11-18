@@ -3117,6 +3117,10 @@ public static partial class McpMod
 
         var cardHolders = FindAllSortedByPosition<NCardHolder>(cardScreen);
         var cards = new List<Dictionary<string, object?>>();
+        // A reward screen opened during a live combat: its cards are combat candidates
+        // (sts2#1019). The usual post-combat reward has no live combat and keeps its shape.
+        var combatState = GetLiveCombatStateForSelection();
+        if (combatState != null) RefreshCardUidRegistry(combatState);
         int index = 0;
         foreach (var holder in cardHolders)
         {
@@ -3128,6 +3132,7 @@ public static partial class McpMod
             // The upgraded form is part of what a reward card is worth, so it belongs in
             // the choice rather than being discovered later at a smith.
             AttachUpgradePreview(cardInfo, card);
+            if (combatState != null) cardInfo["combat_instance"] = BuildSelectionCandidateInstance(card);
             cards.Add(cardInfo);
             index++;
         }
@@ -3416,6 +3421,9 @@ public static partial class McpMod
 
         // Selectable cards (visible holders in the hand)
         var selectableCards = new List<Dictionary<string, object?>>();
+        // The candidates are hand cards: combat_instance names their hand uid (sts2#1019).
+        var combatState = GetLiveCombatStateForSelection();
+        if (combatState != null) RefreshCardUidRegistry(combatState);
         int index = 0;
         foreach (var holder in hand.ActiveHolders)
         {
@@ -3428,6 +3436,7 @@ public static partial class McpMod
             // Only when the prompt is "upgrade a card in hand"; the plain select modes
             // (discard, exhaust, ...) have nothing to decide from the upgraded text.
             if (hand.CurrentMode == NPlayerHand.Mode.UpgradeSelect) AttachUpgradePreview(cardInfo, card);
+            if (combatState != null) cardInfo["combat_instance"] = BuildSelectionCandidateInstance(card);
             selectableCards.Add(cardInfo);
             index++;
         }

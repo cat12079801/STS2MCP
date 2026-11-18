@@ -32,6 +32,20 @@ snapshot の独立、災禍なし・別の災禍・災禍の読取失敗の札�
 災禍の amount の失敗でも保持されること、読取失敗の null・`local_ethereal` の理由・warnings と災禍の保持、
 Markdown の `local ethereal yes / no / null (理由)`、wire の bool・null と理由・省略を検査する。
 
+札の効果の入力（`cat12079801/sts2#1019`、schema 7）: 全行の `retain_this_turn` / `single_turn_retain` /
+`sly_this_turn` / `single_turn_sly` / `base_replay_count` / `extra_replay_this_turn` / `enchanted_replay_count` の
+false・0 の実値（理由なし）、`GiveSingleTurnSly` / `GiveSingleTurnRetain` で実効と単ターンの両方が立つこと、
+キーワードの Sly / Retain は実効だけ、`EndOfTurnCleanup` 後の再読取と snapshot の独立、読取でフラグを変えないこと、
+Spiral（常に Times）・Glam（Normal のときだけ Times、Disabled で外れる）の `EnchantPlayCount` を通した回数、
+付与の `dynamic_vars`（Times の BaseValue、StringVar の除外、1 変数の失敗、列挙の失敗、変数の無い付与の `{}`）、
+付与の `_dynamicVars` が null のときに getter で作らず（初期化しない）、`EnchantPlayCount` も呼ばずに
+`enchantment.dynamic_vars` と `enchanted_replay_count` を null・理由・warnings にすること、
+getter の失敗ごとの null・理由・warnings・Markdown・wire と他項目の保持、
+Mad Science だけの `tinker_time_rider`（`None` を含む全 enum 名・失敗の null と理由）、
+Markdown の `this turn only:` / `replays:` / `tinker time rider` の行と付与の行の `Times 1` を検査する。
+単ターンの private フラグ（`_hasSingleTurnRetain` / `_hasSingleTurnSly`）の読取失敗は、同じ型では起こせないので、
+宣言フィールドの読取の失敗経路（モメンタムの欠落・型違いと同じ `ReadDeclaredStateField`）で代える。
+
 各 getter、添付モデルの ID / Amount、変数一覧の取得・列挙、要素の失敗で、
 null・パス別理由・warnings と、他項目の保持・復旧を検査する。
 CanPlay 内の対象 getter・カードロジックの失敗も手札の行に局所化する。
@@ -44,7 +58,7 @@ Markdown は4パイルの本行末尾の `[Attack/AnyEnemy]` と、
 巨大な state builder はリンクせず、ソースの文字列検査で手札と4パイルの共通経路
 （パイルも詳細の後に手札と同じ `AttachCardPlayability` を通ること）、
 パイルの共通の表示順ヘルパー（動作の検査は `CardIdentityContract`）、非戦闘の対象範囲、マルチの共通経路、
-Markdown の配線、schema 6 を確認する。
+Markdown の配線、schema 7 を確認する。
 
 ゲームの getter は境界ダブルで、返却値・例外・列挙失敗を設定する。
 実際の効果適用・パイル移動・成長処理の実機照合は調整役の検証で行う。

@@ -5,6 +5,9 @@ using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Enchantments;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Enchantments;
+using MegaCrit.Sts2.Core.Models.Events;
 
 STS2_MCP.McpMod.RunCombatUpgradePreviewContract();
 
@@ -92,6 +95,168 @@ namespace STS2_MCP
             var sb = new StringBuilder();
             write(sb);
             return sb.ToString();
+        }
+
+        // sts2#1019: the ready clone carries the live card's turn state; selection candidates map to a pile uid or carry their own values.
+        private static void RunCardEffectInputsContract()
+        {
+            string[] turnKeys = { "retain_this_turn", "single_turn_retain", "sly_this_turn", "single_turn_sly",
+                "base_replay_count", "extra_replay_this_turn", "enchanted_replay_count" };
+            BeginStateWarnings();
+            var player = NewPlayer();
+
+            // --- ready: the clone keeps the single-turn flags, replay counts and enchantment vars ---
+            var glam = new Glam();
+            var replayed = Place(player, PileType.Hand, new CardModel { Name = "Strike", TagSet = { CardTag.Strike } });
+            replayed.Enchant(glam, 1);
+            replayed.GiveSingleTurnSly();
+            replayed.GiveSingleTurnRetain();
+            replayed.BaseReplayCount = 1;
+            replayed.ExtraReplayThisTurn = 2;
+            int notifications = 0;
+            replayed.SubscribeAll(() => notifications++);
+            string before = LiveSnapshot(replayed);
+            var row = Row(replayed, PileType.Hand);
+            var preview = Preview(row);
+            Check(Equals(preview["status"], "ready") && turnKeys.All(preview.ContainsKey) && Reasons(preview).Count == 0, "ready carries every turn key");
+            Check(preview["sly_this_turn"] is true && preview["single_turn_sly"] is true && preview["retain_this_turn"] is true && preview["single_turn_retain"] is true,
+                "single-turn Sly / Retain survive the clone (MemberwiseClone copies the private flags)");
+            Check(Equals(preview["base_replay_count"], 1) && Equals(preview["extra_replay_this_turn"], 2) && Equals(preview["enchanted_replay_count"], 4),
+                "replay counts and Glam's Times on the clone");
+            Check(Equals(row["enchanted_replay_count"], 4) && row["single_turn_sly"] is true, "live row has the same values");
+            Check(Equals(((Dictionary<string, object?>)Obj(preview, "enchantment")["dynamic_vars"]!)["Times"], 1m)
+                && Equals(((Dictionary<string, object?>)Obj(row, "enchantment")["dynamic_vars"]!)["Times"], 1m), "enchantment vars on the live row and the clone");
+            Check(notifications == 0 && LiveSnapshot(replayed) == before && replayed.PeekTurnState() == (true, true, 1, 2), "reading notifies nobody and changes nothing");
+            glam.StatusValue = EnchantmentStatus.Disabled;
+            Check(Equals(Preview(Row(replayed, PileType.Hand))["enchanted_replay_count"], 3), "a Disabled Glam (after its first play) no longer adds Times on the clone either");
+            var plainRow = Row(Place(player, PileType.Draw, new CardModel { Name = "Plain" }), PileType.Draw);
+            Check(turnKeys.All(Preview(plainRow).ContainsKey) && Preview(plainRow)["sly_this_turn"] is false && Equals(Preview(plainRow)["base_replay_count"], 0),
+                "zeros and false are read values in ready too");
+
+            // --- Mad Science: the rider on the row and the clone ---
+            var mad = Place(player, PileType.Discard, new MadScience());
+            mad.TinkerTimeRider = TinkerTime.RiderEffect.Violence;
+            var madRow = Row(mad, PileType.Discard);
+            Check(Equals(madRow["tinker_time_rider"], "Violence") && Equals(Preview(madRow)["tinker_time_rider"], "Violence"), "rider on the live row and the ready clone");
+            Check(Strings(Preview(madRow), "local_keyword_ids").SequenceEqual(new[] { "Innate" }) && Strings(madRow, "local_keyword_ids").Count == 0, "Mad Science+ gains Innate on the clone only");
+            Check(!Preview(plainRow).ContainsKey("tinker_time_rider"), "other cards carry no rider");
+
+            // --- a required turn read failing on the clone makes the preview unavailable ---
+            foreach (string field in new[] { "sly_this_turn", "base_replay_count", "extra_replay_this_turn" })
+            {
+                var broken = Place(player, PileType.Draw, new CardModel { Name = "Broken", PreviewThrowOn = { field } });
+                var brokenRow = Row(broken, PileType.Draw);
+                var brokenPreview = Preview(brokenRow);
+                Check(Equals(brokenPreview["status"], "unavailable") && Reasons(brokenPreview)[field].Contains($"{field} failed")
+                    && brokenPreview.Keys.OrderBy(k => k).SequenceEqual(new[] { "from_level", "status", "unavailable_reasons" }), $"{field} failure on the clone is unavailable with its path");
+                Check(brokenRow[field] != null && !Reasons(brokenRow).ContainsKey(field), $"{field}: the live row still reads it");
+            }
+
+            // --- selection candidates: pile instance or detached values ---
+            UidRequests.Clear();
+            var inHand = Place(player, PileType.Hand, new CardModel { Name = "InHand" });
+            var handInstance = BuildSelectionCandidateInstance(inHand);
+            Check(Equals(handInstance["source"], "pile") && Equals(handInstance["pile"], "Hand") && Equals(handInstance["uid"], GetStableCardUid(inHand))
+                && !handInstance.ContainsKey("values") && Reasons(handInstance).Count == 0, "a pile candidate references its pile row uid");
+            foreach (var pile in new[] { PileType.Draw, PileType.Discard, PileType.Exhaust, PileType.Play })
+            {
+                var inPile = Place(player, pile, new CardModel { Name = $"In{pile}" });
+                var instance = BuildSelectionCandidateInstance(inPile);
+                Check(Equals(instance["source"], "pile") && Equals(instance["pile"], pile.ToString()), $"{pile} candidate is a pile instance");
+            }
+
+            UidRequests.Clear();
+            var generated = new MadScience { OwnerPlayer = player };
+            generated.TinkerTimeRider = TinkerTime.RiderEffect.Sapping;
+            generated.Enchant(new Glam(), 1);
+            generated.GiveSingleTurnSly();
+            generated.EnergyCost.Modifiers.Add(new LocalCostModifier(0, LocalCostType.Absolute, LocalCostModifierExpiration.EndOfTurn, false));
+            var pileOrders = player.Piles.ToDictionary(p => p.Type, p => p.Cards.ToList());
+            string generatedBefore = LiveSnapshot(generated);
+            var detached = BuildSelectionCandidateInstance(generated);
+            var values = Obj(detached, "values");
+            Check(Equals(detached["source"], "detached") && detached["pile"] == null && !detached.ContainsKey("uid") && UidRequests.Count == 0,
+                "a candidate in no pile is detached and gets no uid");
+            Check(Equals(values["id"], "TEST") && Equals(values["type"], "Attack") && Equals(values["target_type"], "AnyEnemy") && Equals(values["upgrade_level"], 0)
+                && Equals(values["max_upgrade_level"], 1) && Equals(Obj(values, "dynamic_vars")["ViolenceHits"], 3m), "detached values: id, shape, level, numbers");
+            Check(Equals(values["tinker_time_rider"], "Sapping") && Equals(Obj(values, "enchantment")["id"], "GLAM") && Equals(values["enchanted_replay_count"], 1)
+                && values["sly_this_turn"] is true && values["single_turn_sly"] is true && values["single_turn_retain"] is false, "detached values: rider, enchantment, replays, single-turn expiry");
+            Check(values["keyword_ids"] is List<string> && values["local_keyword_ids"] is List<string> && values["exhaust_on_next_play"] is false, "detached values: both keyword sets and the exhaust flag");
+            var detachedEnergy = Obj(values, "energy_cost");
+            Check(Equals(detachedEnergy["with_local_modifiers"], 0) && detachedEnergy["with_all_modifiers"] == null && Reasons(detachedEnergy)["with_all_modifiers"] == "detached_preview_context"
+                && values["star_cost_state"] is Dictionary<string, object?>, "detached energy cost: local modifiers, no global context");
+            Check(!values.ContainsKey("can_play") && !values.ContainsKey("unplayable_reason") && !values.ContainsKey("vs_targets") && !values.ContainsKey("upgrade_preview"),
+                "no playability, target or upgrade evaluation on a detached candidate");
+            Check(Reasons(values).Count == 0 && Reasons(detached).Count == 0, "a clean detached read has no reasons");
+            Check(LiveSnapshot(generated) == generatedBefore && player.Piles.All(p => p.Cards.SequenceEqual(pileOrders[p.Type])) && generated.Pile == null,
+                "reading a candidate moves nothing and changes nothing");
+
+            var deckCard = Place(player, PileType.Deck, new CardModel { Name = "DeckCard" });
+            var deckInstance = BuildSelectionCandidateInstance(deckCard);
+            Check(Equals(deckInstance["source"], "detached") && Equals(deckInstance["pile"], "Deck") && deckInstance["values"] is Dictionary<string, object?>,
+                "a card in a non-combat pile is detached and names the pile");
+
+            BeginStateWarnings();
+            var twice = Place(player, PileType.Hand, new CardModel { Name = "Twice" });
+            player.Pile(PileType.Discard).Cards.Add(twice);
+            var ambiguous = BuildSelectionCandidateInstance(twice);
+            Check(ambiguous["source"] == null && ambiguous["pile"] == null && Reasons(ambiguous)["source"].StartsWith("ambiguous: in 2 piles")
+                && !ambiguous.ContainsKey("uid") && !ambiguous.ContainsKey("values"), "a card in two piles is not mapped to either");
+            Check(_stateWarnings.Any(w => w.StartsWith("card.combat_instance.source:")), "ambiguity warns");
+            player.Pile(PileType.Discard).Cards.Remove(twice);
+
+            var ownerless = new CardModel { Name = "Ownerless", ThrowOn = { "owner" } };
+            var ownerFailed = BuildSelectionCandidateInstance(ownerless);
+            Check(ownerFailed["source"] == null && Reasons(ownerFailed)["source"].Contains("owner failed") && Reasons(ownerFailed).ContainsKey("pile"),
+                "an unreadable owner leaves the source unknown with its reason");
+
+            var slyBroken = new CardModel { Name = "SlyBroken", OwnerPlayer = player, ThrowOn = { "sly_this_turn" } };
+            var slyBrokenValues = Obj(BuildSelectionCandidateInstance(slyBroken), "values");
+            Check(slyBrokenValues.ContainsKey("sly_this_turn") && slyBrokenValues["sly_this_turn"] == null && Reasons(slyBrokenValues)["sly_this_turn"].Contains("sly_this_turn failed")
+                && slyBrokenValues["single_turn_sly"] is false, "a detached value failure is null with its reason; the others stay");
+
+            using (var json = JsonDocument.Parse(Json(new Dictionary<string, object?> { ["pile"] = handInstance, ["detached"] = detached, ["ambiguous"] = ambiguous })))
+            {
+                var root = json.RootElement;
+                Check(root.GetProperty("pile").GetProperty("uid").GetString() == GetStableCardUid(inHand)
+                    && root.GetProperty("detached").GetProperty("pile").ValueKind == JsonValueKind.Null
+                    && root.GetProperty("detached").GetProperty("values").GetProperty("enchanted_replay_count").GetInt32() == 1
+                    && root.GetProperty("ambiguous").GetProperty("source").ValueKind == JsonValueKind.Null, "wire: uid string, explicit nulls, numeric values");
+            }
+            string md = Markdown(sb =>
+            {
+                AppendCombatInstanceMarkdown(sb, new() { ["combat_instance"] = handInstance });
+                AppendCombatInstanceMarkdown(sb, new() { ["combat_instance"] = detached });
+                AppendCombatInstanceMarkdown(sb, new() { ["combat_instance"] = deckInstance });
+                AppendCombatInstanceMarkdown(sb, new() { ["combat_instance"] = ambiguous });
+                AppendCombatInstanceMarkdown(sb, new() { ["uid"] = "out of combat" });
+            });
+            Check(md.Contains($"  - instance: Hand `{GetStableCardUid(inHand)}`") && md.Contains("  - instance: detached, values in JSON")
+                && md.Contains("  - instance: detached (in Deck), values in JSON") && md.Contains("  - instance: unknown (ambiguous: in 2 piles")
+                && md.Split('\n').Count(line => line.StartsWith("  - instance")) == 4, "markdown: one line per combat candidate, nothing out of combat");
+
+            // --- wiring: every in-combat selection screen, out-of-combat shapes unchanged ---
+            string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
+            string Source(string file) => File.ReadAllText(Path.Combine(sources, file));
+            string builder = Source("McpMod.StateBuilder.cs");
+            string Slice(string text, string start, string end) => text[text.IndexOf(start, StringComparison.Ordinal)..text.IndexOf(end, text.IndexOf(start, StringComparison.Ordinal), StringComparison.Ordinal)];
+            string handSelect = Slice(builder, "private static Dictionary<string, object?> BuildHandSelectState", "// Confirm button state");
+            string reward = Slice(builder, "private static Dictionary<string, object?> BuildCardRewardState", "var alternatives");
+            foreach (var (name, body) in new[] { ("hand_select", handSelect), ("card_reward", reward) })
+                Check(body.Contains("var combatState = GetLiveCombatStateForSelection();") && body.Contains("if (combatState != null) RefreshCardUidRegistry(combatState);")
+                    && body.Contains("if (combatState != null) cardInfo[\"combat_instance\"] = BuildSelectionCandidateInstance(card);"), $"{name}: combat_instance only during a live combat");
+            string grid = Slice(Source("McpMod.CardSelection.cs"), "BuildCardSelectCardRows(", "FindCardSelectClickMethod");
+            Check(grid.IndexOf("row[\"combat_instance\"] = BuildSelectionCandidateInstance(card);", StringComparison.Ordinal) > grid.IndexOf("if (combatState != null)", StringComparison.Ordinal),
+                "card_select: combat_instance inside the combat branch");
+            string choose = Source("McpMod.ChooseCardSelection.cs");
+            Check(choose.IndexOf("row[\"combat_instance\"] = BuildSelectionCandidateInstance(card);", StringComparison.Ordinal) > choose.IndexOf("else", choose.IndexOf("if (combatState == null)", StringComparison.Ordinal), StringComparison.Ordinal),
+                "choose: combat_instance on the combat rows only");
+            string candidate = string.Join("\n", Source("McpMod.SelectionCandidate.cs").Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            foreach (string forbidden in new[] { "CanPlay", "AttachCardPlayability", "BuildCardTargetPreviews", "UpdateDynamicVarPreview", "CardCmd", "CloneCard", "MutableClone", "Rng", "AddCard" })
+                Check(!candidate.Contains(forbidden + "(", StringComparison.Ordinal) && !candidate.Contains(forbidden + ".", StringComparison.Ordinal), $"candidate reader does not call {forbidden}");
+            Check(candidate.IndexOf("GetStableCardUid(card)", StringComparison.Ordinal) > candidate.IndexOf("state[\"source\"] = CandidateSourcePile;", StringComparison.Ordinal)
+                && candidate.Split("GetStableCardUid(").Length == 2, "a uid is requested only for a pile instance");
+            BeginStateWarnings();
         }
 
         public static void RunCombatUpgradePreviewContract()
@@ -333,7 +498,8 @@ namespace STS2_MCP
                     if (i >= upgradable) { card.UpgradeInternal(); card.FinalizeUpgradeInternal(); }
                     var row = Row(card, pile);
                     string with = Json(row);
-                    foreach (string key in new[] { "upgrade_preview", "upgrade_level", "max_upgrade_level", "local_keyword_ids", "keyword_ids", "retain_this_turn", "single_turn_retain" })
+                    foreach (string key in new[] { "upgrade_preview", "upgrade_level", "max_upgrade_level", "local_keyword_ids", "keyword_ids", "retain_this_turn", "single_turn_retain",
+                        "sly_this_turn", "single_turn_sly", "base_replay_count", "extra_replay_this_turn", "enchanted_replay_count" })
                         row.Remove(key);
                     added += Encoding.UTF8.GetByteCount(with) - Encoding.UTF8.GetByteCount(Json(row));
                 }
@@ -341,6 +507,8 @@ namespace STS2_MCP
                 Console.WriteLine($"  size estimate {label}: +{added} bytes for {total} rows ({upgradable} ready, {total - upgradable} not_upgradable)");
                 Check(added > 0, $"{label}: size estimate computed");
             }
+
+            RunCardEffectInputsContract();
 
             // --- wiring (sources) ---
             string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
@@ -363,7 +531,7 @@ namespace STS2_MCP
                 Check(!previewSource.Contains(forbidden + "(", StringComparison.Ordinal) && !previewSource.Contains(forbidden + ".", StringComparison.Ordinal), $"preview code does not call {forbidden}");
             Check(previewSource.Contains("clone.UpgradeInternal();") && previewSource.Contains("clone.FinalizeUpgradeInternal();"), "the clone gets the two calls CardCmd.Upgrade makes");
             string mod = Source("McpMod.cs");
-            Check(mod.Contains("public const int StateSchemaVersion = 6;"), "combat upgrade_preview changed meaning at schema 5; current schema is 6 (sts2#1018)");
+            Check(mod.Contains("public const int StateSchemaVersion = 7;"), "combat upgrade_preview changed meaning at schema 5; current schema is 7 (sts2#1019)");
             Check(mod.Contains("BuildStateMeasured(BuildGameState, perf)") && mod.Contains("BuildStateMeasured(BuildMultiplayerGameState, perf)"), "?perf=1 on both state endpoints");
             Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState(localPlayer)"), "multiplayer shares the player builder");
             Check(Source("McpMod.Formatting.cs").Contains("AppendUpgradePreviewLine(sb, card, showReady: false);"), "hand markdown prints failures only");

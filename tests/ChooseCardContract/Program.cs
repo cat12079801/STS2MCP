@@ -72,6 +72,12 @@ namespace STS2_MCP
             Calls.Add($"energy:{card.Id.Entry}");
             return new() { ["base"] = 2, ["with_all_modifiers"] = 2, ["local_modifiers"] = new List<object>() };
         }
+        // McpMod.SelectionCandidate is a boundary (CombatUpgradePreviewContract tests it).
+        private static Dictionary<string, object?> BuildSelectionCandidateInstance(CardModel card)
+        {
+            Calls.Add($"instance:{card.Id.Entry}");
+            return new() { ["source"] = CandidateSourceDetached, ["pile"] = null, ["values"] = new Dictionary<string, object?>(), ["unavailable_reasons"] = new Dictionary<string, string>() };
+        }
         private static void RefreshCardUidRegistry(ICombatState state) => UidRefreshes++;
         private static string GetStableCardUid(CardModel card)
         {
@@ -110,7 +116,8 @@ namespace STS2_MCP
             Check(rows.Select(r => r["index"]).SequenceEqual(new object?[] { 0, 2, 3 }), "index は holder の位置（null holder は行を出さず位置を詰めない）");
             Check(_stateWarnings.Any(w => w.StartsWith("card_select.cards[1]:")), "null holder は warning");
             Check(UidRefreshes == 1, "uid registry を行の前に更新する");
-            Check(Calls.Take(5).SequenceEqual(new[] { "info:CRUELTY:False", "details:CRUELTY", "energy:CRUELTY", "playability:CRUELTY", "info:STOMP:False" }), "手札と同じ順: 情報 → details → コスト → 可否");
+            Check(Calls.Take(6).SequenceEqual(new[] { "info:CRUELTY:False", "details:CRUELTY", "energy:CRUELTY", "playability:CRUELTY", "instance:CRUELTY", "info:STOMP:False" }), "手札と同じ順: 情報 → details → コスト → 可否 → 候補の個体（sts2#1019）");
+            Check(rows.All(r => r["combat_instance"] is Dictionary<string, object?> instance && Equals(instance["source"], "detached")), "戦闘中の候補の行に combat_instance");
             Check(Equals(rows[0]["uid"], "CRUELTY#g0") && Equals(rows[1]["uid"], "STOMP#g1") && GetStableCardUid(stomp) == "STOMP#g1", "実個体の uid（選択後のパイルでも同じ registry の値）");
             Check(rows[2]["exhaust_on_next_play"] is true && rows[0]["exhaust_on_next_play"] is false, "ExhaustOnNextPlay の現在値");
             Check(Equals(rows[0]["cost"], "2") && Equals(((Dictionary<string, object?>)rows[0]["energy_cost"]!)["base"], 2), "選択前のコストを 0 に加工しない");
@@ -126,7 +133,7 @@ namespace STS2_MCP
             Calls.Clear();
             CombatManager.Instance.IsInProgress = false;
             var plain = BuildChooseCardRows(new CardModel?[] { cruelty }, GetLiveCombatStateForSelection());
-            Check(Calls.SequenceEqual(new[] { "info:CRUELTY:True" }) && !plain[0].ContainsKey("uid") && !plain[0].ContainsKey("energy_cost"), "戦闘外の choose は従来の行だけ");
+            Check(Calls.SequenceEqual(new[] { "info:CRUELTY:True" }) && !plain[0].ContainsKey("uid") && !plain[0].ContainsKey("energy_cost") && !plain[0].ContainsKey("combat_instance"), "戦闘外の choose は従来の行だけ");
             CombatManager.Instance.IsInProgress = true;
 
             // --- star cost read failure ---
@@ -194,6 +201,7 @@ namespace STS2_MCP
             var md = new System.Text.StringBuilder();
             FormatCardSelectMarkdown(md, new Dictionary<string, object?> { ["screen_type"] = "choose", ["cards"] = rows, ["continuation_context"] = modded });
             Check(md.ToString().Contains("Continuation listeners: unknown (InvalidOperationException") && md.ToString().Contains("`CRUELTY#g0`"), "Markdown は未知の理由と uid を出す");
+            Check(md.ToString().Contains("  - instance: detached, values in JSON"), "Markdown は候補が detached であることを 1 行で出す");
             ModHelper.RunSubscribersForTest.Clear();
             Check(BuildChoiceContinuationContext(run, combat)["known"] is true, "復旧後は再び既知");
             md.Clear();
@@ -267,7 +275,7 @@ namespace STS2_MCP
             int nullGuard = actions.IndexOf("if (holders[index].CardModel == null)", StringComparison.Ordinal);
             int reveal = actions.IndexOf("RevealCardSelectScreen(chooseScreen, revealed)", StringComparison.Ordinal);
             Check(nullGuard > 0 && nullGuard < reveal, "CardModel の無い holder は覆いを外す前に拒否する");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 6;"), "現行の schema は 6（sts2#1018）");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 7;"), "現行の schema は 7（sts2#1019）");
             Console.WriteLine($"ChooseCardContract: {Checks} checks passed");
         }
     }

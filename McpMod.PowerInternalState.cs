@@ -54,6 +54,32 @@ public static partial class McpMod
                 Read("was_just_applied_by_enemy",
                     () => ReadDeclaredStateField<bool>(power, typeof(RitualPower), "_wasJustAppliedByEnemy"));
                 break;
+            // sts2#1019, v0.113.1 (sts2-a671e9ef): per-instance numbers the power's effect uses
+            // that Amount does not hold. They act whatever the HUD shows, so every emitted row
+            // carries them. PowerModel.DynamicVars is built by DeepCloneFields on every live
+            // (mutable) power, so the getter only returns the set; a missing var is a failed
+            // read (null and a reason), never a default.
+            case TheBombPower bomb:
+                // TheBombPower is Instanced; Amount counts the turns left. SetDamage writes the
+                // damage to DynamicVars.Damage.BaseValue and BeforeSideTurnEnd deals that var
+                // when Amount reaches 1.
+                Read("damage", () => bomb.DynamicVars.Damage.BaseValue);
+                break;
+            case InfernoPower:
+            case CrimsonMantlePower:
+                // AfterPlayerTurnStart damages the owner by DynamicVars["SelfDamage"].BaseValue
+                // (IncrementSelfDamage raises it each time the card is played again).
+                Read("self_damage", () => power.DynamicVars["SelfDamage"].BaseValue);
+                break;
+            case PanachePower:
+                // PanachePower is Instanced. AfterCardPlayed counts CardsLeft down only once
+                // Data.alreadyApplied is set (the first notification, the Panache card itself,
+                // just sets it), deals Amount at 0 and resets CardsLeft to 5; AfterSideTurnEnd
+                // resets CardsLeft to 5 and leaves alreadyApplied as it is. DisplayAmount is
+                // CardsLeft.IntValue. Data is read as is, never initialized.
+                Read("cards_left", () => power.DynamicVars["CardsLeft"].IntValue);
+                Read("already_applied", () => ReadPowerDataField<bool>(power, "alreadyApplied"));
+                break;
         }
 
         // Hidden bookkeeping powers have no observable application history.
