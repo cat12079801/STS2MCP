@@ -267,6 +267,8 @@ namespace STS2_MCP
             var custom = Place(player, PileType.Draw, new CustomEventDouble());
             var customPreview = Preview(Row(custom, PileType.Draw));
             Check(Equals(customPreview["status"], "unavailable") && Reasons(customPreview)["clone"].Contains("Cannot isolate event CustomEventDouble.Custom"), "an event that cannot be cleared refuses the clone");
+            Check(_modelEventFields.TryGetValue(typeof(CustomEventDouble), out var refusal) && refusal.Fields == null && refusal.Error!.Contains("CustomEventDouble.Custom")
+                && Equals(Preview(Row(Place(player, PileType.Draw, new CustomEventDouble()), PileType.Draw))["status"], "unavailable"), "the refusal is cached per type and reused");
 
             var cap = Place(player, PileType.Draw, new CapChangingDouble());
             var capPreview = Preview(Row(cap, PileType.Draw));
@@ -292,8 +294,8 @@ namespace STS2_MCP
                 Check(json.RootElement.GetProperty("upgrade_preview").GetProperty("from_level").ValueKind == JsonValueKind.Null, "unknown from_level is an explicit null");
 
             var handRow = Row(neighbour, PileType.Hand);
-            string handMd = Markdown(sb => AppendUpgradePreviewLine(sb, handRow));
-            Check(handMd.Contains("→ **Upgraded**: (1 energy) - Neighbour+ Damage 9 at Hand"), "hand markdown prints the upgraded form");
+            Check(Markdown(sb => AppendUpgradePreviewLine(sb, handRow, showReady: false)) == "", "combat rows print no ready line (values are in the JSON)");
+            Check(Markdown(sb => AppendUpgradePreviewLine(sb, handRow)).Contains("→ **Upgraded**: (1 energy) - Neighbour+ Damage 9 at Hand"), "a caller asking for ready lines gets the upgraded form");
             Check(Markdown(sb => AppendUpgradePreviewLine(sb, Row(upgraded, PileType.Discard))) == "", "not_upgradable prints nothing");
             Check(Markdown(sb => AppendUpgradePreviewLine(sb, brokenRow)).Contains("→ upgrade preview unavailable (description: InvalidOperationException: description failed)"), "unavailable prints its reasons");
             var legacy = new Dictionary<string, object?> { ["upgrade_preview"] = new Dictionary<string, object?> { ["cost"] = "1", ["description"] = "Deal 9 damage." } };
@@ -364,7 +366,7 @@ namespace STS2_MCP
             Check(mod.Contains("public const int StateSchemaVersion = 5;"), "combat upgrade_preview changes meaning: schema 5");
             Check(mod.Contains("BuildStateMeasured(BuildGameState, perf)") && mod.Contains("BuildStateMeasured(BuildMultiplayerGameState, perf)"), "?perf=1 on both state endpoints");
             Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState(localPlayer)"), "multiplayer shares the player builder");
-            Check(Source("McpMod.Formatting.cs").Contains("AppendUpgradePreviewLine(sb, card);"), "hand markdown wiring");
+            Check(Source("McpMod.Formatting.cs").Contains("AppendUpgradePreviewLine(sb, card, showReady: false);"), "hand markdown prints failures only");
 
             Console.WriteLine($"CombatUpgradePreviewContract: {Checks} checks passed");
         }

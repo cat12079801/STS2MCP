@@ -182,7 +182,7 @@ async def get_game_state(format: str = "markdown") -> str:
     ゲームの行動ログ末尾 ID・遷移可否を含む。四値の読取成功時だけ readable=true。
     スタン時も実際の復帰先を読み、分岐先の事前抽選や履歴からの推測はしない。
     取得不能の項目は null・unavailable_reasons・warnings、旧 MOD の欠落は unknown。
-    Markdown は行動 ID と follow-up を短く表示する。schema は 4 のまま。
+    Markdown は行動 ID と follow-up を短く表示する。版は上げていない（schema 4 のときの追加）。
     battle.enemies[].intents[] の Attack / DeathBlow は attack（readable・base_damage・hits・
     resolved_damage）を持つ。base_damage は補正前の素値（decimal の文字列）、hits は回数、
     resolved_damage はローカルのプレイヤーへの 1 ヒットの解決値。ラベルから逆算しない。

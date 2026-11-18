@@ -240,7 +240,9 @@ public static partial class McpMod
     private static readonly MethodInfo ShallowCloneMethod =
         typeof(object).GetMethod("MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-    private static readonly ConcurrentDictionary<Type, FieldInfo[]> _modelEventFields = new();
+    /// <summary>Per card type: the event fields to clear, or why the type cannot be isolated.
+    /// A refusal is cached too, so an unsupported type costs one scan, not one per row and read.</summary>
+    private static readonly ConcurrentDictionary<Type, (FieldInfo[]? Fields, string? Error)> _modelEventFields = new();
 
     /// <summary>
     /// A mutable clone of a live (mutable) card that notifies nobody: the real card's event
@@ -254,8 +256,11 @@ public static partial class McpMod
     {
         if (!card.IsMutable)
             throw new InvalidOperationException("Expected a mutable (live) card");
+        var (fields, error) = ModelEventFields(card.GetType());
+        if (fields == null)
+            throw new InvalidOperationException(error);
         var shallow = (CardModel)ShallowCloneMethod.Invoke(card, null)!;
-        foreach (var field in ModelEventFields(card.GetType()))
+        foreach (var field in fields)
             field.SetValue(shallow, null);
         return (CardModel)shallow.MutableClone();
     }
@@ -264,22 +269,29 @@ public static partial class McpMod
     /// The backing fields of every event declared on the card's type chain. An event without a
     /// same-named delegate field (custom add/remove) cannot be cleared, so the clone is refused.
     /// </summary>
-    private static FieldInfo[] ModelEventFields(Type type) => _modelEventFields.GetOrAdd(type, static type =>
+    private static (FieldInfo[]? Fields, string? Error) ModelEventFields(Type type) => _modelEventFields.GetOrAdd(type, static type =>
     {
         var fields = new List<FieldInfo>();
-        for (var current = type; current != null && current != typeof(object); current = current.BaseType)
+        try
         {
-            const BindingFlags declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
-                | BindingFlags.DeclaredOnly;
-            foreach (var evt in current.GetEvents(declared))
+            for (var current = type; current != null && current != typeof(object); current = current.BaseType)
             {
-                var field = current.GetField(evt.Name, declared);
-                if (field == null || !typeof(Delegate).IsAssignableFrom(field.FieldType))
-                    throw new InvalidOperationException($"Cannot isolate event {current.Name}.{evt.Name}");
-                fields.Add(field);
+                const BindingFlags declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic
+                    | BindingFlags.DeclaredOnly;
+                foreach (var evt in current.GetEvents(declared))
+                {
+                    var field = current.GetField(evt.Name, declared);
+                    if (field == null || !typeof(Delegate).IsAssignableFrom(field.FieldType))
+                        return (null, $"Cannot isolate event {current.Name}.{evt.Name}");
+                    fields.Add(field);
+                }
             }
         }
-        return fields.ToArray();
+        catch (Exception ex)
+        {
+            return (null, $"Cannot isolate events of {type.Name}: {ex.GetType().Name}: {ex.Message}");
+        }
+        return (fields.ToArray(), null);
     });
 
     /// <summary>Per-read counters for ?perf=1. Main thread only, like the warnings.</summary>

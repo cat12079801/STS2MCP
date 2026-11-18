@@ -214,11 +214,11 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 
 POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.is_play_phase` も true の state が
 3 回続くまで待つ（[Waiting for the Game to Settle](#waiting-for-the-game-to-settle)）。
-`player_turn_starting` は既存の `is_resolving` の意味（解決途中の値を返している）に沿って理由を足したものなので、`schema_version` は 4 のまま。
+`player_turn_starting` は既存の `is_resolving` の意味（解決途中の値を返している）に沿って理由を足したものなので、版は上げていない（schema 4 のときの追加）。
 戦闘の前後の `combat_starting` / `combat_ending` も、既にあった理由の名前を同じ意味（戦闘の開始中・終了中で、ゲームが自分で先へ進む）で
-`battle` の無い state に付けたものなので、`schema_version` は 4 のまま。この state は `battle` が無いので、`wait: true` は以前から落ち着いたとみなさない。
+`battle` の無い state に付けたものなので、版は上げていない（schema 4 のときの追加）。この state は `battle` が無いので、`wait: true` は以前から落ち着いたとみなさない。
 `map_traveling` / `map_closing` / `room_changing` / `run_loading` も、既存の `is_resolving` の意味（ゲームが自分で先へ進む途中で、入力を受け付けない）に沿って
-理由を足したもので、`schema_version` は 4 のまま。これまで `is_resolving: false` で返っていた移動中の `map`・読み込み中の `unknown` が true になり、
+理由を足したもので、版は上げていない（schema 4 のときの追加）。これまで `is_resolving: false` で返っていた移動中の `map`・読み込み中の `unknown` が true になり、
 `wait: true` もそこで落ち着いたとみなさなくなる（`choose_map_node` は次の部屋の state、`continue` は再開した部屋の state まで待つ）。ただし待ちの「3 秒変化なし」の打ち切りは `is_resolving` を見ないので、演出が 3 秒を超えて state が変わらないとき（協力プレイの投票の演出など）は、`is_resolving: true` のまま `settled: true, changed: false` で返り得る。読み手は応答の state の `is_resolving` も確かめる。
 
 ### 解放済みの戦闘生成 pool（追加、schema 3）
@@ -439,7 +439,7 @@ Owned relics always include boolean `used_up` and `melted`, in singleplayer and 
 multiplayer local `player` object (both use `BuildPlayerState`). Markdown marks true
 values with `(used)` and `(melted)` in singleplayer outside combat, and during combat.
 Multiplayer outside combat does not list relics in Markdown. These fields are additive:
-feature-detect their presence; the schema stays at 3. Older builds omit them.
+feature-detect their presence; they were added under schema 3 without a bump. Older builds omit them.
 `melted` is separate from consumption: `RelicModel.HoverTip` exposes the melted
 notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint comes
 from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for example,
@@ -606,7 +606,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 `Bound` の正の付与件数は `bound afflictions=2` のように表示する。
 既知の 0 と空配列は省略し、TurnNumber 単独では行を増やさない。
 失敗時は null と理由を表示する。既存の意味の変更・削除を伴わない追加なので
-`schema_version` は **4 のまま**。利用側は `combat_history` と必要な各項目の有無で検出する。
+版は上げていない（schema 4 のときの追加）。利用側は `combat_history` と必要な各項目の有無で検出する。
 `Bound` の付与件数を出さない旧 MOD の欠落を 0 と解釈しない。
 手動プレイの項目も旧 MOD では欠落し、欠落・null は unknown として扱う。
 読取不能時は `any_manual_cards_played_this_turn: null` と同名の `unavailable_reasons`、
@@ -635,7 +635,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 初期化・列挙・数値読み取りが失敗した場合は、そのレリックの `vars` 全体だけを省略し、
 `warnings` に `player.relics.<ID>.vars` を記録する。部分的な一覧や代用の 0 は返さない。
 欠落は unknown と扱い、空オブジェクトと区別する。旧 MOD にもこの項目はない。
-追加項目なので schema は 3 のまま。Markdown は既存の本文表示を使う。
+追加項目なので版は上げていない（schema 3 のときの追加）。Markdown は既存の本文表示を使う。
 
 出典（sts2-9cb4f1ad）: `RelicModel.DynamicVars / CanonicalVars / DynamicDescription`、
 `DynamicVar.BaseValue / IntValue / PreviewValue`、`DynamicVarSet.GetEnumerator / InitializeWithOwner`、
@@ -659,7 +659,7 @@ private フィールドが読めなければキーを省略し、`warnings` に
 ペン先 `attacks_played`、冥銭 `cards_exhausted` / `ethereal_count`、毛皮のコート
 `affects_current_room` は、失敗時にキーを `null` にし、`combat_state.unavailable_reasons`
 にもキーごとの理由を出す。成功した他の値は保持する。
-追加項目なので現在の schema は 4 のまま。旧 MOD・旧 dump は追加項目を持たない。
+追加項目なので版は上げていない（schema 4 のときの追加）。旧 MOD・旧 dump は追加項目を持たない。
 Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付ける。
 虹の指輪は各種別の枚数と発動数、肉兵は cooldown、脈打つ亡骸は HP 損失累積を表示する。
 
@@ -921,7 +921,12 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
   カード（`NUpgradePreview`）と同じく、パイルの無い複製で計算した表示値で、読めなくても `ready` のまま
   （理由は `unavailable_reasons.cost` などに残る）。`description` は数値変数の基底値で書いた本文で、
   所有者の筋力などの補正は入らない。読めなければ `unavailable`（代替の本文で埋めない）。
-  hover tips（`keywords`）は複製しない。
+- `cost` は戦闘の文脈（`UpgradePreviewType=Combat`）で計算するので、パイルを見ない大域のコストの修正
+  （`CorruptionPower`・`SpikedGauntlets`・`TangledPower`・`CuriousPower`・`VoidFormPower`・`ChoLimbs`・`Coda` など）が入る。
+  パイルを見る修正（`FreeAttackPower`・`BrilliantScarf` など）は入らない。schema 4 までの手札のプレビューの
+  `cost` は大域の修正が入らない値だったので、同じ札でも値が違い得る。
+- 戦闘の `ready` には表示用の `keywords`（hover tips）を出さない（schema 4 までの手札のプレビューにはあった）。
+  強化後のキーワードは `local_keyword_ids` / `keyword_ids` で読む。
 - 戦闘外の画面（報酬・鍛冶の `card_select`・`hand_select` の `upgrade_select`・図鑑）の `upgrade_preview` は
   従来どおり `{ name, cost, star_cost, description, keywords }` で、`status` を持たない。
   戦闘中の `hand_select` の候補行も同じ従来の形のまま（同じ札の機械向けの値は `player.hand[]` にある）。
@@ -941,7 +946,7 @@ event に同名の delegate の欄が無い（独自の add/remove）型では�
 本文は親のパイルの種類で `GetDescriptionForPile` を呼ぶ。戦闘外の `upgrade_preview` も、
 現物の札から作るときは同じ隔離した複製を使う（出力の形は変えない）。
 
-Markdown は手札の行の下に `→ **Upgraded**: (… energy) - 本文` を出す。パイルの行には出さない。
+Markdown は `ready` の行を出さない（値は JSON にある。1 枚ごとに 1 行増えるのを避ける）。
 `unavailable` は手札・パイルとも `→ upgrade preview unavailable (理由)` を出す。`not_upgradable` は何も出さない。
 行の段階・キーワードの読取失敗は、パイルの子行（`  - upgrade_level null (理由)` など）に出す。
 
@@ -1089,7 +1094,7 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 `null` には理由を添える。Play Pile の節は `play_pile_count` が1以上の場合だけ表示する。
 既存の `cost`（文字列、X は `"X"`、それ以外は `GetAmountToSpend()`）と `star_cost` は変更しない。
 スターコストの一時値は別の `star_cost_state`（下記）で出す。
-既存フィールドの意味・削除・action の変更がないため `schema_version` は **4 のまま**。
+既存フィールドの意味・削除・action の変更がないため版は上げていない（schema 4 のときの追加）。
 利用側は `energy_cost` と各追加キーの有無で検出する。古い state の欠落は「修正なし」ではなく未観測。
 
 出典（v0.113.0、ローカルの `sts2-d009478a` デコンパイル）:
@@ -1137,7 +1142,7 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
   `SetToFreeThisTurn` は `SetStarCostThisTurn(0)`（`TemporaryCardCost.ThisTurn(0)`）を末尾に足す。
   `[]` は一時値なし、`null` は読取失敗。効果名やプレイ履歴から補わない。
 - 読取失敗はその項目だけ `null`、`unavailable_reasons` に理由、warning `card.star_cost_state.<key>`。
-- Markdown には出さない（既存の `star_cost` 表示は変えない）。追加だけなので schema 4 のまま。
+- Markdown には出さない（既存の `star_cost` 表示は変えない）。追加だけなので版は上げていない（schema 4 のときの追加）。
 
 出典は `sts2-a671e9ef` の `CardModel.BaseStarCost` / `CanonicalStarCost` / `HasStarCostX` / `CurrentStarCost` /
 `_temporaryStarCosts` / `SetToFreeThisTurn` / `SetStarCostThisTurn`、`TemporaryCardCost`。
@@ -1309,7 +1314,7 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 例は `(facing: Left)`、`(stolen strength: 17: -2.75)`。
 拘束の鎖の使用済みフラグは false も `(bound card played: no)`、true は `yes` と表示する。
 失敗は `null (理由)` と表示する。解決中はフック間の値なので行動計画は解決後に行う。
-既存項目の意味を変えない追加のため schema は 4 のまま。
+既存項目の意味を変えない追加のため版は上げていない（schema 4 のときの追加）。
 
 ### Keyword Object
 
@@ -1391,7 +1396,7 @@ Markdown もタイトル、本文、選択肢の順で表示する。
 ラン放棄の確認は `NPauseMenu.OnGiveUpButtonPressed` → `NAbandonRunConfirmPopup._Ready`。
 終了確認の上記文言は `localization/jpn/main_menu_ui.json` の
 `QUIT_CONFIRM_POPUP.header` / `.body`、ボタンは `GENERIC_POPUP.confirm` / `.cancel` に基づく。
-既存の文言欄の取得修正と Markdown への表示追加なので schema は 3 のまま。
+既存の文言欄の取得修正と Markdown への表示追加なので版は上げていない（schema 3 のときの追加）。
 
 #### `multiplayer_join` — Friend list / FastMP
 
@@ -1609,13 +1614,13 @@ left to reattach to, the fight is over rather than about to restart.
   `CombatManager.ShouldSkipCombatEffect` の間は listener が空になり、生存個体は true になる（本体の値のまま）。
 - 読めなければ `hittable: null`、敵の行の `unavailable_reasons.hittable` に理由、warning `battle.enemies.<entity_id>.hittable`。
   false と区別する。旧 MOD では欠落し、未観測として扱う。
-- Markdown は HP の行に `| Hittable: yes|no`（読めなければ `null (理由)`）。追加だけなので schema 4 のまま。
+- Markdown は HP の行に `| Hittable: yes|no`（読めなければ `null (理由)`）。追加だけなので版は上げていない（schema 4 のときの追加）。
 - 契約試験は [`tests/EnemyHittableContract`](../tests/EnemyHittableContract/README.md)。
 
 #### 敵の行動状態（追加、schema 4）
 
 `battle.enemies[].move_state` は全モンスターに出す。生存敵・戦闘に残る死亡敵、
-単独・協力プレイで共通。追加契約なので schema は 4 のまま。旧 MOD の欠落は unknown。
+単独・協力プレイで共通。追加契約なので版は上げていない（schema 4 のときの追加）。旧 MOD の欠落は unknown。
 意図の type・label・round や MOD 独自の履歴から値を補完しない。
 
 ```json
@@ -1684,7 +1689,7 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
 `battle.enemies[].intents[].attack` は、意図が `AttackIntent`（`SingleAttackIntent`・`MultiAttackIntent`・
 `DeathBlowIntent`。`type` は `Attack` か `DeathBlow`）のときだけ出す。攻撃以外の意図・旧 MOD では省略（欠落は unknown）。
 読むのは `MonsterModel.NextMove.Intents` の現在の意図そのもので、生存敵・戦闘に残る死亡敵、単独・協力プレイで共通。
-追加契約なので schema は 4 のまま。`label`・`description`・履歴・パワーから値を補完しない。
+追加契約なので版は上げていない（schema 4 のときの追加）。`label`・`description`・履歴・パワーから値を補完しない。
 
 ```json
 { "readable": true, "base_damage": "20", "hits": 1, "resolved_damage": 36 }
@@ -2173,7 +2178,7 @@ list could not be read; do not select using a partial or stale list. Schema 4 re
 produces a `card_select.selected` warning without rewriting the game's selection.
 Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
 
-#### 隠れている選択画面（`screen_visible` / `hidden_by` / `reveal_on_action`、追加。schema 4 のまま）
+#### 隠れている選択画面（`screen_visible` / `hidden_by` / `reveal_on_action`、追加、schema 4）
 
 選択画面は overlay stack の一番上にあっても見えていないことがある。`state_type` は `card_select` のまま、
 grid と choose の両方に次を出す。
@@ -2357,7 +2362,7 @@ MOD は画面を開いた親の操作を区別しない。4 通知はポーシ�
 
 戦闘外の choose（イベントの報酬など）は従来どおり `BuildCardInfo` の行だけで、`battle` も付けない。
 GET では選択・無料化・カードの追加・抽選と、通知の hook（`After…`）の呼び出しをしない。`AttachCardPlayability` の `CanPlay` は
-手札・パイルの行と同じ読取で、可否の問い合わせの hook（`Hook.ShouldPlay`）を通る。追加だけなので schema 4 のまま。旧 MOD の欠落は未観測として扱う。
+手札・パイルの行と同じ読取で、可否の問い合わせの hook（`Hook.ShouldPlay`）を通る。追加だけなので版は上げていない（schema 4 のときの追加）。旧 MOD の欠落は未観測として扱う。
 出典は `sts2-a671e9ef` の各ポーションの `OnUse`、`CardFactory.GetDistinctForCombat`、`CombatState.CreateCard` /
 `IterateHookListeners`、`RunState.IterateHookListeners`、`Hook.IterateCombatHookListeners` / `AfterCardEnteredCombat` /
 `AfterCardGeneratedForCombat` / `AfterPotionUsed` / `AfterHandEmptied`、`CardModel.CombatState` / `CanPlay`、
@@ -3101,7 +3106,7 @@ opened the preview.
 Returns `status: error` when the press would not land: while a preview is open (use `confirm_selection` or
 `cancel_selection` — pressing through it corrupts the preview row), and when the screen refuses the press
 because its selection is already full. A hidden screen is first revealed when `reveal_on_action` is true
-(see [隠れている選択画面](#隠れている選択画面screen_visible--hidden_by--reveal_on_action追加schema-4-のまま));
+(see [隠れている選択画面](#隠れている選択画面screen_visible--hidden_by--reveal_on_action追加schema-4));
 the result then carries `revealed`. A screen that cannot be revealed or stays hidden, an unavailable candidate
 list, invalid index, or missing click method also returns error. The index and candidates are checked before
 the map is closed. A click exception returns error with its underlying cause;

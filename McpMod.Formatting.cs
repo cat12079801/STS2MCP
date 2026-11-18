@@ -456,7 +456,7 @@ public static partial class McpMod
                     string exhaustNext = card.GetValueOrDefault("exhaust_on_next_play") is true ? " [exhaust-next]" : "";
                     sb.AppendLine($"- [{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] {playable}{keywords}{exhaustNext} - {card["description"]} (target: {card["target_type"]})");
                     FormatCardTargetPreviews(sb, card);
-                    AppendUpgradePreviewLine(sb, card);   // combat status: ready line / unavailable reasons
+                    AppendUpgradePreviewLine(sb, card, showReady: false);   // failures only; ready values are in the JSON
                     AppendCardEnergyCostMarkdown(sb, card);
                     AppendCardDetailsMarkdown(sb, card);
                 }

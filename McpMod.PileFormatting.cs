@@ -35,7 +35,7 @@ public static partial class McpMod
                     sb.AppendLine($"  - can_play false ({card.GetValueOrDefault("unplayable_reason") ?? "no reason"})");
                 AppendCardEnergyCostMarkdown(sb, card);
                 AppendCardDetailsMarkdown(sb, card);
-                // Pile rows print only a failed upgrade preview; the hand prints the upgraded form.
+                // Combat rows print only a failed upgrade preview; ready values are in the JSON.
                 AppendUpgradePreviewLine(sb, card, showReady: false);
             }
         }

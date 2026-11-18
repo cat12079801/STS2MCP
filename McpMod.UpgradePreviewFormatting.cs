@@ -11,7 +11,8 @@ public static partial class McpMod
     /// carries it. Silent when the card has no "upgrade_preview". Combat previews carry a
     /// status: not_upgradable prints nothing, unavailable prints its reasons (unless
     /// <paramref name="showFailures"/> is false), and ready prints the upgraded form unless
-    /// <paramref name="showReady"/> is false (pile rows: only failures are printed).
+    /// <paramref name="showReady"/> is false (combat hand and pile rows print failures only:
+    /// the ready values are machine-readable in the JSON, and a line per card costs tokens).
     /// </summary>
     private static void AppendUpgradePreviewLine(StringBuilder sb, Dictionary<string, object?> card,
         bool showReady = true, bool showFailures = true)

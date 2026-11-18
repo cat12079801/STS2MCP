@@ -5,7 +5,7 @@
 例外は泥棒（`THIEVERY_POWER`）と強奪（`HEIST_POWER`）の対象別の項目と、活力（`VIGOR_POWER`）の
 `vigor_attack` で、`status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
-追加契約のため `schema_version` は 4。項目の有無で利用可否を判別する。
+追加契約のため版は上げていない（schema 4 のときの追加）。項目の有無で利用可否を判別する。
 
 以下の出典は v0.113.0 のデコンパイル `sts2-d009478a`。
 人間の観測可能性は画面表示または画面で起きた出来事の計数に基づく。
