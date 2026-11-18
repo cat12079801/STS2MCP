@@ -43,19 +43,6 @@ public static partial class McpMod
         sb.AppendLine();
     }
 
-    /// <summary>
-    /// Prints the upgraded form under a card line, on the screens where the state
-    /// carries it. Silent when the card has no "upgrade_preview".
-    /// </summary>
-    private static void AppendUpgradePreviewLine(StringBuilder sb, Dictionary<string, object?> card)
-    {
-        if (!card.TryGetValue("upgrade_preview", out var previewObj)
-            || previewObj is not Dictionary<string, object?> preview) return;
-
-        string starCost = preview.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
-        sb.AppendLine($"  → **Upgraded**: ({preview.GetValueOrDefault("cost")} energy{starCost}) - {preview.GetValueOrDefault("description")}");
-    }
-
     private static void FormatCardRewardMarkdown(StringBuilder sb, Dictionary<string, object?> cardReward)
     {
         sb.AppendLine("## Card Reward Selection");

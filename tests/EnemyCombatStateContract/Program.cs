@@ -157,7 +157,7 @@ public static partial class McpMod
             "生死で絞らず敵行に配線（戦闘に残る死亡中の巨人も対象）");
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildEnemyList(combatState)"), "協力プレイも共通の敵 builder");
         Check(Source("McpMod.Formatting.cs").Contains("FormatEnemyCombatState(enemy)"), "敵の Markdown 行への配線");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 4;"), "schema 4 を維持");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 5;"), "現行の schema は 5（sts2#1003）");
         Console.WriteLine($"敵の戦闘内部状態の契約試験: {Checks} 件成功");
     }
 }

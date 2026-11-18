@@ -489,7 +489,7 @@ public static partial class McpMod
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 4;"), "additive schema remains 4");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 5;"), "current schema is 5 (sts2#1003)");
         Console.WriteLine($"PASS: {Checks} power/relic internal-state contract checks");
     }
 }

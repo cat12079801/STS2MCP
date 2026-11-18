@@ -14,6 +14,7 @@
     <Compile Include="../../McpMod.CardSelectionFormatting.cs" Link="CardSelectionFormatting.cs" />
     <Compile Include="../../McpMod.CardEnergyCostFormatting.cs" Link="CardEnergyCostFormatting.cs" />
     <Compile Include="../../McpMod.RewardFormatting.cs" Link="RewardFormatting.cs" />
+    <Compile Include="../../McpMod.UpgradePreviewFormatting.cs" Link="UpgradePreviewFormatting.cs" />
     <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs;../../McpMod.MultiplayerState.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

@@ -109,7 +109,7 @@ namespace STS2_MCP
             Check(guard >= 0 && wiring > guard, "無色の最終候補は戦闘中の共通 Player builder だけで出す");
             Check(playerBuilder.IndexOf("state[\"generation_pool\"] = BuildGenerationPool(player)", StringComparison.Ordinal) is >= 0 and var g && g < guard, "酸液の pool は従来どおり戦闘外も出す");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("Colorless generation pool:"), "Markdown の1行");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 4;"), "pool 契約は filter_version で版を示し、schema は 4 のまま");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 5;"), "pool 契約は filter_version で版を示し、schema は 4 のまま");
             Console.WriteLine($"GenerationPoolContract: {Checks} checks passed");
         }
 

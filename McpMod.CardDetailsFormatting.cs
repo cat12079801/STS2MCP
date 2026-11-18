@@ -41,7 +41,8 @@ public static partial class McpMod
         // Shape, upgrade (title "+") and playability show elsewhere. Keep their failure reasons visible.
         if (reasons != null)
         {
-            foreach (string field in new[] { "type", "target_type", "is_upgraded", "is_upgradable", "tags", "can_play", "unplayable_reason" })
+            foreach (string field in new[] { "type", "target_type", "is_upgraded", "is_upgradable", "tags", "can_play", "unplayable_reason",
+                "upgrade_level", "max_upgrade_level", "local_keyword_ids", "keyword_ids", "retain_this_turn", "single_turn_retain" })
                 if (reasons.ContainsKey(field)) sb.AppendLine($"  - {field} {Value(null, field)}");
         }
     }

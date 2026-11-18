@@ -82,7 +82,7 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 4       // Contract version — see below
+  "schema_version": 5       // Contract version — see below
 }
 ```
 
@@ -96,6 +96,12 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **5** — every combat card row (`player.hand[]` and the draw/discard/exhaust/play piles) always
+  carries `upgrade_preview` with a `status` (`ready` / `not_upgradable` / `unavailable`).
+  It used to be a hand-only display object attached only while an upgrade card was in reach,
+  absent alike for "cannot upgrade" and "failed". `ready` now holds the upgraded clone's
+  machine-readable absolute values. Out-of-combat previews keep their shape. See
+  [戦闘の強化結果](#戦闘の強化結果upgrade_previewschema-5).
 - **4** — `card_select.cards` and `select_card` indices cover all grid candidates in display order,
   independent of scrolling. `selected_outside_grid` was removed.
 - **3** — `map.next_encounters` was removed because it exposed future rooms before the player
@@ -684,6 +690,13 @@ Markdown にも `(used this combat: yes)`、`(used this turn: no)` 等を付け�
   "energy_cost": { /* Energy Cost Object below; combat only */ },
   "is_upgraded": false,
   "is_upgradable": true,
+  "upgrade_level": 0,        // CardModel.CurrentUpgradeLevel
+  "max_upgrade_level": 1,    // CardModel.MaxUpgradeLevel
+  "local_keyword_ids": [],   // CardKeyword names on the card itself; see 戦闘の強化結果
+  "keyword_ids": [],         // Effective in combat (local + Hex, Phantom Blades ...)
+  "retain_this_turn": false, // CardModel.ShouldRetainThisTurn
+  "single_turn_retain": false,
+  "upgrade_preview": { "status": "ready", /* see 戦闘の強化結果 */ },
   "tags": ["Strike"],        // CardTag enum names; [] if none
   "keywords": [ /* Keyword Objects */ ]
 }
@@ -722,7 +735,14 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   "star_cost": null,          // Regent star cost as string, null if N/A
   "exhaust_on_next_play": false,
   "energy_cost": { /* Energy Cost Object below */ },
-  "description": "Deal 6 damage."
+  "description": "Deal 6 damage.",
+  "upgrade_level": 0,
+  "max_upgrade_level": 1,
+  "local_keyword_ids": [],
+  "keyword_ids": [],
+  "retain_this_turn": false,
+  "single_turn_retain": false,
+  "upgrade_preview": { "status": "ready", /* see 戦闘の強化結果 */ }
 }
 ```
 
@@ -813,8 +833,8 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 タグがあれば手札・パイルとも `  - tags Strike` の子行を付ける。強化済みは札名の `+` で分かる。
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
-追加項目で、既存の項目・action の意味を保つため `schema_version` は **4**。
-利用側は項目の有無で追加機能を検出する。
+本節の項目は schema 4 で追加した（追加時に版は上げていない）。
+同じ行の `upgrade_preview` の意味を変えたので、現在の `schema_version` は **5**（次節）。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
@@ -828,6 +848,121 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `Clash.IsPlayable`、`GrandFinale.IsPlayable`、`Normality.ShouldPlay`、`Enthralled.ShouldPlay`、
 `ChainsOfBindingPower.ShouldPlay`、`RingingPower.ShouldPlay`、`SmoggyPower.ShouldPlay`。
 [CardDetailsContract](../tests/CardDetailsContract/README.md)
+
+### 戦闘の強化結果（`upgrade_preview`、schema 5）
+
+戦闘中の `player.hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]` の
+**すべての行**に、その札の強化の状態と、その札そのものを1段強化した結果を出す（sts2#1003）。
+強化の手段（神格化・武装・鍛冶の祝福・剃刀の歯・闘争心など）が手札にあるかどうかに関わらず出す。
+単体・マルチのローカル player は共通の `BuildPlayerState` を通る。
+
+行に足す項目（行の `unavailable_reasons` に読取失敗の理由が入る）:
+
+- `upgrade_level` / `max_upgrade_level`: `CardModel.CurrentUpgradeLevel` / `MaxUpgradeLevel`。
+  手札の行は以前から持っていた。上限は通常1、傷・めまい・アセンダーの災厄は0、汚れた短剣は 999999999。
+- `local_keyword_ids`: `CardModel.GetKeywordsWithSources(KeywordSources.Local)`。札そのものの
+  キーワード（印刷＋ `AddKeyword` − `RemoveKeyword`）。`CardKeyword` の enum 名を enum の数値順に並べる。
+- `keyword_ids`: `CardModel.Keywords`（`KeywordSources.All`）。戦闘中の `Hook.ModifyKeywordsInCombat`
+  （呪術の付いた札の Ethereal、ファントムブレードの Shiv の Retain など）を含む実効のキーワード。
+  hover tips（`keywords`）とは別物で、関連札の説明に出る「保留」「廃棄」を対象札に付けない。
+- `retain_this_turn`: `CardModel.ShouldRetainThisTurn`（Retain キーワード、または単ターン保留）。
+- `single_turn_retain`: 単ターン保留の private `_hasSingleTurnRetain`（`GiveSingleTurnRetain` が立てる）。
+  宣言されたフィールドを読むだけ。キーワードの Retain とは別に、今ターンだけ保留される札を区別する。
+
+`upgrade_preview` はどの行にも必ずあり、`status` が次の3値のどれかになる。
+`from_level` は強化の始点（親の段階）、`unavailable_reasons` はプレビュー自身の失敗理由（正常時 `{}`）。
+
+| `status` | 条件 | 中身 |
+|---|---|---|
+| `ready` | 親の `IsUpgradable` が真で、複製の段階が親＋1、上限・ID が親と一致 | 強化後の絶対値（下記） |
+| `not_upgradable` | 親の `IsUpgradable` が偽で、段階が上限（上限0を含む）。複製しない | `status` / `from_level` / `unavailable_reasons` だけ |
+| `unavailable` | 複製の失敗、必須の getter の例外、不整合（段階・上限・ID）、親の段階・可否が読めない | `status` / `from_level`（読めなければ null）/ `unavailable_reasons`（失敗した項目のパス）。部分的な値は出さない |
+
+`unavailable` は「強化できない」ではなく「観測できなかった」。他の札と state の残りはそのまま返す。
+多段の札（汚れた短剣）は**次の1段だけ**を出す。その先の段は、実際に強化したあとの state を読み直して得る。
+
+`ready` の項目（すべて強化後の複製の値）:
+
+```jsonc
+"upgrade_preview": {
+  "status": "ready",
+  "from_level": 0,
+  "id": "STRIKE_IRONCLAD",
+  "name": "Strike+",            // 表示名（段階の付いた名前）
+  "description": "Deal 9 damage.", // 親のパイルでの通常表示の本文（「強化前→後」の比較表示ではない）
+  "type": "Attack", "target_type": "AnyEnemy", "tags": ["Strike"],
+  "upgrade_level": 1, "max_upgrade_level": 1,
+  "is_upgraded": true, "is_upgradable": false,   // 次の強化ができるか（強化後の getter）
+  "dynamic_vars": { "Damage": 9 },              // 全数値変数の BaseValue（StringVar を除く）
+  "local_keyword_ids": [], "keyword_ids": [],
+  "affliction": null, "enchantment": null,      // 戦闘カードの詳細と同じ形
+  "energy_cost": { "base": 1, "with_local_modifiers": 1, "with_all_modifiers": null,
+                   "unavailable_reasons": { "with_all_modifiers": "detached_preview_context", ... }, ... },
+  "star_cost_state": { "base": -1, "current": -1, "temporary_costs": [], ... },
+  "cost": "1", "star_cost": null,               // 表示用（下記）
+  "unavailable_reasons": {}
+}
+```
+
+- 機械が読むのは `dynamic_vars`・`type`・`target_type`・`tags`・`local_keyword_ids`・`keyword_ids`・
+  `energy_cost`・`star_cost_state`・`affliction`・`enchantment`・段階と可否。どれも複製の現在値で、差分ではない。
+  `dynamic_vars` は空の `{}` も正常（数値の無い強化、たとえば幻影の Ethereal を外す強化）。
+- `energy_cost` は [Energy Cost Object](#energy-cost-object追加schema-4) と同じ形・同じ読取。
+  `CardEnergyCost.UpgradeBy` による基礎の低下と、Absolute の修正の切り詰めが入った値になる。
+  ただし複製はパイルに居ないので、パイルで決まる大域の修正（手札・Play pile だけに効く `FreeAttackPower` など）は
+  分からない。`with_all_modifiers` は常に null で、理由は `detached_preview_context`。
+  実際に払う額は、強化後に読み直した親の行で確かめる。X コストの `base` の欠落（`x_cost`）、
+  エネルギーコストの無い札（`no_energy_cost`）、X 以外の `captured_x_value`（`not_x_cost`）は正常。
+  `costs_x` / `base_raw` / `canonical` / `local_modifiers`（と、通常の札の `with_local_modifiers`、
+  X の札の `captured_x_value`）が読めなければ `unavailable` になる。
+- `star_cost_state` は [Star Cost State Object](#star-cost-state-object追加schema-4) と同じ。
+  `CardModel.UpgradeStarCostBy` が基礎の低下で外す一時コストも反映される。読取失敗は `unavailable`。
+- `name` / `description` / `cost` / `star_cost` は表示用。`cost` / `star_cost` はゲーム自身の強化プレビューの
+  カード（`NUpgradePreview`）と同じく、パイルの無い複製で計算した表示値で、読めなくても `ready` のまま
+  （理由は `unavailable_reasons.cost` などに残る）。`description` は数値変数の基底値で書いた本文で、
+  所有者の筋力などの補正は入らない。読めなければ `unavailable`（代替の本文で埋めない）。
+  hover tips（`keywords`）は複製しない。
+- 戦闘外の画面（報酬・鍛冶の `card_select`・`hand_select` の `upgrade_select`・図鑑）の `upgrade_preview` は
+  従来どおり `{ name, cost, star_cost, description, keywords }` で、`status` を持たない。
+  戦闘中の `hand_select` の候補行も同じ従来の形のまま（同じ札の機械向けの値は `player.hand[]` にある）。
+
+**複製と隔離。** 強化はゲームの `CardCmd.Upgrade` と同じく `CardModel.UpgradeInternal` →
+`FinalizeUpgradeInternal` を複製に1回ずつ適用する。現物には何もしない（`CardCmd.Upgrade`・
+`ICardScope.CloneCard`〔`AddCard` をする〕は使わない）。複製は `AbstractModel.MutableClone` で作るが、
+`CardModel.DeepCloneFields` は付与を貼り直す（`EnchantInternal` / `AfflictInternal`）ときに、
+まだ現物から浅くコピーされたままの購読（`EnchantmentChanged` / `AfflictionChanged`。
+`CombatStateTracker.Subscribe` や `NCard` が付ける）を呼ぶ。`CardModel.AfterCloned` が購読を外すのはその後。
+そこで、登録されていない浅いコピーを作り、そのコピーの event の欄だけを空にしてから、
+コピーに対してゲームの `MutableClone` を呼ぶ。現物と、現物と共有する集合（キーワード・数値変数・コストと修正・
+一時スターコスト・付与）には書き込まない。`DeepCloneFields` が強化前にそれらを複製に置き換える。
+event に同名の delegate の欄が無い（独自の add/remove）型では隔離できないので、`unavailable`（理由 `clone`）にする。
+複製には UID を振らず、パイル・戦闘履歴・乱数・パイルの順序に触れない。
+読取の文脈は、複製の `UpgradePreviewType` を `Combat` にし（`NUpgradePreview.Reload` と同じ）、
+本文は親のパイルの種類で `GetDescriptionForPile` を呼ぶ。戦闘外の `upgrade_preview` も、
+現物の札から作るときは同じ隔離した複製を使う（出力の形は変えない）。
+
+Markdown は手札の行の下に `→ **Upgraded**: (… energy) - 本文` を出す。パイルの行には出さない。
+`unavailable` は手札・パイルとも `→ upgrade preview unavailable (理由)` を出す。`not_upgradable` は何も出さない。
+行の段階・キーワードの読取失敗は、パイルの子行（`  - upgrade_level null (理由)` など）に出す。
+
+**計測。** `GET /api/v1/singleplayer?perf=1`（マルチは `/api/v1/multiplayer?perf=1`）で、state に
+`state_build_perf: { build_ms, upgrade_preview: { rows, clones, ready, not_upgradable, unavailable, elapsed_ms } }`
+を足す。`build_ms` は state 全体の構築時間、`elapsed_ms` はその内のプレビュー（複製と読取）の時間、
+`clones` は作った複製の数（`ready` と、複製後に失敗した `unavailable`）。既定では出さない。
+raw JSON のバイト数は、`perf` を付けない通常の読取の応答の大きさで測る。
+
+出典（v0.113.1、`sts2-a671e9ef` デコンパイル）: `CardCmd.Upgrade(IEnumerable<CardModel>, CardPreviewStyle)`、
+`CardModel.UpgradeInternal` / `FinalizeUpgradeInternal` / `DeepCloneFields` / `AfterCloned` / `EnchantInternal` /
+`AfflictInternal` / `CurrentUpgradeLevel` / `MaxUpgradeLevel` / `IsUpgradable` / `GetKeywordsWithSources` /
+`Keywords` / `ShouldRetainThisTurn` / `UpgradePreviewType` / `CombatState` / `GetDescriptionForPile` /
+`UpgradeStarCostBy`、`AbstractModel.MutableClone`、`EnchantmentModel.DeepCloneFields` / `ApplyInternal`、
+`AfflictionModel.AfterCloned` / `Amount`、`CardEnergyCost.UpgradeBy` / `Clone` / `GetWithModifiers`、
+`DynamicVar.Clone` / `UpgradeValueBy`、`CombatStateTracker.Subscribe`、`NCard.SubscribeToModel`、
+`NUpgradePreview.Reload`、`HexPower.TryModifyKeywordsInCombat`、`PhantomBladesPower.TryModifyKeywordsInCombat`、
+`FreeAttackPower.TryModifyEnergyCostInCombatLate`、`DingyDagger.MaxUpgradeLevel` / `OnUpgrade`、
+`Apparition.OnUpgrade`、`Wound` / `Dazed` / `AscendersBane.MaxUpgradeLevel`。
+全札の `OnUpgrade` は数値変数・エネルギーコスト・キーワード（と `ShowOff.UpdateAim` の自分の欄）だけを変える。
+[CombatUpgradePreviewContract](../tests/CombatUpgradePreviewContract/README.md)
 
 ### 戦闘カードの uid とパイル順序
 
@@ -863,7 +998,7 @@ round 1 の途中から保存して終了 → continue したとき、初手の�
 
 利用側は uid を不透明な文字列として照合する。旧 fixture・dump の具体的な番号は
 新しい MOD と異なる場合があるため、必要な観測は新しい MOD で取り直す。
-`schema_version` は **4**。
+この採番は schema 4 で入れた（追加時に版は上げていない）。
 
 出典は v0.113.0（`sts2-d009478a`）の `NCardPileScreen.OnPileContentsChanged`、
 `CardModel.CompareTo`、`NCardGrid.SetCards`。戦闘開始時は

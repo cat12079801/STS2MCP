@@ -19,7 +19,7 @@ X の CapturedXValue の0・正数・更新と snapshot の独立、非 X／種�
 呼ばず理由付き null にすること、新規 getter／raw計算の失敗時の独立性・warnings・wire null も確認する。Play Pile の節は件数が1以上で表示し、
 欠落・負数・0では省略すること、他のパイルの節と JSON は変えないことも確認する。
 巨大な state builder はリンクせず、本番ソースの文字列検査で手札・4パイル・
-マルチの共通経路、非戦闘の除外、schema 4 を確認する。
+マルチの共通経路、非戦闘の除外、schema 5 を確認する。
 grid の戦闘条件・全行への追加と Markdown の配線は `tests/CardSelectContract` で検証する。
 
 ゲームのコスト計算は設定済みの結果を返す境界ダブル。ゲームの計算アルゴリズムは複製しない。

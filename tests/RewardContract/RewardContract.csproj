@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../Rewards/RewardSession.cs" Link="RewardSession.cs" />
     <Compile Include="../../McpMod.RewardFormatting.cs" Link="RewardFormatting.cs" />
+    <Compile Include="../../McpMod.UpgradePreviewFormatting.cs" Link="UpgradePreviewFormatting.cs" />
   </ItemGroup>
 </Project>

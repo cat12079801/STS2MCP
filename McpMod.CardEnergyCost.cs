@@ -9,9 +9,14 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
+    internal const string DetachedPreviewContext = "detached_preview_context";
+
     // sts2-d009478a: CardEnergyCost.GetWithModifiers and LocalCostModifier.
     // Read the live ordered list, never reconstruct modifiers from card/play history.
-    private static Dictionary<string, object?> BuildCardEnergyCostState(CardModel card)
+    // detachedPreview: the card is a pileless upgrade-preview clone (McpMod.CombatUpgradePreview).
+    // Global modifiers depend on the real pile (FreeAttackPower.TryModifyEnergyCostInCombatLate
+    // checks Hand/Play), so with_all_modifiers is not computed for it.
+    private static Dictionary<string, object?> BuildCardEnergyCostState(CardModel card, bool detachedPreview = false)
     {
         var reasons = new Dictionary<string, string>();
         var state = new Dictionary<string, object?>
@@ -75,7 +80,10 @@ public static partial class McpMod
             // Use the game's own calculation, including its ordering/reduceOnly/clamp.
             // A failed reflection read must not hide still-readable public cost values.
             ReadEnergyCostValue(state, reasons, "with_local_modifiers", () => cost.GetWithModifiers(CostModifiers.Local));
-            ReadEnergyCostValue(state, reasons, "with_all_modifiers", () => cost.GetWithModifiers(CostModifiers.All));
+            if (detachedPreview)
+                reasons["with_all_modifiers"] = DetachedPreviewContext;
+            else
+                ReadEnergyCostValue(state, reasons, "with_all_modifiers", () => cost.GetWithModifiers(CostModifiers.All));
         }
         return state;
     }

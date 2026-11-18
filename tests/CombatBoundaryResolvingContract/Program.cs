@@ -104,7 +104,7 @@ namespace STS2_MCP
             Check(stateSource.Contains("combatRoom.Encounter.ShouldGiveRewards"), "reads whether the encounter gives rewards");
 
             var modSource = File.ReadAllText(Path.Combine(sources, "McpMod.cs"));
-            Check(modSource.Contains("public const int StateSchemaVersion = 4;"), "published schema remains 4");
+            Check(modSource.Contains("public const int StateSchemaVersion = 5;"), "published schema is 5 (sts2#1003)");
             int settled = modSource.IndexOf("internal static bool IsSettledState(", StringComparison.Ordinal);
             Check(settled >= 0, "IsSettledState exists");
             string settledBody = modSource[settled..modSource.IndexOf("internal static string StateFingerprint(", settled, StringComparison.Ordinal)];

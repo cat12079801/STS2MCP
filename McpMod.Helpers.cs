@@ -63,8 +63,10 @@ public static partial class McpMod
 
         try
         {
+            // A live card's MutableClone notifies its enchantment/affliction listeners
+            // (CardModel.DeepCloneFields); the isolated clone does not.
             var preview = card.IsMutable
-                ? (CardModel)card.MutableClone()
+                ? CreateIsolatedMutableClone(card)
                 : card.ToMutable();
             preview.UpgradeInternal();
             return preview;

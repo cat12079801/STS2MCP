@@ -38,13 +38,13 @@ action は画面外の index 30、具体 override への一回のモデル引き
 
 ゲームのモデル・ノード・combat registry・カード情報作成・強化プレビュー作成は境界ダブル。
 実ゲームのソート、描画、ハイライト、シグナル、効果適用、uid の registry 本体を動かした証拠にはならない。
-schema 4、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
+schema 5、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
 巨大な state/action 全体をリンクせず、ビルド出力へコピーした本番ソースへの文字列検査で確認する。
 choose は formatter の即時選択案内・見出しを検査し、choose action / bundle / 手札の統合回帰は実機で行う。
 
 実機は調整役が次を確認する（本試験はゲームや MOD API に接続しない）。
 
-1. 35 枚の全札が除去可能なデッキで EMPTY_CAGE を開き、schema 4、35 候補、index 0–34 を確認。
+1. 35 枚の全札が除去可能なデッキで EMPTY_CAGE を開き、schema 5、35 候補、index 0–34 を確認。
    先頭・中央・末尾へのスクロールと hover 後も候補順・件数・選択印が同じか照合する。
 2. 最上部のまま index 30 を選択・解除。再選択して対象までスクロールし、ハイライトを確認。
    別札を加えた 2 枚プレビューで追加 select が拒否され、cancel で解除されることを確認。

@@ -14,7 +14,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/bi
 - 参照・ログ・末尾・各 ID の不在、空ログ、各 getter の例外。項目別の null・理由・個体別 warnings と成功項目の保持。
 - 四値の型・欠落・null に対する純粋な readable 判定。空文字列の FollowUpStateId は初期状態への遷移指定なので保持。
 - 反復読取の不変性、前回 snapshot の独立性、次回取得での復旧、JSON の bool / null と warnings。
-- Markdown の ID・follow-up・読取不能の理由。全敵・協力プレイ・表示への配線と schema 4 の維持はソース文字列で確認。
+- Markdown の ID・follow-up・読取不能の理由。全敵・協力プレイ・表示への配線と現行の schema 5 をソース文字列で確認。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `MonsterModel.NextMove/MoveStateMachine/SetMoveImmediate`、
 `MoveState.Id/FollowUpState/FollowUpStateId/CanTransitionAway/GetNextState`、

@@ -20,8 +20,9 @@
 
 - **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない）。現在は `4`。
-  2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）
+- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない）。現在は `5`。
+  2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
+  5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
@@ -60,7 +61,10 @@
 ## 戦闘
 
 - **`vs_targets`**: 手札の敵対象カードに、敵ごとの解決後ダメージ・ヒット数・その敵向けの本文を出す（弱体・脱力・筋力込み。UI のホバーと同じ経路）（#37・#42）
-- **手札の `upgrade_preview`**: 手札を強化できる手段があるターンだけ、手札の各札に強化後の本文・コストを付ける（#58）
+- **戦闘の `upgrade_preview`（手札と全パイル）**: すべての行に、その札そのものを1段強化した結果を `status`（`ready` / `not_upgradable` / `unavailable`）付きで出す。
+  `ready` は隔離した複製に `UpgradeInternal` → `FinalizeUpgradeInternal` を当てた絶対値（数値変数の BaseValue・型・対象・キーワード〔local と実効〕・`energy_cost`・`star_cost_state`・付与）。
+  複製は現物の購読を外した浅いコピーから作り、UID・パイル・履歴・乱数に触れない。行には `upgrade_level` / `max_upgrade_level` / `local_keyword_ids` / `keyword_ids` / `retain_this_turn` / `single_turn_retain` も出す。
+  `?perf=1` で構築時間と複製数を返す。[入力契約と出典](raw-full.md#戦闘の強化結果upgrade_previewschema-5)（`cat12079801/sts2#1003`）
 - **札の詳細（手札と全パイル共通）**:
   - `type` / `target_type`、`affliction`、`enchantment`（`{id, amount, status}`。モメンタムは `extra_damage` も）、`dynamic_vars`（現在の `BaseValue`）（#77・#83）
   - `is_upgraded` / `is_upgradable`、`tags`、パイルにも `can_play` / `unplayable_reason`（#82）
@@ -105,7 +109,7 @@
 ## 戦闘外の画面
 
 - **デッキ**: 戦闘外の全画面で `player.deck`、全画面で `deck_count`（#49）
-- **`upgrade_preview`**: 強化画面・強化モードの `hand_select`・`card_reward` のカードに強化後の本文・コスト（#44）
+- **`upgrade_preview`**: 強化画面・強化モードの `hand_select`・`card_reward` のカードに強化後の本文・コスト（#44）。`status` は持たない（戦闘の行の契約とは別）。現物の札から作る複製も、戦闘と同じく購読を外して作る
 - **デッキからのカード選択（`card_select`）**:
   - 候補と `select_card` の index は画面の全候補（`NCardGrid._cards`）から作る。画面外の札も選べる（#73）
   - `cards[].selected` / `selected_count` / `required_count` / `min_select` / `max_select` と `screen_type` を出す。`select_card` はトグル。
@@ -144,4 +148,4 @@
 
 ## 試験
 
-- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・uid・カード選択・戦闘中の choose-a-card・敵に当てられるか・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中）
+- `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・戦闘の強化結果・uid・カード選択・戦闘中の choose-a-card・敵に当てられるか・戦闘の履歴・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中）

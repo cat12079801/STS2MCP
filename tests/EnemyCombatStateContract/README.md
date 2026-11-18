@@ -22,7 +22,7 @@ move の実行・`TriggerAboutToBlowState`・乱数・Ascension の判定は用�
 - 読取失敗の形（null・`unavailable_reasons`・個体と項目を識別する warnings・Markdown の理由）は、
   共通の `ReadInternalStateValue` / `ReadDeclaredStateField` に欠落フィールド・型違いを与えて確認する
   （本番の `WaterfallGiant` は sealed で、同じ型に壊れたフィールドを持たせた二重は作れないため）。
-- 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・schema 4 の維持はソース文字列で確認。
+- 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・現行の schema 5 をソース文字列で確認。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `WaterfallGiant._isAboutToBlow` / `_steamEruptionDamage`、
 `WaterfallGiant.TriggerAboutToBlowState` / `AboutToBlowMove` / `ExplodeMove`、`SteamEruptionPower.AfterDeath`、

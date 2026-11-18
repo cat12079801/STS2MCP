@@ -80,7 +80,7 @@ namespace STS2_MCP
             Check(body.Contains("!combat.IsStarting && !combat.IsOverOrEnding"), "combat start/end keep their own reasons");
 
             var modSource = File.ReadAllText(Path.Combine(sources, "McpMod.cs"));
-            Check(modSource.Contains("public const int StateSchemaVersion = 4;"), "published schema remains 4");
+            Check(modSource.Contains("public const int StateSchemaVersion = 5;"), "published schema is 5 (sts2#1003)");
             int settled = modSource.IndexOf("internal static bool IsSettledState(", StringComparison.Ordinal);
             Check(settled >= 0 && modSource.IndexOf("state.TryGetValue(\"is_resolving\"", settled, StringComparison.Ordinal) > settled,
                 "POST wait still settles on is_resolving");

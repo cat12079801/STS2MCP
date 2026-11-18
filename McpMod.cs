@@ -46,8 +46,14 @@ public static partial class McpMod
     ///
     /// 4: card_select.cards and select_card indices cover all grid candidates in display
     ///    order, independent of scrolling; selected_outside_grid is removed.
+    ///
+    /// 5: combat rows (player.hand and the draw/discard/exhaust/play piles) always carry
+    ///    upgrade_preview with a status (ready / not_upgradable / unavailable). It used to be a
+    ///    hand-only display object present only when an upgrade card was in reach, and absent
+    ///    for "cannot upgrade" and "failed" alike; ready now holds the clone's machine-readable
+    ///    absolute values (sts2#1003). Out-of-combat previews keep their shape.
     /// </summary>
-    public const int StateSchemaVersion = 4;
+    public const int StateSchemaVersion = 5;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";
@@ -534,7 +540,8 @@ public static partial class McpMod
 
         try
         {
-            var state = RunOnMainThreadBlocking(() => BuildMultiplayerGameState());
+            bool perf = ReadFlagParam(new Dictionary<string, JsonElement>(), request, "perf", false);
+            var state = RunOnMainThreadBlocking(() => BuildStateMeasured(BuildMultiplayerGameState, perf));
 
             if (format == "markdown")
             {
@@ -656,10 +663,12 @@ public static partial class McpMod
             // merchant inventory, force-clicking the fake merchant / treasure chest). A watcher that
             // polls the state while a human plays must not reopen what the human just closed.
             bool passive = ReadFlagParam(new Dictionary<string, JsonElement>(), request, "passive", false);
+            // ?perf=1: add state_build_perf (build time, combat upgrade preview clones/time).
+            bool perf = ReadFlagParam(new Dictionary<string, JsonElement>(), request, "perf", false);
             var state = RunOnMainThreadBlocking(() =>
             {
                 _passiveRead = passive;
-                try { return BuildGameState(); }
+                try { return BuildStateMeasured(BuildGameState, perf); }
                 finally { _passiveRead = false; }
             });
 
