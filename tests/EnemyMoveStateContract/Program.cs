@@ -29,6 +29,7 @@ public static partial class McpMod
         var move = new MoveState { IdValue = id, FollowUpIdValue = follow };
         model.Move = move;
         model.Machine = new MonsterMoveStateMachine { Log = [new MoveState { IdValue = id }] };
+        model.Machine.States[id] = move;
         // 状態機械の現在地点は NextMove と同じ行動、初期地点は別の分岐状態（Nibbit の INIT_MOVE のように）。
         model.Machine.SetInternals(move, new MonsterState { IdValue = "INIT_MOVE" }, true);
         return model;
@@ -81,7 +82,7 @@ public static partial class McpMod
         Check(json.RootElement.GetProperty("warnings").GetArrayLength() == expected.Count, "warnings を応答に付ける");
     }
 
-    private static readonly string[] MachineInputs = ["current_state_id", "initial_state_id", "performed_first_move", "state_log"];
+    private static readonly string[] MachineInputs = ["current_state_id", "current_state_registered", "initial_state_id", "performed_first_move", "state_log"];
     private static readonly string[] MoveInputs = ["has_follow_up", "must_perform_once", "is_stun", "stun_handler"];
 
     private static List<(string Id, bool IsMove)> Log(Dictionary<string, object?> state)
@@ -107,7 +108,7 @@ public static partial class McpMod
                 "全モンスターで参照先 ID を優先し、不要な fallback getter を読まない");
             Check(Equals(state["last_logged_id"], id) && state["can_transition_away"] is true, "ログ末尾と遷移可否");
             Check(state["inputs_readable"] is true && state["has_follow_up"] is true && state["must_perform_once"] is false
-                && Equals(state["current_state_id"], id) && Equals(state["initial_state_id"], "INIT_MOVE")
+                && Equals(state["current_state_id"], id) && state["current_state_registered"] is true && Equals(state["initial_state_id"], "INIT_MOVE")
                 && state["performed_first_move"] is true && state["spawned_this_turn"] is false
                 && state["is_stun"] is false && state.ContainsKey("stun_handler") && state["stun_handler"] == null,
                 "追加項目: follow-up の有無・ロック・現在地点・初期地点・初回実行・召喚直後・非スタン");
@@ -130,7 +131,8 @@ public static partial class McpMod
         Check(Log(histState).SequenceEqual([("BUTT_MOVE", true), ("SLICE_MOVE", true), ("BRANCH", false), ("BUTT_MOVE", true), ("SLICE_MOVE", true)]),
             "ログの順序・重複・is_move を保持");
         Check(Equals(histState["current_state_id"], "RAND") && Equals(histState["initial_state_id"], "SLICE_MOVE")
-            && histState["performed_first_move"] is false && histState["spawned_this_turn"] is true, "現在地点が分岐・初回未実行・召喚直後");
+            && histState["performed_first_move"] is false && histState["spawned_this_turn"] is true
+            && histState["current_state_registered"] is false, "現在地点が分岐（未登録）・初回未実行・召喚直後");
         Check(Markdown(histState) == "**Move:** `SLICE_MOVE` | follow-up: `HISS_MOVE` | log(5): … `SLICE_MOVE` > `BRANCH` > `BUTT_MOVE` > `SLICE_MOVE`",
             "長いログは末尾 4 件と件数");
 
@@ -166,7 +168,8 @@ public static partial class McpMod
             && Equals(locked["last_logged_id"], "CURL_AND_GROW_MOVE")
             && Equals(locked["follow_up_id"], "EXPLICIT_RETURN"), "スタンの明示復帰先・実ログ末尾・false を個別に保持");
         Check(locked["is_stun"] is true && Equals(locked["stun_handler"], "CreatureCmd.Stun.no_op") && locked["must_perform_once"] is true
-            && locked["inputs_readable"] is true, "通常スタン（no-op の lambda）を IL で照合");
+            && locked["inputs_readable"] is true && Equals(locked["current_state_id"], "STUNNED") && locked["current_state_registered"] is false,
+            "通常スタン（no-op の lambda）を IL で照合。強制遷移した動的な STUNNED は未登録");
         Check(Markdown(locked) == "**Move:** `STUNNED` | follow-up: `EXPLICIT_RETURN` | stun: `CreatureCmd.Stun.no_op` | log(1): `CURL_AND_GROW_MOVE`",
             "スタンの ID・復帰先・処理");
         stunned.Move!.TransitionValue = true;
@@ -197,9 +200,9 @@ public static partial class McpMod
         var matriarch = Prepare(new LagavulinMatriarch(), "SLEEP_MOVE", "SLEEP_MOVE");
         matriarch.StunSelf();
         var slug = Model("GLOMP_MOVE", "GOOP_MOVE");
-        new RavenousPower().StunOwner(slug.Creature);
+        new RavenousPower { Owner = slug.Creature }.StunOwner(slug.Creature);
         var hopper = Model("HOVER_MOVE", "FLUTTER_MOVE");
-        new FlutterPower().StunOwner(hopper.Creature, "NAB_MOVE");
+        new FlutterPower { Owner = hopper.Creature }.StunOwner(hopper.Creature, "NAB_MOVE");
         foreach (var (model, handler) in new (MonsterModel, string)[]
         {
             (rock, "BowlbugRock.DizzyMove"), (tunneler, "Tunneler.StillDizzyMove"), (beast, "CeremonialBeast.StunnedMove"),
@@ -233,6 +236,27 @@ public static partial class McpMod
         Failure(crossed, [], ["stun_handler"]);
         Check(Reasons(crossed)["stun_handler"].Contains("Target がこの個体ではありません"), "敵のメソッドの Target を照合");
 
+        // STUNNED なのに Wrapper ではない delegate（Wrapper の形が変わった版）は is_stun を未観測にする。
+        var fakeStun = Model("STUNNED", "BITE_MOVE");
+        var fakeState = Read(fakeStun);
+        Failure(fakeState, [], ["is_stun", "stun_handler"]);
+        Check(Reasons(fakeState)["is_stun"].Contains("Wrapper の形が既知と違います"), "STUNNED と Wrapper の食い違いは null と理由");
+        // Wrapper ではない通常の行動は is_stun=false のまま。
+        Check(Read(Model("BITE_MOVE", "BITE_MOVE"))["is_stun"] is false && _stateWarnings.Count == 0, "通常の行動は is_stun=false");
+        // 逆向き: Wrapper なのに ID が STUNNED ではない。
+        var renamed = Model();
+        CreatureCmd.Stun(renamed.Creature, "BITE_MOVE");
+        renamed.Move!.IdValue = "OTHER_MOVE";
+        var renamedState = Read(renamed);
+        Failure(renamedState, [], ["is_stun", "stun_handler"]);
+        Check(Reasons(renamedState)["is_stun"].Contains("STUNNED ではありません"), "Wrapper と ID の食い違いは null と理由");
+        // パワーの処理は、パワーの所有者がこの個体か照合する。
+        var slugB = Model("GLOMP_MOVE", "GOOP_MOVE");
+        new RavenousPower { Owner = Model().Creature }.StunOwner(slugB.Creature);
+        var ownerState = Read(slugB);
+        Failure(ownerState, [], ["stun_handler"]);
+        Check(Reasons(ownerState)["stun_handler"].Contains("所有者がこの個体ではありません"), "パワーの所有者を照合");
+
         // 読取失敗。四値の readable と追加項目の inputs_readable は別に決まる。
         Failure(Read(null), Keys, EnemyMoveStateInputKeys);
         var missingMove = Model();
@@ -261,7 +285,7 @@ public static partial class McpMod
         }
         foreach (var (getter, key, inputs) in new (string, string, string[])[]
         {
-            ("Id", "id", ["current_state_id"]), ("FollowUpState", "follow_up_id", ["has_follow_up"]), ("FollowUpStateId", "follow_up_id", ["has_follow_up"]),
+            ("Id", "id", ["current_state_id", "current_state_registered", "is_stun", "stun_handler"]), ("FollowUpState", "follow_up_id", ["has_follow_up"]), ("FollowUpStateId", "follow_up_id", ["has_follow_up"]),
             ("CanTransitionAway", "can_transition_away", [])
         })
         {
@@ -274,7 +298,7 @@ public static partial class McpMod
         {
             ("must_perform", ["must_perform_once"], m => m.Move!.Fail.Add(nameof(MoveState.MustPerformOnceBeforeTransitioning))),
             ("spawned", ["spawned_this_turn"], m => m.ThrowSpawned = true),
-            ("current_null", ["current_state_id"], m => m.Machine!.SetInternals(null, m.Move, true)),
+            ("current_null", ["current_state_id", "current_state_registered"], m => m.Machine!.SetInternals(null, m.Move, true)),
             ("initial_id_null", ["initial_state_id"], m => m.Machine!.SetInternals(m.Move, new MonsterState(), true)),
             ("middle_entry", ["state_log"], m => m.Machine!.Log!.Insert(0, new MonsterState { IdValue = "A", Fail = { nameof(MonsterState.IsMove) } })),
         })
@@ -285,6 +309,13 @@ public static partial class McpMod
             Failure(s, [], inputs);
             Check(s["readable"] is true, $"{name}: 四値の readable は保つ");
         }
+        // 登録済みと同じ ID 文字列の別の状態（動的に作られた状態）は未登録として区別する。
+        var sameId = Model();
+        sameId.Machine!.SetInternals(new MoveState { IdValue = "WEB_CANNON_MOVE" }, sameId.Move, true);
+        var sameIdState = Read(sameId);
+        Check(Equals(sameIdState["current_state_id"], "WEB_CANNON_MOVE") && sameIdState["current_state_registered"] is false
+            && sameIdState["inputs_readable"] is true && _stateWarnings.Count == 0, "同じ ID でも参照が違えば current_state_registered=false");
+
         // 二度の読取の間にログが変われば、末尾と last_logged_id の不一致として全体を未観測にする。
         var racing = Model();
         int reads = 0;
@@ -295,7 +326,7 @@ public static partial class McpMod
 
         var noId = Model();
         noId.Move!.IdValue = null;
-        Failure(Read(noId), ["id"], ["current_state_id"]);
+        Failure(Read(noId), ["id"], ["current_state_id", "current_state_registered", "is_stun", "stun_handler"]);
         var brokenRef = Model();
         brokenRef.Move!.FollowUpValue = new MonsterState { IdValue = "RETURN" };
         brokenRef.Move.FollowUpValue.Fail.Add(nameof(MonsterState.Id));

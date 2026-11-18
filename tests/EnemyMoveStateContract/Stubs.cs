@@ -46,6 +46,7 @@ namespace MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine
         private MonsterState? _initialState;
         private bool _performedFirstMove;
 
+        public Dictionary<string, MonsterState> States { get; } = new();
         public List<MonsterState>? Log { get; set; } = new();
         public bool ThrowLog { get; set; }
         public Action? OnLogRead { get; set; }
@@ -68,6 +69,9 @@ namespace MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine
             _performedFirstMove = performedFirstMove;
         }
 
+        // 本体の ForceCurrentState（SetMoveImmediate から）: 現在地点だけを差し替え、ログには足さない。
+        public void ForceCurrentState(MonsterState state) => _currentState = state;
+
         public (MonsterState?, MonsterState?, bool) PeekInternals() => (_currentState, _initialState, _performedFirstMove);
     }
 }
@@ -84,13 +88,16 @@ namespace MegaCrit.Sts2.Core.Entities.Creatures
         {
             if (string.IsNullOrEmpty(nextMoveId))
                 nextMoveId = Monster!.Machine!.Log!.Last().Id;
-            Monster!.Move = new MoveState(stunMove)
+            var state = new MoveState(stunMove)
             {
                 IdValue = "STUNNED",
                 FollowUpIdValue = nextMoveId,
                 TransitionValue = false,
                 MustPerformValue = true
             };
+            // 本体の MonsterModel.SetMoveImmediate → MonsterMoveStateMachine.ForceCurrentState。
+            Monster!.Move = state;
+            Monster.Machine?.ForceCurrentState(state);
         }
     }
 }
@@ -122,6 +129,7 @@ namespace MegaCrit.Sts2.Core.Models
 
     public class MonsterModel
     {
+        public const string stunnedMoveId = "STUNNED";
         public MonsterModel() => Creature = new Creature { Monster = this };
         public Creature Creature { get; set; }
         public MoveState? Move { get; set; }
@@ -136,6 +144,12 @@ namespace MegaCrit.Sts2.Core.Models
             ? throw new InvalidOperationException("MoveStateMachine 読取失敗") : Machine;
         public bool SpawnedThisTurn => ThrowSpawned
             ? throw new InvalidOperationException("SpawnedThisTurn 読取失敗") : SpawnedValue;
+    }
+
+    // 本体の PowerModel.Owner は AssertMutable の後 _owner を返す getter。
+    public class PowerModel
+    {
+        public Creature? Owner { get; set; }
     }
 }
 
@@ -179,13 +193,13 @@ namespace MegaCrit.Sts2.Core.Models.Powers
 {
     using Commands;
 
-    public sealed class RavenousPower
+    public sealed class RavenousPower : PowerModel
     {
         public Task StunOwner(Creature owner) => CreatureCmd.Stun(owner, StunnedMove);
         private Task StunnedMove(IReadOnlyList<Creature> targets) => Task.CompletedTask;
     }
 
-    public sealed class FlutterPower
+    public sealed class FlutterPower : PowerModel
     {
         public Task StunOwner(Creature owner, string next) => CreatureCmd.Stun(owner, StunnedMove, next);
         private Task StunnedMove(IReadOnlyList<Creature> targets) => Task.CompletedTask;

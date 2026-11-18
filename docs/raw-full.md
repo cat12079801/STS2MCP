@@ -1743,6 +1743,7 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
   "has_follow_up": true,
   "must_perform_once": true,
   "current_state_id": "STUNNED",
+  "current_state_registered": false,
   "initial_state_id": "SLEEP_MOVE",
   "performed_first_move": true,
   "spawned_this_turn": false,
@@ -1758,12 +1759,13 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
 | `has_follow_up` | `NextMove.FollowUpState?.Id ?? NextMove.FollowUpStateId`（`MoveState.GetNextState` と同じ式）が null でないか。false は「次の行動が無い」終端の実値（`GasBomb.EXPLODE_MOVE`）。空文字列の follow-up（初期地点へ戻る）は true |
 | `must_perform_once` | `NextMove.MustPerformOnceBeforeTransitioning`。true の間、`CanTransitionAway` は実行済みフラグを返す（スタン・`CeremonialBeast.STUN_MOVE` など） |
 | `current_state_id` | private `MonsterMoveStateMachine._currentState.Id`。状態機械の現在地点で、分岐状態（`ConditionalBranchState` / `RandomBranchState`）のこともある。実行予定の `id`（`NextMove`）とは別に保持する |
+| `current_state_registered` | 現在地点が `MonsterMoveStateMachine.States` に登録された状態そのものか（`States.TryGetValue(current_state_id)` で得た参照と `_currentState` が同じ参照）。false は `SetMoveImmediate` → `ForceCurrentState` で入った動的な状態（`STUNNED`、`IllusionPower` の `REVIVE_MOVE` など）か、登録外の分岐状態。同じ ID 文字列だけで登録済みの状態と同一視しないための値 |
 | `initial_state_id` | private `MonsterMoveStateMachine._initialState.Id`。`FindNextMoveState` は空文字列の follow-up をここへの遷移として扱う。`Chomper._screamFirst`・`CorpseSlug._starterMoveIdx` などの初期地点の選択はこの値で読める |
 | `performed_first_move` | private `MonsterMoveStateMachine._performedFirstMove`。`OnMovePerformed` で true。false の間、現在地点が `MoveState` なら `FindNextMoveState` は遷移しない（最初の行動の保持） |
 | `spawned_this_turn` | `MonsterModel.SpawnedThisTurn`。`SetUpForCombat` で true、`OnSideSwitch` で false。`Creature.TakeTurn` は true の敵の行動を飛ばす |
 | `state_log` | `MonsterMoveStateMachine.StateLog` の全要素を順序・重複のまま `{id, is_move}`（`MonsterState.Id` / `IsMove`）で。`RandomBranchState` の `UseOnlyOnce` は全ログ、`CannotRepeat` / `CanRepeatXTimes` は末尾の連続、cooldown は `is_move` の要素だけを末尾から数える。空配列 `[]` はログが本当に空（分岐状態から始まり未抽選）という実値で、`last_logged_id` の読取失敗（空）と区別する。要素が一つでも読めなければ全体を `null`（途中までの配列は返さない）。末尾が `last_logged_id` と一致しなければ `null` と理由 |
-| `is_stun` | `NextMove` の private `MoveState._onPerform` が `CreatureCmd.Stun` のローカル関数 Wrapper（v0.113.1 では `CreatureCmd+<>c__DisplayClass30_0.<Stun>g__Wrapper\|0`）か。`Creature.StunInternal` が `STUNNED` に入れる delegate。false は「スタンではない」実値 |
-| `stun_handler` | `is_stun` のとき、Wrapper が捕捉した `stunMove`（宣言型と delegate 型を検査して読む。呼ばない）を許可リストの名前に対応付ける。`CreatureCmd.Stun.no_op`（引数なしの `CreatureCmd.Stun` の `_ => Task.CompletedTask`。宣言型が `CreatureCmd` の入れ子で IL が `call Task.get_CompletedTask; ret` だけであることを確かめる）、`BowlbugRock.DizzyMove`、`SlumberingBeetle.WakeUpMove`、`Tunneler.StillDizzyMove`、`CeremonialBeast.StunnedMove`、`LagavulinMatriarch.WakeUpMove`、`RavenousPower.StunnedMove`、`FlutterPower.StunnedMove`。Wrapper の `creature` がこの個体でない・敵のメソッドの Target がこの個体でない・許可リストに無い delegate は `null` と理由（未観測）。`is_stun=false` なら理由なしの `null`。同じ復帰先（例: `ROLL_OUT_MOVE`）でも通常のスタンと起床はこの値で区別し、復帰 ID の一致では起床扱いにしない |
+| `is_stun` | `NextMove` の private `MoveState._onPerform` が `CreatureCmd.Stun` のローカル関数 Wrapper（v0.113.1 では `CreatureCmd+<>c__DisplayClass30_0.<Stun>g__Wrapper\|0`）か。`Creature.StunInternal` が `STUNNED` に入れる delegate。false は「スタンではない」実値。v0.113.1 で `MonsterModel.stunnedMoveId`（`STUNNED`）を使うのは `StunInternal` だけなので、`id` が `STUNNED` なのに Wrapper と判定できない（Wrapper の名前・形が変わった版）とき、また Wrapper なのに `id` が `STUNNED` でないときは、false にせず `null` と理由（未観測） |
+| `stun_handler` | `is_stun` のとき、Wrapper が捕捉した `stunMove`（宣言型と delegate 型を検査して読む。呼ばない）を許可リストの名前に対応付ける。`CreatureCmd.Stun.no_op`（引数なしの `CreatureCmd.Stun` の `_ => Task.CompletedTask`。宣言型が `CreatureCmd` の入れ子で IL が `call Task.get_CompletedTask; ret` だけであることを確かめる）、`BowlbugRock.DizzyMove`、`SlumberingBeetle.WakeUpMove`、`Tunneler.StillDizzyMove`、`CeremonialBeast.StunnedMove`、`LagavulinMatriarch.WakeUpMove`、`RavenousPower.StunnedMove`、`FlutterPower.StunnedMove`。Wrapper の `creature` がこの個体でない・敵のメソッドの Target がこの個体でない・パワーの処理の所有者（`PowerModel.Owner`）がこの個体でない・許可リストに無い delegate は `null` と理由（未観測）。`is_stun=false` なら理由なしの `null`。同じ復帰先（例: `ROLL_OUT_MOVE`）でも通常のスタンと起床はこの値で区別し、復帰 ID の一致では起床扱いにしない |
 | `inputs_readable` | 上の項目がすべて読めたときだけ true |
 
 `stun_handler` の許可リストは、v0.113.1 で `CreatureCmd.Stun(creature, stunMove, nextMoveId)` に処理を渡す呼び出しの全件
@@ -1797,7 +1799,7 @@ Markdown の行動の行は、スタン中は `| stun: ` の後に処理の名�
 | 項目 | 読取元・意味 |
 | --- | --- |
 | `game_assembly_sha256` | ロードした本体 DLL 全体の SHA-256（`player.generation_pool.game_assembly_sha256` と同じ値）。行動表の版との照合用 |
-| `game_mode` | `CombatState.RunState.GameMode`（`Standard` / `Daily` / `Dread` / `Blitz`） |
+| `game_mode` | `CombatState.RunState.GameMode`（`Standard` / `Daily` / `Dread` / `Blitz`）。出典が戦闘の `RunState` なので、`RunManager.IsInProgress` に依らず読む（下の 3 項目と違い、ラン外でも null にしない） |
 | `is_dread` | `RunManager.IsDread()`（`AscensionHelper.IsDread` の参照先） |
 | `ascension_levels` | `AscensionLevel` の各値（`None` を除く）のうち `RunManager.HasAscension(level)` が true のものを列挙順で。`AscensionHelper.GetValueIfAscension` の参照先そのもの（Blitz の段階の対応 `GetLevelForBlitz` も含まれる）。`run.ascension` の数値から作らない |
 | `combat_player_count` | `CombatState.Players.Count`。`KnowledgeDemon.PonderMove`・`WaterfallGiant.SiphonMove` などが掛ける人数 |

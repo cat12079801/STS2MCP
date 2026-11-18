@@ -13,7 +13,7 @@ public static partial class McpMod
     // inputs_readable はこれらがすべて読めたときだけ true。
     internal static readonly string[] EnemyMoveStateInputKeys =
     [
-        "has_follow_up", "must_perform_once", "current_state_id", "initial_state_id",
+        "has_follow_up", "must_perform_once", "current_state_id", "current_state_registered", "initial_state_id",
         "performed_first_move", "spawned_this_turn", "state_log", "is_stun", "stun_handler"
     ];
 
@@ -63,6 +63,16 @@ public static partial class McpMod
         // 状態機械の現在地点（分岐状態のこともある）と、空文字列の follow-up で戻る初期地点。
         // 実行予定の NextMove とは別に保持する（SetMoveImmediate → ForceCurrentState で揃うが、別の参照）。
         Read("current_state_id", () => ReadMachineStateId(Machine(), "_currentState"));
+        // 現在地点が States に登録された状態そのものか。false は SetMoveImmediate → ForceCurrentState で入った動的な状態
+        // （STUNNED・IllusionPower の REVIVE_MOVE など）。同じ ID 文字列でも登録済みの状態と同一視しない。
+        Read("current_state_registered", () =>
+        {
+            var machine = Machine();
+            var current = ReadDeclaredStateField<MonsterState>(machine, typeof(MonsterMoveStateMachine), "_currentState");
+            var states = machine.States ?? throw new InvalidOperationException("MoveStateMachine.States がありません");
+            string id = current.Id ?? throw new InvalidOperationException("MonsterMoveStateMachine._currentState.Id が null です");
+            return states.TryGetValue(id, out var registered) && ReferenceEquals(registered, current);
+        });
         Read("initial_state_id", () => ReadMachineStateId(Machine(), "_initialState"));
         // FindNextMoveState は false の間、現在地点が MoveState なら遷移しない（最初の行動の保持）。
         Read("performed_first_move", () => ReadDeclaredStateField<bool>(Machine(), typeof(MonsterMoveStateMachine), "_performedFirstMove"));

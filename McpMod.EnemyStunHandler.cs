@@ -35,7 +35,8 @@ public static partial class McpMod
     // new MoveState("STUNNED", Wrapper, StunIntent) を NextMove にする。_onPerform.Method.Name だけでは
     // 通常のスタンと起床（SlumberingBeetle.WakeUpMove など）を区別できないので、Wrapper の捕捉した stunMove を
     // 宣言型・delegate 型を検査して読み、許可リストの処理に対応付ける。delegate は呼ばない。
-    // is_stun=false は「NextMove が CreatureCmd.Stun の Wrapper ではない」実値で、stun_handler は null。
+    // is_stun=false は「NextMove が CreatureCmd.Stun の Wrapper ではなく、ID も STUNNED ではない」実値で、stun_handler は null。
+    // Wrapper と ID（MonsterModel.stunnedMoveId）が食い違うときは is_stun も null と理由（未観測）。
     // is_stun=true で対応付けられない delegate は stun_handler=null と理由（未観測）。復帰 ID から推測しない。
     private static void AttachEnemyStunHandler(Dictionary<string, object?> state, MonsterModel? monster, string context)
     {
@@ -46,7 +47,18 @@ public static partial class McpMod
             var model = monster ?? throw new InvalidOperationException("Monster がありません");
             var move = model.NextMove ?? throw new InvalidOperationException("NextMove がありません");
             var onPerform = ReadDeclaredStateField<Func<IReadOnlyList<Creature>, Task>>(move, typeof(MoveState), "_onPerform");
-            state["is_stun"] = TryReadStunWrapper(onPerform, out inner, out captured);
+            bool wrapper = TryReadStunWrapper(onPerform, out inner, out captured);
+            // v0.113.1 では MonsterModel.stunnedMoveId（"STUNNED"）を使うのは Creature.StunInternal だけ。
+            // Wrapper の名前・形が変わった版で、スタン中に is_stun=false を実値として返さない（未観測に倒す）。
+            string id = move.Id ?? throw new InvalidOperationException("NextMove.Id が null です");
+            bool stunnedId = id == MonsterModel.stunnedMoveId;
+            if (!wrapper && stunnedId)
+                throw new InvalidOperationException(
+                    $"{MonsterModel.stunnedMoveId} だが CreatureCmd.Stun の Wrapper の形が既知と違います（{onPerform.Method.DeclaringType?.FullName ?? "?"}.{onPerform.Method.Name}）");
+            if (wrapper && !stunnedId)
+                throw new InvalidOperationException(
+                    $"CreatureCmd.Stun の Wrapper だが行動 ID が {MonsterModel.stunnedMoveId} ではありません（{id}）");
+            state["is_stun"] = wrapper;
         }
         catch (Exception ex)
         {
@@ -100,6 +112,9 @@ public static partial class McpMod
                 throw new InvalidOperationException($"{type.Name}.{name} の Target が {type.Name} ではありません");
             if (onMonster && !ReferenceEquals(target, monster))
                 throw new InvalidOperationException($"{type.Name}.{name} の Target がこの個体ではありません");
+            // パワーの処理は、そのパワーの所有者がこの個体か（PowerModel.Owner は AssertMutable の後 _owner を返す getter）。
+            if (!onMonster && (target is not PowerModel power || !ReferenceEquals(power.Owner, monster.Creature)))
+                throw new InvalidOperationException($"{type.Name}.{name} の所有者がこの個体ではありません");
             return $"{type.Name}.{name}";
         }
         throw new InvalidOperationException(

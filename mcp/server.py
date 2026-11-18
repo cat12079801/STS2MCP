@@ -183,7 +183,7 @@ async def get_game_state(format: str = "markdown") -> str:
     スタン時も実際の復帰先を読み、分岐先の事前抽選や履歴からの推測はしない。
     取得不能の項目は null・unavailable_reasons・warnings、旧 MOD の欠落は unknown。
     Markdown は行動 ID と follow-up を短く表示する（schema 4 のときの追加）。
-    schema 6 で move_state に has_follow_up・must_perform_once・current_state_id・initial_state_id・
+    schema 6 で move_state に has_follow_up・must_perform_once・current_state_id・current_state_registered・initial_state_id・
     performed_first_move・spawned_this_turn・state_log（[{id,is_move}] の全要素）・is_stun・stun_handler
     （CreatureCmd.Stun が包んだ処理。no-op か起床などの許可リストの名前）と inputs_readable を足した。
     敵の行に slot_name、battle に enemy_move_context（ascension_levels・is_dread・game_mode・
