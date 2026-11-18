@@ -1447,6 +1447,8 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 破壊（`Rend`）の倍率は対象の `Creature.Powers` のうち `Rend.ShouldCountPower` を満たすパワーの数
 （`power.TypeForCurrentAmount == PowerType.Debuff && !(power is ITemporaryPower)`。出典は v0.113.1 `sts2-a671e9ef`、
 `cat12079801/sts2#1034`）。その 2 つの入力を、player・敵・ペットのすべての `status[]` の行（`hidden_in_ui` の行・説明失敗時の最小行も）に付ける。
+`status[]` が `Creature.Powers` から落とす行は、`IsVisible` が false・`Amount` が 0・`TypeForCurrentAmount` が `Debuff` でない、の 3 つがそろう行だけ
+（`TypeForCurrentAmount` が読めない行も落とさない）。破壊が数えるパワーは、HUD に出なくても必ず `status[]` に出る。
 
 - `type_for_current_amount` — `PowerModel.TypeForCurrentAmount`（`GetTypeForAmount(Amount)`）の enum 名。
   `GetTypeForAmount` は、`StackType` が `Counter` で `AllowNegative` のパワーの負の量を `Debuff`、`AllowNegative` でない

@@ -856,6 +856,9 @@ public static partial class McpMod
         Check(Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = power.Type.ToString(),")
             && Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = SafeGetText(() => power.Type.ToString()),"),
             "status type stays PowerModel.Type in full and minimal rows (TypeForCurrentAmount is the new key)");
+        Check(Source("McpMod.StateBuilder.cs").Contains("if (!isVisible && !HasLiveStack(power) && !IsCurrentDebuffOrUnknown(power)) continue;")
+            && Source("McpMod.StateBuilder.cs").Contains("try { return power.TypeForCurrentAmount == MegaCrit.Sts2.Core.Entities.Powers.PowerType.Debuff; }\n        catch { return true; }"),
+            "only hidden, zero-amount rows that are not a current Debuff are dropped; an unreadable type keeps the row (sts2#1034)");
         Console.WriteLine($"PASS: {Checks} power/relic internal-state contract checks");
     }
 }

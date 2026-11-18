@@ -3681,7 +3681,9 @@ public static partial class McpMod
             bool visibilityKnown = true;
             try { isVisible = power.IsVisible; }
             catch (Exception ex) { Warn("status.is_visible", ex); isVisible = true; visibilityKnown = false; }
-            if (!isVisible && !HasLiveStack(power)) continue;
+            // sts2#1034: Rend counts a current Debuff over Creature.Powers whatever the HUD
+            // shows, so such a row is never dropped (nor one whose current type is unreadable).
+            if (!isVisible && !HasLiveStack(power) && !IsCurrentDebuffOrUnknown(power)) continue;
 
             // Per-power try/catch: HoverTips getter calls into game engine code
             // (LocString resolution, DynamicVars, virtual ExtraHoverTips) that can
@@ -3760,6 +3762,14 @@ public static partial class McpMod
             ["keywords"] = new List<string>()
         };
         return entry;
+    }
+
+    // True for PowerModel.TypeForCurrentAmount == Debuff, and when it cannot be read: the row is
+    // then kept and AttachPowerInternalState records the failure (null, reason, warning) on it.
+    private static bool IsCurrentDebuffOrUnknown(PowerModel power)
+    {
+        try { return power.TypeForCurrentAmount == MegaCrit.Sts2.Core.Entities.Powers.PowerType.Debuff; }
+        catch { return true; }
     }
 
     private static bool HasLiveStack(PowerModel power)

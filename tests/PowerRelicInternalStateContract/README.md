@@ -71,7 +71,7 @@ Data が null・フィールドの欠落・型違いは null・理由・warnings
 `Debuff` になること（Markdown に出る・snapshot の独立）、一時パワー（Debuff 型の `ManglePower`、Buff 型の `FlexPotionPower`・
 `SpeedPotionPower`）が非表示の行でも true、`type` と同じ値・false は Markdown に出さないこと、wire の文字列と bool、
 getter の失敗は `type` で補わず null・理由・warnings で他の項目を保持すること、読取が getter 1 回だけで Data・`_dynamicVars`・
-`Applier` に触れないことを検査する。ダブルは `GetTypeForAmount` を計算せず、ゲームが返す値を fixture が与える。
+`Applier` に触れないこと、`BuildPowersState` が非表示・量 0 でも現在の型が Debuff（または読めない）の行を落とさないこと（ソース文字列）を検査する。ダブルは `GetTypeForAmount` を計算せず、ゲームが返す値を fixture が与える。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること（破壊の入力は除く）、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。
