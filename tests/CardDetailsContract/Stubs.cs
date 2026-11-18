@@ -19,6 +19,10 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
         EnergyCostTooHigh = 0x10, StarCostTooHigh = 0x20, NoLivingAllies = 0x40
     }
     public enum CardTag { None, Strike, Defend, Minion, OstyAttack, Shiv, Wah, Cho, Ki, Shoot }
+    // Mirrors v0.113.1 KeywordSources ([Flags]: Local = 2, Global = 4, All = -1).
+    [Flags]
+    public enum KeywordSources { None = 0, Local = 2, Global = 4, All = -1 }
+    public enum CardKeyword { None, Exhaust, Ethereal, Innate, Unplayable, Retain, Sly, Eternal }
 }
 
 // Boundary doubles for game-owned getters. No game calculations or previews.
@@ -75,7 +79,25 @@ namespace MegaCrit.Sts2.Core.Models
         public bool IsUpgraded => Read("is_upgraded", UpgradeLevel > 0);
         public bool IsUpgradable => Read("is_upgradable", UpgradeLevel < MaxLevel);
         public IEnumerable<CardTag> Tags => Read("tags", TagSet);
+        // Boundary double of CardModel.GetKeywordsWithSources: Local is the card's own set,
+        // Global the keywords other models add in combat (HexPower's Ethereal on Hexed).
+        public HashSet<CardKeyword> LocalKeywordSet = [];
+        public HashSet<CardKeyword> GlobalKeywordSet = [];
+        public List<KeywordSources> KeywordReads = [];
+        public IReadOnlySet<CardKeyword> GetKeywordsWithSources(KeywordSources sources)
+        {
+            KeywordReads.Add(sources);
+            Read("local_ethereal", 0);
+            var result = new HashSet<CardKeyword>();
+            if (sources.HasFlag(KeywordSources.Local)) result.UnionWith(LocalKeywordSet);
+            if (sources.HasFlag(KeywordSources.Global)) result.UnionWith(GlobalKeywordSet);
+            return result;
+        }
     }
+}
+namespace MegaCrit.Sts2.Core.Models.Afflictions
+{
+    public sealed class Hexed : AfflictionModel { }
 }
 // Mirrors v0.113.1 MegaCrit.Sts2.Core.Models.Enchantments.Momentum: a private int _extraDamage
 // that OnPlay grows by Amount. The real class is sealed; the subclasses model a moved or retyped field.

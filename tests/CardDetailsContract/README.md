@@ -26,6 +26,12 @@ StringVar の除外、PreviewValue / EnchantedValue と区別した値の取得�
 フィールドの欠落・型違いで null・`enchantment.extra_damage` の理由・warnings と他項目の保持を検査する。
 他のエンチャントと災禍にキーが無いことも確かめる。
 
+呪詛（`Hexed`）の札の `local_ethereal` は、札自身に Ethereal が無く呪術の Global の Ethereal だけがある札で false、
+札自身に Ethereal がある札で true、読取は `KeywordSources.Local` だけ（Global のフックを通さない）・キーワードの集合を変えないこと、
+snapshot の独立、災禍なし・別の災禍・災禍の読取失敗の札にはキーが無くキーワードも読まないこと、
+災禍の amount の失敗でも保持されること、読取失敗の null・`local_ethereal` の理由・warnings と災禍の保持、
+Markdown の `local ethereal yes / no / null (理由)`、wire の bool・null と理由・省略を検査する。
+
 各 getter、添付モデルの ID / Amount、変数一覧の取得・列挙、要素の失敗で、
 null・パス別理由・warnings と、他項目の保持・復旧を検査する。
 CanPlay 内の対象 getter・カードロジックの失敗も手札の行に局所化する。
@@ -45,3 +51,6 @@ Markdown の配線、schema 5 を確認する。
 v0.113.0 の検証用ランで同じ uid の手札・山札・捨て札・廃棄札を照合し、
 Play pile は解決中の snapshot で確認する。
 ゲーム build・MOD commit・schema と前後の state を記録する。
+呪詛の `local_ethereal` は、呪術を受けた戦闘で、札自身にエセリアルが無い札（攻撃・防御など）が false、
+正準のキーワードにエセリアルを持つ札（めまい〔`Dazed`〕・アセンダーの災厄〔`AscendersBane`〕など。どちらも `CanonicalKeywords` に Ethereal と Unplayable を持ち、呪詛は `CanAfflictUnplayableCards` が既定の true なので付く）が true になること、
+呪術が外れた後（付与元の死亡）にその札から `HEXED` と呪術のエセリアルが消え、true の札だけ手番終了で廃棄されることを照合する。

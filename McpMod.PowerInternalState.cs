@@ -39,6 +39,12 @@ public static partial class McpMod
                 // minimal rows carry it too.
                 AttachVigorAttackState(state, power, context);
                 break;
+            case HexPower:
+                // HexPower.AfterDeath removes the power when the dying creature is
+                // PowerModel.Applier (unless removal was prevented), whatever IsVisible
+                // says, so every emitted row carries the applier.
+                AttachHexApplierState(state, power, context);
+                break;
         }
 
         // Hidden bookkeeping powers have no observable application history.
@@ -85,6 +91,29 @@ public static partial class McpMod
                 return uid;
             });
         }
+    }
+
+    // v0.113.1 (sts2-a671e9ef): PowerCmd.Apply sets PowerModel.Applier only on a new
+    // instance (HexPower keeps InstanceType None, so FindExistingInstanceForStacking sends a
+    // re-apply to ModifyAmount and the first applier stays); SpectralKnight.HexMove passes its own Creature. The id is the same
+    // Creature.CombatId as enemies[].combat_id. The public getter only runs
+    // AssertMutable() before returning _applier; nothing is initialized or written.
+    // applier_readable=true with a null id is a known "no applier", distinct from a
+    // failed read (readable=false, null id, reason). An applier without a CombatId is a
+    // failed read too: no id is substituted.
+    private static void AttachHexApplierState(Dictionary<string, object?> state, PowerModel power,
+        string context)
+    {
+        state["applier_readable"] = false;
+        ReadInternalStateValue(state, "applier_combat_id", () =>
+        {
+            var applier = power.Applier;
+            uint? id = null;
+            if (applier != null)
+                id = applier.CombatId ?? throw new InvalidOperationException("Applier に CombatId がありません");
+            state["applier_readable"] = true;
+            return id;
+        }, context);
     }
 
     // v0.113.1 (sts2-a671e9ef) VigorPower.Data: BeforeAttack binds the owner's first

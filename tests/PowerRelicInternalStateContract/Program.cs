@@ -245,6 +245,42 @@ public static partial class McpMod
         Unknown(Power(new HeistPower()), "target_player_id", "status.HeistPower");
         Check(!Power(new PowerModel { Target = first }).ContainsKey("target_player_id"), "other targeted powers do not get target fields");
 
+        // Hex: PowerModel.Applier read as-is. AfterDeath / PowerCmd.Apply are not simulated.
+        BeginStateWarnings();
+        var knight = new Creature { CombatId = 7 };
+        var hex = new HexPower { Applier = knight };
+        var hexRow = Power(hex);
+        Check(hexRow["applier_readable"] is true && hexRow["applier_combat_id"] is uint knightId && knightId == 7
+            && !hexRow.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "Hex applier is the applier's CombatId");
+        Check(ReferenceEquals(hex.PeekApplier(), knight) && knight.CombatId == 7, "Hex read leaves the applier untouched");
+        Check(FormatPowerInternalState(hexRow).Contains("applier combat id: 7") && !FormatPowerInternalState(hexRow).Contains("applier readable"),
+            "Hex markdown shows the id; readable=true is JSON-only");
+        knight.CombatId = 0;
+        var zeroHex = Power(hex);
+        Check(zeroHex["applier_readable"] is true && zeroHex["applier_combat_id"] is uint zeroId && zeroId == 0 && !zeroHex.ContainsKey("unavailable_reasons"),
+            "CombatId 0 is a real id, not unknown or none");
+        Check(FormatPowerInternalState(zeroHex).Contains("applier combat id: 0"), "Hex markdown shows id 0");
+        Check(hexRow["applier_combat_id"] is uint keptId && keptId == 7, "Hex snapshot independent of later id changes");
+        var noApplier = Power(new HexPower());
+        Check(noApplier["applier_readable"] is true && noApplier.ContainsKey("applier_combat_id") && noApplier["applier_combat_id"] == null
+            && !noApplier.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "readable null applier is a known none without reasons");
+        Check(FormatPowerInternalState(noApplier).Contains("applier combat id: none") && !FormatPowerInternalState(noApplier).Contains("readable"),
+            "known none applier markdown");
+        var hiddenHex = Power(hex, false);
+        Check(hiddenHex["applier_readable"] is true && hiddenHex["applier_combat_id"] is uint && !hiddenHex.ContainsKey("skip_next_duration_tick"),
+            "hidden / visibility-unknown Hex row keeps the applier only");
+        var idless = Power(new HexPower { Applier = new Creature() });
+        Unknown(idless, "applier_combat_id", "status.HexPower");
+        Check(idless["applier_readable"] is false && Reasons(idless)["applier_combat_id"].Contains("CombatId"), "applier without CombatId is a failed read, not none");
+        Check(FormatPowerInternalState(idless).Contains("applier combat id: null (InvalidOperationException")
+            && FormatPowerInternalState(idless).Contains("applier readable: no"), "failed applier markdown shows reason and readable: no");
+        var failedHex = Power(new HexPower { Applier = knight, ThrowApplier = true, Skip = true });
+        Unknown(failedHex, "applier_combat_id", "status.HexPower");
+        Check(failedHex["applier_readable"] is false && failedHex["skip_next_duration_tick"] is true, "applier getter failure keeps other row fields");
+        Check(!Power(new PowerModel { Applier = knight }).ContainsKey("applier_combat_id") && !Power(new HeistPower { Applier = knight, Target = first }).ContainsKey("applier_readable"),
+            "other powers do not get applier fields");
+        Check(new PowerModel { Applier = knight }.ApplierReads == 0, "construction does not read Applier");
+
         // Vigor: VigorPower.Data binding, read as-is. Before/After attack are not simulated.
         // Own warning window: the response list is capped at MaxStateWarnings.
         BeginStateWarnings();
@@ -429,6 +465,14 @@ public static partial class McpMod
             Check(json.RootElement.GetProperty("stolen_strength")[0].GetProperty("amount").GetDecimal() == -2.75m, "wire numeric decimal theft");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(rowA, wireOptions)))
             Check(json.RootElement.GetProperty("stolen_gold").GetInt32() == 0 && json.RootElement.GetProperty("target_player_id").GetString() == "17", "Thievery zero int and string target survive production wire");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(zeroHex, wireOptions)))
+            Check(json.RootElement.GetProperty("applier_combat_id").GetUInt32() == 0 && json.RootElement.GetProperty("applier_readable").GetBoolean(), "Hex applier id 0 survives production wire as a number");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noApplier, wireOptions)))
+            Check(json.RootElement.GetProperty("applier_combat_id").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("applier_readable").GetBoolean()
+                && !json.RootElement.TryGetProperty("unavailable_reasons", out _), "known none applier survives production wire as null with success flag");
+        using (var json = JsonDocument.Parse(JsonSerializer.Serialize(idless, wireOptions)))
+            Check(json.RootElement.GetProperty("applier_combat_id").ValueKind == JsonValueKind.Null && !json.RootElement.GetProperty("applier_readable").GetBoolean()
+                && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("applier_combat_id", out _), "failed applier survives production wire as null, false and reason");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(noTargetRow, wireOptions)))
             Check(json.RootElement.GetProperty("target_player_id").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("target_player_id", out _), "missing Thievery target survives wire as null and reason");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(failedSkip, wireOptions)))

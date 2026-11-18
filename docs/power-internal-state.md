@@ -3,7 +3,7 @@
 `status[]` の各行は player・敵・ペットで共通。画面に見えるパワーに限り、
 許可リストの項目を付ける。HUD 非表示・可視性不明のパワーの追加状態は省略する。
 例外は泥棒（`THIEVERY_POWER`）と強奪（`HEIST_POWER`）の対象別の項目と、活力（`VIGOR_POWER`）の
-`vigor_attack` で、`status[]` に出る行には可視性によらず付ける（下記）。
+`vigor_attack`、呪術（`HEX_POWER`）の付与元で、`status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
 追加契約のため版は上げていない（schema 4 のときの追加）。項目の有無で利用可否を判別する。
 
@@ -24,6 +24,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 泥棒（`THIEVERY_POWER`） `stolen_gold` | `ThieveryPower.DynamicVars.Gold.IntValue`（出典は v0.113.1 `sts2-a671e9ef`）。`CanonicalVars` の `GoldVar(0)` から始まり、`Steal` が対象の player から実際に失わせた額（`min(Amount, 所持金)`。対象が死亡・所持金 0 なら何もしない）を `Gold.BaseValue` に足す。`SurprisePower.AfterDeath` はこの値を強奪の量として引き継ぐ。`Amount` は 1 回の上限で、盗んだ累計ではない。 | 盗まれたゴールドは player の所持金の減少として画面に出る。対象別に数えられる。 |
 | 泥棒 `target_player_id` / 強奪（`HEIST_POWER`） `target_player_id` | `PowerModel.Target.Player.NetId` の文字列。泥棒は `GremlinMerc` が player ごとに 1 インスタンス（`Instanced`）付け、`SurprisePower.AfterDeath` が各インスタンスの `Target` を強奪へ写す。強奪の `BeforeDeath` はこの player へ `Amount` のゴールドを報酬として返す。`stolen_gold` が 0 のインスタンスからは強奪を付与しない（`PowerCmd.Apply` が amount 0 を無視）ので、強奪の行は盗んだ額が正の対象だけに出る。 | どの player から盗んだかは所持金の減少で見える。 |
 | 活力（`VIGOR_POWER`） `vigor_attack` | private `VigorPower.Data` の `commandToModify`（`AttackCommand?`）と `amountWhenAttackStarted`（int）（出典は v0.113.1 `sts2-a671e9ef`）。`BeforeAttack` は所有者の powered attack で、未結合かつ `ModelSource` が null（敵の `AttackCommand.FromMonster`）か札のときに、そのコマンドと開始時の `Amount` を記録する。`ModifyDamageAdditive` は結合先の `Attacker` が dealer と違う（札なら `ModelSource` が違う）攻撃には足さない。`AfterAttack` は同じコマンドのときだけ開始時の量を引き、参照は null に戻さない。新規の付与は `PowerCmd.Apply` が正準モデルから複製し、`DeepCloneFields` が `InitInternalData` で未結合の Data を作る。 | 結合は所有者の攻撃の開始で起き、攻撃の終わりの減少は画面の活力の数字と被ダメージに出る。攻撃で結合した活力は、`AfterAttack` が開始時の量を引いて 0 になれば行ごと無くなり（`ShouldRemoveDueToAmount`）、攻撃中に量が増えて残れば結合したまま残る。活力が無い状態で攻撃の後に付与された活力（テラーウツボの `ThrashMove` は攻撃の `Execute` の後に `PowerCmd.Apply<VigorPower>` を呼ぶ）は新しいインスタンスで、未結合の行になる。 |
+| 呪術（`HEX_POWER`） `applier_combat_id` / `applier_readable` | `PowerModel.Applier`（`Creature?`）の `Creature.CombatId`（出典は v0.113.1 `sts2-a671e9ef`）。`PowerCmd.Apply` は新規のインスタンスにだけ `Applier` を設定し、既存のインスタンスへの再付与は、呪術の `InstanceType` が既定の `None` なので `FindExistingInstanceForStacking` が既存のインスタンスを返し、`ModifyAmount` に回って付与元を差し替えない。`SpectralKnight.HexMove` は自身の `Creature` を付与元に渡す。`HexPower.AfterDeath` は死んだ creature が `Applier` で、除去が防がれなければ呪術を外し、`HexPower.AfterRemoved` が所有者の全戦闘札から Hexed を消す。 | 呪術を付けた敵の行動（スペクトルナイトの HEX）は画面に出る。付与元の死亡と呪術の解除も画面で見える。 |
 | まるくなる（`CURL_UP_POWER`） `played_card_uid` / `played_card_readable` | private `CurlUpPower.Data.playedCard` を同じ uid registry に通す（出典は v0.113.1 `sts2-a671e9ef`。v0.113.0 `sts2-d009478a` と同一）。`AfterDamageReceived` は所有者への `IsPoweredAttack` かつ `cardSource` ありの被弾で、未記録または同じ札なら記録（別の札が記録済みなら無視）。`AfterCardPlayed` は `cardPlay.Card` が記録の札と同じときに参照を消し、Amount のブロックを得てパワーを外す。 | 画面に出た、その敵へのアタック札の命中から分かる追跡状態。uid はその公開された札の個体を照合する。 |
 
 盗難の配列の各行は `{player_id, amount}`。`player_id` は `player.player_id` と同じ文字列。
@@ -102,6 +103,25 @@ Markdown は `(vigor attack: has command: no, attacker is owner: none, amount wh
 `Data` の 2 つのフィールドの `FieldInfo.GetValue`、自動プロパティ `AttackCommand.Attacker`、
 `PowerModel.Owner`（`AssertMutable` のあと `_owner` を返すだけ）の getter に限る。
 `GetInternalData` / `InitInternalData`・`BeforeAttack` / `AfterAttack` / `ModifyDamageAdditive` は呼ばず、Data も書き換えない。
+
+呪術（`HEX_POWER`）の付与元は player の呪術の行に、`hidden_in_ui`・可視性不明・説明取得失敗の最小行にも付ける
+（`HexPower.AfterDeath` は `IsVisible` によらず `Applier` を見る）。
+
+| 項目 | 型 | 意味 |
+|---|---|---|
+| `applier_readable` | bool | `Applier` の参照と、参照があればその `CombatId` を読めたら true |
+| `applier_combat_id` | uint / null | 付与元の `Creature.CombatId`。`enemies[].combat_id` と同じ識別子で、0 も実在する ID。付与元が無い（読めた null）ときと読取失敗は null |
+
+付与元なしは `applier_readable=true, applier_combat_id=null` で、理由・警告を付けない。
+`Applier` の getter の失敗と、参照があるのに `CombatId` が null のときは読取失敗とし、
+`applier_readable=false`、`applier_combat_id=null`、行の `unavailable_reasons.applier_combat_id`、
+`warnings` の `status.HEX_POWER.applier_combat_id` を付ける。ID を補わない。
+付与元が死んでも参照は残る（呪術はふつう同時に外れて行ごと無くなる。除去が防がれて残った場合は、死んだ付与元の ID のまま）。
+付与元が生きているか・敵の一覧に居るかは、この ID を `enemies[]` の `combat_id` と照合して判断する。
+読取は `PowerModel.Applier` の getter（`AssertMutable` のあと `_applier` を返すだけ）と
+`Creature.CombatId`（自動プロパティ）に限る。フックの呼び出しや書き換えはしない。
+Markdown は `(applier combat id: 3)`、付与元なしは `none`、読取失敗は `null (理由); applier readable: no`。
+`applier_readable=true` は Markdown で省略する。
 
 Markdown は情報がある場合だけ既存 status 行に追記する。skip=false と空配列は省略し、
 対象別の 0 / false は表示、失敗時は null と理由を表示する。

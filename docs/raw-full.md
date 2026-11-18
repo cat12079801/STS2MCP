@@ -767,6 +767,19 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   `StarCostTooHigh` / `NoLivingAllies`。
 - `affliction` は `CardModel.Affliction` の `{ id, amount }`。
   `id` は `Id.Entry`、`amount` は現在の `Amount`（整数）。
+- `local_ethereal` は災禍が呪詛（`Hexed`）の札だけに付く bool。札自身のエセリアル
+  （`CardModel.GetKeywordsWithSources(KeywordSources.Local).Contains(CardKeyword.Ethereal)`。
+  正準のキーワードと `CardCmd.ApplyKeyword` で付いたもの。オルゴール・幽霊の種など）。
+  `HexPower.TryModifyKeywordsInCombat` は所有者の Hexed の札に Ethereal を Global として足すので、
+  札のキーワード・本文にはこの寄与が混ざり、札自身の分と区別できない。呪術が外れると
+  （`HexPower.AfterRemoved` が Hexed を消す）Global の分は無くなり、Local の分は残る。
+  false も出す。災禍が無い・別の災禍の札にはキーが無い（呪詛の札で読めたときだけ bool）。
+  災禍の読取に失敗した札にもキーは無い（`affliction` が null と理由になるので、呪詛かどうかが未確認）。
+  `local_ethereal` 自体の読取失敗は null と `unavailable_reasons.local_ethereal`・`warnings`。
+  `Local` だけを指定するので `Hook.ModifyKeywordsInCombat` は呼ばれず、キーワードの付け外しもしない
+  （札の Local の集合は、最初の読取で `CanonicalKeywords` から作られる。他のキーワードの読取と同じ）。
+  例は `{ "affliction": { "id": "HEXED", "amount": 2 }, "local_ethereal": false }`。
+  Markdown は災禍の行に `affliction HEXED (amount 2, local ethereal no)`。
 - `enchantment` は `CardModel.Enchantment` の `{ id, amount, status }`。
   `status` は `EnchantmentModel.Status` の enum 名（`Normal` / `Disabled`）。
   例は `{ "id": "VIGOROUS", "amount": 3, "status": "Disabled" }`。
@@ -1222,7 +1235,7 @@ Pets also share the same builder.
 
 画面に見えるパワーには次の内部状態を追加する（schema 4）。
 可視性が不明、または `hidden_in_ui` のパワーには追加しない。
-ただし `THIEVERY_POWER` / `HEIST_POWER` の項目と `VIGOR_POWER` の `vigor_attack` は、`status[]` に出る行なら可視性によらず付ける。
+ただし `THIEVERY_POWER` / `HEIST_POWER` の項目、`VIGOR_POWER` の `vigor_attack`、`HEX_POWER` の付与元は、`status[]` に出る行なら可視性によらず付ける。
 各項目の意味・人間が知りうる根拠・非公開の範囲は
 [パワーの内部状態](power-internal-state.md) を参照。
 
@@ -1244,6 +1257,8 @@ Pets also share the same builder.
 | `THIEVERY_POWER` | `target_player_id` | string（`player.player_id` と同じ） |
 | `HEIST_POWER` | `target_player_id` | string（同上） |
 | `VIGOR_POWER` | `vigor_attack` | `{"readable":true,"has_command":false,"attacker_is_owner":null,"amount_when_started":0}` |
+| `HEX_POWER` | `applier_combat_id` | uint / null（`enemies[].combat_id` と同じ） |
+| `HEX_POWER` | `applier_readable` | bool |
 
 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の `bound_card_played` は private `ChainsOfBindingPower.Data.boundCardPlayed`。
 `BeforeCardPlayed` は IsDupe を除き、所有者の Bound 札が使用されると true にする
@@ -1304,6 +1319,19 @@ player の札の攻撃では、結合先の `ModelSource` と札の一致も加�
 ```
 
 （行の一部を抜粋。Markdown は `(vigor attack: has command: no, attacker is owner: none, amount when started: 0)`。）
+
+呪術（`HEX_POWER`）の `applier_combat_id` は `PowerModel.Applier` の `Creature.CombatId`（`enemies[].combat_id` と同じ識別子。0 も実在する ID）。
+`PowerCmd.Apply` が新規のインスタンスにだけ設定し、既存の呪術への再付与（`InstanceType` が `None`。`FindExistingInstanceForStacking` → `ModifyAmount`）は付与元を差し替えない。
+`HexPower.AfterDeath` は死んだ creature が `Applier` で除去が防がれなければ呪術を外し、`AfterRemoved` が所有者の全戦闘札から Hexed を消す。
+付与元なし（読めた null）は `applier_readable=true` と null で理由なし。getter の失敗と、参照があるのに `CombatId` が null のときは
+`applier_readable=false`、null、行の `unavailable_reasons.applier_combat_id`、`warnings` の `status.HEX_POWER.applier_combat_id`。
+`hidden_in_ui`・最小行にも付ける。付与元の生死は `enemies[]` との照合で判断し、MOD は補わない。
+
+```json
+{ "id": "HEX_POWER", "amount": 2, "applier_readable": true, "applier_combat_id": 3 }
+```
+
+（行の一部を抜粋。Markdown は `(applier combat id: 3)`。付与元なしは `none`、読取失敗は `null (理由); applier readable: no`。）
 
 `stolen_strength` / `stolen_dexterity` の盗んだ量はゲームの符号付き値（減少なので負数）。`player_id` は既存の player と同じ
 文字列 ID。空の配列は盗んだ記録なしを表し、合算・正数化・既定値補完はしない。
@@ -2293,7 +2321,7 @@ described below. Selection actions still use `index`.
 | キー | 読み方 |
 |---|---|
 | `uid` | `GetStableCardUid`（手札・パイルと共通の registry。選択後のパイルでも同じ uid） |
-| `type` / `target_type` / `is_upgraded` / `is_upgradable` / `tags` / `affliction` / `enchantment` / `dynamic_vars` | `AttachCardDetails`（[戦闘カードの詳細](#戦闘カードの詳細追加schema-4)） |
+| `type` / `target_type` / `is_upgraded` / `is_upgradable` / `tags` / `affliction` / `local_ethereal`（呪詛の札だけ） / `enchantment` / `dynamic_vars` | `AttachCardDetails`（[戦闘カードの詳細](#戦闘カードの詳細追加schema-4)） |
 | `can_play` / `unplayable_reason` | `AttachCardPlayability`（`CardModel.CanPlay(out reason, out _)`）。details の `unavailable_reasons` に理由を足す |
 | `exhaust_on_next_play` | `CardModel.ExhaustOnNextPlay` |
 | `energy_cost` | `BuildCardEnergyCostState`（[Energy Cost Object](#energy-cost-object追加schema-4)） |

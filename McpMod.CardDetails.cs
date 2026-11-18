@@ -4,6 +4,7 @@ using System.Linq;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.Models.Enchantments;
 
 namespace STS2_MCP;
@@ -39,12 +40,25 @@ public static partial class McpMod
         // CardModel.Tags (CardTag enum names). Ordered by enum value: the game holds a HashSet.
         ReadCardDetailValue(state, reasons, "tags", () => card.Tags
             .Distinct().OrderBy(tag => (int)tag).Select(tag => tag.ToString()).ToList());
+        bool hexed = false;
         ReadCardDetailValue(state, reasons, "affliction", () =>
         {
             var affliction = card.Affliction;
+            hexed = affliction is Hexed;
             return affliction == null ? null
                 : BuildCardAttachmentState(affliction, () => affliction.Amount, reasons, "affliction");
         });
+        // sts2-a671e9ef: HexPower.TryModifyKeywordsInCombat adds Ethereal to the owner's
+        // Hexed cards as a Global keyword, so the hand/pile keywords cannot tell whether the
+        // card is Ethereal by itself. HexPower.AfterRemoved clears Hexed and the Global
+        // Ethereal goes with it; the card's own (Local: canonical + CardCmd.ApplyKeyword
+        // from Music Box, Ghost Seed...) Ethereal stays. Only Hexed cards get the key; a
+        // card with no or another affliction omits it. GetKeywordsWithSources(Local) skips
+        // Hook.ModifyKeywordsInCombat and returns the card's own set (created from
+        // CanonicalKeywords on first read, as every keyword read does); it is only queried.
+        if (hexed)
+            ReadCardDetailValue(state, reasons, "local_ethereal",
+                () => card.GetKeywordsWithSources(KeywordSources.Local).Contains(CardKeyword.Ethereal));
         ReadCardDetailValue(state, reasons, "enchantment", () =>
         {
             var enchantment = card.Enchantment;

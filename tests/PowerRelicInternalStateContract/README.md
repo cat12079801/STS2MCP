@@ -47,6 +47,11 @@ HUD 非表示の行にも付くこと、未結合では Owner を読まないこ
 has_command・attacker_is_owner が null（開始時の量は保持）、開始時の量の型変更で量だけ null（未結合は保持）、
 Attacker・Owner の getter 失敗で attacker_is_owner だけ null になり、どれも readable=false になることを確認する。
 wire の bool / null / int と行の理由、Markdown の `none`・`readable: no`・`null (理由)` も確認する。
+呪術（`HEX_POWER`）の `applier_combat_id` / `applier_readable` は、付与元の `CombatId`（7 と実在する 0）、
+付与元なし（readable=true の null・理由なし・Markdown の `none`）、`CombatId` の無い付与元と getter の失敗
+（readable=false・null・理由・warnings・Markdown の `null (理由)` と `applier readable: no`、他項目の保持）、
+読取で付与元を変えないこと、snapshot の独立、HUD 非表示の行にも付くこと、他のパワーには付かないこと、
+wire の uint 0・null と readable の bool を確認する。
 内部データを初期化・書換えしないこと、HUD非表示／可視性不明の追加状態を省略すること、
 JSON の本番設定でも null と理由が残ること、Markdown の空・通常の skip=false・
 空の盗難配列の省略と、値／失敗理由の短い表示を確認する。
@@ -66,3 +71,7 @@ JSON の本番設定でも null と理由が残ること、Markdown の空・通
 まるくなる（`CURL_UP_POWER`）は、始祖虫（`LouseProgenitor.AfterAddedToRoom` が付与）にアタック札を撃つ前後と、
 プレイ途中の選択で止まる局面の state で、`played_card_uid` が none → 撃った札の uid（解決中）→
 行ごと消える（発動でパワーが外れる）と変わることを照合する（`CurlUpPower.AfterDamageReceived` / `AfterCardPlayed`）。
+呪術（`HEX_POWER`）は、スペクトルナイト（`SpectralKnight.HexMove`）の HEX の後の state で、
+player の呪術の行の `applier_combat_id` がそのナイトの `enemies[].combat_id` と一致すること、
+騎士が複数いる局面で別の騎士を倒しても呪術と付与元が残り、付与元のナイトを倒すと呪術の行と札の `HEXED` が消えることを照合する
+（`HexPower.AfterDeath` / `AfterRemoved`）。呪術の無い戦闘では行ごと無いことも確かめる。

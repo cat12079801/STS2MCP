@@ -19,6 +19,9 @@ public static partial class McpMod
                 string disabled = attachment.GetValueOrDefault("status") is "Disabled" ? " (disabled)" : "";
                 string extra = attachment.TryGetValue("extra_damage", out var extraDamage)
                     ? $", extra damage {Value(extraDamage, $"{field}.extra_damage")}" : "";
+                // Hexed cards only: the card's own Ethereal, kept when the Hex is removed.
+                if (field == "affliction" && card.TryGetValue("local_ethereal", out var localEthereal))
+                    extra += $", local ethereal {(localEthereal is bool flag ? (flag ? "yes" : "no") : Value(null, "local_ethereal"))}";
                 sb.AppendLine($"  - {field} {Value(attachment.GetValueOrDefault("id"), $"{field}.id")} (amount {Value(attachment.GetValueOrDefault("amount"), $"{field}.amount")}{extra}){disabled}");
                 if (attachment.TryGetValue("status", out var status) && status == null)
                     sb.AppendLine($"  - {field} status {Value(null, $"{field}.status")}");

@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Enchantments;
+using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.Models.Enchantments;
 
 STS2_MCP.McpMod.RunCardDetailsContract();
@@ -269,6 +270,61 @@ namespace STS2_MCP
                 using var json = JsonDocument.Parse(JsonSerializer.Serialize(row, options));
                 Check(json.RootElement.GetProperty("enchantment").GetProperty("extra_damage").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("enchantment.extra_damage", out _), "wire null and reason for extra damage");
             }
+
+            // Hexed: the card's own (Local) Ethereal, separate from HexPower's Global Ethereal.
+            BeginStateWarnings();
+            var hexedCard = new CardModel { Afflicted = new Hexed { ModelId = new("HEXED"), Value = 2 } };
+            hexedCard.GlobalKeywordSet.Add(CardKeyword.Ethereal);
+            var hexedPlain = Details(hexedCard);
+            Check(hexedPlain["local_ethereal"] is false && Reasons(hexedPlain).Count == 0 && _stateWarnings.Count == 0, "Hexed card without its own Ethereal is local_ethereal=false despite the Global Ethereal");
+            Check(hexedCard.KeywordReads.Count == 1 && hexedCard.KeywordReads[0] == KeywordSources.Local, "local_ethereal reads Local keywords only (no Global hook)");
+            Check(Markdown(hexedPlain).Contains("affliction HEXED (amount 2, local ethereal no)"), "markdown shows local ethereal no on the Hexed line");
+            hexedCard.LocalKeywordSet.Add(CardKeyword.Ethereal);
+            hexedCard.LocalKeywordSet.Add(CardKeyword.Unplayable);
+            var hexedEthereal = Details(hexedCard);
+            Check(hexedEthereal["local_ethereal"] is true && Reasons(hexedEthereal).Count == 0, "Hexed card with its own Ethereal is local_ethereal=true");
+            Check(Markdown(hexedEthereal).Contains("affliction HEXED (amount 2, local ethereal yes)"), "markdown shows local ethereal yes");
+            Check(hexedCard.LocalKeywordSet.SetEquals(new[] { CardKeyword.Ethereal, CardKeyword.Unplayable }) && hexedCard.GlobalKeywordSet.SetEquals(new[] { CardKeyword.Ethereal }),
+                "reading local_ethereal does not add or remove keywords");
+            Check(hexedPlain["local_ethereal"] is false, "local_ethereal snapshot independent of later keyword changes");
+            foreach (var other in new AfflictionModel?[] { null, new() { ModelId = new("BOUND"), Value = 1 } })
+            {
+                var otherCard = new CardModel { Afflicted = other };
+                otherCard.LocalKeywordSet.Add(CardKeyword.Ethereal);
+                var otherRow = Details(otherCard);
+                Check(!otherRow.ContainsKey("local_ethereal") && otherCard.KeywordReads.Count == 0 && !Markdown(otherRow).Contains("local ethereal"),
+                    $"{other?.Id.Entry ?? "no"} affliction omits local_ethereal and reads no keywords");
+            }
+            var unknownAffliction = new CardModel { Afflicted = new Hexed { ModelId = new("HEXED") } };
+            unknownAffliction.ThrowOn.Add("affliction");
+            var unknownRow = Details(unknownAffliction);
+            Check(unknownRow["affliction"] == null && Reasons(unknownRow).ContainsKey("affliction") && !unknownRow.ContainsKey("local_ethereal"),
+                "unreadable affliction leaves local_ethereal absent (affliction itself is unknown)");
+            BeginStateWarnings();
+            hexedCard.Afflicted.ThrowAmount = true;
+            var hexedAmountFailed = Details(hexedCard);
+            Check(hexedAmountFailed["local_ethereal"] is true && Object(hexedAmountFailed, "affliction")["amount"] == null, "Hexed amount failure keeps local_ethereal");
+            hexedCard.Afflicted.ThrowAmount = false;
+            BeginStateWarnings();
+            hexedCard.ThrowOn.Add("local_ethereal");
+            var hexedFailed = Details(hexedCard);
+            Check(hexedFailed.ContainsKey("local_ethereal") && hexedFailed["local_ethereal"] == null && Reasons(hexedFailed).Count == 1
+                && Reasons(hexedFailed)["local_ethereal"].Contains("local_ethereal failed"), "local_ethereal read failure is null with its own reason");
+            Check(Equals(Object(hexedFailed, "affliction")["id"], "HEXED") && Equals(Object(hexedFailed, "affliction")["amount"], 2), "local_ethereal failure keeps the affliction");
+            Check(Markdown(hexedFailed).Contains("affliction HEXED (amount 2, local ethereal null (InvalidOperationException: local_ethereal failed))"), "markdown shows the local_ethereal failure reason");
+            {
+                var response = new Dictionary<string, object?> { ["hand"] = new[] { hexedFailed } };
+                EndStateWarnings(response);
+                Check(response["warnings"] is List<string> warnings && warnings.Any(w => w.StartsWith("card.local_ethereal:")), "local_ethereal failure is attached to warnings");
+            }
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(hexedPlain, options)))
+                Check(json.RootElement.GetProperty("local_ethereal").ValueKind == JsonValueKind.False && json.RootElement.GetProperty("affliction").GetProperty("id").GetString() == "HEXED",
+                    "wire local_ethereal false is a boolean");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(hexedFailed, options)))
+                Check(json.RootElement.GetProperty("local_ethereal").ValueKind == JsonValueKind.Null && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty("local_ethereal", out _),
+                    "wire local_ethereal null and reason");
+            using (var json = JsonDocument.Parse(JsonSerializer.Serialize(plain, options)))
+                Check(!json.RootElement.TryGetProperty("local_ethereal", out _), "wire omits local_ethereal without Hexed");
 
             BeginStateWarnings();
             var recovered = Details(new());

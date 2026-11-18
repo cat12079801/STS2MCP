@@ -26,7 +26,13 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
 }
 namespace MegaCrit.Sts2.Core.Entities.Creatures
 {
-    public class Creature { public MegaCrit.Sts2.Core.Models.Player? Player { get; set; } }
+    // v0.113.1: CombatId is an auto-property { get; set; } (uint?), the same value as
+    // enemies[].combat_id.
+    public class Creature
+    {
+        public MegaCrit.Sts2.Core.Models.Player? Player { get; set; }
+        public uint? CombatId { get; set; }
+    }
 }
 namespace MegaCrit.Sts2.Core.Models
 {
@@ -47,6 +53,16 @@ namespace MegaCrit.Sts2.Core.Models
         public bool ThrowSkip;
         public bool SkipNextDurationTick => ThrowSkip ? throw new InvalidOperationException("skip failed") : Skip;
         public Entities.Creatures.Creature? Target { get; set; }
+        // Real getter: AssertMutable() then _applier (throws only on a canonical model).
+        public bool ThrowApplier;
+        public int ApplierReads;
+        private Entities.Creatures.Creature? _applier;
+        public Entities.Creatures.Creature? Applier
+        {
+            get { ApplierReads++; return ThrowApplier ? throw new InvalidOperationException("canonical applier") : _applier; }
+            set => _applier = value;
+        }
+        public Entities.Creatures.Creature? PeekApplier() => _applier;
         // Real getter: AssertMutable() then _owner (throws only on a canonical model).
         public bool ThrowOwner;
         private Entities.Creatures.Creature? _owner;
@@ -90,6 +106,8 @@ namespace MegaCrit.Sts2.Core.Models.Powers
     // v0.113.1: Instanced, per-target. Gold starts at GoldVar(0); Steal adds the real loss.
     public class ThieveryPower : PowerModel { public DynamicVars DynamicVars { get; } = new(); }
     public class HeistPower : PowerModel { }
+    // v0.113.1: sealed, Single; AfterDeath removes it when the dying creature is Applier.
+    public class HexPower : PowerModel { }
     public class SurroundedPower : PowerModel
     {
         public enum Direction { Right, Left }
