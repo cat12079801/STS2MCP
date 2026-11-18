@@ -30,6 +30,15 @@ public static partial class McpMod
         }
         sb.AppendLine();
 
+        // Only on GET ?passive=1&scenario_setup_guard=1 (verification runs, sts2#1037).
+        if (state.GetValueOrDefault(ScenarioSetupGuardKey) is Dictionary<string, object?> setupGuard)
+        {
+            sb.AppendLine($"**Setup guard:** {(setupGuard.GetValueOrDefault("allowed") is true ? "allowed" : "not allowed")}"
+                + $" (screen {setupGuard.GetValueOrDefault("screen") ?? "?"}, room {setupGuard.GetValueOrDefault("room") ?? "?"}"
+                + $"{(setupGuard.GetValueOrDefault("reason") is string why ? ", " + why : "")})");
+            sb.AppendLine();
+        }
+
         if (state.TryGetValue("run", out var runObj) && runObj is Dictionary<string, object?> run)
         {
             sb.AppendLine($"**Act {run["act"]}** | Floor {run["floor"]} | Ascension {run["ascension"]}");
@@ -1049,7 +1058,9 @@ public static partial class McpMod
             foreach (var card in cards)
             {
                 string starCost = card.TryGetValue("star_cost", out var sc) && sc != null ? $" + {sc} star" : "";
-                sb.AppendLine($"- [{card["index"]}] **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}] - {card["description"]}");
+                string uid = card.GetValueOrDefault("uid") is string u ? $" `{u}`" : "";
+                string disabled = card.GetValueOrDefault("enabled") is false ? " (not selectable now)" : "";
+                sb.AppendLine($"- [{card["index"]}]{uid} **{card["name"]}** ({card["cost"]} energy{starCost}) [{card["type"]}]{disabled} - {card["description"]}");
                 AppendUpgradePreviewLine(sb, card);
                 AppendCombatInstanceMarkdown(sb, card);
             }
@@ -1060,9 +1071,18 @@ public static partial class McpMod
         {
             sb.AppendLine("### Already Selected");
             foreach (var card in selected)
-                sb.AppendLine($"- {card["name"]}");
+                sb.AppendLine($"- {(card.GetValueOrDefault("uid") is string u ? $"`{u}` " : "")}{card["name"]}");
             sb.AppendLine();
         }
+        else if (handSelect.ContainsKey("selected_cards") && handSelect["selected_cards"] == null)
+        {
+            sb.AppendLine($"**Already selected:** unknown ({handSelect.GetValueOrDefault("selected_cards_unavailable_reason") ?? "unreadable"})");
+            sb.AppendLine();
+        }
+        if (handSelect.GetValueOrDefault("min_select") is int minSelect && handSelect.GetValueOrDefault("max_select") is int maxSelect)
+            sb.AppendLine($"**Select:** {minSelect}-{maxSelect}");
+        if (handSelect.GetValueOrDefault("peeking") is true)
+            sb.AppendLine("**Peeking:** the game ignores card presses until the peek ends");
 
         bool canConfirm = handSelect.TryGetValue("can_confirm", out var cc) && cc is true;
         sb.AppendLine($"Use `combat_select_card(card_index)` to select. Can confirm: {(canConfirm ? "Yes - use `combat_confirm_selection`" : "No - select more cards")}");

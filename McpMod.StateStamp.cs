@@ -26,7 +26,9 @@ public static partial class McpMod
             ["mod_commit"] = BuildCommit,
             ["game_version"] = release?.Version,
             ["game_commit"] = release?.Commit,
-            ["schema_version"] = StateSchemaVersion
+            ["schema_version"] = StateSchemaVersion,
+            // Build-level: which verification contracts this MOD implements (sts2#1037).
+            ["scenario_capabilities"] = BuildScenarioCapabilities()
         };
     }
 }

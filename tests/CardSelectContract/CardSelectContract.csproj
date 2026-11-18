@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.CardSelection.cs" Link="CardSelection.cs" />
+    <Compile Include="../../McpMod.ScenarioGuard.cs" Link="ScenarioGuard.cs" />
     <Compile Include="../../McpMod.CardSelectionFormatting.cs" Link="CardSelectionFormatting.cs" />
     <Compile Include="../../McpMod.CardSelectVisibility.cs" Link="CardSelectVisibility.cs" />
     <Compile Include="../../McpMod.CardEnergyCostFormatting.cs" Link="CardEnergyCostFormatting.cs" />

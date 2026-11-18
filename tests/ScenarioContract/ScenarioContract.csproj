@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../McpMod.ScenarioGuard.cs" Link="ScenarioGuard.cs" />
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Actions.cs;../../McpMod.StateStamp.cs;../../McpMod.ScenarioGuardLive.cs;../../McpMod.HandSelection.cs;../../McpMod.DevConsole.cs;../../McpMod.Formatting.cs;../../McpMod.CardSelection.cs;../../mcp/server.py"
+          Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

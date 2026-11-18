@@ -3419,54 +3419,76 @@ public static partial class McpMod
             state["prompt"] = prompt;
         }
 
-        // Selectable cards (visible holders in the hand)
+        // Selectable cards: NPlayerHand.ActiveHolders, the list combat_select_card presses. index is
+        // the holder's position there; a holder without a card gets no row but keeps its position,
+        // so the indices after it still name the holder that will be pressed (sts2#1037).
         var selectableCards = new List<Dictionary<string, object?>>();
         // The candidates are hand cards: combat_instance names their hand uid (sts2#1019).
         var combatState = GetLiveCombatStateForSelection();
         if (combatState != null) RefreshCardUidRegistry(combatState);
-        int index = 0;
-        foreach (var holder in hand.ActiveHolders)
+        bool? peeking = ReadHandPeeking(hand);
+        state["peeking"] = peeking;
+        var holderCards = hand.ActiveHolders.Select(holder => holder.CardModel).ToList();
+        foreach (var (index, card) in HandSelectHolderRows(holderCards))
         {
-            var card = holder.CardModel;
-            if (card == null) continue;
-
             var cardInfo = BuildCardInfo(card);
             cardInfo["index"] = index;
+            // Same uid as the card's player.hand row; only from a live combat's registry.
+            cardInfo["uid"] = combatState != null ? GetStableCardUid(card) : null;
+            // The game ignores presses while the hand is peeked at (NPlayerHand.OnHolderPressed);
+            // otherwise the visible holders are exactly the ones the selection filter admits.
+            cardInfo["enabled"] = peeking == false;
             cardInfo["description"] = SafeGetCardDescription(card); // hand cards use default pile
             // Only when the prompt is "upgrade a card in hand"; the plain select modes
             // (discard, exhaust, ...) have nothing to decide from the upgraded text.
             if (hand.CurrentMode == NPlayerHand.Mode.UpgradeSelect) AttachUpgradePreview(cardInfo, card);
             if (combatState != null) cardInfo["combat_instance"] = BuildSelectionCandidateInstance(card);
             selectableCards.Add(cardInfo);
-            index++;
         }
+        for (int index = 0; index < holderCards.Count; index++)
+            if (holderCards[index] == null)
+                Warn($"hand_select.cards[{index}]", "hand holder has no CardModel; combat_select_card refuses this index");
         state["cards"] = selectableCards;
 
-        // Already-selected cards (in the SelectedHandCardContainer)
-        var selectedContainer = hand.GetNodeOrNull<Godot.Control>("%SelectedHandCardContainer");
-        if (selectedContainer != null)
+        // Already selected: the hand's own _selectedCards (what the game returns on confirm), in its
+        // order, including the card on the upgrade preview. [] is a successful read of none; null
+        // (with selected_cards_unavailable_reason) is a failed read.
+        var selected = ReadHandSelectedCards(hand, out var selectedReason);
+        if (selected != null)
         {
-            var selectedCards = new List<Dictionary<string, object?>>();
-            var selectedHolders = FindAll<NSelectedHandCardHolder>(selectedContainer);
-            int selIdx = 0;
-            foreach (var holder in selectedHolders)
+            var selectedCards = new List<Dictionary<string, object?>>(selected.Count);
+            for (int i = 0; i < selected.Count; i++)
             {
-                var card = holder.CardModel;
-                if (card == null) continue;
+                var card = selected[i];
                 selectedCards.Add(new Dictionary<string, object?>
                 {
-                    ["index"] = selIdx,
-                    ["name"] = SafeGetText(() => card.Title)
+                    ["index"] = i,
+                    ["id"] = SafeGetText(() => card.Id.Entry),
+                    ["name"] = SafeGetText(() => card.Title),
+                    ["uid"] = combatState != null ? GetStableCardUid(card) : null
                 });
-                selIdx++;
             }
-            if (selectedCards.Count > 0)
-                state["selected_cards"] = selectedCards;
+            state["selected_cards"] = selectedCards;
+        }
+        else
+        {
+            state["selected_cards"] = null;
+            state["selected_cards_unavailable_reason"] = selectedReason;
+            Warn("hand_select.selected_cards", selectedReason ?? "unreadable");
         }
 
-        // Confirm button state
-        var confirmBtn = hand.GetNodeOrNull<NConfirmButton>("%SelectModeConfirmButton");
-        state["can_confirm"] = confirmBtn?.IsEnabled ?? false;
+        // How many the game accepts: NPlayerHand._prefs (CardSelectorPrefs.MinSelect / MaxSelect).
+        var prefs = ReadHandSelectPrefs(hand, out var prefsReason);
+        state["min_select"] = prefs?.MinSelect;
+        state["max_select"] = prefs?.MaxSelect;
+        if (prefs == null)
+        {
+            state["select_range_unavailable_reason"] = prefsReason;
+            Warn("hand_select.prefs", prefsReason ?? "unreadable");
+        }
+
+        // Confirm button state: shown and enabled, the one combat_confirm_selection presses.
+        state["can_confirm"] = IsHandSelectConfirmPressable(hand);
 
         return state;
     }

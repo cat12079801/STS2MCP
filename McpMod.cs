@@ -87,8 +87,18 @@ public static partial class McpMod
     ///    is_temporary_power (the instance implements ITemporaryPower). The existing type keeps
     ///    its meaning (PowerModel.Type). Like 6 to 8, the bump is deliberate although additive:
     ///    the engine requires these inputs on every status row and gates on the version.
+    ///
+    /// 10: the verification-capture contract (sts2#1037). hand_select.cards[].index is the
+    ///    NPlayerHand.ActiveHolders position combat_select_card presses (a holder without a card
+    ///    leaves a gap instead of shifting later rows); rows gain uid and enabled; selected_cards is
+    ///    always present (the hand's _selectedCards with uid; [] when none, null when unreadable);
+    ///    hand_select gains min_select / max_select / peeking, and can_confirm requires the button to
+    ///    be shown. combat_select_card and select_card take expected_uid; GET
+    ///    ?passive=1&amp;scenario_setup_guard=1 adds scenario_setup_guard and the dev_console body takes
+    ///    one; every state and GET / carry scenario_capabilities. Like 6 to 9, the bump is deliberate
+    ///    although mostly additive; hand_select's index and selected_cards change meaning.
     /// </summary>
-    public const int StateSchemaVersion = 9;
+    public const int StateSchemaVersion = 10;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";
@@ -450,7 +460,8 @@ public static partial class McpMod
                     ["status"] = "ok",
                     ["version"] = Version,
                     ["commit"] = BuildCommit,
-                    ["schema_version"] = StateSchemaVersion
+                    ["schema_version"] = StateSchemaVersion,
+                    ["scenario_capabilities"] = BuildScenarioCapabilities()
                 }, pretty);
             }
             else if (path == "/api/v1/singleplayer")
@@ -700,10 +711,29 @@ public static partial class McpMod
             bool passive = ReadFlagParam(new Dictionary<string, JsonElement>(), request, "passive", false);
             // ?perf=1: add state_build_perf (build time, combat upgrade preview clones/time).
             bool perf = ReadFlagParam(new Dictionary<string, JsonElement>(), request, "perf", false);
+            // ?passive=1&scenario_setup_guard=1: add the out-of-combat setup verdict, read in the
+            // same frame as the state (sts2#1037). Verification only; never on a non-passive read.
+            bool setupGuard = passive
+                && ReadFlagParam(new Dictionary<string, JsonElement>(), request, ScenarioSetupGuardKey, false);
             var state = RunOnMainThreadBlocking(() =>
             {
                 _passiveRead = passive;
-                try { return BuildStateMeasured(BuildGameState, perf); }
+                try
+                {
+                    var built = BuildStateMeasured(BuildGameState, perf);
+                    if (setupGuard)
+                    {
+                        try { built[ScenarioSetupGuardKey] = BuildScenarioSetupGuard(built); }
+                        catch (Exception ex)
+                        {
+                            built[ScenarioSetupGuardKey] = DecideScenarioSetupGuard(new ScenarioSetupGuardReads
+                            {
+                                Unreadable = { $"guard: {ex.GetType().Name}: {ex.Message}" }
+                            });
+                        }
+                    }
+                    return built;
+                }
                 finally { _passiveRead = false; }
             });
 

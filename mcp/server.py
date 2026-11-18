@@ -224,6 +224,12 @@ async def get_game_state(format: str = "markdown") -> str:
     type_for_current_amount（PowerModel.TypeForCurrentAmount。負の筋力は type が Buff のまま
     Debuff）と is_temporary_power（ITemporaryPower を実装するか）を足した。type は従来どおり
     PowerModel.Type。読めないときは null・理由・warnings。
+    schema 10 で hand_select.cards[].index を NPlayerHand.ActiveHolders の位置（combat_select_card が
+    押す位置。札の無い holder は詰めない）にし、行に uid・enabled、画面に min_select・max_select・
+    peeking を足した。selected_cards は常に返し（{index, id, name, uid}、空は []、読めなければ null）。
+    すべての state に scenario_capabilities（setup_guard・selection_uid・potion_availability の版。
+    0 は未実装）を足した。combat_select_card / deck_select_card の expected_uid は index の現個体の
+    uid と照合し、違えば何も押さない。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
 
@@ -594,17 +600,24 @@ async def combat_end_turn(wait: bool = False) -> str:
 
 
 @mcp.tool()
-async def combat_select_card(card_index: int) -> str:
+async def combat_select_card(card_index: int, expected_uid: str | None = None) -> str:
     """[Combat Selection] Select a card from hand during an in-combat card selection prompt.
 
     Used when a card effect asks you to select a card to exhaust, discard, etc.
     This is different from deck_select_card which handles out-of-combat card selection overlays.
 
     Args:
-        card_index: 0-based index of the card in the selectable hand cards (as shown in game state).
+        card_index: 0-based `hand_select.cards[].index` (the hand holder position; a holder without
+            a card leaves a gap, so indices need not be consecutive).
+        expected_uid: Optional `hand_select.cards[].uid`. When given, the MOD checks that the card at
+            card_index still has this uid (and that the hand is not being peeked at) and presses
+            nothing otherwise.
     """
     try:
-        return await _post({"action": "combat_select_card", "card_index": card_index})
+        body = {"action": "combat_select_card", "card_index": card_index}
+        if expected_uid is not None:
+            body["expected_uid"] = expected_uid
+        return await _post(body)
     except Exception as e:
         return _handle_error(e)
 
@@ -801,7 +814,7 @@ async def event_advance_dialogue() -> str:
 
 
 @mcp.tool()
-async def deck_select_card(card_index: int) -> str:
+async def deck_select_card(card_index: int, expected_uid: str | None = None) -> str:
     """[Card Selection] Select or deselect a card in the card selection screen.
 
     Used when the game asks you to choose cards from your deck (transform, upgrade,
@@ -817,9 +830,15 @@ async def deck_select_card(card_index: int) -> str:
 
     Args:
         card_index: 0-based index of the card (as shown in game state).
+        expected_uid: Optional `card_select.cards[].uid` (rows carry one only during a combat).
+            When given, the MOD checks that the grid / choose-a-card candidate at card_index
+            still has this uid and presses nothing otherwise.
     """
     try:
-        return await _post({"action": "select_card", "index": card_index})
+        body = {"action": "select_card", "index": card_index}
+        if expected_uid is not None:
+            body["expected_uid"] = expected_uid
+        return await _post(body)
     except Exception as e:
         return _handle_error(e)
 

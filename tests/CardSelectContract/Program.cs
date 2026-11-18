@@ -175,6 +175,11 @@ namespace STS2_MCP
             CombatManager.Instance.IsInProgress = false;
             CombatManager.Instance.State = new();
             Check(BuildCardSelectCardRows(current, [])!.All(row => !row.ContainsKey("exhaust_on_next_play") && !row.ContainsKey("energy_cost")), "inactive combat omits combat fields");
+            int outsideCalls = current.Calls;
+            Open(current);
+            var outsideUid = ExecuteSelectGridCard(current, 30, "c0");
+            Check(!Ok(outsideUid) && current.Calls == outsideCalls && outsideUid["message"]!.ToString()!.Contains("cannot be checked"),
+                "out of combat grid rows have no uid: expected_uid is refused, nothing pressed (sts2#1037)");
             CombatManager.Instance = null;
             Warnings.Clear();
             BuildCardSelectCardRows(current, [new("OUTSIDE_CANDIDATES")]);
@@ -213,6 +218,33 @@ namespace STS2_MCP
             Check(reorderedRows.Select(row => row["uid"]).SequenceEqual(drawRows.Select(row => row["uid"])), "hidden tie permutation yields same exposed UID order");
             Check(Ok(ExecuteSelectGridCard(drawScreen, 1)) && ReferenceEquals(drawScreen.LastCard, tieCards[2]), "click recomputes same mapping after grid permutation");
             Check(Markdown(reorderedRows).Contains("STRIKE#0"), "normalized UIDs reach selection Markdown");
+
+            // expected_uid (sts2#1037): checked against the candidate at the index, in the same
+            // normalized snapshot the click uses; a mismatch presses nothing.
+            drawGrid.SetCards(tieCards);
+            drawScreen.SetSelection([]);
+            Open(drawScreen);
+            int uidCalls = drawScreen.Calls;
+            var uidMismatch = ExecuteSelectGridCard(drawScreen, 0, "STRIKE#2");
+            Check(!Ok(uidMismatch) && drawScreen.Calls == uidCalls && uidMismatch["message"]!.ToString()!.Contains("STRIKE#0"),
+                "same-name card with another uid at the index is refused without a press");
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 0, "STRIKE#0")) && ReferenceEquals(drawScreen.LastCard, tieCards[1]),
+                "matching expected_uid presses that exact instance");
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 0, "STRIKE#0")), "toggle back with the same uid");
+            drawGrid.SetCards(tieCards.Reverse().ToArray());
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 2, "STRIKE#2")) && ReferenceEquals(drawScreen.LastCard, tieCards[0]),
+                "reordered grid: the uid still names the normalized row's instance");
+            Check(Ok(ExecuteSelectGridCard(drawScreen, 2, "STRIKE#2")), "toggle back after reorder");
+            uidCalls = drawScreen.Calls;
+            CombatManager.Instance.State = null;
+            var noState = ExecuteSelectGridCard(drawScreen, 0, "STRIKE#0");
+            Check(!Ok(noState) && drawScreen.Calls == uidCalls && noState["message"]!.ToString()!.Contains("cannot be checked"),
+                "no live combat state: expected_uid cannot be checked, nothing pressed");
+            CombatManager.Instance.State = new();
+            Check(!Ok(ExecuteSelectGridCard(drawScreen, 9, "STRIKE#0")) && drawScreen.Calls == uidCalls, "out-of-range index with expected_uid");
+            Check(ExpectedUidMismatch("STRIKE#0", 0, "STRIKE#0") == null && ExpectedUidMismatch("STRIKE#0", 0, null, "why")!.Contains("why"),
+                "linked comparison helper");
+            drawGrid.SetCards(tieCards);
 
             var differentRank = new CardModel("STRIKE") { DisplayRank = 1 };
             var differentTitle = new CardModel("STRIKE") { TitleOverride = "Strike+" };
@@ -406,11 +438,11 @@ namespace STS2_MCP
             // Lightweight integration assertions for entry points not linked into this
             // small boundary project (the entire state/action builders depend on Godot).
             var sources = Path.Combine(AppContext.BaseDirectory, "Sources");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 9;"), "published schema is 9 (sts2#1034)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 10;"), "published schema is 10 (sts2#1037)");
             var stateSource = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             Check(stateSource.Contains("state[\"cards\"] = BuildCardSelectCardRows(screen, selection);") && !stateSource.Contains("selected_outside_grid"), "state uses linked rows and removes old field");
             var actionSource = File.ReadAllText(Path.Combine(sources, "McpMod.Actions.cs"));
-            Check(actionSource.Contains("return ExecuteSelectGridCard(gridScreen, index);"), "action dispatches linked implementation");
+            Check(actionSource.Contains("return ExecuteSelectGridCard(gridScreen, index, expectedUid);"), "action dispatches linked implementation with expected_uid");
             Check(actionSource.Contains("RevealCardSelectScreen(chooseScreen, revealed)")
                 && actionSource.Contains("return WithRevealed(ConfirmVisibleCardSelection(screen), revealed);")
                 && actionSource.Contains("return WithRevealed(CancelVisibleCardSelection(overlay), revealed);"), "choose select, confirm and cancel reveal a hidden screen first");

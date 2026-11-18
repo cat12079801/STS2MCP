@@ -213,6 +213,88 @@ namespace STS2_MCP
                 (_, deadline) => observedTimeout = deadline.TimeoutMs);
             Check(observedTimeout == 30000, "wait timeout clamps to 30000 ms maximum");
 
+            // scenario_setup_guard (sts2#1037): parsed on the HTTP worker, re-checked on the main
+            // thread in the frame that runs the command; a refusal executes nothing.
+            ReadState = () => new() { ["phase"] = console.Calls.ToString(), ["settled"] = true };
+            console.Execute = _ => new(true, "game result");
+            Dictionary<string, JsonElement> Guarded(string guardJson, bool wait = false)
+            {
+                var args = Args(wait);
+                args["scenario_setup_guard"] = JsonDocument.Parse(guardJson).RootElement.Clone();
+                return args;
+            }
+            Dictionary<string, object?> GuardState(bool allowed, string screen, string? reason = null) => new()
+            {
+                ["version"] = 1, ["screen"] = screen, ["room"] = "MapRoom", ["combat_starting"] = false,
+                ["combat_in_progress"] = false, ["run_over"] = false, ["allowed"] = allowed, ["reason"] = reason
+            };
+            const string MapGuard = "{\"version\":1,\"expected_screen\":\"map\"}";
+            GuardNow = () => GuardState(true, "map");
+            int callsBeforeGuard = console.Calls;
+            result = ExecuteDevConsole(null!, Guarded(MapGuard), "energy 10", 0);
+            Check(result["success"] is true && console.Calls == callsBeforeGuard + 1, "allowed guard on the expected screen runs the command");
+            Check(GuardReads > 0 && GuardReadsOutsideDispatch == 0, "guard is read on the main thread, inside the dispatch that runs the command");
+            Check(result.GetValueOrDefault("scenario_setup_guard") == null, "a run command carries no guard refusal");
+
+            // Moved between the client's GET and this POST: the guard read now shows another screen.
+            GuardNow = () => GuardState(true, "event");
+            callsBeforeGuard = console.Calls;
+            result = ExecuteDevConsole(null!, Guarded(MapGuard, wait: true), "energy 10", 0);
+            Check(result["success"] is false && result["status"] as string == "error" && console.Calls == callsBeforeGuard,
+                "screen moved since the GET: refused, nothing executed");
+            Check((result["message"] as string)!.Contains("screen moved") && (result["message"] as string)!.Contains("not executed")
+                && result["guard_refused"] is true && result["scenario_setup_guard"] is Dictionary<string, object?> moved
+                && Equals(moved["screen"], "event"), "refusal names the move and returns the guard it read");
+            foreach (var (blocked, reason) in new[] { (GuardState(false, "map", "combat_starting"), "combat_starting"),
+                (GuardState(false, "map", "run_over"), "run_over"), (GuardState(false, "map", "resolving"), "resolving") })
+            {
+                GuardNow = () => blocked;
+                callsBeforeGuard = console.Calls;
+                result = ExecuteDevConsole(null!, Guarded(MapGuard), "card STRIKE_IRONCLAD Deck", 0);
+                Check(result["success"] is false && console.Calls == callsBeforeGuard
+                    && (result["message"] as string)!.Contains(reason), $"guard not allowed ({reason}) refuses");
+            }
+            GuardNow = () => throw new InvalidOperationException("guard boom");
+            callsBeforeGuard = console.Calls;
+            result = ExecuteDevConsole(null!, Guarded(MapGuard), "energy 10", 0);
+            Check(result["success"] is false && console.Calls == callsBeforeGuard && (result["message"] as string)!.Contains("guard boom"),
+                "an unreadable guard refuses");
+
+            // Malformed or unknown guards are refused on the HTTP worker: no dispatch, no state read.
+            GuardNow = () => GuardState(true, "map");
+            foreach (var bad in new[] { "null", "[]", "{}", "{\"version\":2,\"expected_screen\":\"map\"}",
+                "{\"version\":\"1\",\"expected_screen\":\"map\"}", "{\"version\":1}", "{\"version\":1,\"expected_screen\":\"shop\"}",
+                "{\"version\":1,\"expected_screen\":\"map\",\"extra\":true}", "{\"version\":1,\"expected_screen\":1}" })
+            {
+                int dispatches = DispatchCalls, reads = GuardReads;
+                callsBeforeGuard = console.Calls;
+                result = ExecuteDevConsole(null!, Guarded(bad), "energy 10", 0);
+                Check(result["success"] is false && result["guard_refused"] is true && console.Calls == callsBeforeGuard
+                    && DispatchCalls == dispatches && GuardReads == reads, $"malformed guard refused before dispatch: {bad}");
+            }
+
+            // Empty command: never runs. With a guard it checks the guard, then keeps the exact empty rejection.
+            const string EmptyRejection = "dev_console requires a non-empty string 'command'.";
+            int readsBefore = GuardReads;
+            result = ExecuteDevConsole(null!, Guarded(MapGuard), "", 0);
+            Check(result["message"] as string == EmptyRejection && result["success"] is false && GuardReads == readsBefore + 1
+                && GuardReadsOutsideDispatch == 0, "guarded empty probe passes the guard and returns the unchanged rejection");
+            GuardNow = () => GuardState(false, "map", "combat_in_progress");
+            result = ExecuteDevConsole(null!, Guarded(MapGuard), "", 0);
+            Check(result["success"] is false && (result["message"] as string)!.Contains("combat_in_progress") && result["guard_refused"] is true,
+                "guarded empty probe in a fight gets the guard refusal, not the empty rejection");
+            readsBefore = GuardReads;
+            result = ExecuteDevConsole(null!, Args(true), "", 0);
+            Check(result["message"] as string == EmptyRejection && GuardReads == readsBefore, "unguarded empty command is unchanged");
+            result = ExecuteDevConsole(null!, Guarded(MapGuard), "unlock all", 0);
+            Check(result["success"] is false && GuardReads == readsBefore && !result.ContainsKey("guard_refused"),
+                "a command outside the allow-list is refused as before, without reading the guard");
+            Configure("{\"dev_console_enabled\":false}");
+            result = ExecuteDevConsole(null!, Guarded("{}"), "energy 10", 0);
+            Check((result["message"] as string)!.Contains("disabled") && GuardReads == readsBefore, "disabled console wins over the guard");
+            Configure("{\"dev_console_enabled\":true}");
+            GuardNow = () => GuardState(true, "map");
+
             // The optional deadline path must leave existing ordinary actions intact.
             result = ExecuteWithOptionalWait(null!, Args(true), () => new() { ["status"] = "ok" });
             Check(result["settled"] is true && !result.ContainsKey("task_completed"), "ordinary action uses existing settle contract");

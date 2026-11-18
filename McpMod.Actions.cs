@@ -1093,9 +1093,11 @@ public static partial class McpMod
 
         if (!TryGetIntParam(data, out int index, "index", "card_index"))
             return MissingIntParam("card index in the grid", "index", "card_index");
+        if (ReadExpectedUid(data, out var expectedUid) is { } uidError)
+            return Error(uidError);
 
         if (overlay is NCardGridSelectionScreen gridScreen)
-            return ExecuteSelectGridCard(gridScreen, index);
+            return ExecuteSelectGridCard(gridScreen, index, expectedUid);
         else if (overlay is NChooseACardSelectionScreen chooseScreen)
         {
             var holders = FindAllSortedByPosition<NGridCardHolder>(chooseScreen);
@@ -1104,6 +1106,19 @@ public static partial class McpMod
             // State omits a row for a holder without a CardModel; never press it.
             if (holders[index].CardModel == null)
                 return Error($"Card index {index} has no card on the choose screen - re-read state");
+
+            // UID-checked pick (sts2#1037): the card at this holder position now, read like the
+            // choose rows (BuildChooseCardRows; uids exist only in a live combat). Refused before
+            // anything on screen changes.
+            if (expectedUid != null)
+            {
+                var combatState = GetLiveCombatStateForSelection();
+                if (combatState != null) RefreshCardUidRegistry(combatState);
+                if (ExpectedUidMismatch(expectedUid, index,
+                        combatState != null ? GetStableCardUid(holders[index].CardModel!) : null,
+                        "choose-a-card rows carry uids only during a live combat") is { } mismatch)
+                    return Error(mismatch);
+            }
 
             // Bring a screen hidden under the map / by a peek back first, as the player would.
             var revealed = new List<string>();
@@ -1372,10 +1387,20 @@ public static partial class McpMod
 
         if (!TryGetIntParam(data, out int index, "card_index", "index"))
             return MissingIntParam("index of the card in hand", "card_index", "index");
+        if (ReadExpectedUid(data, out var expectedUid) is { } uidError)
+            return Error(uidError);
 
+        // The same list and positions hand_select.cards[].index reports (sts2#1037).
         var holders = hand.ActiveHolders;
-        if (index < 0 || index >= holders.Count)
-            return Error($"Card index {index} out of range ({holders.Count} selectable cards)");
+        var holderCards = new List<CardModel?>(holders.Count);
+        foreach (var activeHolder in holders) holderCards.Add(activeHolder.CardModel);
+        var combatState = expectedUid != null ? GetLiveCombatStateForSelection() : null;
+        if (combatState != null) RefreshCardUidRegistry(combatState);
+        bool peeking = expectedUid != null && ReadHandPeeking(hand) != false;
+        if (HandSelectPressRejection(holderCards, index, peeking, expectedUid,
+                card => combatState != null ? GetStableCardUid(card) : null,
+                combatState == null ? "no live combat state to read uids from" : null) is { } refused)
+            return Error(refused);
 
         var holder = holders[index];
         string cardName = SafeGetText(() => holder.CardModel?.Title) ?? "unknown";
@@ -1396,11 +1421,11 @@ public static partial class McpMod
         if (hand == null || !hand.IsInCardSelection)
             return Error("No in-combat card selection is active");
 
-        var confirmBtn = hand.GetNodeOrNull<NConfirmButton>("%SelectModeConfirmButton");
-        if (confirmBtn == null || !confirmBtn.IsEnabled)
+        // The same check as hand_select.can_confirm: shown and enabled.
+        if (!IsHandSelectConfirmPressable(hand))
             return Error("Confirm button is not enabled - select more cards first");
 
-        confirmBtn.ForceClick();
+        GetHandSelectConfirmButton(hand)!.ForceClick();
 
         return new Dictionary<string, object?>
         {

@@ -63,6 +63,10 @@ public static partial class McpMod
     // Called only by the main-thread dispatcher after ValidateDevConsole. Never create a
     // second console or register commands ourselves: the initialized registry is authoritative.
     private static Dictionary<string, object?> StartDevConsole(string command, string name, out Task? task)
+        => StartDevConsole(command, name, null, out task);
+
+    private static Dictionary<string, object?> StartDevConsole(
+        string command, string name, ScenarioSetupGuardRequest? guard, out Task? task)
     {
         task = null;
         try
@@ -100,6 +104,10 @@ public static partial class McpMod
             if (implementation == null || implementation.GetType().Assembly != typeof(DevConsole).Assembly)
                 return DevConsoleResult(command, false,
                     $"Console command '{name}' is not implemented by the game's assembly (possibly overridden by another mod); execution refused.");
+
+            // Last check before the command runs, in the same main-thread frame (sts2#1037).
+            if (guard != null && CheckScenarioSetupGuardForConsole(command, guard) is { } refused)
+                return refused;
 
             CmdResult cmdResult = console.ProcessCommand(command);
             task = cmdResult.task;
@@ -145,15 +153,59 @@ public static partial class McpMod
         }
     }
 
+    /// <summary>
+    /// The guarded dev_console's refusal, or null to run. Reads the passive state and its setup guard
+    /// in the caller's main-thread frame, so a move between the client's GET and this POST is seen.
+    /// </summary>
+    private static Dictionary<string, object?>? CheckScenarioSetupGuardForConsole(
+        string? command, ScenarioSetupGuardRequest guard)
+    {
+        Dictionary<string, object?>? current = null;
+        string? reason;
+        try
+        {
+            current = ReadScenarioSetupGuardNow();
+            reason = ScenarioSetupGuardConsoleRejection(current, guard);
+        }
+        catch (Exception ex)
+        {
+            reason = $"the setup guard could not be read ({ex.GetType().Name}: {ex.Message})";
+        }
+        if (reason == null) return null;
+        var refused = DevConsoleResult(command, false,
+            $"dev_console refused by scenario_setup_guard: {reason}. The command was not executed; re-read state.");
+        refused["guard_refused"] = true;
+        refused[ScenarioSetupGuardKey] = current;
+        return refused;
+    }
+
     private static Dictionary<string, object?> ExecuteDevConsole(
         HttpListenerRequest request, Dictionary<string, JsonElement> parsed, string? command, long apiRequest)
     {
         var rejected = ValidateDevConsole(command, out var name);
+
+        // Verification-only condition (sts2#1037). A body without the key keeps the manual console as is.
+        ScenarioSetupGuardRequest? guard = null;
+        if (_devConsoleEnabled && parsed.TryGetValue(ScenarioSetupGuardKey, out var guardValue))
+        {
+            if (ParseScenarioSetupGuardRequest(guardValue, out guard) is { } guardError)
+            {
+                var invalid = DevConsoleResult(command, false, guardError);
+                invalid["guard_refused"] = true;
+                return invalid;
+            }
+            // An empty command never runs. With a guard it still checks the guard on the main
+            // thread, so the setup probe proves the guard is honoured; it then gets the unchanged
+            // empty-command rejection.
+            if (rejected != null && string.IsNullOrWhiteSpace(command))
+                return RunOnMainThreadBlocking(() => CheckScenarioSetupGuardForConsole(command, guard!), MainThreadTimeoutMs)
+                    ?? rejected;
+        }
         if (rejected != null) return rejected;
 
         Task? commandTask = null;
         return ExecuteWithOptionalWait(request, parsed,
-            Recorder.CombatRecorder.InHandler(apiRequest, () => StartDevConsole(command!, name, out commandTask)),
+            Recorder.CombatRecorder.InHandler(apiRequest, () => StartDevConsole(command!, name, guard, out commandTask)),
             (dispatched, deadline) => CompleteDevConsole(dispatched, commandTask, deadline));
     }
 

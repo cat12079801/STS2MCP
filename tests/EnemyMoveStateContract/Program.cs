@@ -361,7 +361,7 @@ public static partial class McpMod
         string stun = Source("McpMod.EnemyStunHandler.cs");
         Check(!stun.Contains(".Invoke(") && !stun.Contains("DynamicInvoke") && !Source("McpMod.EnemyMoveState.cs").Contains("GetNextState(")
             && !Source("McpMod.EnemyMoveState.cs").Contains("RollMove("), "delegate・抽選・遷移を呼ばない");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 9;"), "現行の schema は 9（sts2#1034）");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 10;"), "現行の schema は 10（sts2#1037）");
         Console.WriteLine($"敵行動状態の契約試験: {Checks} 件成功");
     }
 }

@@ -175,7 +175,8 @@ public static partial class McpMod
         return null;
     }
 
-    private static Dictionary<string, object?> ExecuteSelectGridCard(NCardGridSelectionScreen screen, int index)
+    private static Dictionary<string, object?> ExecuteSelectGridCard(NCardGridSelectionScreen screen, int index,
+        string? expectedUid = null)
     {
         if (!IsCardSelectScreenStillOpen(screen) || !screen.IsInsideTree())
             return Error("Card selection screen is not the live current overlay");
@@ -192,6 +193,11 @@ public static partial class McpMod
         var method = FindCardSelectClickMethod(screen.GetType());
         if (method == null)
             return Error("No concrete OnCardClicked(CardModel) method on selection screen");
+
+        // UID-checked pick (sts2#1037): refuse before anything on screen changes; checked again
+        // below on the snapshot the click uses.
+        if (expectedUid != null && GridExpectedUidMismatch(expectedUid, index, candidates[index]) is { } mismatch)
+            return Error(mismatch);
 
         // A screen hidden under the map (or a peek) is brought back the player's way first:
         // a hidden preview would otherwise be invisible to the check below.
@@ -212,6 +218,8 @@ public static partial class McpMod
         }
 
         var card = candidates[index];
+        if (expectedUid != null && GridExpectedUidMismatch(expectedUid, index, card) is { } mismatchAfterReveal)
+            return WithRevealed(Error(mismatchAfterReveal), revealed);
         string cardName = SafeGetText(() => card.Title) ?? "unknown";
         var before = GetCardSelectSelection(screen);
         bool? wasSelected = before?.Contains(card);
@@ -262,6 +270,19 @@ public static partial class McpMod
         }
         if (FindVisibleCardSelectPreview(screen) != null) result["preview_showing"] = true;
         return WithRevealed(result, revealed);
+    }
+
+    /// <summary>
+    /// expected_uid against the grid candidate at <paramref name="index"/>, read like the rows
+    /// (BuildCardSelectCardRows): uids exist only during a live combat.
+    /// </summary>
+    private static string? GridExpectedUidMismatch(string expectedUid, int index, CardModel card)
+    {
+        var combatManager = CombatManager.Instance;
+        var combatState = combatManager is { IsInProgress: true } ? combatManager.DebugOnlyGetState() : null;
+        if (combatState != null) RefreshCardUidRegistry(combatState);
+        return ExpectedUidMismatch(expectedUid, index, combatState != null ? GetStableCardUid(card) : null,
+            "grid rows carry uids only during a live combat");
     }
 
     /// <summary>

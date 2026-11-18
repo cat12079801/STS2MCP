@@ -95,6 +95,30 @@ Task の例外時は、ゲームの `TaskHelper.LogTaskExceptions` がログを�
 `SentryService.CaptureException` を呼ぶ（手動コンソールと同じ挙動。キャンセル例外は除く）。
 期限切れ後の Task もゲーム側の `TaskHelper.RunSafely` が観測し、MOD 側で追加の観測はしない。
 
+## 戦闘外の準備に限る条件（`scenario_setup_guard`、検証用）
+
+検証用の採取（`cat12079801/sts2#1016`・`#1037`）では、body に次を付けて「戦闘外の準備の画面でだけ実行する」条件にできる。
+付けない要求は上のとおりで変わらない（通常の手動の console の仕様は既存のまま）。
+
+```json
+{"action":"dev_console","command":"card STRIKE_IRONCLAD Deck",
+ "scenario_setup_guard":{"version":1,"expected_screen":"map"}}
+```
+
+- この条件を扱えるかは state（と `GET /`）の `scenario_capabilities.setup_guard`（`1`）で確かめてから送る。古い build は未知のキーを無視して
+  条件なしで実行するので、版の番号や項目の有無から推定しない。
+- HTTP の側で、`scenario_setup_guard` が `{version, expected_screen}` だけを持つ object で、`version` が `1`、`expected_screen` が
+  `map` / `event` / `rest_site` のどれかであることを確かめる。違えば配送せず `success: false`・`guard_refused: true` で拒否する
+  （設定が無効なら従来の無効の拒否が先）。
+- 受理したら、コマンドを `ProcessCommand` に渡す**直前に、同じメインスレッドの呼び出しの中で** passive の state を組み、
+  [`scenario_setup_guard`](raw-full.md#戦闘外の準備の判定scenario_setup_guardschema-10) を判定する。`allowed` が true で `screen` が
+  `expected_screen` と同じときだけ実行する。クライアントの GET と POST のあいだに画面が動いた（別の準備画面・戦闘・選択・`game_over`）、
+  戦闘が始まった、値が読めないときは実行せず、`success: false`・`guard_refused: true`・その時点の `scenario_setup_guard` を返す。
+  判定は state の読取だけで、何も押さず、乱数・hook を使わない（shop の在庫を開くなどの非 passive の読取の副作用も起こさない）。
+- 空のコマンドは実行しない。ガード付きの空のコマンドはメインスレッドで判定を通し、通れば従来の拒否文
+  `dev_console requires a non-empty string 'command'.` をそのまま返す（準備の前の設定確認に使う）。通らなければガードの拒否を返す。
+  許可リスト外のコマンドは判定を読まずに従来どおり拒否する。
+
 ## 許可リストと実名
 
 局面作成と、設計で指定された `dump` / `log` の診断用途に限定する。

@@ -852,7 +852,7 @@ public static partial class McpMod
         }
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 9;"), "current schema is 9 (sts2#1034)");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 10;"), "current schema is 10 (sts2#1037)");
         Check(Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = power.Type.ToString(),")
             && Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = SafeGetText(() => power.Type.ToString()),"),
             "status type stays PowerModel.Type in full and minimal rows (TypeForCurrentAmount is the new key)");

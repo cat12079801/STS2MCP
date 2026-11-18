@@ -76,6 +76,18 @@ namespace STS2_MCP
         private const int SettleConsecutivePolls = 3;
         private const int SettleNoChangeGiveUpMs = 3_000;
         private static int DispatchCalls;
+        // The live guard read (McpMod.ScenarioGuardLive.cs) is a boundary: what the main thread sees
+        // in the frame that would run the command. Records whether it was read inside a dispatch.
+        private static bool InDispatch;
+        private static int GuardReads;
+        private static int GuardReadsOutsideDispatch;
+        private static Func<Dictionary<string, object?>> GuardNow = () => throw new InvalidOperationException("guard not configured");
+        internal static Dictionary<string, object?> ReadScenarioSetupGuardNow()
+        {
+            GuardReads++;
+            if (!InDispatch) GuardReadsOutsideDispatch++;
+            return GuardNow();
+        }
         private static int StateReads;
         private static readonly Queue<int> DispatchDelays = new();
         private static readonly List<int> DispatchTimeouts = new();
@@ -87,7 +99,9 @@ namespace STS2_MCP
             int delay = DispatchDelays.Count == 0 ? 0 : DispatchDelays.Dequeue();
             Thread.Sleep(Math.Min(delay, timeoutMs));
             if (delay > timeoutMs) throw new MainThreadUnavailableException("simulated stalled frames");
-            return action();
+            InDispatch = true;
+            try { return action(); }
+            finally { InDispatch = false; }
         }
         private static Dictionary<string, object?> BuildGameState() { StateReads++; return ReadState(); }
         private static string StateFingerprint(Dictionary<string, object?> state) => (string)state["phase"]!;

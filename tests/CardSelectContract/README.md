@@ -41,7 +41,7 @@ Markdown に `instance:` の 1 行が出ること、戦闘外の行には付か�
 
 ゲームのモデル・ノード・combat registry・カード情報作成・強化プレビュー作成は境界ダブル。
 実ゲームのソート、描画、ハイライト、シグナル、効果適用、uid の registry 本体を動かした証拠にはならない。
-schema 9、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
+schema 10、旧 `selected_outside_grid` の削除、state/action からリンク対象への配線は、
 巨大な state/action 全体をリンクせず、ビルド出力へコピーした本番ソースへの文字列検査で確認する。
 choose は formatter の即時選択案内・見出しを検査し、choose action / bundle / 手札の統合回帰は実機で行う。
 
@@ -65,3 +65,5 @@ choose は formatter の即時選択案内・見出しを検査し、choose acti
 デッキ枚数と実候補数、前後の state/action、確定前後のデッキを記録する。
 戦闘 pile のゲーム側 min/max 判定が生成済み holder 数で切り詰められる既存制約は今回の修正範囲外。
 sts2 側の利用コードと full selftest も別途調整役で確認する。
+
+`expected_uid`（`cat12079801/sts2#1037`）: 戦闘中の grid で、正規化した候補の index の個体の uid と照合してから押すこと（同名の別個体・並べ替え後・戦闘の state が無い・戦闘外・範囲外は押さずに拒否）。

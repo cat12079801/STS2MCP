@@ -3,7 +3,7 @@
 HTTP API served by the STS2_MCP mod on `localhost:15526`. No authentication. Local use only.
 
 **Endpoints:**
-- `GET  /` — health check: `{ "message", "status", "version", "commit", "schema_version" }`
+- `GET  /` — health check: `{ "message", "status", "version", "commit", "schema_version", "scenario_capabilities" }`
 - `GET  /api/v1/singleplayer` — read current game state
 - `POST /api/v1/singleplayer` — perform a game action
 - `GET  /api/v1/multiplayer` — read multiplayer game state
@@ -66,6 +66,8 @@ httpx はこれらのブラウザ用ヘッダーを送らず、POST に JSON の
 |-----------|-----------------------------------------------|---------|-----------------------------------------------------------------|
 | `format`  | `json`, `markdown`                            | `json`  | Response format                                                 |
 | `pretty`  | `1`, `true`, `yes` (or present with no value) | off     | Indent the JSON. Off by default — compact output is ~32% smaller |
+| `passive` | `1`, `true`, `yes`                            | off     | Read without UI side effects (no auto-opened merchant inventory, no fake-merchant / chest press) |
+| `scenario_setup_guard` | `1`, `true`, `yes`               | off     | With `passive` only: add [`scenario_setup_guard`](#戦闘外の準備の判定scenario_setup_guardschema-10) (verification runs) |
 
 JSON responses are compact by default; `pretty` opts into indentation for that one request. It works on
 every JSON-returning endpoint, on POST as well as GET (e.g. `POST /api/v1/singleplayer?pretty=1`), and on
@@ -82,15 +84,28 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 9       // Contract version — see below
+  "schema_version": 10,     // Contract version — see below
+  "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 0 }
 }
 ```
+
+`scenario_capabilities` names the verification contracts this build implements, as contract versions
+(`0` = not implemented): `setup_guard` = the passive [`scenario_setup_guard`](#戦闘外の準備の判定scenario_setup_guardschema-10)
+and the guarded `dev_console`; `selection_uid` = `hand_select` rows / `selected_cards` by uid at the holder index
+and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability` = the potion can-use-now contract
+(`cat12079801/sts2#1012`, not in this build). It is a build constant on every state (and `GET /`). A client gates
+on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
+sent to one would run unchecked.
 
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
-The exceptions are **6**, **7**, **8** and **9**: additive contracts that a client treats as required as a whole, so
-they are gated on the version instead of probing each field.
+The exceptions are **6**, **7**, **8**, **9** and **10**: additive contracts that a client treats as required as a whole, so
+they are gated on the version instead of probing each field. **10** (`cat12079801/sts2#1037`, the verification-capture
+contract) also changes two `hand_select` meanings: `cards[].index` is now the `NPlayerHand.ActiveHolders` position that
+`combat_select_card` presses (a holder without a card leaves a gap instead of shifting later rows), and `selected_cards`
+is always present (`[]` when none, `null` when unreadable) and lists the hand's `_selectedCards` (the upgrade preview's card
+included) instead of the selected-card container's holders.
 
 `game_version` and `game_commit` come from the game's `ReleaseInfoManager`, which reads
 `release_info.json` (`.app/Contents/Resources/release_info.json` on macOS). They identify the
@@ -878,7 +893,7 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 本節の項目は schema 4 で追加した（追加時に版は上げていない）。
-同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **9**。
+同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次々節）。現在の `schema_version` は **10**。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
@@ -1517,6 +1532,47 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 
 ---
 
+### 戦闘外の準備の判定（`scenario_setup_guard`、schema 10）
+
+検証用の GET（`?passive=1&scenario_setup_guard=1`）だけで、state に戦闘外で準備（開発コンソール）してよいかの根拠を足す。
+`passive` の無い GET には付けない。state と同じメインスレッドの呼び出しの中で読む。
+
+```jsonc
+"scenario_setup_guard": {
+  "version": 1,
+  "screen": "map",              // 判定した state_type
+  "room": "MapRoom",            // RunState.CurrentRoom の実型名。部屋なしは null
+  "combat_starting": false,     // CombatManager.IsStarting
+  "combat_in_progress": false,  // CombatManager.IsInProgress
+  "run_over": false,            // RunState.IsGameOver
+  "allowed": true,
+  "reason": null                // allowed が false のときの理由（下表）。true なら null
+  // 読めない値は null にし、"unavailable_reasons": ["<項目>: <例外>"] を付ける
+}
+```
+
+`allowed` が true になるのは、ランが進行中で終わっておらず、戦闘の開始中でも進行中でもなく、解決中（`is_resolving`）でもなく、
+前面の画面とその部屋が次の組のどれかのときだけ: `map` と `MapRoom`、`event` と Neow（`EventRoom.CanonicalEvent is Neow`）の `EventRoom`、
+`rest_site` と `RestSiteRoom`。選択・報酬・ショップ・メニュー・`game_over`・未対応の画面、戦闘や別の部屋に重なった `map` は許さない。
+値が読めないときは許さない。true 以外は準備不可として扱う。
+
+| `reason` | 意味 |
+|---|---|
+| `no_run` | ランが進行していない（メニュー） |
+| `unreadable` | 判定に要る値が読めない（`unavailable_reasons`） |
+| `run_over` | `RunState.IsGameOver` |
+| `combat_in_progress` / `combat_starting` | 戦闘の進行中 / 開始中 |
+| `screen_not_setup` | 前面が `map` / `event` / `rest_site` 以外 |
+| `resolving` | `is_resolving` が true |
+| `no_current_room` | `CurrentRoom` が無い（移動中など） |
+| `room_not_setup` | 部屋が `MapRoom` / `EventRoom` / `RestSiteRoom` 以外（戦闘・ショップ・宝箱の部屋に重なった map など） |
+| `screen_room_mismatch` | 準備用の部屋だが、前面の画面がその部屋のものでない（Neow の部屋に重なった map など） |
+| `event_not_neow` | Neow 以外のイベント |
+
+同じ判定を、`scenario_setup_guard` 付きの `dev_console` がコマンドを実行する直前にも行う（[検証用の開発コンソール](#検証用の開発コンソール既定は無効)）。
+出典（v0.113.1、`sts2-a671e9ef`）: `RunState.CurrentRoom` / `IsGameOver`、`CombatManager.IsStarting` / `IsInProgress`、`EventRoom.CanonicalEvent`、`Neow`。
+GET は何も押さず、乱数・hook を使わない。
+
 ## State Types
 
 ### `menu`
@@ -2097,9 +2153,12 @@ Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". *
   "hand_select": {
     "mode": "simple_select",     // "simple_select" or "upgrade_select"
     "prompt": "Select a card to Exhaust.",
+    "peeking": false,            // schema 10: PeekButton.IsPeeking (null if unreadable)
     "cards": [
       {
-        "index": 0,
+        "index": 0,              // schema 10: position in NPlayerHand.ActiveHolders (see below)
+        "uid": "STRIKE_R#0",     // schema 10: same uid as the card's player.hand row
+        "enabled": true,         // schema 10: false while peeking (the game ignores presses)
         "id": "STRIKE_R",
         "name": "Strike",
         "type": "Attack",
@@ -2111,9 +2170,11 @@ Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". *
         "combat_instance": { "source": "pile", "pile": "Hand", "uid": "STRIKE_R#0", "unavailable_reasons": {} } // schema 7
       }
     ],
-    "selected_cards": [          // Only present if cards have been selected
-      { "index": 0, "name": "Defend" }
+    "selected_cards": [          // schema 10: always present; [] = none selected, null = unreadable
+      { "index": 0, "id": "DEFEND_R", "name": "Defend", "uid": "DEFEND_R#4" }
     ],
+    "min_select": 1,             // schema 10: NPlayerHand._prefs.MinSelect (null if unreadable)
+    "max_select": 1,             // schema 10: NPlayerHand._prefs.MaxSelect (null if unreadable)
     "can_confirm": false
   },
   "battle": { ... },  // Full battle state included for context
@@ -2121,6 +2182,25 @@ Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". *
   "player": { ... }
 }
 ```
+
+#### 手札選択の候補と uid（schema 10）
+
+`cards[]` は `NPlayerHand.ActiveHolders`（見えている holder。選択の絞り込みに通らない札は隠れるので含まれない）の順で、
+`index` はその **holder の位置**（`combat_select_card` が押す位置と同じ）。`CardModel` の無い holder は行を出さず
+（`warnings` に `hand_select.cards[<index>]`）、後ろの行の index を詰めない。`uid` は `NPlayerHand.ActiveHolders[i].CardModel` を
+`player.hand[]` と同じ registry（`GetStableCardUid`）に渡した値で、戦闘の state が読めないときは null。
+`enabled` は押下が効くか: 覗き見中（`PeekButton.IsPeeking`。このあいだは絞り込みも外れて全札が見える）は false、
+覗き見の値が読めないときも false。`player.hand[]` とは配列の位置・名前で対応付けず、`uid` で対応付ける。
+
+`selected_cards` は `NPlayerHand._selectedCards`（確定でゲームが返すモデルの列。強化モードの preview の札も含む）を選んだ順に
+`{index, id, name, uid}` で返す。読めた空は `[]`、読めないときは `null` と `selected_cards_unavailable_reason`・`warnings`。
+選択済みの並びは照合に使わず、uid の集合で比べる。`min_select` / `max_select` は `NPlayerHand._prefs`（`CardSelectorPrefs`）で、
+ゲームは選択数がこの範囲にあるときだけ確定ボタンを有効にする（`RefreshSelectModeConfirmButton`）。読めないときは null と
+`select_range_unavailable_reason`。`can_confirm` は `%SelectModeConfirmButton` が有効かつ表示中で、`combat_confirm_selection` も同じ判定で押す。
+
+出典（v0.113.1、`sts2-a671e9ef`）: `NPlayerHand.ActiveHolders` / `_selectedCards` / `_prefs` / `PeekButton` /
+`OnHolderPressed`（覗き見中は押下を無視）/ `UpdateSelectModeCardVisibility`（覗き見中以外は絞り込みで holder を隠す）/
+`SelectCardInSimpleMode` / `SelectCardInUpgradeMode` / `RefreshSelectModeConfirmButton`。
 
 ### `rewards` — Rewards Screen
 
@@ -3058,6 +3138,14 @@ Task の期限切れは HTTP 200 / `status: "error"` / `task_completed: false`�
 `remove` の実名は `remove_card`。設定・全許可名・拒否条件・出典は
 [開発コンソール API](dev-console.md) を参照。
 
+検証用の戦闘外の準備では body に `"scenario_setup_guard": {"version": 1, "expected_screen": "map" | "event" | "rest_site"}` を付けられる
+（schema 10、`scenario_capabilities.setup_guard`）。型・版・画面・未知のキーが合わなければ実行せずに拒否する。
+受理したらメインスレッドでコマンドを実行する直前に、同じフレームで passive の state を組んで
+[`scenario_setup_guard`](#戦闘外の準備の判定scenario_setup_guardschema-10) を判定し、`allowed` が true で `screen` が `expected_screen` と同じときだけ実行する。
+GET のあとに画面が動いた・戦闘が始まった・読めないときは `success: false`・`guard_refused: true`・その時点の `scenario_setup_guard` を返し、何も実行しない。
+空のコマンドは実行しないが、ガード付きなら判定を通したうえで従来の拒否文（`dev_console requires a non-empty string 'command'.`）を返す
+（判定に通らなければガードの拒否）。キーの無い要求は従来どおり。
+
 
 ### Success Response
 
@@ -3245,12 +3333,16 @@ End the player's combat turn.
 Select a card during in-combat hand selection (exhaust, discard, upgrade prompts).
 
 ```json
-{ "action": "combat_select_card", "card_index": 0 }
+{ "action": "combat_select_card", "card_index": 0, "expected_uid": "STRIKE_R#0" }
 ```
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `card_index` | int | Yes | Index in the selectable hand cards |
+| `card_index` (alias `index`) | int | Yes | `hand_select.cards[].index`: the `NPlayerHand.ActiveHolders` position (schema 10) |
+| `expected_uid` | string | No | `hand_select.cards[].uid` (schema 10). When given, the card at that holder must still have this uid and the hand must not be peeked at; otherwise nothing is pressed and `status: error` |
+
+A holder without a card is refused (nothing pressed) with or without `expected_uid`. Without `expected_uid` the
+press is otherwise unchanged.
 
 ### `combat_confirm_selection`
 
@@ -3260,7 +3352,7 @@ Confirm the in-combat hand card selection.
 { "action": "combat_confirm_selection" }
 ```
 
-**Errors:** No selection active, confirm button not enabled (select more cards first).
+**Errors:** No selection active, confirm button not enabled or not shown (select more cards first) — the same check as `hand_select.can_confirm`.
 
 ### `claim_reward`
 
@@ -3439,6 +3531,7 @@ Select a card in a card selection overlay.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `index` (alias `card_index`) | int | Yes | 0-based index in the latest full `card_select.cards` candidate list; no scrolling required |
+| `expected_uid` | string | No | `card_select.cards[].uid` (schema 10; rows have uids only during a combat). When given, the grid candidate (same normalized snapshot the click uses) or choose-a-card holder at `index` must have this uid; otherwise nothing is pressed or revealed and `status: error`. Out of combat (no uids) it is always refused |
 
 **Behavior varies by screen type:**
 - Grid screens: pass the original model at the full candidate index to the concrete game's
