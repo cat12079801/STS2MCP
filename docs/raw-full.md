@@ -82,13 +82,15 @@ Every response — `menu` and error-ish states included — carries the build st
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema_version": 5       // Contract version — see below
+  "schema_version": 6       // Contract version — see below
 }
 ```
 
 `schema_version` is bumped **only** when an existing field or action changes meaning or is removed.
 Purely additive changes (new fields, actions, parameters, `state_type`s) do not bump it, so
 feature-detect additions by presence and use `schema_version` only to notice a breaking change.
+The one exception is **6**: an additive contract that a client treats as required as a whole, so it
+is gated on the version instead of probing each field.
 
 `game_version` and `game_commit` come from the game's `ReleaseInfoManager`, which reads
 `release_info.json` (`.app/Contents/Resources/release_info.json` on macOS). They identify the
@@ -96,6 +98,13 @@ running game's release, independently of the mod build. Singleplayer, multiplaye
 states carry them; markdown also shows the game stamp. Dump consumers should copy these
 fields into their own `meta.json` (dump metadata is not written by this mod).
 
+- **6** — the enemy-move input contract (`cat12079801/sts2#1018`). `battle.enemies[].move_state`
+  gains the full move log, the state machine's current/initial state, the first-move and
+  spawned-this-turn flags, the terminal-move flag and the `CreatureCmd.Stun` handler; every enemy
+  row gains `slot_name`; `battle` gains `enemy_move_context`; `combat_state` covers more enemies;
+  Ritual rows carry `was_just_applied_by_enemy`. Existing fields keep their meaning (additive);
+  the version is bumped so a client can require the whole contract. See
+  [敵の行動の入力](#敵の行動の入力schema-6).
 - **5** — every combat card row (`player.hand[]` and the draw/discard/exhaust/play piles) always
   carries `upgrade_preview` with a `status` (`ready` / `not_upgradable` / `unavailable`).
   It used to be a hand-only display object attached only while an upgrade card was in reach,
@@ -847,7 +856,7 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `energy_cost.unavailable_reasons` はコスト専用、行の `unavailable_reasons` は本節の項目用。
 
 本節の項目は schema 4 で追加した（追加時に版は上げていない）。
-同じ行の `upgrade_preview` の意味を変えたので、現在の `schema_version` は **5**（次節）。
+同じ行の `upgrade_preview` の意味を変えたので schema 5 に上げた（次節）。現在の `schema_version` は **6**。
 
 出典（v0.113.0、`sts2-d009478a` デコンパイル）は `CardModel.Type` / `TargetType` /
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
@@ -1567,6 +1576,7 @@ Run state or room type not recognized.
         "name": "Jaw Worm",
         "alive": true,                 // Always present. false = dead but still in the fight
         "hittable": true,              // Creature.IsHittable; null when unreadable (see below)
+        "slot_name": "front",          // Creature.SlotName; null = no slot (schema 6)
         "hp": 44,
         "max_hp": 44,
         "block": 0,
@@ -1606,7 +1616,8 @@ Run state or room type not recognized.
         },
         "intents": []                  // Becomes a Heal intent on the turn before the revive
       }
-    ]
+    ],
+    "enemy_move_context": { /* schema 6: ascension levels, Dread, encounter slots (see below) */ }
   },
   "run": { ... },
   "player": { ... }  // Includes hand, energy, piles, orbs during combat
@@ -1646,10 +1657,10 @@ left to reattach to, the fight is over rather than about to restart.
 - Markdown は HP の行に `| Hittable: yes|no`（読めなければ `null (理由)`）。追加だけなので版は上げていない（schema 4 のときの追加）。
 - 契約試験は [`tests/EnemyHittableContract`](../tests/EnemyHittableContract/README.md)。
 
-#### 敵の行動状態（追加、schema 4）
+#### 敵の行動状態（追加、schema 4。入力の追加は schema 6）
 
 `battle.enemies[].move_state` は全モンスターに出す。生存敵・戦闘に残る死亡敵、
-単独・協力プレイで共通。追加契約なので版は上げていない（schema 4 のときの追加）。旧 MOD の欠落は unknown。
+単独・協力プレイで共通。四値は schema 4 のときの追加、残りの項目は schema 6（[敵の行動の入力](#敵の行動の入力schema-6)）。旧 MOD の欠落は unknown。
 意図の type・label・round や MOD 独自の履歴から値を補完しない。
 
 ```json
@@ -1672,7 +1683,7 @@ left to reattach to, the fight is over rather than about to restart.
 
 **時機（`id` がいつ次の行動か）:** プレイヤーが入力できる落ち着いた局面では、`id` は次の敵手番で実行する行動。次の行動を抽選する `RollMove` は、プレイヤー側の追加ターンでない手番の始め（`CombatManager.StartTurn` → `Creature.PrepareForNextTurn`）と、プレイヤーの手番中に敵が追加されたとき（`CombatManager.AfterCreatureAdded`）にだけ呼ばれる。同じ手番の中でも `MonsterModel.SetMoveImmediate` が置き換えることがある（スタン・`Queen` の激昂・`ReattachPower`・`IllusionPower` など）。敵が行動してから次のプレイヤー手番が始まるまでは、実行済みの行動の ID が残る。追加ターンでは抽選しない（敵はまだ行動していないので `id` は次の行動のまま）。
 
-**次の行動を持たない行動:** `GasBomb` の `EXPLODE_MOVE`（`GasBomb.GenerateMoveStateMachine`。爆発のあと自分を倒す）のように、ゲームが `FollowUpState` も `FollowUpStateId` も設定しない行動では、`follow_up_id` は null で `readable` は false、warnings に `follow_up_id` の理由が出る。読取の失敗と区別できないので、読み手は `id` で判断する。
+**次の行動を持たない行動:** `GasBomb` の `EXPLODE_MOVE`（`GasBomb.GenerateMoveStateMachine`。爆発のあと自分を倒す）のように、ゲームが `FollowUpState` も `FollowUpStateId` も設定しない行動では、`follow_up_id` は null で `readable` は false、warnings に `follow_up_id` の理由が出る（四値の意味は変えていない）。読取の失敗とは schema 6 の `has_follow_up`（終端なら false の実値、読取失敗なら null と理由）で区別する。
 
 参照・ログ末尾がない場合や読取例外では、該当項目だけ `null` とし、
 `move_state.unavailable_reasons.<key>` に `ExceptionType: message`、トップレベルの
@@ -1712,6 +1723,99 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
   はログへ追加しないため、スタンの ID・復帰先・ログ末尾は同一とは限らない。
 - `LouseProgenitor.GenerateMoveStateMachine` は `WEB_CANNON_MOVE` → `CURL_AND_GROW_MOVE`
   → `POUNCE_MOVE` → WEB の参照を設定する。`Curled` は今回の公開対象に含めない。
+
+#### 敵の行動の入力（schema 6）
+
+敵の行動表（ソースの `GenerateMoveStateMachine` と各 Move から生成したもの。`cat12079801/sts2#1018`）を、
+ゲームの現在の状態から確定的に評価するための入力。既存の項目の意味は変えていない（追加）が、
+読み手がこの契約一式を必須として扱えるように `schema_version` を 6 に上げた。
+すべてゲームスレッドで読むだけで、`GetNextState`・`RollMove`・`GenerateMoveStateMachine`・乱数を使う getter・
+行動の delegate を呼ばず、状態を変えない。各項目は個別に成否を持ち、失敗した項目だけ `null` と
+`unavailable_reasons.<key>`・warnings（`battle.enemies.<entity_id>.move_state.<key>` など）にする。
+死亡中・復活待ちの敵の行にも同じ契約で出す。
+
+**`move_state` の追加項目**（`readable` は従来どおり四値だけで決まり、追加項目の成否は `inputs_readable` にまとめる）:
+
+```json
+{
+  "readable": true, "id": "STUNNED", "follow_up_id": "ROLL_OUT_MOVE",
+  "last_logged_id": "SLEEP_MOVE", "can_transition_away": false,
+  "has_follow_up": true,
+  "must_perform_once": true,
+  "current_state_id": "STUNNED",
+  "initial_state_id": "SLEEP_MOVE",
+  "performed_first_move": true,
+  "spawned_this_turn": false,
+  "state_log": [{"id": "SLEEP_MOVE", "is_move": true}, {"id": "SLEEP_MOVE", "is_move": true}],
+  "is_stun": true,
+  "stun_handler": "SlumberingBeetle.WakeUpMove",
+  "inputs_readable": true
+}
+```
+
+| 項目 | 読取元・意味 |
+| --- | --- |
+| `has_follow_up` | `NextMove.FollowUpState?.Id ?? NextMove.FollowUpStateId`（`MoveState.GetNextState` と同じ式）が null でないか。false は「次の行動が無い」終端の実値（`GasBomb.EXPLODE_MOVE`）。空文字列の follow-up（初期地点へ戻る）は true |
+| `must_perform_once` | `NextMove.MustPerformOnceBeforeTransitioning`。true の間、`CanTransitionAway` は実行済みフラグを返す（スタン・`CeremonialBeast.STUN_MOVE` など） |
+| `current_state_id` | private `MonsterMoveStateMachine._currentState.Id`。状態機械の現在地点で、分岐状態（`ConditionalBranchState` / `RandomBranchState`）のこともある。実行予定の `id`（`NextMove`）とは別に保持する |
+| `initial_state_id` | private `MonsterMoveStateMachine._initialState.Id`。`FindNextMoveState` は空文字列の follow-up をここへの遷移として扱う。`Chomper._screamFirst`・`CorpseSlug._starterMoveIdx` などの初期地点の選択はこの値で読める |
+| `performed_first_move` | private `MonsterMoveStateMachine._performedFirstMove`。`OnMovePerformed` で true。false の間、現在地点が `MoveState` なら `FindNextMoveState` は遷移しない（最初の行動の保持） |
+| `spawned_this_turn` | `MonsterModel.SpawnedThisTurn`。`SetUpForCombat` で true、`OnSideSwitch` で false。`Creature.TakeTurn` は true の敵の行動を飛ばす |
+| `state_log` | `MonsterMoveStateMachine.StateLog` の全要素を順序・重複のまま `{id, is_move}`（`MonsterState.Id` / `IsMove`）で。`RandomBranchState` の `UseOnlyOnce` は全ログ、`CannotRepeat` / `CanRepeatXTimes` は末尾の連続、cooldown は `is_move` の要素だけを末尾から数える。空配列 `[]` はログが本当に空（分岐状態から始まり未抽選）という実値で、`last_logged_id` の読取失敗（空）と区別する。要素が一つでも読めなければ全体を `null`（途中までの配列は返さない）。末尾が `last_logged_id` と一致しなければ `null` と理由 |
+| `is_stun` | `NextMove` の private `MoveState._onPerform` が `CreatureCmd.Stun` のローカル関数 Wrapper（v0.113.1 では `CreatureCmd+<>c__DisplayClass30_0.<Stun>g__Wrapper\|0`）か。`Creature.StunInternal` が `STUNNED` に入れる delegate。false は「スタンではない」実値 |
+| `stun_handler` | `is_stun` のとき、Wrapper が捕捉した `stunMove`（宣言型と delegate 型を検査して読む。呼ばない）を許可リストの名前に対応付ける。`CreatureCmd.Stun.no_op`（引数なしの `CreatureCmd.Stun` の `_ => Task.CompletedTask`。宣言型が `CreatureCmd` の入れ子で IL が `call Task.get_CompletedTask; ret` だけであることを確かめる）、`BowlbugRock.DizzyMove`、`SlumberingBeetle.WakeUpMove`、`Tunneler.StillDizzyMove`、`CeremonialBeast.StunnedMove`、`LagavulinMatriarch.WakeUpMove`、`RavenousPower.StunnedMove`、`FlutterPower.StunnedMove`。Wrapper の `creature` がこの個体でない・敵のメソッドの Target がこの個体でない・許可リストに無い delegate は `null` と理由（未観測）。`is_stun=false` なら理由なしの `null`。同じ復帰先（例: `ROLL_OUT_MOVE`）でも通常のスタンと起床はこの値で区別し、復帰 ID の一致では起床扱いにしない |
+| `inputs_readable` | 上の項目がすべて読めたときだけ true |
+
+`stun_handler` の許可リストは、v0.113.1 で `CreatureCmd.Stun(creature, stunMove, nextMoveId)` に処理を渡す呼び出しの全件
+（`BowlbugRock.Stun`、`SlumberPower.AfterDamageReceived`、`BurrowedPower.AfterBlockBroken`、`PlowPower.AfterDamageReceived`、
+`AsleepPower.AfterDamageReceived`、`RavenousPower.AfterDeath`、`FlutterPower.AfterDamageReceived`）。引数なしの呼び出し
+（`Whistle`、`PlowPower` の他の敵、`ImbalancedPower`、`ShriekPower`）は `CreatureCmd.Stun.no_op`。
+
+Markdown の行動の行は、スタン中は `| stun: ` の後に処理の名前、ログは `| log(5): … ` の後に末尾 4 件の ID と件数、
+終端の行動は `(none: terminal move)` を足し、追加項目だけの失敗は `| inputs unreadable (項目: 理由)` と表示する。
+
+**敵の行の `slot_name`:** `Creature.SlotName`（auto-property）の文字列。`null` はスロット無しの実値で、読取失敗は `null` と
+行の `unavailable_reasons.slot_name`・warning `battle.enemies.<entity_id>.slot_name`。Markdown の HP 行に `| Slot: front`。
+`Exoskeleton`・`Myte`・`PhantasmalGardener`・`Wriggler` の初期地点の条件分岐がこの値を読む。
+
+**`battle.enemy_move_context`:**
+
+```json
+{
+  "game_assembly_sha256": "a671e9efb86a7b80…",
+  "game_mode": "Standard",
+  "is_dread": false,
+  "ascension_levels": ["SwarmingElites", "WearyTraveler", "…", "Scarcity"],
+  "combat_player_count": 1,
+  "has_encounter": true,
+  "encounter_id": "NIBBITS_WEAK",
+  "encounter_slots": [{"name": "front", "occupant_ids": ["NIBBIT_0"]}, {"name": "back", "occupant_ids": []}],
+  "readable": true
+}
+```
+
+| 項目 | 読取元・意味 |
+| --- | --- |
+| `game_assembly_sha256` | ロードした本体 DLL 全体の SHA-256（`player.generation_pool.game_assembly_sha256` と同じ値）。行動表の版との照合用 |
+| `game_mode` | `CombatState.RunState.GameMode`（`Standard` / `Daily` / `Dread` / `Blitz`） |
+| `is_dread` | `RunManager.IsDread()`（`AscensionHelper.IsDread` の参照先） |
+| `ascension_levels` | `AscensionLevel` の各値（`None` を除く）のうち `RunManager.HasAscension(level)` が true のものを列挙順で。`AscensionHelper.GetValueIfAscension` の参照先そのもの（Blitz の段階の対応 `GetLevelForBlitz` も含まれる）。`run.ascension` の数値から作らない |
+| `combat_player_count` | `CombatState.Players.Count`。`KnowledgeDemon.PonderMove`・`WaterfallGiant.SiphonMove` などが掛ける人数 |
+| `has_encounter` | `CombatState.Encounter` があるか |
+| `encounter_id` | `Encounter.Id.Entry`。遭遇が無ければ理由なしの `null` |
+| `encounter_slots` | `Encounter.Slots` の並び（`GetNextSlot` は先頭の空き、`Ovicopter.LayEggsMove`・`TwoTailedRat.CallForBackup` は末尾の空き）と、各スロットの `CombatState.Enemies` 全体（戦闘に残る死亡個体を含み、`battle.enemies` の絞り込みではない）の占有個体の `entity_id`。遭遇が無ければ `[]`。一人でも `SlotName` が読めなければ全体を `null` |
+| `readable` | 上の項目がすべて読めたときだけ true |
+
+`RunManager.IsInProgress` が false のとき、ゲームの getter は Ascension・Dread を「無し」として返すので、`is_dread`・
+`ascension_levels`・`encounter_slots`（`TheKinBoss.Slots` は `IsDread` を読む）は読まずに `null` と理由にする。
+Markdown は `## Enemies` の下に `Enemy move context: mode Standard | dread no | ascension … | encounter … | slots front=NIBBIT_0, back=empty` の 1 行。
+
+**公開しないもの:** まだ表示されていない抽選の結果（乱数器・seed・抽選済みの次の分岐先）は出さない。ランダム分岐は
+`state_log` と公開値から分布として扱う。各敵の private の現在値は [敵の戦闘内部状態](#敵の戦闘内部状態追加schema-4) の許可リストに出す。
+儀式（`RITUAL_POWER`）の付与ターンの印は status 行の `was_just_applied_by_enemy`（[`power-internal-state.md`](power-internal-state.md)）。
+
+契約試験は [`tests/EnemyMoveStateContract`](../tests/EnemyMoveStateContract/README.md)（`move_state`・スタンの処理）と
+[`tests/EnemyCombatStateContract`](../tests/EnemyCombatStateContract/README.md)（`combat_state`・`slot_name`・`enemy_move_context`）。
 
 #### 敵の攻撃の意図（追加、schema 4）
 
@@ -1770,8 +1874,8 @@ Markdown は意図の行の `label` の後に `[attack: base 20 | hits 1 | resol
 
 #### 敵の戦闘内部状態（追加、schema 4）
 
-`battle.enemies[].combat_state` は許可リストの敵にだけ出す。いまは滝の巨人（`WaterfallGiant`）だけで、
-他の敵・旧 MOD では省略する（欠落は unknown）。生存敵・戦闘に残る死亡中の敵、単独・協力プレイで共通。
+`battle.enemies[].combat_state` は許可リストの敵にだけ出す。滝の巨人（`WaterfallGiant`、schema 4 のときの追加）と、
+schema 6 で足した行動の入力の敵（下の表）。他の敵・旧 MOD では省略する（欠落は unknown）。生存敵・戦闘に残る死亡中の敵、単独・協力プレイで共通。
 宣言型 `WaterfallGiant` の private フィールドと、副作用の無い getter を宣言型・型を検査して読むだけで、
 move の実行・初期化・乱数・履歴の集計はしない。HP・行動 ID・パワー・Ascension の値から作らない。
 すべて非負の int（`is_about_to_blow` だけ bool）で、false・0 も実値。
@@ -1806,6 +1910,28 @@ getter の 6 項目を `null`（理由付き）にする。括弧内の値は v0
 負の値は該当項目を `null`・理由にする（0 に丸めない）。
 Markdown は行動の行の次に `Combat state: is about to blow: no | steam eruption damage: 0 | current pressure gun damage: 20 | …` と表示し、
 失敗は `null (理由)` と表示する。
+
+**行動の入力の敵（schema 6、`cat12079801/sts2#1018`）:** 行動の分岐・効果量に効く現在値のうち、ほかの state（HP・status・
+`move_state`・`enemy_move_context`）に出ないもの。宣言型・型を検査した private フィールド（Axebot だけ public getter）をそのまま読む。
+false・0・負の値も実値（`turns_until_summonable` は行動のたびに減り、負になりうる）。
+
+| 敵 | 項目 | 読取元・使われ方 |
+| --- | --- | --- |
+| `Aeonglass` | `additional_strength`・`wither_upgrade_count` | `_additionalStrength`（INCREASING_INTENSITY の筋力 = `IncreasingIntensityBaseStrength` + この値。実行のたびに +1）・`_witherUpgradeCount`（実行のたびに +1。`AfterCardGeneratedForCombat` が生成した Wither をこの回数だけ `FakeUpgrade`） |
+| `Axebot` | `stock_amount` | getter `StockAmount`（`_stockOverrideAmount ?? 2`）。BOOT_UP の筋力は `BootUpStrGain × (2 − StockAmount)` |
+| `BowlbugRock` | `is_off_balance` | `_isOffBalance`。POST_HEADBUTT の条件分岐と、HEADBUTT の攻撃の後のスタン（`DizzyMove` が false に戻す） |
+| `Fabricator` | `last_spawned_id`・`last_spawned_readable` | `_lastSpawned`（`MonsterModel?`）の `Id.Entry`。`SpawnBot` は候補から直前と同じモデルを除いて抽選する。読取に成功した null は「まだ召喚なし」（`last_spawned_readable=true`・`last_spawned_id=null`、Markdown は `none`）、読取失敗は `last_spawned_readable=false`・null・理由。同種の別個体や召喚履歴から補わない |
+| `FrogKnight` | `has_beetle_charged` | `_hasBeetleCharged`。条件分岐 `HasBeetleCharged \|\| CurrentHp >= MaxHp / 2` |
+| `KnowledgeDemon` | `curse_of_knowledge_counter` | `_curseOfKnowledgeCounter`。条件分岐（3 未満なら CURSE_OF_KNOWLEDGE）と、`ChooseCurse` の呪いの組・`DisintegrationDamageValues` の添字 |
+| `LivingFog` | `bloat_amount` | `_bloatAmount`。BLOAT が GasBomb を足す回数（空きスロットがある限り） |
+| `Nibbit` | `is_alone`・`is_front` | `_isAlone`・`_isFront`。初期編成で入る値で、INIT_MOVE の条件分岐が読む。生存数から遡って決めない |
+| `Queen` | `has_amalgam_died` | `_hasAmalgamDied`。条件分岐（`AfterDeath` で TorchHeadAmalgam が死ぬと true） |
+| `TestSubject` | `respawns`・`extra_multi_claw_count` | `_respawns`（条件分岐 `Respawns < 2` と RESPAWN の段階）・`_extraMultiClawCount`（MULTI_CLAW の回数 = `BaseMultiClawCount` + この値。実行のたびに +1） |
+| `Toadpole` | `is_front` | `_isFront`。初期編成で入る値で、INIT_MOVE の条件分岐が読む |
+| `TwoTailedRat` | `turns_until_summonable`・`call_for_backup_count` | `_turnsUntilSummonable`・`_callForBackupCount`。`CanSummon`（前者が正、後者が 3 以上なら召喚不可）が分岐の重みを決める |
+
+表示・効果音・アニメーションだけに使うフィールド（`LouseProgenitor._curled`、`CubexConstruct._isBurrowed` など）と、
+初期地点の選択だけに使うフィールド（`move_state.initial_state_id` で読める）は載せない。
 
 ### `hand_select` — In-Combat Card Selection
 

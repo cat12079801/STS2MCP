@@ -108,6 +108,13 @@ namespace MegaCrit.Sts2.Core.Models.Powers
     public class HeistPower : PowerModel { }
     // v0.113.1: sealed, Single; AfterDeath removes it when the dying creature is Applier.
     public class HexPower : PowerModel { }
+    // v0.113.1 RitualPower: private bool _wasJustAppliedByEnemy（AfterApplied で true、AfterSideTurnEnd で false）。
+    public class RitualPower : PowerModel
+    {
+        private bool _wasJustAppliedByEnemy;
+        public void Set(bool value) => _wasJustAppliedByEnemy = value;
+        public bool Peek() => _wasJustAppliedByEnemy;
+    }
     public class SurroundedPower : PowerModel
     {
         public enum Direction { Right, Left }

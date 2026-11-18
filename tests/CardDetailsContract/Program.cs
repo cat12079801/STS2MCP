@@ -360,7 +360,7 @@ namespace STS2_MCP
             Check(!Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("AttachCardDetails"), "noncombat deck and previews omit added combat fields");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCardDetailsMarkdown(sb, card)"), "hand markdown wiring");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState("), "multiplayer shares player builder");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 5;"), "current schema is 5 (sts2#1003)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 6;"), "current schema is 6 (sts2#1018)");
             Console.WriteLine($"CardDetailsContract: {Checks} checks passed");
         }
     }

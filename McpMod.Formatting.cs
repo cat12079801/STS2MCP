@@ -486,6 +486,9 @@ public static partial class McpMod
         if (battle.TryGetValue("enemies", out var enemiesObj) && enemiesObj is List<Dictionary<string, object?>> enemies && enemies.Count > 0)
         {
             sb.AppendLine("## Enemies");
+            string contextLine = FormatEnemyMoveContext(battle);
+            if (contextLine.Length > 0)
+                sb.AppendLine(contextLine);
             foreach (var enemy in enemies)
             {
                 string combatIdTag = enemy.TryGetValue("combat_id", out var cid) && cid != null
@@ -496,7 +499,7 @@ public static partial class McpMod
                 bool alive = enemy.GetValueOrDefault("alive") is not bool a || a;
                 string deadTag = alive ? "" : " — DEAD";
                 sb.AppendLine($"### {enemy["name"]} (`{enemy["entity_id"]}`{combatIdTag}){deadTag}");
-                sb.AppendLine($"HP: {enemy["hp"]}/{enemy["max_hp"]} | Block: {enemy["block"]}{FormatEnemyHittable(enemy)}");
+                sb.AppendLine($"HP: {enemy["hp"]}/{enemy["max_hp"]} | Block: {enemy["block"]}{FormatEnemyHittable(enemy)}{FormatEnemySlotName(enemy)}");
                 string moveLine = FormatEnemyMoveState(enemy);
                 if (moveLine.Length > 0)
                     sb.AppendLine(moveLine);

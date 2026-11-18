@@ -182,14 +182,22 @@ async def get_game_state(format: str = "markdown") -> str:
     ゲームの行動ログ末尾 ID・遷移可否を含む。四値の読取成功時だけ readable=true。
     スタン時も実際の復帰先を読み、分岐先の事前抽選や履歴からの推測はしない。
     取得不能の項目は null・unavailable_reasons・warnings、旧 MOD の欠落は unknown。
-    Markdown は行動 ID と follow-up を短く表示する。版は上げていない（schema 4 のときの追加）。
+    Markdown は行動 ID と follow-up を短く表示する（schema 4 のときの追加）。
+    schema 6 で move_state に has_follow_up・must_perform_once・current_state_id・initial_state_id・
+    performed_first_move・spawned_this_turn・state_log（[{id,is_move}] の全要素）・is_stun・stun_handler
+    （CreatureCmd.Stun が包んだ処理。no-op か起床などの許可リストの名前）と inputs_readable を足した。
+    敵の行に slot_name、battle に enemy_move_context（ascension_levels・is_dread・game_mode・
+    combat_player_count・encounter_slots と占有個体・game_assembly_sha256）を出す。
     battle.enemies[].intents[] の Attack / DeathBlow は attack（readable・base_damage・hits・
     resolved_damage）を持つ。base_damage は補正前の素値（decimal の文字列）、hits は回数、
     resolved_damage はローカルのプレイヤーへの 1 ヒットの解決値。ラベルから逆算しない。
     読めない値は null・unavailable_reasons・warnings。
-    滝の巨人だけ battle.enemies[].combat_state に is_about_to_blow（bool）と
+    battle.enemies[].combat_state は許可リストの敵だけ。滝の巨人は is_about_to_blow（bool）と
     steam_eruption_damage・current_pressure_gun_damage・steam_boost_amount・
-    pressurize_amount・stomp_damage・ram_damage・pressure_up_damage・siphon_heal（int）を出す。
+    pressurize_amount・stomp_damage・ram_damage・pressure_up_damage・siphon_heal（int）。
+    schema 6 で行動の分岐・効果量に効く private の現在値を足した（Nibbit is_alone/is_front、
+    Fabricator last_spawned_id/last_spawned_readable、TwoTailedRat turns_until_summonable/
+    call_for_backup_count など。一覧は docs/raw-full.md）。儀式の status 行は was_just_applied_by_enemy。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、

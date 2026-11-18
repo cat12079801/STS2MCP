@@ -35,7 +35,7 @@ JSON は本番の `_jsonOptions` と同じ WhenWritingNull・SnakeCaseLower・En
 数値／文字列／null 型、辞書の null が残ることと `by_type` の Attack 等のキーが変わらないことを確認する。
 Markdown の `this turn=[...]` / `last turn=[...]`、非空・空・失敗表示も検査する。
 巨大な state builder はリンクせず、ソースの文字列検査で戦闘限定・共通の Player builder・
-UID registry の更新・マルチ・Markdown の配線と schema 5 を確認する。
+UID registry の更新・マルチ・Markdown の配線と schema 6 を確認する。
 
 `card_play_events_this_turn` は `CardPlayEventChecks.cs` で、空履歴の `[]`、本番の entity_id registry
 （`McpMod.EntityIdentity.cs` をリンク）での敵の初見順の ID・戦闘から消えた敵の ID の保持・非敵の `entity_id: null`、

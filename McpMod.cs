@@ -52,8 +52,17 @@ public static partial class McpMod
     ///    hand-only display object present only when an upgrade card was in reach, and absent
     ///    for "cannot upgrade" and "failed" alike; ready now holds the clone's machine-readable
     ///    absolute values (sts2#1003). Out-of-combat previews keep their shape.
+    ///
+    /// 6: the enemy-move input contract (sts2#1018). battle.enemies[].move_state gains the move
+    ///    log, the state machine's current/initial state, the first-move and spawn flags, the
+    ///    terminal-move flag and the CreatureCmd.Stun handler; enemies gain slot_name; battle gains
+    ///    enemy_move_context (ascension levels, Dread, game mode, encounter slots, assembly hash);
+    ///    combat_state covers the enemies whose move branches/amounts read private counters; Ritual
+    ///    rows carry was_just_applied_by_enemy. Existing fields keep their meaning. The bump is
+    ///    deliberate although the change is additive: the planner treats these inputs as required
+    ///    for every enemy and gates on the version instead of probing each field.
     /// </summary>
-    public const int StateSchemaVersion = 5;
+    public const int StateSchemaVersion = 6;
 
     public const int DefaultPort = 15526;
     private const string ConfigFileName = "STS2_MCP.conf";

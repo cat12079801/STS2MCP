@@ -281,6 +281,7 @@ public static partial class McpMod
         battle["all_players_ready"] = CombatManager.Instance.AllPlayersReadyToEndTurn();
 
         battle["enemies"] = BuildEnemyList(combatState);
+        battle["enemy_move_context"] = BuildEnemyMoveContext(combatState);
 
         return battle;
     }

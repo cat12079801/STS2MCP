@@ -45,6 +45,6 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
   追加の項目が増やすバイト数を出力する（実機の本文・キーワードは長いので、実測は調整役が実機で行う）。
 - ソースの配線: 手札と 4 パイルの共通経路、条件付きの手札だけのプレビューが残っていないこと、
   `hand_select` と報酬は従来の契約、戦闘外のプレビューも隔離した複製を使うこと、プレビューのコードが
-  UID・`CardCmd`・`CloneCard`・乱数・履歴を呼ばないこと、schema 5、`?perf=1` の配線。
+  UID・`CardCmd`・`CloneCard`・乱数・履歴を呼ばないこと、schema 6、`?perf=1` の配線。
 
 実際の札の `OnUpgrade`・ローカライズの本文・購読の付いた UI の実機照合は、調整役の検証で行う。

@@ -8,9 +8,10 @@
   <ItemGroup>
     <Compile Include="../../McpMod.EnemyMoveState.cs" Link="EnemyMoveState.cs" />
     <Compile Include="../../McpMod.EnemyMoveStateFormatting.cs" Link="EnemyMoveStateFormatting.cs" />
+    <Compile Include="../../McpMod.EnemyStunHandler.cs" Link="EnemyStunHandler.cs" />
     <Compile Include="../../McpMod.InternalState.cs" Link="InternalState.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
-    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs"
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs;../../McpMod.EnemyStunHandler.cs;../../McpMod.EnemyMoveState.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

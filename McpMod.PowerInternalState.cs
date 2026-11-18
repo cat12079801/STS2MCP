@@ -45,6 +45,15 @@ public static partial class McpMod
                 // says, so every emitted row carries the applier.
                 AttachHexApplierState(state, power, context);
                 break;
+            case RitualPower:
+                // v0.113.1 (sts2-a671e9ef) RitualPower.AfterApplied sets the flag when an enemy
+                // owner gets the power during the enemy side's turn; AfterSideTurnEnd then clears
+                // it instead of applying Strength once (sts2#1018). The private field is read as
+                // is (false is a real value) on every emitted row, like the applier above.
+                // Never derived from the round or the move history.
+                Read("was_just_applied_by_enemy",
+                    () => ReadDeclaredStateField<bool>(power, typeof(RitualPower), "_wasJustAppliedByEnemy"));
+                break;
         }
 
         // Hidden bookkeeping powers have no observable application history.

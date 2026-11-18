@@ -281,6 +281,25 @@ public static partial class McpMod
             "other powers do not get applier fields");
         Check(new PowerModel { Applier = knight }.ApplierReads == 0, "construction does not read Applier");
 
+        // Ritual (sts2#1018): the private flag as-is, on every emitted row (hidden too); false is a real value.
+        BeginStateWarnings();
+        var ritual = new RitualPower();
+        var freshRitual = Power(ritual);
+        Check(freshRitual["was_just_applied_by_enemy"] is false && !freshRitual.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0,
+            "Ritual flag false is a real value");
+        ritual.Set(true);
+        var justApplied = Power(ritual, visible: false);
+        Check(justApplied["was_just_applied_by_enemy"] is true && ritual.Peek() && !justApplied.ContainsKey("skip_next_duration_tick"),
+            "Ritual flag is read on hidden rows and the read leaves it untouched");
+        Check(FormatPowerInternalState(justApplied).Contains("was just applied by enemy: yes")
+            && FormatPowerInternalState(freshRitual).Contains("was just applied by enemy: no"), "Ritual flag markdown");
+        Check(freshRitual["was_just_applied_by_enemy"] is false, "Ritual snapshot independent of later changes");
+        Check(!Power(new HexPower()).ContainsKey("was_just_applied_by_enemy"), "other powers do not get the Ritual flag");
+        var ritualFail = new Dictionary<string, object?>();
+        ReadInternalStateValue(ritualFail, "was_just_applied_by_enemy",
+            () => ReadDeclaredStateField<bool>(ritual, typeof(RitualPower), "_removed"), "status.RitualPower");
+        Unknown(ritualFail, "was_just_applied_by_enemy", "status.RitualPower");
+
         // Vigor: VigorPower.Data binding, read as-is. Before/After attack are not simulated.
         // Own warning window: the response list is capped at MaxStateWarnings.
         BeginStateWarnings();
@@ -533,7 +552,7 @@ public static partial class McpMod
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
-        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 5;"), "current schema is 5 (sts2#1003)");
+        Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 6;"), "current schema is 6 (sts2#1018)");
         Console.WriteLine($"PASS: {Checks} power/relic internal-state contract checks");
     }
 }

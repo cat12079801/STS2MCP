@@ -1601,6 +1601,7 @@ public static partial class McpMod
         battle["is_play_phase"] = IsPlayPhase(combatState);
 
         battle["enemies"] = BuildEnemyList(combatState);
+        battle["enemy_move_context"] = BuildEnemyMoveContext(combatState);
 
         return battle;
     }
@@ -2160,6 +2161,7 @@ public static partial class McpMod
         };
         // Alive or dead, minion or reviving: always the game's own getter (false != unknown).
         AttachEnemyHittable(state, creature, entityId);
+        AttachEnemySlotName(state, creature, entityId);
         if (BuildEnemyCombatState(monster, entityId) is { } enemyCombatState)
             state["combat_state"] = enemyCombatState;
 

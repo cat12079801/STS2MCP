@@ -20,9 +20,10 @@
 
 - **版の情報**: すべての state と `GET /` が `mod_version` / `mod_commit` / `schema_version` を返す。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない）。現在は `5`。
+- **`schema_version`**: 既存の項目・アクションの意味を変えたり消したりしたときだけ上げる（足すだけなら上げない。例外は 6）。現在は `6`。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
-  5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）
+  5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
+  6 = 敵の行動の入力契約（追加だけだが、読み手が一式を必須として扱えるように上げた。`cat12079801/sts2#1018`）
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
@@ -81,11 +82,19 @@
 - **敵に当てられるか**: `battle.enemies[].hittable` に `Creature.IsHittable`（死亡なら false、それ以外は `Hook.ShouldAllowHitting`。復活中の体節・幻影・実験体は false）の bool をそのまま出す。生死で絞らず全ての敵の行に付け、HP・alive・パワー名から作らない。読めなければ null・理由・warnings。Markdown の HP 行に `Hittable`。版は上げていない（schema 4 のときの追加）。[入力契約と出典](raw-full.md#敵に当てられるかhittable追加schema-4)（#95、`cat12079801/sts2#941`）
 - **敵の行動状態**: 全モンスターの `battle.enemies[].move_state` に現在の行動 ID・follow-up ID・ゲームの行動ログ末尾 ID・遷移可否を公開する。スタン時も実際の復帰先とロックを保持。四値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体別 warnings とし、履歴から推測しない。分岐の事前抽選やゲームの状態変更はせず、Markdown に ID と follow-up を表示する。単独・協力プレイと死亡中の敵で共通、版は上げていない（schema 4 のときの追加）。[入力契約と出典](raw-full.md#敵の行動状態追加schema-4)（#91、`cat12079801/sts2#910`）
 - **敵の戦闘内部状態**: 滝の巨人の `battle.enemies[].combat_state` に `is_about_to_blow`（private `_isAboutToBlow`）・`steam_eruption_damage`（private `_steamEruptionDamage`）・`current_pressure_gun_damage`（private `_currentPressureGunDamage`）と、getter の現在値 `steam_boost_amount`（`SteamBoostAmount`。Dread 込み）・`pressurize_amount`・`stomp_damage`・`ram_damage`・`pressure_up_damage`・`siphon_heal`（人数を掛ける前）を公開する。false・0 も実値で、HP・行動 ID・Ascension から作らない。ラン外（getter が Ascension を無視する）・負の値は null。読取失敗は null・項目別理由・warnings。Markdown に `Combat state:` 行を表示。他の敵には出さない。版は上げていない（schema 4 のときの追加）。[入力契約と出典](raw-full.md#敵の戦闘内部状態追加schema-4)（#92・#94、`cat12079801/sts2#954`・`cat12079801/sts2#968`）
+- **敵の行動の入力**（schema 6）: ソースから生成した敵の行動表を現在の状態から評価するための入力を、読むだけで公開する。
+  `move_state` に `has_follow_up`（終端の行動は false の実値）・`must_perform_once`・状態機械の現在地点と初期地点（`current_state_id` / `initial_state_id`）・
+  `performed_first_move`・`spawned_this_turn`・行動ログの全要素 `state_log`（`[{id, is_move}]`、空は `[]`、途中までの配列は返さない）・
+  `is_stun` / `stun_handler`（`CreatureCmd.Stun` の Wrapper が包んだ処理を、宣言型・delegate 型を検査して `CreatureCmd.Stun.no_op`・`SlumberingBeetle.WakeUpMove` などの許可リストに対応付ける。未対応は null と理由）・`inputs_readable`。
+  敵の行に `slot_name`、`battle.enemy_move_context` に Ascension の段階（`RunManager.HasAscension`）・`is_dread`・`game_mode`・人数・遭遇のスロットと占有個体・本体 DLL の SHA-256。
+  `combat_state` を行動の分岐・効果量に効く private の現在値の敵（`Nibbit`・`Toadpole` の前列、`Fabricator` の直前の召喚、`TwoTailedRat` の召喚の待ち・回数、`TestSubject` の復活回数など 12 種）に広げ、
+  儀式の status 行に `was_just_applied_by_enemy`。`GetNextState`・`RollMove`・乱数・delegate は呼ばない。項目ごとに成否（null・理由・warnings）を持つ。
+  [入力契約と出典](raw-full.md#敵の行動の入力schema-6)（`cat12079801/sts2#1018`）
 - **敵の攻撃の意図**: `battle.enemies[].intents[]` の Attack / DeathBlow（`AttackIntent`）に `attack: {readable, base_damage, hits, resolved_damage}` を公開する。`base_damage` は現在の `AttackIntent.DamageCalc()` の補正前の decimal（invariant culture の文字列）、`hits` は `Repeats`、`resolved_damage` はローカルのプレイヤーが対象のときの `GetSingleDamage`（筋力・脆弱・脱力など込み）。ラベル・本文から逆算しない。ローカルのプレイヤーが居ないときの補正前の値を解決値として出さない。三値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体と意図の位置を識別する warnings。Markdown の意図の行に `[attack: base … | hits … | resolved …]` を表示。単独・協力プレイと死亡中の敵で共通、版は上げていない（schema 4 のときの追加）。[入力契約と出典](raw-full.md#敵の攻撃の意図追加schema-4)（#93、`cat12079801/sts2#956`）
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）
   - 説明の解決に失敗しても、パワーを捨てずに id・名前・スタック数を返す。UI に出ないが残っているものは `hidden_in_ui`（#24）
-  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。版は上げていない（schema 4 のときの追加）。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
+  - 観測できる内部状態を許可リストで出す（持続のスキップ・ブロックの基底値・包囲の向き・盗んだ量・拘束の鎖の使用済み・まるくなるが追跡中の札の uid・泥棒が盗んだゴールドと泥棒・強奪の対象 player など）。泥棒・強奪の対象別の項目は `hidden_in_ui` の行にも付ける。活力の `vigor_attack`（private `VigorPower.Data` の攻撃との結合の有無・結合先の攻撃者が所有者か・開始時の量。未結合と読取失敗を区別）を player・敵、`hidden_in_ui`・最小行の活力に付ける。呪術の付与元（`PowerModel.Applier` の `CombatId` を `applier_combat_id`、読取の成否を `applier_readable`。付与元なしと読取失敗を区別）を可視性によらず付ける（`cat12079801/sts2#990`）。儀式の `was_just_applied_by_enemy`（`cat12079801/sts2#1018`、schema 6）も可視性によらず付ける。版は上げていない（schema 4 のときの追加）。詳細は [`power-internal-state.md`](power-internal-state.md)（#78・#81・#86・#92・#96、`cat12079801/sts2#980`）
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）。
   この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#95、`cat12079801/sts2#937`）
 - **生成の候補**:
