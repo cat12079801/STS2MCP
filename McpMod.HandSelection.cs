@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using MegaCrit.Sts2.Core.CardSelection;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
+using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 
 namespace STS2_MCP;
 
@@ -21,6 +23,23 @@ public static partial class McpMod
             Warn("hand_select.peeking", ex);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Why a hand press would be ignored now (<see cref="HandPressBlocker"/>): the peek button,
+    /// NOverlayStack.Instance.ScreenCount and CombatManager.Instance.IsInProgress, as
+    /// NPlayerHand.OnHolderPressed checks them. Unreadable values count as blocked.
+    /// </summary>
+    private static string? ReadHandPressBlocker(NPlayerHand hand)
+    {
+        bool? peeking = ReadHandPeeking(hand);
+        int? overlays = null;
+        bool? inCombat = null;
+        try { overlays = NOverlayStack.Instance?.ScreenCount; }
+        catch (Exception ex) { Warn("hand_select.overlay_stack", ex); }
+        try { inCombat = CombatManager.Instance.IsInProgress; }
+        catch (Exception ex) { Warn("hand_select.combat", ex); }
+        return HandPressBlocker(peeking, overlays, inCombat);
     }
 
     /// <summary>

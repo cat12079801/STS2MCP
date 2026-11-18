@@ -610,8 +610,10 @@ async def combat_select_card(card_index: int, expected_uid: str | None = None) -
         card_index: 0-based `hand_select.cards[].index` (the hand holder position; a holder without
             a card leaves a gap, so indices need not be consecutive).
         expected_uid: Optional `hand_select.cards[].uid`. When given, the MOD checks that the card at
-            card_index still has this uid (and that the hand is not being peeked at) and presses
-            nothing otherwise.
+            card_index still has this uid and presses nothing otherwise.
+
+    Rows with `enabled: false` (peeking, an overlay on top, no combat in progress) are refused
+    with the reason instead of being pressed for nothing.
     """
     try:
         body = {"action": "combat_select_card", "card_index": card_index}
@@ -832,7 +834,8 @@ async def deck_select_card(card_index: int, expected_uid: str | None = None) -> 
         card_index: 0-based index of the card (as shown in game state).
         expected_uid: Optional `card_select.cards[].uid` (rows carry one only during a combat).
             When given, the MOD checks that the grid / choose-a-card candidate at card_index
-            still has this uid and presses nothing otherwise.
+            still has this uid and presses nothing otherwise (checked before revealing a hidden
+            screen and again after; a failed second check leaves the screen revealed).
     """
     try:
         body = {"action": "select_card", "index": card_index}

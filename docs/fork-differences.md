@@ -93,12 +93,14 @@
   - 山札の表示順はゲームの並べ方（`Rarity` → `CardModel.CompareTo`）で、同順位は uid の順。引く順を漏らさない（#79）
 - **戦闘中の `card_select`**: 戦闘のパイルから選ぶ行に、戦闘中の `uid` を出す（#70）
 - **戦闘中の手札選択（`hand_select`）**: `cards[].index` は `NPlayerHand.ActiveHolders` の位置（`combat_select_card` が押す位置）で、札の無い holder は
-  行を出さず後ろを詰めない。行に `uid`（`player.hand[]` と同じ）と `enabled`（覗き見中は false）、画面に `min_select` / `max_select`（`_prefs`）と `peeking` を出す。
+  行を出さず後ろを詰めない。行に `uid`（`player.hand[]` と同じ）と `enabled`（覗き見中・オーバーレイあり・戦闘外など、ゲームが押下を無視するときは false）、画面に `min_select` / `max_select`（`_prefs`）と `peeking` を出す。
   `selected_cards` は手札の `_selectedCards`（強化モードの preview の札も含む）を `{index, id, name, uid}` で常に返し、空は `[]`、読めなければ null と理由。
   `can_confirm` と `combat_confirm_selection` は表示中の有効な確定ボタンで判定する。[契約と出典](raw-full.md#手札選択の候補と-uidschema-10)（schema 10、`cat12079801/sts2#1037`）
 - **uid で照合する選択**: `combat_select_card` と `select_card`（grid・choose-a-card）に `expected_uid` を渡すと、その index の現在の個体の uid と照合し、
-  違えば（同名の別個体・並べ替え後・uid の無い戦闘外を含む）何も押さず、覆いも外さずに error を返す。手札では覗き見中も拒否する。
-  `combat_select_card` は札の無い holder の index を、`expected_uid` の有無によらず押さずに拒否する（schema 10、`cat12079801/sts2#1037`）
+  違えば（同名の別個体・並べ替え後・uid の無い戦闘外を含む）押さずに error を返す。照合は覆いを外す前に行い、grid は覆いを外した後に
+  クリックに使う候補でもう一度行う。2 回目で違えば押さないが、画面は表に戻ったままで、error に `revealed` が付く。
+  `combat_select_card` は札の無い holder と、ゲームが押下を無視する状態（覗き見中・オーバーレイあり・戦闘外。読めないときも）を、
+  `expected_uid` の有無によらず押さずに理由付きで拒否する（schema 10、`cat12079801/sts2#1037`）
 - **戦闘中の選択候補の個体（`combat_instance`）**: 戦闘中の `card_select`（grid・choose）・`hand_select`・`card_reward` の候補行に、
   戦闘のパイルのちょうど1つにある札は `{source: "pile", pile, uid}`（パイルの行と同じ uid）、パイルに無い候補（3 択の生成札など）は
   `{source: "detached", pile, values}`（uid を発行せず、型・段階・数値・付与・キーワード・単ターンの期限・リプレイ・コストを候補から直接読む。

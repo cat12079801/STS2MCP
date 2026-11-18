@@ -3428,6 +3428,8 @@ public static partial class McpMod
         if (combatState != null) RefreshCardUidRegistry(combatState);
         bool? peeking = ReadHandPeeking(hand);
         state["peeking"] = peeking;
+        // Whether a press would land at all (NPlayerHand.OnHolderPressed's early returns).
+        string? pressBlocked = ReadHandPressBlocker(hand);
         var holderCards = hand.ActiveHolders.Select(holder => holder.CardModel).ToList();
         foreach (var (index, card) in HandSelectHolderRows(holderCards))
         {
@@ -3435,9 +3437,11 @@ public static partial class McpMod
             cardInfo["index"] = index;
             // Same uid as the card's player.hand row; only from a live combat's registry.
             cardInfo["uid"] = combatState != null ? GetStableCardUid(card) : null;
-            // The game ignores presses while the hand is peeked at (NPlayerHand.OnHolderPressed);
-            // otherwise the visible holders are exactly the ones the selection filter admits.
-            cardInfo["enabled"] = peeking == false;
+            // NPlayerHand.OnHolderPressed ignores presses while peeking, with an overlay on the stack or
+            // outside a combat in progress (and for a holder without a CardNode, which has no row here:
+            // NCardHolder.CardModel is CardNode?.Model). Otherwise the visible holders are exactly the
+            // ones the selection filter admits.
+            cardInfo["enabled"] = pressBlocked == null;
             cardInfo["description"] = SafeGetCardDescription(card); // hand cards use default pile
             // Only when the prompt is "upgrade a card in hand"; the plain select modes
             // (discard, exhaust, ...) have nothing to decide from the upgraded text.

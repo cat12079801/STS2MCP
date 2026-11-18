@@ -11,10 +11,11 @@
   実行直前の判定が GET のときから動いた（別の画面・戦闘）場合の拒否
 - `expected_uid` の読み取り（無ければ照合しない、空・非文字列は拒否）と照合
 - `hand_select` の index が `NPlayerHand.ActiveHolders` の位置であること（札の無い holder は行を出さず、後ろの index を詰めない）。
-  index と uid が同じ holder を指すこと、空の holder・範囲外・同名の別個体・並べ替え・覗き見・uid が読めない場合の拒否。expected_uid なしの押下は従来どおり
+  index と uid が同じ holder を指すこと、空の holder・範囲外・同名の別個体・並べ替え・uid が読めない場合の拒否。
+  `NPlayerHand.OnHolderPressed` が押下を無視する条件（覗き見中・オーバーレイあり・戦闘外。読めない値も含む）は、expected_uid の有無によらず理由付きで拒否する
 
 本体の state・action・Markdown・MCP サーバーへの配線（GET が passive のときだけ判定を足す、実行直前の判定が `ProcessCommand` より前、
-`_selectedCards`・`_prefs`・覗き見・表示中の確定ボタンの読取、`combat_select_card` / `select_card` の照合が押下・覆いを外す操作より前、schema 10）は
+`_selectedCards`・`_prefs`・覗き見・オーバーレイの数・戦闘の進行・表示中の確定ボタンの読取、行の `enabled` と action が同じ判定を使うこと、`combat_select_card` / `select_card` の照合が押下・覆いを外す操作より前、schema 10）は
 ゲームの型が要るのでソース文字列で検査する。grid の expected_uid は `CardSelectContract`、`dev_console` の実行直前の判定と空入力は `DevConsoleContract` で動かして確かめる。
 
 実機（ゲームの部屋・戦闘の実際の遷移、手札の holder の実際の並び、覗き見中の押下）は別途確認する。

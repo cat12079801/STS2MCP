@@ -1396,8 +1396,9 @@ public static partial class McpMod
         foreach (var activeHolder in holders) holderCards.Add(activeHolder.CardModel);
         var combatState = expectedUid != null ? GetLiveCombatStateForSelection() : null;
         if (combatState != null) RefreshCardUidRegistry(combatState);
-        bool peeking = expectedUid != null && ReadHandPeeking(hand) != false;
-        if (HandSelectPressRejection(holderCards, index, peeking, expectedUid,
+        // A press the game would ignore (peek, overlay, no combat) is refused instead of reported ok.
+        string? pressBlocked = ReadHandPressBlocker(hand);
+        if (HandSelectPressRejection(holderCards, index, pressBlocked, expectedUid,
                 card => combatState != null ? GetStableCardUid(card) : null,
                 combatState == null ? "no live combat state to read uids from" : null) is { } refused)
             return Error(refused);

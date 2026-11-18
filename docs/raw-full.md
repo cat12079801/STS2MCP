@@ -2189,8 +2189,11 @@ Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". *
 `index` はその **holder の位置**（`combat_select_card` が押す位置と同じ）。`CardModel` の無い holder は行を出さず
 （`warnings` に `hand_select.cards[<index>]`）、後ろの行の index を詰めない。`uid` は `NPlayerHand.ActiveHolders[i].CardModel` を
 `player.hand[]` と同じ registry（`GetStableCardUid`）に渡した値で、戦闘の state が読めないときは null。
-`enabled` は押下が効くか: 覗き見中（`PeekButton.IsPeeking`。このあいだは絞り込みも外れて全札が見える）は false、
-覗き見の値が読めないときも false。`player.hand[]` とは配列の位置・名前で対応付けず、`uid` で対応付ける。
+`enabled` は押下が効くか。`NPlayerHand.OnHolderPressed` が押下を無視する条件のどれかに当たれば false: 覗き見中
+（`PeekButton.IsPeeking`。このあいだは絞り込みも外れて全札が見える）、オーバーレイが積まれている（`NOverlayStack.Instance.ScreenCount > 0`）、
+戦闘が進行中でない（`CombatManager.Instance.IsInProgress` が false）。どれかの値が読めないときも false。
+holder の `CardNode` が無い条件は、その holder に行が無いことで表す（`NCardHolder.CardModel` は `CardNode?.Model`）。
+`combat_select_card` は同じ条件のとき、`expected_uid` の有無によらず押さずに理由付きの error を返す。`player.hand[]` とは配列の位置・名前で対応付けず、`uid` で対応付ける。
 
 `selected_cards` は `NPlayerHand._selectedCards`（確定でゲームが返すモデルの列。強化モードの preview の札も含む）を選んだ順に
 `{index, id, name, uid}` で返す。読めた空は `[]`、読めないときは `null` と `selected_cards_unavailable_reason`・`warnings`。
@@ -2199,7 +2202,7 @@ Appears when a card effect prompts "Select a card to exhaust/discard/upgrade". *
 `select_range_unavailable_reason`。`can_confirm` は `%SelectModeConfirmButton` が有効かつ表示中で、`combat_confirm_selection` も同じ判定で押す。
 
 出典（v0.113.1、`sts2-a671e9ef`）: `NPlayerHand.ActiveHolders` / `_selectedCards` / `_prefs` / `PeekButton` /
-`OnHolderPressed`（覗き見中は押下を無視）/ `UpdateSelectModeCardVisibility`（覗き見中以外は絞り込みで holder を隠す）/
+`OnHolderPressed`（覗き見中・オーバーレイあり・戦闘外・CardNode なしは押下を無視）/ `UpdateSelectModeCardVisibility`（覗き見中以外は絞り込みで holder を隠す）/
 `SelectCardInSimpleMode` / `SelectCardInUpgradeMode` / `RefreshSelectModeConfirmButton`。
 
 ### `rewards` — Rewards Screen
@@ -3339,10 +3342,12 @@ Select a card during in-combat hand selection (exhaust, discard, upgrade prompts
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `card_index` (alias `index`) | int | Yes | `hand_select.cards[].index`: the `NPlayerHand.ActiveHolders` position (schema 10) |
-| `expected_uid` | string | No | `hand_select.cards[].uid` (schema 10). When given, the card at that holder must still have this uid and the hand must not be peeked at; otherwise nothing is pressed and `status: error` |
+| `expected_uid` | string | No | `hand_select.cards[].uid` (schema 10). When given, the card at that holder must still have this uid; otherwise nothing is pressed and `status: error` |
 
-A holder without a card is refused (nothing pressed) with or without `expected_uid`. Without `expected_uid` the
-press is otherwise unchanged.
+Refused with a reason and nothing pressed, with or without `expected_uid`: a holder without a card, and every press
+`NPlayerHand.OnHolderPressed` would silently ignore — while peeking, with an overlay on the stack
+(`NOverlayStack.ScreenCount > 0`), or outside a combat in progress (unreadable values count as blocked). These are the
+rows with `enabled: false`.
 
 ### `combat_confirm_selection`
 
@@ -3531,7 +3536,7 @@ Select a card in a card selection overlay.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `index` (alias `card_index`) | int | Yes | 0-based index in the latest full `card_select.cards` candidate list; no scrolling required |
-| `expected_uid` | string | No | `card_select.cards[].uid` (schema 10; rows have uids only during a combat). When given, the grid candidate (same normalized snapshot the click uses) or choose-a-card holder at `index` must have this uid; otherwise nothing is pressed or revealed and `status: error`. Out of combat (no uids) it is always refused |
+| `expected_uid` | string | No | `card_select.cards[].uid` (schema 10; rows have uids only during a combat). When given, the grid candidate (same normalized snapshot the click uses) or choose-a-card holder at `index` must have this uid. A mismatch never presses. The uid is checked before anything is revealed; on a grid hidden under the map or a peek it is checked again after revealing, on the snapshot the click uses, and if that second check fails nothing is pressed but the screen stays revealed and the error carries `revealed`. Out of combat (no uids) it is always refused |
 
 **Behavior varies by screen type:**
 - Grid screens: pass the original model at the full candidate index to the concrete game's

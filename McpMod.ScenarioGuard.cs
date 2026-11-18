@@ -223,20 +223,42 @@ public static partial class McpMod
     }
 
     /// <summary>
-    /// Why combat_select_card must not press holder <paramref name="index"/>: out of range, no card,
-    /// or (when the caller sent expected_uid) a peek in progress or a uid mismatch. Null = press it.
-    /// Without expected_uid the existing behaviour is kept apart from refusing an empty holder.
+    /// Why a press on any hand holder would be a silent no-op right now, mirroring the early returns
+    /// of NPlayerHand.OnHolderPressed: a peek in progress (it only wiggles the peek button), an overlay
+    /// on the stack (NOverlayStack.ScreenCount &gt; 0) or no combat in progress. A value that could not
+    /// be read (null) counts as blocked. Null = presses land. The per-holder condition (CardNode == null)
+    /// is the holder without a card.
     /// </summary>
-    internal static string? HandSelectPressRejection<T>(IReadOnlyList<T?> holderCards, int index, bool peeking,
+    internal static string? HandPressBlocker(bool? peeking, int? overlayScreenCount, bool? combatInProgress)
+    {
+        if (peeking != false)
+            return peeking == null
+                ? "whether the hand is being peeked at cannot be read"
+                : "the hand is being peeked at; the game ignores card presses until the peek ends";
+        if (overlayScreenCount == null) return "the overlay stack cannot be read";
+        if (overlayScreenCount > 0)
+            return $"an overlay is open on top of the hand ({overlayScreenCount}); the game ignores card presses";
+        if (combatInProgress != true)
+            return combatInProgress == null ? "whether combat is in progress cannot be read"
+                : "no combat is in progress; the game ignores card presses";
+        return null;
+    }
+
+    /// <summary>
+    /// Why combat_select_card must not press holder <paramref name="index"/>: out of range, no card,
+    /// a press the game would ignore (<paramref name="pressBlocked"/>, from <see cref="HandPressBlocker"/>),
+    /// or - when the caller sent expected_uid - a uid mismatch. Null = press it.
+    /// </summary>
+    internal static string? HandSelectPressRejection<T>(IReadOnlyList<T?> holderCards, int index, string? pressBlocked,
         string? expectedUid, Func<T, string?> uidOf, string? uidUnavailableReason = null) where T : class
     {
         if (index < 0 || index >= holderCards.Count)
             return $"Card index {index} out of range ({holderCards.Count} selectable cards)";
         if (holderCards[index] is not { } card)
             return $"Card index {index} has no card in the hand - re-read state";
+        if (pressBlocked != null)
+            return $"Card index {index} not pressed: {pressBlocked} - re-read state";
         if (expectedUid == null) return null;
-        if (peeking)
-            return "The hand is being peeked at; the game ignores card presses until the peek ends - nothing was pressed";
         return ExpectedUidMismatch(expectedUid, index, uidOf(card), uidUnavailableReason);
     }
 }

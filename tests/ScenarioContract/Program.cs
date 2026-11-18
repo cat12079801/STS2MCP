@@ -153,8 +153,8 @@ namespace STS2_MCP
             Check(HandSelectHolderRows<Card>(Array.Empty<Card?>()).Count == 0 && HandSelectHolderRows<Card>(new Card?[] { null }).Count == 0,
                 "no rows for no / empty holders");
 
-            string? Press(int index, string? expected, bool peeking = false, Card?[]? list = null)
-                => HandSelectPressRejection<Card>(list ?? holders, index, peeking, expected, card => card.Uid);
+            string? Press(int index, string? expected, string? blocked = null, Card?[]? list = null)
+                => HandSelectPressRejection<Card>(list ?? holders, index, blocked, expected, card => card.Uid);
             // Each row's index presses the holder whose card the row shows.
             foreach (var (index, card) in rows)
                 Check(Press(index, card.Uid) == null, $"row {index}: index and uid name the same holder");
@@ -162,12 +162,28 @@ namespace STS2_MCP
                 "the gap's index is refused with or without expected_uid");
             Check(Press(4, null)!.Contains("out of range") && Press(-1, "x")!.Contains("out of range"), "out of range");
             Check(Press(0, "STRIKE_IRONCLAD#1")!.Contains("does not match"), "same-name card with another uid is refused");
-            Check(Press(0, null) == null && Press(0, null, peeking: true) == null, "without expected_uid the existing press is kept");
-            Check(Press(0, "STRIKE_IRONCLAD#0", peeking: true)!.Contains("peek"), "with expected_uid a peek refuses (the game ignores presses)");
+            Check(Press(0, null) == null, "without expected_uid a press that lands is kept");
+
+            // OnHolderPressed's early returns (peek, overlay on the stack, no combat): every press there
+            // would be a silent no-op, so it is refused with the reason, with or without expected_uid.
+            Check(HandPressBlocker(false, 0, true) == null, "no peek, no overlay, combat in progress: presses land");
+            var blockers = new (bool? Peek, int? Overlays, bool? Combat, string Word)[]
+            {
+                (true, 0, true, "peeked"), (null, 0, true, "peeked"), (false, 1, true, "overlay"), (false, 3, true, "overlay"),
+                (false, null, true, "overlay stack"), (false, 0, false, "no combat"), (false, 0, null, "combat")
+            };
+            foreach (var (peek, overlays, combat, word) in blockers)
+            {
+                var blocker = HandPressBlocker(peek, overlays, combat);
+                Check(blocker != null && blocker.Contains(word), $"blocked: {word} -> {blocker}");
+                Check(Press(0, null, blocker)!.Contains("not pressed") && Press(0, "STRIKE_IRONCLAD#0", blocker)!.Contains(word),
+                    $"blocked press refused with or without expected_uid: {word}");
+                Check(Press(1, null, blocker)!.Contains("no card"), $"an empty holder is still reported as such: {word}");
+            }
             var reordered = new Card?[] { strikeB, strikeA, defend };
             Check(Press(0, "STRIKE_IRONCLAD#0", list: reordered)!.Contains("does not match")
                 && Press(1, "STRIKE_IRONCLAD#0", list: reordered) == null, "reordered hand: the old index no longer matches the uid");
-            Check(HandSelectPressRejection<Card>(holders, 0, false, "STRIKE_IRONCLAD#0", _ => null, "no live combat")!.Contains("no live combat"),
+            Check(HandSelectPressRejection<Card>(holders, 0, null, "STRIKE_IRONCLAD#0", _ => null, "no live combat")!.Contains("no live combat"),
                 "uid unavailable refuses with the reason");
 
             // --- wiring in the production sources (not linked: they need the game) ---
@@ -212,7 +228,8 @@ namespace STS2_MCP
                 && handSelect.Contains("cardInfo[\"index\"] = index;") && !handSelect.Contains("index++;"),
                 "hand_select rows: ActiveHolders positions via the linked helper, no compaction");
             Check(handSelect.Contains("cardInfo[\"uid\"] = combatState != null ? GetStableCardUid(card) : null;")
-                && handSelect.Contains("cardInfo[\"enabled\"] = peeking == false;"), "hand_select rows carry uid and enabled");
+                && handSelect.Contains("string? pressBlocked = ReadHandPressBlocker(hand);")
+                && handSelect.Contains("cardInfo[\"enabled\"] = pressBlocked == null;"), "hand_select rows carry uid and enabled (same blocker as the action)");
             Check(handSelect.Contains("ReadHandSelectedCards(hand, out var selectedReason)")
                 && handSelect.Contains("[\"uid\"] = combatState != null ? GetStableCardUid(card) : null")
                 && handSelect.Contains("state[\"selected_cards\"] = null;") && handSelect.Contains("state[\"selected_cards\"] = selectedCards;")
@@ -221,12 +238,15 @@ namespace STS2_MCP
                 && handSelect.Contains("state[\"can_confirm\"] = IsHandSelectConfirmPressable(hand);"), "min/max from _prefs, can_confirm shared with the action");
             string hand = Source("McpMod.HandSelection.cs");
             Check(hand.Contains("GetInstanceFieldValue(hand, \"_selectedCards\") is List<CardModel>") && hand.Contains("GetInstanceFieldValue(hand, \"_prefs\") is CardSelectorPrefs")
-                && hand.Contains("hand.PeekButton?.IsPeeking") && hand.Contains("button.IsEnabled && IsNodeVisible(button)"), "hand reads: _selectedCards, _prefs, peek, shown+enabled confirm");
+                && hand.Contains("hand.PeekButton?.IsPeeking") && hand.Contains("button.IsEnabled && IsNodeVisible(button)")
+                && hand.Contains("NOverlayStack.Instance?.ScreenCount") && hand.Contains("CombatManager.Instance.IsInProgress")
+                && hand.Contains("return HandPressBlocker(peeking, overlays, inCombat);"), "hand reads: _selectedCards, _prefs, peek, overlay stack, combat, shown+enabled confirm");
 
             string actions = Source("McpMod.Actions.cs");
             string combatSelect = Slice(actions, "private static Dictionary<string, object?> ExecuteCombatSelectCard", "private static Dictionary<string, object?> ExecuteCombatConfirmSelection");
             Check(combatSelect.Contains("ReadExpectedUid(data, out var expectedUid)") && combatSelect.Contains("var holders = hand.ActiveHolders;")
-                && combatSelect.Contains("HandSelectPressRejection(holderCards, index, peeking, expectedUid,")
+                && combatSelect.Contains("string? pressBlocked = ReadHandPressBlocker(hand);")
+                && combatSelect.Contains("HandSelectPressRejection(holderCards, index, pressBlocked, expectedUid,")
                 && combatSelect.IndexOf("HandSelectPressRejection", StringComparison.Ordinal) < combatSelect.IndexOf("EmitSignal", StringComparison.Ordinal),
                 "combat_select_card checks the same holders and the uid before pressing");
             Check(Slice(actions, "private static Dictionary<string, object?> ExecuteCombatConfirmSelection", "private static Dictionary<string, object?> ExecuteSelectRelic")

@@ -325,10 +325,10 @@ Example searches:
 
 | Action | Parameters | When to Use |
 |---|---|---|
-| `combat_select_card` | `card_index`: int (alias `index`), optional `expected_uid`: string | Select/deselect a card during "choose a card to exhaust/discard" prompts. With `expected_uid` the card at that holder must still have that uid and the hand must not be peeked at, or nothing is pressed (error). |
+| `combat_select_card` | `card_index`: int (alias `index`), optional `expected_uid`: string | Select/deselect a card during "choose a card to exhaust/discard" prompts. With `expected_uid` the card at that holder must still have that uid, or nothing is pressed (error). A press the game would ignore (peeking, an overlay on the stack, no combat in progress, an empty holder) is refused with the reason, with or without `expected_uid`. |
 | `combat_confirm_selection` | _(none)_ | Confirm the hand card selection (refused unless `can_confirm`). |
 
-`hand_select.cards[].index` is the position in `NPlayerHand.ActiveHolders` — the holder `combat_select_card` presses; a holder without a card gets no row and the later indices are not shifted (schema 10). Each row carries `uid` (same as the card's `player.hand[]` row; null without a readable combat) and `enabled` (false while peeking — the game ignores presses then). `selected_cards` is always present: the hand's `_selectedCards` in selection order as `{index, id, name, uid}`, `[]` when none, `null` plus `selected_cards_unavailable_reason` when unreadable. `min_select` / `max_select` come from the selection's prefs (null plus `select_range_unavailable_reason` when unreadable), `peeking` from the peek button, and `can_confirm` is the confirm button enabled and shown. Match by uid, not by position or name in `player.hand`. [Details](raw-full.md#手札選択の候補と-uidschema-10).
+`hand_select.cards[].index` is the position in `NPlayerHand.ActiveHolders` — the holder `combat_select_card` presses; a holder without a card gets no row and the later indices are not shifted (schema 10). Each row carries `uid` (same as the card's `player.hand[]` row; null without a readable combat) and `enabled` (false while peeking, with an overlay on the stack or outside a combat in progress — the game ignores presses then — or when one of those cannot be read). `selected_cards` is always present: the hand's `_selectedCards` in selection order as `{index, id, name, uid}`, `[]` when none, `null` plus `selected_cards_unavailable_reason` when unreadable. `min_select` / `max_select` come from the selection's prefs (null plus `select_range_unavailable_reason` when unreadable), `peeking` from the peek button, and `can_confirm` is the confirm button enabled and shown. Match by uid, not by position or name in `player.hand`. [Details](raw-full.md#手札選択の候補と-uidschema-10).
 
 When `mode` is `upgrade_select`, each selectable card with an upgrade left carries `upgrade_preview` (its upgraded form).
 
@@ -437,7 +437,7 @@ true のときだけ Markdown に `[exhaust-next]` を付ける。戦闘外に�
 
 | Action | Parameters | When to Use |
 |---|---|---|
-| `select_card` | `index`: int (alias `card_index`), optional `expected_uid`: string | Grid: toggle any full-list candidate without scrolling. Choose-a-card: pick immediately. With `expected_uid` (schema 10; rows have uids only in combat) the candidate at `index` must have that uid, or nothing is pressed or revealed (error). |
+| `select_card` | `index`: int (alias `card_index`), optional `expected_uid`: string | Grid: toggle any full-list candidate without scrolling. Choose-a-card: pick immediately. With `expected_uid` (schema 10; rows have uids only in combat) the candidate at `index` must have that uid; a mismatch never presses. It is checked before revealing a hidden screen and again after revealing; if the second check fails, nothing is pressed but the screen stays revealed and the error carries `revealed`. |
 | `confirm_selection` | _(none)_ | Open/apply a deck preview, or apply a grid with manual confirmation. Not needed for immediate completion or choose-a-card. |
 | `cancel_selection` | _(none)_ | Cancel preview, skip (choose-a-card), or close screen. |
 
