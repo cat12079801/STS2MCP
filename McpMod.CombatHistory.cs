@@ -38,6 +38,9 @@ public static partial class McpMod
             return SummarizeCardPlays(CombatManager.Instance.History.CardPlaysFinished
                 .Where(e => e.HappenedThisTurn(combat) && e.CardPlay.Player == owner).Select(e => e.CardPlay));
         });
+        // GoldAxe.CanonicalVars: CalculatedDamage の倍率は CombatManager.Instance.History.CardPlaysFinished.Count()。
+        // 戦闘全体・全員分（Player で絞らない）。完了（CardModel.OnPlayWrapper の CardPlayFinished）だけを数える。
+        Read("card_plays_finished_this_combat", () => CombatManager.Instance.History.CardPlaysFinished.Count());
         Read("any_manual_cards_played_this_turn", () =>
         {
             var combat = CurrentCombat();

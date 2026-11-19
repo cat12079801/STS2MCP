@@ -1645,6 +1645,8 @@ public static partial class McpMod
             state["unlocked_pools"] = BuildUnlockedPools(player, creature.CombatState);
             // JackOfAllTrades.OnPlay の最終候補（自己除外・FilterForRun・FilterForCombat 後）。
             state["colorless_generation_pool"] = BuildColorlessGenerationPool(player);
+            // Splash.OnPlay の抽選前の候補（他キャラの解放済み pool の Attack。FilterForRun・FilterForCombat 後）。
+            state["other_character_attack_generation_pool"] = BuildOtherCharacterAttackGenerationPool(player);
             state["energy"] = combatState.Energy;
             state["max_energy"] = combatState.MaxEnergy;
 
@@ -1677,6 +1679,9 @@ public static partial class McpMod
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
             state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
             state["combat_history"] = BuildCombatHistoryState(player);
+            // EntropyPower の変化の候補（CardFactory.GetDefaultTransformationOptions）。エントロピーがある戦闘だけ。
+            if (BuildTransformationOptionsIfRelevant(player, combatState) is { } transformationOptions)
+                state["transformation_options"] = transformationOptions;
 
             // Orbs
             var orbQueue = combatState.OrbQueue;
@@ -3300,6 +3305,17 @@ public static partial class McpMod
         }
         state["can_confirm"] = canConfirm;
 
+        // In a fight, the grid screens CardSelectCmd opens (StratagemPower.AfterShuffle's FromCombatPile, FromSimpleGrid)
+        // carry who opened them and the listeners still to run.
+        string? choiceScreen = screen switch
+        {
+            NCombatPileCardSelectScreen => "combat_pile",
+            NSimpleCardSelectScreen => "simple_grid",
+            _ => null
+        };
+        if (choiceScreen != null && GetLiveCombatStateForSelection() != null)
+            state["choice_source"] = BuildChoiceSource(choiceScreen, null, runState);
+
         return state;
     }
 
@@ -3322,6 +3338,8 @@ public static partial class McpMod
             for (int i = 0; i < cards.Count; i++)
                 cards[i]["continuation_listeners"] = BuildCandidateContinuationListenersSafe(candidates[i]);
             state["continuation_context"] = BuildChoiceContinuationContext(runState, combatState);
+            // Who opened this screen (Splash.OnPlay, a potion, ...) and the card play it belongs to.
+            state["choice_source"] = BuildChoiceSource("choose", holderCards, runState);
         }
         state["cards"] = cards;
 
@@ -3492,6 +3510,9 @@ public static partial class McpMod
 
         // Confirm button state: shown and enabled, the one combat_confirm_selection presses.
         state["can_confirm"] = IsHandSelectConfirmPressable(hand);
+
+        // Who opened the hand selection (EntropyPower.AfterPlayerTurnStart, a card's OnPlay, ...) and what follows.
+        if (combatState != null) state["choice_source"] = BuildChoiceSource("hand", null, runState);
 
         return state;
     }

@@ -1,0 +1,36 @@
+# 選択を開いた元（`choice_source`）・エントロピーの変化の候補（`transformation_options`）の契約試験
+
+追加パッケージ不要。fish では次で実行する。
+
+```fish
+env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/ChoiceSourceContract -c Release -p:BuildInParallel=false -p:UseSharedCompilation=false
+```
+
+本番の `McpMod.ChoiceSourceTracker.cs`（開いている選択の記録・画面と入口の対応・Markdown の 1 行）、
+`McpMod.TransformationOptionsTable.cs`（変化の候補のまとめ方・Markdown の 1 行）、`McpMod.Warnings.cs` をリンクする。ゲームの型は使わない。
+
+- 記録: 開いた順の番号、最も新しい開いている記録、player・戦闘・画面の種類での絞り込み（別の戦闘の古い記録を使わない）、
+  choose の候補の照合（null の holder を飛ばし、同じ実体・同じ順だけ）、閉じた記録を返さないこと、上限を超えた古い記録を捨てること
+- 画面と `CardSelectCmd` の入口の対応（`hand` = `FromHand` / `FromHandForDiscard` / `FromHandForUpgrade`、`choose` = `FromChooseACardScreen`、
+  `combat_pile` = `FromCombatPile`、`simple_grid` = `FromSimpleGrid` / `FromSimpleGridForRewards`）
+- 変化の候補: 同じ ID・同じ候補の札を 1 行にまとめ uid を序数順に並べる（山札の順を出さない）、候補の重複除去と昇順、
+  同じ ID でも候補が違えば別の行、本体の例外（候補なし）は `options: null` と理由・warning、列挙の失敗は `known: false`、wire の null
+- Markdown（`Choice source: …`・`Transformation options (Entropy): …`）
+- ソースの文字列: `CardSelectCmd` の 8 つの patch 対象と引数の型、prefix が void・postfix が `ref` で Task を差し替えないこと、
+  完了で記録を閉じること、初期化で patch を当てること、通知の表（24 件・列の種類）、残りの listener を既存の
+  `BuildHookListenerRows`（山札の位置を隠す）で出すこと、`ModHelper` の購読者がいれば出さないこと、乱数・抽選に触らないこと、
+  hand_select・choose・grid への配線と戦闘中の条件、変化の候補の配線・エントロピーの戦闘だけで出すこと・
+  本体の `GetDefaultTransformationOptions` に `CardTransformation` と同じ `isInCombat` を渡すこと、金の斧の件数の式、版の履歴の 1.5.0
+
+Harmony の patch の当たり方・`PlayerChoiceContext` の連鎖・通知の列の読み直しはゲームが無いと動かせない。実機の確認（調整役が行う）:
+
+1. 計略（`STRATAGEM_POWER`）を持ち、手番の初めのドローの途中で山札が尽きてシャッフルした選択（`NCombatPileCardSelectScreen`）の
+   `card_select.choice_source` が `known: true`・`selector: "FromCombatPile"`・`models[0].model_id: "STRATAGEM_POWER"`・
+   `hook.name: "AfterShuffle"` で、`remaining_listeners` にそれより後ろの `AfterShuffle` の listener（そろばん等を持っていれば）が出ること。
+   ドロー札（ポメルストライクなど）の本文の途中のシャッフルでは `card_play.uid` がその札で `models` に札が続くこと。
+2. エントロピーの手番の初めの `hand_select` で `selector: "FromHand"`・`hand_source.model_id: "ENTROPY_POWER"`・
+   `models[0].model_id: "ENTROPY_POWER"`・`hook.name: "AfterPlayerTurnStart"`・`card_play: null`、`contexts[0].kind: "hook"` であること。
+   `player.transformation_options` が出て、選んだ札の変化先がその札の行の `options` に含まれること。
+3. スプラッシュの choose で `selector: "FromChooseACardScreen"`・`models[0]` がスプラッシュの札（uid）・`card_play.uid` が同じ uid・
+   `card_play.model_index: 0`・`hook.name: null`、複製で 2 回目なら `play_index: 1` であること。
+4. 戦闘外の選択画面（休憩所の強化など）に `choice_source` が付かないこと。

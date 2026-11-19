@@ -208,6 +208,11 @@ async def get_game_state(format: str = "markdown") -> str:
     schema 1.4.0 で、戦闘中に出る選択画面（state_type が *_select のもの。hand_select、グリッドと
     choose-a-card の card_select〔計略・未来視の雫の山からの選択も〕、bundle_select、relic_select）すべてに、
     戦闘の画面と同じ battle を付けた。戦闘の外の選択画面には付けない。
+    schema 1.5.0 で、無色 4 札の入力を足した。player.combat_history.card_plays_finished_this_combat
+    （金の斧。戦闘全体・全員の完了したカードの数）、player.other_character_attack_generation_pool（スプラッシュの
+    抽選前の候補）、player.transformation_options（エントロピーの戦闘だけ。札ごとの変化の候補）、戦闘中の
+    hand_select・card_select の choice_source（選択を開いた CardSelectCmd の入口、PlayerChoiceContext の連鎖と
+    model stack、進行中のカードのプレイ、上のモデルが走らせているフックとその後に残る listener）。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
@@ -261,7 +266,7 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
-    契約の版は schema（semver の文字列。現在 "1.4.0"）で返す。規則の正本は docs/raw-full.md の
+    契約の版は schema（semver の文字列。現在 "1.5.0"）で返す。規則の正本は docs/raw-full.md の
     「Common Top-Level Fields」。MAJOR は後方互換の無い変更（既存の項目の意味・型・形の変更、
     項目・アクション・列挙の値・state_type の削除・改名、構造の変更）、MINOR は後方互換の追加
     （項目・アクション・任意の引数・state_type・既存の列挙の新しい値。版でなく項目の有無と

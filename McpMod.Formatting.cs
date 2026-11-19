@@ -105,6 +105,21 @@ public static partial class McpMod
             sb.AppendLine();
         }
 
+        if (state.GetValueOrDefault("player") is Dictionary<string, object?> splashPlayer
+            && splashPlayer.GetValueOrDefault("other_character_attack_generation_pool") is Dictionary<string, object?> splashPool)
+        {
+            string summary = splashPool.GetValueOrDefault("known") is true
+                && splashPool.GetValueOrDefault("cards") is List<Dictionary<string, object?>> cards
+                ? $"{cards.Count} cards"
+                : $"unknown: {splashPool.GetValueOrDefault("reason")}";
+            sb.AppendLine($"Other-character attack pool: {summary}");
+            sb.AppendLine();
+        }
+
+        if (state.GetValueOrDefault("player") is Dictionary<string, object?> transformPlayer
+            && transformPlayer.GetValueOrDefault("transformation_options") is Dictionary<string, object?> transform)
+            AppendTransformationOptionsMarkdown(sb, transform);
+
         if (state.GetValueOrDefault("player") is Dictionary<string, object?> unlockedPlayer
             && unlockedPlayer.GetValueOrDefault("unlocked_pools") is Dictionary<string, object?> unlocked)
         {
@@ -212,11 +227,13 @@ public static partial class McpMod
         if (state.TryGetValue("hand_select", out var handSelectObj) && handSelectObj is Dictionary<string, object?> handSelect)
         {
             FormatHandSelectMarkdown(sb, handSelect);
+            AppendChoiceSourceMarkdown(sb, handSelect);
         }
 
         if (state.TryGetValue("card_select", out var cardSelectObj) && cardSelectObj is Dictionary<string, object?> cardSelect)
         {
             FormatCardSelectMarkdown(sb, cardSelect);
+            AppendChoiceSourceMarkdown(sb, cardSelect);
         }
 
         if (state.TryGetValue("bundle_select", out var bundleSelectObj) && bundleSelectObj is Dictionary<string, object?> bundleSelect)

@@ -29,6 +29,9 @@ public static partial class McpMod
     private const string ColorlessGenerationPoolFilterSource =
         "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;JackOfAllTrades.OnPlay:ExcludeSelf";
 
+    private const string OtherCharacterAttackGenerationPoolFilterSource =
+        "UnlockState.CharacterCardPools(Character.CardPool removed when Count>1).GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;Splash.OnPlay:Attack";
+
     // OrobicAcid.OnUse: キャラの解放済み pool → GetDistinctForCombat（FilterForRun → FilterForCombat）を
     // Attack/Skill/Power の型ごとに抽選する。その抽選前の候補一覧。
     private static Dictionary<string, object?> BuildGenerationPool(Player player) =>
@@ -43,6 +46,19 @@ public static partial class McpMod
             p => ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(p.UnlockState, p.RunState.CardMultiplayerConstraint)
                 .Where(c => c is not JackOfAllTrades),
             _ => true);
+
+    // Splash.OnPlay: UnlockState.CharacterCardPools を列挙し、2 つ以上あれば自キャラの Character.CardPool を除く
+    // （1 つだけなら除かない）。各 pool の GetUnlockedCards から Attack だけを GetDistinctForCombat
+    // （FilterForRun → FilterForCombat）で 3 枚抽選する。その抽選前の候補一覧。抽選の結果は出さない。
+    private static Dictionary<string, object?> BuildOtherCharacterAttackGenerationPool(Player player) =>
+        BuildCombatGenerationPool(player, "player.other_character_attack_generation_pool", OtherCharacterAttackGenerationPoolFilterSource,
+            p =>
+            {
+                var pools = p.UnlockState.CharacterCardPools.ToList();
+                if (pools.Count > 1) pools.Remove(p.Character.CardPool);
+                return pools.SelectMany(pool => pool.GetUnlockedCards(p.UnlockState, p.RunState.CardMultiplayerConstraint));
+            },
+            c => c.Type == CardType.Attack);
 
     private static Dictionary<string, object?> BuildCombatGenerationPool(Player player, string warningPath,
         string filterSource, Func<Player, IEnumerable<CardModel>> unlockedCards, Func<CardModel, bool> keep)

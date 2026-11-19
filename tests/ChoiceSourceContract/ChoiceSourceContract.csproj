@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../McpMod.ChoiceSourceTracker.cs" Link="ChoiceSourceTracker.cs" />
+    <Compile Include="../../McpMod.TransformationOptionsTable.cs" Link="TransformationOptionsTable.cs" />
+    <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.ChoiceSource.cs;../../McpMod.TransformationOptions.cs;../../McpMod.CombatHistory.cs"
+          Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

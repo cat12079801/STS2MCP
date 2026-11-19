@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.4.0",        // Contract version (semver) — see below
+  "schema": "1.5.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.4.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.5.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.4.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.5.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -135,6 +135,14 @@ and changing the meaning or shape of an existing field is MAJOR.
   `battle`, built the same way as the fight's own screen: the grid `card_select` (`NCombatPileCardSelectScreen` of
   Stratagem and the like), `bundle_select` and `relic_select` too, not only `hand_select` and the choose-a-card screen.
   See [戦闘中の選択画面の battle](#戦闘中の選択画面の-battleschema-140).
+- **1.5.0** — the public inputs of four colorless cards (`cat12079801/sts2#1084`):
+  `player.combat_history.card_plays_finished_this_combat` (Gold Axe), `player.other_character_attack_generation_pool`
+  (Splash), `player.transformation_options` (Entropy; only in a fight with Entropy) and `choice_source` on the in-combat
+  `hand_select` / `card_select` screens that `CardSelectCmd` opens (who opened the selection, the card play it belongs
+  to, the hook the top model runs and the listeners left in it; Stratagem, Entropy, Splash). See
+  [スプラッシュの生成候補](#スプラッシュの生成候補playerother_character_attack_generation_poolschema-150filter_version-2),
+  [エントロピーの変化の候補](#エントロピーの変化の候補playertransformation_optionsschema-150) and
+  [選択を開いた元](#選択を開いた元choice_sourceschema-150).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -403,6 +411,70 @@ Markdown は `Colorless generation pool: N cards` または unknown と理由の
 解放済み一覧の `unlocked_pools.colorless_cards`（後段の filter 前）は従来どおり残す。
 出典は `sts2-a671e9ef` の `JackOfAllTrades.OnPlay`、上記の `CardFactory` / `CardModel` のメソッド。
 
+#### スプラッシュの生成候補（`player.other_character_attack_generation_pool`、schema 1.5.0。filter_version 2）
+
+戦闘中の単独・マルチのローカル `player` に、スプラッシュ（`Splash.OnPlay`）の抽選前の候補を出す。
+戦闘外・旧 MOD では省略する。形は `generation_pool` と同じ（`character_id` / `player_id` / `players` /
+`multiplayer_constraint` / `known` / `cards` / `game_assembly_sha256` / `filter_version` / `filter_source`、失敗時 `reason`）。
+
+```jsonc
+"other_character_attack_generation_pool": {
+  "known": true,
+  "cards": [ { "id": "SWEEPING_BEAM", "type": "Attack" } ], // 例示。実際には全候補
+  "filter_version": 2,
+  "filter_source": "UnlockState.CharacterCardPools(Character.CardPool removed when Count>1).GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;Splash.OnPlay:Attack"
+}
+```
+
+`Splash.OnPlay` と同じく `player.UnlockState.CharacterCardPools` を列挙し、2 つ以上あれば自キャラの
+`player.Character.CardPool` を除く（1 つだけなら除かない）。各 pool の
+`GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint)` から `Type == Attack` の札を、
+`CardFactory.GetDistinctForCombat` と同じく `CardModel.IsAllowedInRun`（= private の `FilterForRun`）→
+`CardFactory.FilterForCombat` に通した ID の昇順。スプラッシュはここから 3 枚を `Rng.CombatCardGeneration` で
+抽選し、強化版なら 3 枚とも強化して choose-a-card に出す。その抽選・強化・結果は出さない（候補の集合だけ）。
+解放済みのキャラは図鑑・キャラ選択で見え、各 pool の解放済みの札も公開の情報なので、集合は人間が見える範囲で決まる。
+失敗時の契約・抽選をしないことは `generation_pool` と同じ（warning のパスは `player.other_character_attack_generation_pool`）。
+Markdown は `Other-character attack pool: N cards` または unknown と理由の 1 行。
+出典は `sts2-a671e9ef` の `Splash.OnPlay`、`UnlockState.CharacterCardPools`、`CardFactory.GetDistinctForCombat` /
+`FilterForCombat`、`CardModel.IsAllowedInRun`。契約試験は [`tests/GenerationPoolContract`](../tests/GenerationPoolContract/README.md)。
+
+#### エントロピーの変化の候補（`player.transformation_options`、schema 1.5.0）
+
+戦闘中の単独・マルチのローカル `player` に、エントロピー（`EntropyPower`）が手番の初めに変化させうる札ごとの、
+変化先の候補を出す。**エントロピーの戦闘だけ**（`player.Creature.Powers` に `EntropyPower` がある、または
+戦闘のパイルのどれかに `Entropy` の札がある）。それ以外の戦闘・戦闘外・旧 MOD では省略する。
+
+```jsonc
+"transformation_options": {
+  "known": true,
+  "source": "EntropyPower.AfterPlayerTurnStart;CardCmd.TransformToRandom;CardTransformation(original).IsInCombat=original.CombatState!=null;CardFactory.GetDefaultTransformationOptions(original,isInCombat)",
+  "cards": [
+    { "id": "DEFEND_IRONCLAD", "uids": ["DEFEND_IRONCLAD#1", "DEFEND_IRONCLAD#3"], "options": ["ANGER", "ASHEN_STRIKE", "..."] },
+    { "id": "BURN", "uids": ["BURN#9"], "options": null, "reason": "InvalidOperationException: All transformation options provided are invalid! …" }
+  ]
+}
+```
+
+- 経路: `EntropyPower.AfterPlayerTurnStart` → `CardSelectCmd.FromHand`（手札から `Amount` 枚）→ 選んだ札ごとに
+  `CardCmd.TransformToRandom(item, Rng.CombatCardGeneration)` → `CardTransformation(original)`（候補の指定なし、
+  `IsInCombat = original.CombatState != null`）→ `CardFactory.CreateRandomCardForTransform` →
+  `GetDefaultTransformationOptions(original, isInCombat)` から 1 枚。MOD はこの `GetDefaultTransformationOptions` を
+  各札に対して同じ引数で呼んだ結果（ID）を出す。条件（元の札の pool、Quest・Event・Ancient・Token なら無色の pool、
+  元が Status・Curse でなければ Common・Uncommon・Rare だけ、戦闘中は `CanBeGeneratedInCombat`、自分と同じ ID を除く、
+  `FilterForRun`）は本体のメソッドの中にあり、MOD には写さない。
+- 対象は所有者の戦闘のパイル（`PlayerCombatState.AllPiles`: 手札・山札・捨て札・廃棄札・Play）のすべての札。
+  手番の初めの手札は引くまで分からないので、引きうる札をすべて出す。同じ ID で候補も同じ札は 1 行にまとめ、
+  `uids` はその個体の uid の**序数順**（山札の順は出さない）。同じ ID でも候補が違えば別の行。行は ID の昇順。
+- `options` は重複を除いた ID の昇順。本体が候補なしで例外を投げる札は `options: null` と `reason`
+  （本体の変化もその札では例外になる）。warning `player.transformation_options.<ID>`。
+- 列挙そのものの失敗は `known: false`・`cards: []`・`reason`、warning `player.transformation_options`。
+- 抽選・`CardCmd.Transform`・乱数は呼ばない。候補の集合は元の札の pool・解放状態・ランから決まる公開の情報で、
+  どの札に変わるか（抽選の結果）は出さない。
+- Markdown は `Transformation options (Entropy): DEFEND_IRONCLAD 70, …`（ID と候補の数）の 1 行。
+出典は `sts2-a671e9ef` の `EntropyPower.AfterPlayerTurnStart`、`CardCmd.TransformToRandom` / `Transform`、
+`CardTransformation`、`CardFactory.CreateRandomCardForTransform` / `GetDefaultTransformationOptions` /
+`GetFilteredTransformationOptions`、`PlayerCombatState.AllPiles`。契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
+
 ### 戦闘中の解放済み pool（追加、schema 3）
 
 戦闘中のローカル `player.unlocked_pools` に、解放済みのモデル ID (`Id.Entry`) の一覧を追加する。
@@ -642,6 +714,7 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
     "by_type": { "None": 0, "Attack": 1, "Skill": 1, "Power": 0, "Status": 0, "Curse": 0, "Quest": 0 }
   },
   "any_manual_cards_played_this_turn": true,
+  "card_plays_finished_this_combat": 7,
   "card_plays_finished_this_turn_card_uids": ["THRUMMING_HATCHET#0", "THRUMMING_HATCHET#0"],
   "card_play_events_this_turn": [
     { "phase": "started", "uid": "HAVOC#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1 },
@@ -670,6 +743,7 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
 | `turn_number` | `owner.PlayerCombatState.TurnNumber`。`StoneCalendar.DisplayAmount` / `AfterSideTurnStart` / `BeforeSideTurnEnd`、`MrStruggles.AfterPlayerTurnStart`。追加ターンでは `battle.round` と一致しない。 |
 | `card_plays_started_this_turn` | `History.CardPlaysStarted` で `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner`。型は `e.CardPlay.Card.Type`。`NostalgiaPower.ModifyCardPlayResultLocation` の Attack + Skill、`JugglingPower.AfterApplied` の Attack、`VelvetChoker.GetCardsPlayedThisTurn` の全型と同じ。 |
 | `card_plays_finished_this_turn` | `History.CardPlaysFinished` で同じターン・Player 条件。`RippleBasin.BeforeSideTurnEnd` の Attack、`LunarBlast.CanonicalVars` の Skill と同じ。 |
+| `card_plays_finished_this_combat` | int（schema 1.5.0）。`History.CardPlaysFinished.Count()`。戦闘全体・**全 Player**（ターン・Player の条件なし）。v0.113.1 `sts2-a671e9ef` の `GoldAxe.CanonicalVars`（`CalculatedDamageVar.WithMultiplier` の式そのもの）。完了（`CardModel.OnPlayWrapper` の `CardPlayFinished`）だけを数えるので、解決中の金の斧自身や、本文の途中の親の札は入らない。リプレイ・自動プレイ・スキップした選択の札も完了の entry の数だけ数える。 |
 | `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
@@ -2890,6 +2964,85 @@ Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombat
 
 出典（v0.113.1、`sts2-a671e9ef`）: `NCombatPileCardSelectScreen : NCardGridSelectionScreen`。
 [SelectionBattleContract](../tests/SelectionBattleContract/README.md)
+
+#### 選択を開いた元（`choice_source`、schema 1.5.0）
+
+戦闘中（`CombatManager.IsInProgress`）に `CardSelectCmd` が開く選択画面の state に、その選択を開いた元と、
+選択の後に続く処理の手がかりを出す（`cat12079801/sts2#1084`）。付くのは `hand_select`（`FromHand` /
+`FromHandForDiscard` / `FromHandForUpgrade`）、choose-a-card の `card_select`（`FromChooseACardScreen`）、grid の
+`card_select` のうち `NCombatPileCardSelectScreen`（`FromCombatPile`）と `NSimpleCardSelectScreen`（`FromSimpleGrid` /
+`FromSimpleGridForRewards`）。戦闘外の画面・それ以外の画面には付けない。
+
+MOD は `CardSelectCmd` の上の 8 つの入口（`PlayerChoiceContext` を取るもの。`FromCombatPile` は 2 つの多重定義とも）に
+読むだけの Harmony の prefix・postfix を当て、呼ばれたときの引数（`context`・`player`・`FromHand` の `source`・
+choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の Task が終わったら記録を消す。state を作るときは、
+ローカル player・同じ戦闘・その画面を出す入口のうち、開いている最も新しい記録を使う（choose は画面の札が記録の札と
+同じ実体・同じ順のときだけ）。
+
+```jsonc
+"choice_source": {
+  "version": 1,
+  "known": true,
+  "selector": "FromCombatPile",                 // 選択を開いた CardSelectCmd のメソッド
+  "chooser_player_id": "1",
+  "hand_source": null,                          // FromHand* の source 引数（例: EntropyPower）の行
+  "contexts": [                                 // PlayerChoiceContext の連鎖。0 が CardSelectCmd に渡された context
+    { "index": 0, "owner_player_id": "1", "kind": "branching", "source": { "kind": "card", "uid": "POMMEL_STRIKE#4", "pile": "Play", "model_type": "PommelStrike", "model_id": "POMMEL_STRIKE" }, "branched": false },
+    { "index": 1, "owner_player_id": "1", "kind": "game_action",
+      "action": { "type": "PlayCardAction", "id": 12, "owner_player_id": "1", "state": "GatheringPlayerChoice", "card_uid": "POMMEL_STRIKE#4", "target_combat_id": 3 } }
+  ],
+  "models": [                                   // 各 context の ModelStack を上から（context 0 から順に）
+    { "kind": "power", "model_type": "StratagemPower", "model_id": "STRATAGEM_POWER", "owner_combat_id": 1, "owner_player_id": "1", "context_index": 0 },
+    { "kind": "card", "model_type": "PommelStrike", "model_id": "POMMEL_STRIKE", "uid": "POMMEL_STRIKE#4", "pile": "Play", "context_index": 0 },
+    { "kind": "card", "model_type": "PommelStrike", "model_id": "POMMEL_STRIKE", "uid": "POMMEL_STRIKE#4", "pile": "Play", "context_index": 1 }
+  ],
+  "card_play": { "phase": "started", "uid": "POMMEL_STRIKE#4", "is_auto_play": false, "target": { "combat_id": 3, "entity_id": "NIBBIT_0" },
+                 "play_index": 0, "play_count": 1, "model_index": 1, "player_id": "1" },
+  "hook": { "model_index": 0, "declared": ["AfterShuffle"], "name": "AfterShuffle", "scope": "combat",
+            "remaining_listeners": [ { "order": 3, "model_type": "TheAbacus", "model_id": "THE_ABACUS", "declared_by": "TheAbacus", "kind": "relic", "owner_player_id": "1" } ] }
+}
+```
+
+- `contexts`: `BranchingPlayerChoiceContext`（`kind: "branching"`。`Source`、別の chooser の context に分岐したかの
+  `branched`、次は private の `_originalContext`）、`HookPlayerChoiceContext`（`"hook"`。`Source` と、選択で作った
+  `GenericHookGameAction` の `action`）、`GameActionPlayerChoiceContext`（`"game_action"`。`Action`）、
+  `BlockingPlayerChoiceContext`（`"blocking"`）、`ThrowingPlayerChoiceContext`（`"throwing"`）。`action` は
+  `GameAction` の型名・`Id`・`OwnerId`・`State`、`PlayCardAction` なら `card_uid`（`NetCombatCard.ToCardModelOrNull`）と
+  `target_combat_id`（`TargetId`）。手番の初めの処理（`CombatManager.SetupPlayerTurn`）の context は
+  `Source` の無い `"hook"`。
+- `models`: 各 context の `PlayerChoiceContext.ModelStack`（`Stack` なので上から）を、context 0 から順に並べたもの。
+  `Hook` の各通知（`Hook.AfterShuffle`・`AfterPlayerTurnStart` など）は listener を走らせる間 `PushModel` し、
+  `CardModel.OnPlayWrapper` は札を積む（本文は札を積んだ `BranchingPlayerChoiceContext` で走る）。よって `models[0]` が
+  いま選択を開いた model（計略なら `StratagemPower`、エントロピーなら `EntropyPower`、スプラッシュなら札）。
+  行の形は `continuation_context` の listener の行と同じ（`kind` と所有者・uid・パイル。山札の札も uid とパイルだけ）。
+- `card_play`: `models` を上から見て最初の、プレイが進行中の札（`History.CardPlaysStarted` にあり、同じ `CardPlay` の
+  `CardPlaysFinished` が無い）。形は `combat_history.card_play_events_this_turn` の行と同じに、`models` の中の位置
+  `model_index` とプレイした `player_id` を足したもの。`play_index` / `play_count` がその札の何回目の解決か
+  （複製などのリプレイ）。無ければ `null`。
+- `hook`: `models[0]` について。`declared` は `Hook` が model を積んで走らせる 24 の通知（`AfterShuffle`・
+  `AfterPlayerTurnStartEarly` / `AfterPlayerTurnStart` / `AfterPlayerTurnStartLate`・`AfterCardPlayed`・`AfterCardDrawn` など）
+  のうち、その型が `AbstractModel` の既定から override しているもの（リフレクションだけ。呼ばない）。`name` は、
+  `models[0]` がプレイ進行中の札（本文の `OnPlay`）でなく、`declared` がちょうど 1 つのときのその通知。それ以外は `null`
+  （どの通知の中かを推測しない）。`scope` はその通知が回す列（`combat` = `Hook.IterateCombatHookListeners`、
+  `combat_all` = `ICombatState.IterateHookListeners()`、`run` = `IRunState.IterateHookListeners(combat)`）。
+- `remaining_listeners`: `name` が決まったとき、その通知の列を**いま読み直し**、`models[0]` より後ろで同じ通知を
+  override している listener。行は `continuation_context` と同じで、山札の listener は `order: null` と `order_group`
+  （山札の順を出さない）。`order` は `models[0]` の次を 0 とする位置。本体はその通知を始めたときに取った列を回すので、
+  始めてから `models[0]` までの listener が足した・消した model の分は違いうる（選択そのものはまだ何も動かしていない）。
+  `name` が `null`、列に `models[0]` が無い、`ModHelper` に hook の subscriber がいるときは `null`（後の 2 つは
+  `unavailable_reasons` も）。
+- 公開の情報だけ: 選択を開いた model は画面で光る・プレイ中の札として見えるもの、listener は場に出ているパワー・
+  レリック・ポーション・札で、山札の順は出さない。抽選の結果・乱数・山札の順には触らない。
+- 分からないとき（記録が無い、patch を当てられなかった、知らない種類の context・listener）は `known: false` と
+  `unavailable_reasons`（文字列の配列）。warning は `choice_source`。
+- Markdown は `Choice source: FromHand; models ENTROPY_POWER; hook AfterPlayerTurnStart (2 listeners left)` の 1 行
+  （プレイ中の札は `card play SPLASH#15 (1/1)`、未知なら理由）。
+
+出典（v0.113.1、`sts2-a671e9ef`）: `CardSelectCmd` の各入口、`PlayerChoiceContext.ModelStack` / `PushModel`、
+`BranchingPlayerChoiceContext`、`HookPlayerChoiceContext`、`GameActionPlayerChoiceContext`、`GenericHookGameAction`、
+`PlayCardAction`、`Hook.AfterShuffle` / `AfterPlayerTurnStart` ほか、`CardModel.OnPlayWrapper`、`CombatManager.SetupPlayerTurn`、
+`CardPileCmd.Shuffle`、`StratagemPower.AfterShuffle`、`EntropyPower.AfterPlayerTurnStart`、`Splash.OnPlay`。
+契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
 
 #### 選択候補の個体（`combat_instance`、schema 7）
 

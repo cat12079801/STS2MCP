@@ -16,7 +16,15 @@ namespace MegaCrit.Sts2.Core.Runs
         public bool Blitz;
     }
 }
-namespace MegaCrit.Sts2.Core.Unlocks { public class UnlockState { } }
+namespace MegaCrit.Sts2.Core.Unlocks
+{
+    public class UnlockState
+    {
+        // v0.113.1 UnlockState.CharacterCardPools: Characters.Select(c => c.CardPool).
+        public List<Models.CardPoolModel> Pools = new();
+        public IEnumerable<Models.CardPoolModel> CharacterCardPools => Pools;
+    }
+}
 namespace MegaCrit.Sts2.Core.Entities.Players
 {
     public class Player

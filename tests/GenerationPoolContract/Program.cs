@@ -101,6 +101,8 @@ namespace STS2_MCP
             var stranger = BuildGenerationPool(owner);
             Check(stranger["known"] is false && ((string)stranger["reason"]!).Contains("run.Players"), "run にいない player は known=false");
 
+            CheckOtherCharacterAttackPool();
+
             string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
             string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             string playerBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildCardState", StringComparison.Ordinal)];
@@ -109,9 +111,61 @@ namespace STS2_MCP
             Check(guard >= 0 && wiring > guard, "無色の最終候補は戦闘中の共通 Player builder だけで出す");
             Check(playerBuilder.IndexOf("state[\"generation_pool\"] = BuildGenerationPool(player)", StringComparison.Ordinal) is >= 0 and var g && g < guard, "酸液の pool は従来どおり戦闘外も出す");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("Colorless generation pool:"), "Markdown の1行");
+            int splashWiring = playerBuilder.IndexOf("state[\"other_character_attack_generation_pool\"] = BuildOtherCharacterAttackGenerationPool(player)", StringComparison.Ordinal);
+            Check(splashWiring > guard, "スプラッシュの候補は戦闘中の共通 Player builder だけで出す");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("Other-character attack pool:"), "スプラッシュの候補の Markdown の1行");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "pool 契約は filter_version で版を示す（state 全体の schema は 12）");
             Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
             Console.WriteLine($"GenerationPoolContract: {Checks} checks passed");
+        }
+
+        // Splash.OnPlay: UnlockState.CharacterCardPools, minus the owner's Character.CardPool when there is more
+        // than one, each pool's GetUnlockedCards, Attack only, GetDistinctForCombat (FilterForRun, FilterForCombat).
+        private static void CheckOtherCharacterAttackPool()
+        {
+            BeginStateWarnings();
+            CardModel.AllowedCalls.Clear();
+            var owner = new Player();
+            owner.RunState.Players.Add(owner);
+            var silent = new CardPoolModel();
+            var defect = new CardPoolModel();
+            var calls = new List<CardPoolModel>();
+            Func<MegaCrit.Sts2.Core.Unlocks.UnlockState, CardMultiplayerConstraint, IEnumerable<CardModel>> Reader(CardPoolModel pool, params CardModel[] cards)
+                => (unlocks, constraint) =>
+                {
+                    Check(ReferenceEquals(unlocks, owner.UnlockState) && constraint == owner.RunState.CardMultiplayerConstraint, "Splash.OnPlay と同じ引数（owner の UnlockState・run の制約）");
+                    calls.Add(pool);
+                    return cards;
+                };
+            var shared = new CardModel("SHARED_ATTACK", CardType.Attack);
+            owner.Character.CardPool.Read = Reader(owner.Character.CardPool, new CardModel("OWN_ATTACK", CardType.Attack), new CardModel("OWN_SKILL", CardType.Skill));
+            silent.Read = Reader(silent, new CardModel("S_ATTACK", CardType.Attack), new CardModel("S_SKILL", CardType.Skill),
+                new CardModel("S_NO_GEN", CardType.Attack) { GeneratedInCombat = false }, shared,
+                new CardModel("S_MP", CardType.Attack) { MultiplayerConstraint = CardMultiplayerConstraint.MultiplayerOnly });
+            defect.Read = Reader(defect, new CardModel("D_ATTACK", CardType.Attack), shared, new CardModel("D_POWER", CardType.Power));
+
+            owner.UnlockState.Pools.AddRange(new[] { silent, owner.Character.CardPool, defect });
+            const string source = "UnlockState.CharacterCardPools(Character.CardPool removed when Count>1).GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;Splash.OnPlay:Attack";
+            var pool = BuildOtherCharacterAttackGenerationPool(owner);
+            Check(pool["known"] is true && Equals(pool["filter_version"], 2) && Equals(pool["filter_source"], source), "スプラッシュの候補は版2・filter_source の完全一致");
+            Check(Ids(pool).SequenceEqual(new[] { "D_ATTACK", "SHARED_ATTACK", "S_ATTACK" }), "自キャラの pool を除き、Attack だけ、FilterForRun・FilterForCombat 後、ID 昇順・重複なし");
+            Check(calls.SequenceEqual(new[] { silent, defect }), "自キャラの pool の GetUnlockedCards は呼ばない（Splash は除いてから列挙する）");
+            Check(CardModel.AllowedCalls.All(c => ReferenceEquals(c.Run, owner.RunState)), "IsAllowedInRun は owner の run");
+
+            owner.UnlockState.Pools.Clear();
+            owner.UnlockState.Pools.Add(owner.Character.CardPool);
+            Check(Ids(BuildOtherCharacterAttackGenerationPool(owner)).SequenceEqual(new[] { "OWN_ATTACK" }), "pool が 1 つだけなら自キャラの pool も除かない（Splash.OnPlay の list.Count > 1）");
+            owner.UnlockState.Pools.Clear();
+            owner.UnlockState.Pools.Add(silent);
+            Check(Ids(BuildOtherCharacterAttackGenerationPool(owner)).SequenceEqual(new[] { "SHARED_ATTACK", "S_ATTACK" }), "自キャラが一覧に無く 1 つだけでもそのまま列挙する");
+            Check(_stateWarnings.Count == 0, "成功時は warning なし");
+
+            owner.UnlockState.Pools.Add(defect);
+            defect.Read = (_, _) => throw new InvalidOperationException("defect pool renamed");
+            var failed = BuildOtherCharacterAttackGenerationPool(owner);
+            Check(failed["known"] is false && ((List<Dictionary<string, object?>>)failed["cards"]!).Count == 0 && ((string)failed["reason"]!).Contains("defect pool renamed"), "1 つの pool の失敗で部分一覧を known にしない");
+            Check(_stateWarnings.Any(w => w.StartsWith("player.other_character_attack_generation_pool:")), "スプラッシュの候補の warning パス");
+            BeginStateWarnings();
         }
 
         private static IEnumerable<CardModel> Throwing()

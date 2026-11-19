@@ -52,8 +52,12 @@ public static partial class McpMod
     /// target_combat_id (PowerModel._target), whatever the power's subclass.
     /// 1.4.0: every selection state (*_select) shown while a fight is in progress carries battle, built the
     /// same way as the fight's own screen (the grid card_select such as NCombatPileCardSelectScreen too).
+    /// 1.5.0: the inputs of four colorless cards: player.combat_history.card_plays_finished_this_combat (GoldAxe),
+    /// player.other_character_attack_generation_pool (Splash), player.transformation_options (EntropyPower) and
+    /// choice_source on the in-combat hand_select / card_select screens (who opened the selection, the card play
+    /// it belongs to, the listeners still to run; StratagemPower, EntropyPower, Splash).
     /// </summary>
-    public const string StateSchema = "1.4.0";
+    public const string StateSchema = "1.5.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to
@@ -322,6 +326,8 @@ public static partial class McpMod
             // Optional settings UI patches should not block the HTTP bridge itself.
             TryApplyHarmonyPatches();
             InstallRewardTracking();
+            // Who opened a card selection (choice_source on the in-combat selection screens).
+            InstallChoiceSourceTracking();
 
             // Connect to main thread process frame for action execution
             var tree = (SceneTree)Engine.GetMainLoop();

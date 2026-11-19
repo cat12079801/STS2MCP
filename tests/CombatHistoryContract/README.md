@@ -7,7 +7,7 @@
 env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CombatHistoryContract -c Release -p:BuildInParallel=false -p:UseSharedCompilation=false
 ```
 
-開始／完了の区別、全 CardType と 0、リプレイの重複、所有者の絞り込み、
+金の斧の倍率と同じ `card_plays_finished_this_combat`（`History.CardPlaysFinished.Count()`。別手番・他 Player・リプレイも数え、getter の失敗は 0 でなく null）、開始／完了の区別、全 CardType と 0、リプレイの重複、所有者の絞り込み、
 本体のターン判定への引数、このターンと前手番の uid の順序・重複・他 Player のプレイを検査する。
 廃棄は entry の数、被ダメは正の UnblockedDamage の件数をターン／戦闘で区別する。
 不動のブロックは CardPlay・プレイした Player・Move を検査し、Receiver で絞らず、
