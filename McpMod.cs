@@ -56,8 +56,10 @@ public static partial class McpMod
     /// player.other_character_attack_generation_pool (Splash), player.transformation_options (EntropyPower) and
     /// choice_source on the in-combat hand_select / card_select screens (who opened the selection, the card play
     /// it belongs to, the listeners still to run; StratagemPower, EntropyPower, Splash).
+    /// 1.6.0: player.combat_history.card_resolution_events, the owner's draw / play / generated entries of the
+    /// whole combat in History order, across turn boundaries (sts2#1088).
     /// </summary>
-    public const string StateSchema = "1.5.0";
+    public const string StateSchema = "1.6.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

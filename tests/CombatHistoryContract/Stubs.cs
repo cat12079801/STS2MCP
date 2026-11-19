@@ -129,6 +129,31 @@ namespace MegaCrit.Sts2.Core.Combat.History.Entries
         }
     }
     public class CardExhaustedEntry : CombatHistoryEntry { }
+    // Actor is Card.Owner.Creature in the real constructors (CardDrawnEntry / CardGeneratedEntry).
+    public class CardDrawnEntry : CombatHistoryEntry
+    {
+        public Models.CardModel Card;
+        public bool FromHand;
+        public bool ThrowFromHandDraw;
+        public bool FromHandDraw => ThrowFromHandDraw ? throw new MissingMemberException("FromHandDraw renamed") : FromHand;
+        public CardDrawnEntry(Models.CardModel card, bool fromHandDraw, Entities.Creatures.Creature actor)
+        {
+            Card = card;
+            FromHand = fromHandDraw;
+            Actor = actor;
+        }
+    }
+    public class CardGeneratedEntry : CombatHistoryEntry
+    {
+        public Models.CardModel Card;
+        public Entities.Players.Player? Creator;
+        public CardGeneratedEntry(Models.CardModel card, Entities.Players.Player? creator, Entities.Creatures.Creature actor)
+        {
+            Card = card;
+            Creator = creator;
+            Actor = actor;
+        }
+    }
     public class CardAfflictedEntry(Models.CardModel card, Models.AfflictionModel affliction) : CombatHistoryEntry
     {
         public Models.CardModel Card = card;

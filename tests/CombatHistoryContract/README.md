@@ -44,6 +44,14 @@ UID registry の更新・マルチ・Markdown の配線と schema 12 を確認�
 Markdown の `play events=[...]`、対象の `CombatId` 欠落・`IsAutoPlay` 取得失敗・途中の手番判定失敗での配列全体の null・理由・warning、
 他の項目の保持、復旧・履歴リセット・前の snapshot の独立を検査する。
 
+`card_resolution_events`（schema 1.6.0）は `ResolutionEventChecks.cs` で、空履歴の `[]`、前の手番の終わりの内側のドロー（`from_hand_draw: false`）と
+自動プレイ・敵の手番の生成（`creator: null`）・次の手番の通常のドローと同じ札の再ドロー・自動プレイを、手番の条件なしに履歴順のまま 1 本で出すこと、
+他 Player のドロー・生成・プレイとプレイ以外の entry の除外、所有者・他 Player が作った生成札の `creator`、開始だけの札、
+後の snapshot の列が前の snapshot の列で始まること（接頭部）、既存の `card_play_events_this_turn` が今の手番だけのままであること、
+play の行が既存の要素に `kind` を足した形であること、各行のキーと wire の bool・null・数値、Markdown の種類ごとの件数を検査する。
+`FromHandDraw` の取得失敗・対象の `CombatId` 欠落・combat state の欠落で配列全体が null・理由・warning になり、他の項目を保持し、
+復旧・履歴のリセットで空配列に戻り、前の snapshot が独立であることも確認する。
+
 ターン判定は境界ダブル。判定結果を設定し、本体メソッドへの委譲を確かめる。
 uid registry は本番を実行し、パイルとこのターン・前手番の履歴が同じ個体を同じ uid で参照することを確認する。
 本体のターン進行・履歴記録を再現した証拠ではない。

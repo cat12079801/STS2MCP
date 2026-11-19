@@ -228,7 +228,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 |---|---|---|---|
 | `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:104 … | mod-scan |
 | `AbstractModel.Id` | base | McpMod.Actions.cs:1014, McpMod.Actions.cs:1729, McpMod.Actions.cs:2607 … | mod-scan |
-| `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:168, McpMod.CombatHistory.cs:103 | mod-scan |
+| `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:168, McpMod.CombatHistory.cs:120 | mod-scan |
 | `CardModel.Enchantment` | base | McpMod.CardDetails.cs:117, McpMod.CardDetails.cs:65, McpMod.ChoiceContinuationState.cs:169 | mod-scan |
 | `CardModel._baseReplayCount` | base | McpMod.CardDetails.cs:110 | mod-scan |
 | `CardModel._baseStarCost` | base | McpMod.CardStarCost.cs:23 | mod-scan |
@@ -288,7 +288,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59 | mod-scan |
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
 | `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
-| `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:143 … | mod-scan |
+| `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:202 … | mod-scan |
 | `Creature.Side` | entity | McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
 | `Creature._block` | entity | McpMod.MultiplayerState.cs:447, McpMod.PowerInternalState.cs:218, McpMod.StateBuilder.cs:1637 … | mod-scan |
@@ -320,7 +320,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `PlayerCombatState.Hand` | entity | McpMod.Actions.cs:189, McpMod.Actions.cs:261, McpMod.Helpers.cs:49 … | mod-scan |
 | `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1689 | mod-scan |
 | `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1676, McpMod.StateBuilder.cs:1682 | mod-scan |
-| `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:28 | mod-scan |
+| `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:29 | mod-scan |
 | `PlayerCombatState._energy` | entity | McpMod.StateBuilder.cs:1652 | mod-scan |
 | `PlayerCombatState._pets` | entity | player.pets（McpMod.StateBuilder.cs:1700） | manual |
 | `PlayerCombatState._phase` | entity | McpMod.Helpers.cs:26, McpMod.Helpers.cs:36, McpMod.StateBuilder.cs:759 | mod-scan |

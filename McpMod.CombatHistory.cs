@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Combat.History.Entries;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
@@ -78,6 +79,22 @@ public static partial class McpMod
             }
             return events;
         });
+        Read("card_resolution_events", () =>
+        {
+            var combat = CurrentCombat();
+            RefreshEntityIdRegistry(combat);
+            // The whole combat's draw / play / generated entries in History order, across the end of a
+            // turn, the enemy turn and the next turn's start (sts2#1088). Every row is fixed once
+            // recorded (entry, CardPlay and the combat's uid / entity id registries never change), so a
+            // later snapshot's array starts with an earlier one's. Never re-sort, dedupe or summarize.
+            var events = new List<Dictionary<string, object?>>();
+            foreach (var entry in CombatManager.Instance.History.Entries)
+            {
+                var row = BuildCardResolutionEvent(entry, owner);
+                if (row != null) events.Add(row);
+            }
+            return events;
+        });
         Read("last_player_turn_card_uids", () =>
         {
             _ = owner.PlayerCombatState ?? throw new InvalidOperationException("PlayerCombatState is unavailable");
@@ -130,6 +147,48 @@ public static partial class McpMod
                 reasons[key] = $"{ex.GetType().Name}: {ex.Message}";
                 Warn($"player.combat_history.{key}", ex);
             }
+        }
+    }
+
+    // One row of card_resolution_events, or null for an entry that is not the owner's draw, play
+    // or generated card. Draws and generated cards belong to the owner whose pile the card entered:
+    // their entries record Actor = Card.Owner.Creature when created (CardDrawnEntry /
+    // CardGeneratedEntry constructors), so an enemy's Burn sits in its target player's stream with
+    // creator=null. Plays use CardPlay.Player like card_play_events_this_turn.
+    private static Dictionary<string, object?>? BuildCardResolutionEvent(CombatHistoryEntry entry, Player owner)
+    {
+        switch (entry)
+        {
+            case CardDrawnEntry drawn when drawn.Actor == owner.Creature:
+                return new Dictionary<string, object?>
+                {
+                    ["kind"] = "draw",
+                    ["uid"] = GetStableCardUid(drawn.Card),
+                    ["from_hand_draw"] = drawn.FromHandDraw
+                };
+            case CardGeneratedEntry generated when generated.Actor == owner.Creature:
+                return new Dictionary<string, object?>
+                {
+                    ["kind"] = "generated",
+                    ["card_id"] = generated.Card.Id.Entry,
+                    ["uid"] = GetStableCardUid(generated.Card),
+                    // Player? Creator: null when no player made it (an enemy move, a status effect).
+                    ["creator"] = generated.Creator == null ? null
+                        : generated.Creator == owner ? "owner" : "other_player"
+                };
+            case CardPlayStartedEntry started when started.CardPlay.Player == owner:
+                return WithKind(BuildCardPlayEvent("started", started.CardPlay));
+            case CardPlayFinishedEntry finished when finished.CardPlay.Player == owner:
+                return WithKind(BuildCardPlayEvent("finished", finished.CardPlay));
+            default:
+                return null;
+        }
+
+        static Dictionary<string, object?> WithKind(Dictionary<string, object?> play)
+        {
+            var row = new Dictionary<string, object?> { ["kind"] = "play" };
+            foreach (var (key, value) in play) row[key] = value;
+            return row;
         }
     }
 

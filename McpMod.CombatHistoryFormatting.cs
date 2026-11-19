@@ -32,6 +32,14 @@ public static partial class McpMod
                 };
                 parts.Add($"{label}={count}");
             }
+            else if (key == "card_resolution_events" && value is List<Dictionary<string, object?>> stream)
+            {
+                // The whole combat's stream is long; Markdown shows only its size (JSON has the rows).
+                if (stream.Count > 0)
+                    parts.Add($"resolution events={stream.Count} ({string.Join(", ", stream
+                        .GroupBy(e => e.GetValueOrDefault("kind") as string ?? "?")
+                        .Select(g => $"{g.Key}:{g.Count()}"))})");
+            }
             else if (value is List<Dictionary<string, object?>> events && events.Count > 0)
                 parts.Add($"play events=[{string.Join(", ", events.Select(FormatCardPlayEvent))}]");
             else if (value is List<string> uids && uids.Count > 0)

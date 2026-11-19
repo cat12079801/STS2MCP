@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.5.0",        // Contract version (semver) — see below
+  "schema": "1.6.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.5.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.6.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.5.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.6.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -143,6 +143,9 @@ and changing the meaning or shape of an existing field is MAJOR.
   [スプラッシュの生成候補](#スプラッシュの生成候補playerother_character_attack_generation_poolschema-150filter_version-2),
   [エントロピーの変化の候補](#エントロピーの変化の候補playertransformation_optionsschema-150) and
   [選択を開いた元](#選択を開いた元choice_sourceschema-150).
+- **1.6.0** — `player.combat_history.card_resolution_events`: the owner's draw, play (started / finished) and
+  generated-card entries of the whole combat, in History order, across the end of a turn, the enemy turn and the next
+  turn's start (`cat12079801/sts2#1088`). See [札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -724,6 +727,12 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
       "target": { "combat_id": 12, "entity_id": "WRIGGLER_1" }, "play_index": 0, "play_count": 1 },
     { "phase": "finished", "uid": "HAVOC#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1 }
   ],
+  "card_resolution_events": [
+    { "kind": "draw", "uid": "STRIKE_IRONCLAD#1", "from_hand_draw": false },
+    { "kind": "generated", "card_id": "BURN", "uid": "BURN#g1182", "creator": null },
+    { "kind": "draw", "uid": "HAVOC#10", "from_hand_draw": true },
+    { "kind": "play", "phase": "started", "uid": "HAVOC#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1 }
+  ],
   "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
   "cards_exhausted_this_turn": 1,
   "bound_afflictions_this_turn": 2,
@@ -747,6 +756,7 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
 | `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
+| `card_resolution_events` | schema 1.6.0。`History.Entries` を元の順のまま走査し、所有者の `CardDrawnEntry`・`CardPlayStartedEntry` / `CardPlayFinishedEntry`・`CardGeneratedEntry` を戦闘全体（手番の条件なし）で出す。下の「[札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160)」。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
 | `bound_afflictions_this_turn` | `History.Entries.OfType<CardAfflictedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature && e.Affliction is Bound`。`ChainsOfBindingPower.AfterCardDrawn` と同じ集合の件数。 |
@@ -860,6 +870,56 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 手動プレイの項目も旧 MOD では欠落し、欠落・null は unknown として扱う。
 読取不能時は `any_manual_cards_played_this_turn: null` と同名の `unavailable_reasons`、
 `player.combat_history.any_manual_cards_played_this_turn` の warning を出す。
+
+#### 札の解決の通し列（card_resolution_events、schema 1.6.0）
+
+`card_play_events_this_turn` は今の手番のプレイだけなので、前の手番の終わり（闇の抱擁のエセリアルのドローと、そこで引いた札の
+ヘルレイザーの自動プレイ）・敵の手番（敵が捨て札に入れる火傷）・次の手番の初め（通常のドロー、その中の自動プレイ、鉄の棍棒のドロー）が
+どの順に起きたかは、次の入力の state の 4 山の最終位置からは決まらない（同じ札が引かれ、自動プレイで捨て札に行き、シャッフルでまた引かれると、
+最終位置には 1 回しか現れない）。`card_resolution_events` は、プレイヤーが画面で見たこれらの出来事を、本体が記録した順のまま 1 本の列で出す
+（`cat12079801/sts2#1088`）。
+
+- **範囲**: `CombatManager.Instance.History.Entries` の全件を元の順のまま走査する。手番の条件は付けない（戦闘全体）。
+  本体の履歴は戦闘の終わり（`CombatManager.EndCombatInternal`）と戦闘の破棄（`CombatManager.CancelCombat`）で `History.Clear()` され、
+  `combat_history` 自体も戦闘中だけ出るので、列は 1 つの戦闘の中だけで続き、次の戦闘は空の列から始まる。
+- **選ぶ entry と所有者**:
+  - ドロー: `CardDrawnEntry` で `Actor == owner.Creature`。`CardPileCmd.DrawInternal` が札を手札に移した直後、`Hook.AfterCardDrawn` の前に
+    `CombatHistory.CardDrawn` で記録する。entry の Actor はコンストラクタが `card.Owner.Creature` を入れる。
+  - プレイ: `CardPlayStartedEntry` / `CardPlayFinishedEntry` で `CardPlay.Player == owner`（`card_play_events_this_turn` と同じ条件）。
+  - 生成: `CardGeneratedEntry` で `Actor == owner.Creature`。`CardPileCmd.AddGeneratedCardsToCombat` が山に入れる直前に記録する（戦闘中の変化
+    `CardCmd.Transform` の置き換え後の札も `CombatHistory.CardGenerated` を通る）。Actor は札の持ち主なので、敵の行動が作った火傷
+    （`Creator == null`）も、それが入った山の持ち主の列に出る。
+  - それ以外の entry（廃棄・捨てる・ダメージ・ブロックなど）は出さない。
+- **各行**（`kind` で種類を分ける）:
+
+  | `kind` | キー | 値 |
+  |---|---|---|
+  | `draw` | `uid` | `CardDrawnEntry.Card` を手札・各パイルと共通の `GetStableCardUid` で変換 |
+  | | `from_hand_draw` | `CardDrawnEntry.FromHandDraw`（bool）。手番の初めの通常のドロー（`CombatManager.SetupPlayerTurn` の `fromHandDraw: true`）なら true、札・レリック・パワーが引かせたドローは false |
+  | `play` | `phase` ほか | `card_play_events_this_turn` の要素と同じ `phase`・`uid`・`is_auto_play`・`target`・`play_index`・`play_count`（同じ `BuildCardPlayEvent` で作る） |
+  | `generated` | `card_id` | `CardGeneratedEntry.Card.Id.Entry` |
+  | | `uid` | 同じく `GetStableCardUid`（生成札は `#g<number>` の空間） |
+  | | `creator` | `CardGeneratedEntry.Creator`（`Player?`）。所有者なら `"owner"`、ほかのプレイヤーなら `"other_player"`、プレイヤーでない（敵の行動など）なら `null` |
+
+- **接頭部が変わらない**: entry は追加されるだけで、各行の値（entry・`CardPlay`・戦闘の uid / entity id の registry）は記録の後に変わらない。
+  したがって同じ戦闘の後の snapshot の列は、前の snapshot の列で始まる。差分は「前の列の長さ以降」で取れる。
+  手番を示す値（`RoundNumber`・`CurrentSide` は entry の private）や、読むたびに変わる「この手番か」の印は付けない。
+  手番の境界は `from_hand_draw` と、今の手番の `card_play_events_this_turn` との突き合わせで読む。
+- **出さないもの**: 山札の順・まだ引いていない札・乱数・次の対象。ドローの行は手札に入った札（画面に表を向けて出た札）だけで、
+  生成の行は札の ID と uid だけ（山の中の位置は出さない。生成札は `draw_pile` などの一覧にもすでに出ている）。
+- **重複・順序**: 同じ札の再ドロー・同じ札の複数回のプレイ（自動プレイ・リプレイ）は行ごとに残す。並べ替え・重複除去・要約をしない。
+  入れ子（親の開始 → 子のドローと自動プレイ → 親の完了）も記録の順のまま。
+- **失敗**: 読取（History・entry の判定・各 getter・対象の `CombatId`）のどれかに失敗したら配列全体を `null` にし、
+  `unavailable_reasons.card_resolution_events` と warning `player.combat_history.card_resolution_events` を出す。1 行を飛ばした短い列は返さない。
+  正常な空の戦闘履歴は `[]`。
+- **戦闘の終わり**: 勝利の後の state（報酬・マップ）には `combat_history` が無く、本体の履歴も消えるので、最後の操作の後の行は出ない。
+  終局の値は報酬の画面の HP などの公開値で読む。
+- **Markdown**: 列が長いので、History 行に `resolution events=13 (draw:4, play:5, generated:4)` のように種類ごとの件数だけを出す
+  （`play` は開始・完了の行の数）。行そのものは JSON で読む。
+
+出典は v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardDrawn / CardGenerated / CardPlayStarted / CardPlayFinished / Clear`、
+`CardDrawnEntry.Card / FromHandDraw`、`CardGeneratedEntry.Card / Creator`、`CombatHistoryEntry.Actor`、
+`CardPileCmd.DrawInternal / AddGeneratedCardsToCombat`、`CardCmd.Transform`、`CombatManager.EndCombatInternal / CancelCombat`。
 
 契約試験と実機確認の観点は [`tests/CombatHistoryContract`](../tests/CombatHistoryContract/README.md)。
 
