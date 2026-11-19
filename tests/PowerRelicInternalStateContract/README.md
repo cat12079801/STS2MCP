@@ -49,11 +49,12 @@ HUD 非表示の行にも付くこと、未結合では Owner を読まないこ
 has_command・attacker_is_owner が null（開始時の量は保持）、開始時の量の型変更で量だけ null（未結合は保持）、
 Attacker・Owner の getter 失敗で attacker_is_owner だけ null になり、どれも readable=false になることを確認する。
 wire の bool / null / int と行の理由、Markdown の `none`・`readable: no`・`null (理由)` も確認する。
-呪術（`HEX_POWER`）の `applier_combat_id` / `applier_readable` は、付与元の `CombatId`（7 と実在する 0）、
-付与元なし（readable=true の null・理由なし・Markdown の `none`）、`CombatId` の無い付与元と getter の失敗
-（readable=false・null・理由・warnings・Markdown の `null (理由)` と `applier readable: no`、他項目の保持）、
-読取で付与元を変えないこと、snapshot の独立、HUD 非表示の行にも付くこと、他のパワーには付かないこと、
-wire の uint 0・null と readable の bool を確認する。
+呪術（`HEX_POWER`）の行の直下の `applier_combat_id` / `applier_readable` は、許可リストの `internal_state.applier_combat_id`
+（ここでは手で置いた値。読み取りそのものは `StateAllowlistContract`）を `AttachHexApplierCompat` が写したものとして、
+付与元の `CombatId`（7 と実在する 0）、付与元なし（readable=true の null・理由なし・Markdown の `none`）、
+読取失敗（readable=false・null・同じ理由で warnings を足さない・Markdown の `null (理由)` と `applier readable: no`）、
+許可リストの値が無いとき（readable=false・null・理由・warnings）、HUD 非表示の行にも付くこと、他のパワーには付かないこと、
+`AttachPowerInternalState` が付与元を読まないこと、wire の uint 0・null と readable の bool を確認する。
 札の効果の入力（`cat12079801/sts2#1019`、schema 7）: 爆弾（`TheBombPower`）の `damage`（`DynamicVars.Damage.BaseValue`。
 正準の 40・`SetDamage` 後の値・0、Instanced の行ごとの値、非表示の行にも付く、snapshot の独立、変数の欠落・読取失敗は null・理由・warnings で 0 にしない）、
 インフェルノ・深紅の衣の `self_damage`（`DynamicVars["SelfDamage"].BaseValue`。0 と `IncrementSelfDamage` 後の値、wire の decimal、失敗）、

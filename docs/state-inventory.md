@@ -12,6 +12,7 @@
 | 分類 | 意味 |
 |---|---|
 | exposed | すでに MOD の state に出ている（MOD のソースで読み取りを検出、分類表で確認、または分類表の section から生成した許可リスト `internal_state` で出す〔判定 allowlist〕） |
+| partial | 基底クラスのメンバーを、MOD が派生の分岐（case・is・その分岐からしか呼ばれない補助）の中だけで読んでいる。ほかの派生の行には出ていない。許可リストで全派生に出すか、分類表の `partial_reason` で解消する（判定 partial-resolved）。解消していないと棚卸しは終了コード 4 |
 | public | 人間が見える・見たものから確定できる。まだ出ていない（出す対象） |
 | hidden | 人間に見えない（乱数・未公開の山の順・まだ見せていない生成物）。出さない |
 | cosmetic | 戦闘・進行に効かない（台詞・演出・UI）。出す必要は無い |
@@ -24,35 +25,35 @@
 
 ## 件数（種別 × 分類）
 
-| 種別 | exposed | public | hidden | cosmetic | static/derived | out_of_scope | unknown | unclassified | 計 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
-| relic | 95 | 3 | 0 | 29 | 15 | 0 | 0 | 0 | 142 |
-| power | 57 | 25 | 0 | 9 | 5 | 0 | 0 | 0 | 96 |
-| card | 44 | 10 | 0 | 7 | 17 | 0 | 0 | 0 | 78 |
-| potion | 1 | 0 | 0 | 1 | 5 | 0 | 0 | 0 | 7 |
-| enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
-| affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
-| orb | 1 | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 5 |
-| base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 49 | 1 | 3 | 9 | 16 | 4 | 0 | 0 | 82 |
-| **計** | 279 | 41 | 5 | 94 | 91 | 4 | 0 | 0 | 514 |
+| 種別 | exposed | partial | public | hidden | cosmetic | static/derived | out_of_scope | unknown | unclassified | 計 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| monster | 25 | 0 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
+| relic | 95 | 0 | 3 | 0 | 29 | 15 | 0 | 0 | 0 | 142 |
+| power | 57 | 0 | 25 | 0 | 9 | 5 | 0 | 0 | 0 | 96 |
+| card | 44 | 0 | 10 | 0 | 7 | 17 | 0 | 0 | 0 | 78 |
+| potion | 1 | 0 | 0 | 0 | 1 | 5 | 0 | 0 | 0 | 7 |
+| enchantment | 5 | 0 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
+| affliction | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
+| orb | 1 | 0 | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 5 |
+| base | 1 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
+| entity | 49 | 0 | 1 | 3 | 9 | 16 | 4 | 0 | 0 | 82 |
+| **計** | 279 | 0 | 41 | 5 | 94 | 91 | 4 | 0 | 0 | 514 |
 
 ### アイアンクラッドの範囲だけ（他キャラ・廃止・モックを除く）
 
-| 種別 | exposed | public | hidden | cosmetic | static/derived | out_of_scope | unknown | unclassified | 計 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
-| relic | 93 | 0 | 0 | 27 | 15 | 0 | 0 | 0 | 135 |
-| power | 51 | 0 | 0 | 5 | 3 | 0 | 0 | 0 | 59 |
-| card | 36 | 0 | 0 | 5 | 14 | 0 | 0 | 0 | 55 |
-| potion | 1 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 6 |
-| enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
-| affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
-| orb | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
-| base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 49 | 0 | 3 | 9 | 16 | 4 | 0 | 0 | 81 |
-| **計** | 263 | 0 | 5 | 85 | 86 | 4 | 0 | 0 | 443 |
+| 種別 | exposed | partial | public | hidden | cosmetic | static/derived | out_of_scope | unknown | unclassified | 計 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| monster | 25 | 0 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
+| relic | 93 | 0 | 0 | 0 | 27 | 15 | 0 | 0 | 0 | 135 |
+| power | 51 | 0 | 0 | 0 | 5 | 3 | 0 | 0 | 0 | 59 |
+| card | 36 | 0 | 0 | 0 | 5 | 14 | 0 | 0 | 0 | 55 |
+| potion | 1 | 0 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 6 |
+| enchantment | 5 | 0 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
+| affliction | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
+| orb | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
+| base | 1 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
+| entity | 49 | 0 | 0 | 3 | 9 | 16 | 4 | 0 | 0 | 81 |
+| **計** | 263 | 0 | 0 | 5 | 85 | 86 | 4 | 0 | 0 | 443 |
 
 範囲（pool）: `ironclad`・`colorless`・`curse`・`status`・`event-only`・`shared`・`ancient`・`monster`・`enchantment`・`affliction`・`base`（モデルの基底）・`entity`（Creature・Player など）を範囲に入れる。`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。
 
@@ -107,6 +108,10 @@
 | `ConductorsBaton._triggeredThisTurn` | bool | field | other-character | AfterCardPlayed, BeforeSideTurnStart | AfterCardPlayed | `triggered_this_turn` | このターンに発動したか |
 | `GalacticDust._starsSpent` | int | field · saved | other-character | AfterStarsSpent | AfterStarsSpent | `stars_spent` | 使った星の累計（DisplayAmount にも使う。星はリージェント専用） |
 | `Metronome._orbsChanneled` | int | field | other-character | AfterCombatEnd, AfterOrbChanneled, AfterRoomEntered | AfterOrbChanneled | `orbs_channeled` | チャネルしたオーブの数（ディフェクト専用） |
+
+## partial（未解消。棚卸しは終了コード 4）（0 件）
+
+（なし）
 
 ## unknown（ソースから決めきれない）（0 件）
 
@@ -209,6 +214,14 @@
 - `ToyBox._isActivating`（bool）: DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用
 - `TuningFork._isActivating`（bool）: DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用
 
+## partial-resolved（派生の分岐の中だけで読み、ほかの派生は要らないと判断した基底のメンバー）（1 件）
+
+MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T` は T 以外）。
+
+| クラス.メンバー | 範囲 | MOD の箇所（only は読む派生） | ほかの派生が要らない理由 |
+|---|---|---|---|
+| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:393[only AdaptablePower,AutomationPower,CalamityPower,ChainsOfBindingPower,CurlUpPower,DampenPower,DarkEmbracePower,GigantificationPower,HardenedShellPower,HellraiserPower,IllusionPower,JugglingPower,PanachePower,PossessSpeedPower,PossessStrengthPower,ReattachPower,RupturePower,SkittishPower,StranglePower,VigorPower] | 容器そのものは値ではない。中身は派生ごとの Data の欄（Power.Data.field の行、kind=data_field）として一つずつ分類し、出すものはその行の判断で出す（PowerInternalState の各 case・許可リストの DataField）。Data を持たない派生には読むものが無い |
+
 ## exposed（出ている）（279 件）
 
 | クラス.メンバー | 範囲 | MOD の箇所 | 判定 |
@@ -223,7 +236,7 @@
 | `CardModel._currentPlayIndex` | base | McpMod.StateAllowlist.Generated.cs:16 | allowlist |
 | `CardModel._currentTarget` | base | McpMod.StateAllowlist.Generated.cs:19 | allowlist |
 | `CardModel._currentUpgradeLevel` | base | McpMod.CombatUpgradePreview.cs:165, McpMod.CombatUpgradePreview.cs:52, McpMod.CombatUpgradePreview.cs:99 … | mod-scan |
-| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
+| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:6 … | mod-scan |
 | `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.StateBuilder.cs:1810 | mod-scan |
 | `CardModel._exhaustOnNextPlay` | base | McpMod.CardSelection.cs:143, McpMod.ChooseCardSelection.cs:43, McpMod.SelectionCandidate.cs:92 … | mod-scan |
 | `CardModel._extraReplayThisTurn` | base | McpMod.CardDetails.cs:111 | mod-scan |
@@ -247,21 +260,21 @@
 | `Maul._extraDamageFromMaulPlays` | event-only | McpMod.StateAllowlist.Generated.cs:52 | allowlist |
 | `Monologue.DynamicVars.Strength` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Rampage.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
-| `Rampage._extraDamageFromPlays` | ironclad | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
-| `Regret._cardsInHand` | curse | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
+| `Rampage._extraDamageFromPlays` | ironclad | McpMod.StateAllowlist.Generated.cs:76 | allowlist |
+| `Regret._cardsInHand` | curse | McpMod.StateAllowlist.Generated.cs:79 | allowlist |
 | `ShowOff.DynamicVars.AimPower` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SovereignBlade.DynamicVars.Damage` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SovereignBlade.DynamicVars.HitCount` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SpoilsMap.SpoilsCoord` | event-only | ModifyGeneratedMapLate で地図の点に AddQuest する。地図の点の quests に出る（McpMod.StateBuilder.cs:2976） | manual |
-| `SpoilsMap._spoilsActIndex` | event-only | McpMod.StateAllowlist.Generated.cs:85 | allowlist |
+| `SpoilsMap._spoilsActIndex` | event-only | McpMod.StateAllowlist.Generated.cs:91 | allowlist |
 | `TheBall.DynamicVars.Damage` | colorless | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
-| `TheBall._extraDamageFromPlays` | colorless | McpMod.StateAllowlist.Generated.cs:88 | allowlist |
+| `TheBall._extraDamageFromPlays` | colorless | McpMod.StateAllowlist.Generated.cs:94 | allowlist |
 | `TheScythe.DynamicVars.Damage` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Thrash.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
-| `Thrash._extraDamage` | ironclad | McpMod.StateAllowlist.Generated.cs:91 | allowlist |
+| `Thrash._extraDamage` | ironclad | McpMod.StateAllowlist.Generated.cs:97 | allowlist |
 | `Adroit.DynamicVars.Block` | enchantment | McpMod.CardDetails.cs:130（DynamicVars を丸ごと出す） | mod-scan |
 | `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
-| `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130, McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72 … | mod-scan |
+| `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130, McpMod.CardDetails.cs:5, McpMod.PowerInternalState.cs:6 … | mod-scan |
 | `EnchantmentModel._status` | base | McpMod.CardDetails.cs:140 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
 | `CardEnergyCost.Canonical` | entity | McpMod.CardEnergyCost.cs:47 | mod-scan |
@@ -272,13 +285,13 @@
 | `CombatState.CurrentSide` | entity | McpMod.Helpers.cs:46, McpMod.MultiplayerState.cs:279, McpMod.PotionUsabilityLive.cs:126 … | mod-scan |
 | `CombatState.RoundNumber` | entity | McpMod.MultiplayerActions.cs:127, McpMod.MultiplayerActions.cs:99, McpMod.MultiplayerState.cs:278 … | mod-scan |
 | `CombatState._allies` | entity | McpMod.StateAllowlist.Generated.cs:37 | allowlist |
-| `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59, McpMod.StateBuilder.cs:813 | mod-scan |
+| `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59 | mod-scan |
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
 | `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
 | `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:140 … | mod-scan |
 | `Creature.Side` | entity | McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
-| `Creature._block` | entity | McpMod.MultiplayerState.cs:436, McpMod.PowerInternalState.cs:224, McpMod.StateBuilder.cs:1623 … | mod-scan |
+| `Creature._block` | entity | McpMod.MultiplayerState.cs:436, McpMod.PowerInternalState.cs:218, McpMod.StateBuilder.cs:1623 … | mod-scan |
 | `Creature._currentHp` | entity | McpMod.MultiplayerState.cs:429, McpMod.StateBuilder.cs:1496, McpMod.StateBuilder.cs:1621 … | mod-scan |
 | `Creature._maxHp` | entity | McpMod.MultiplayerState.cs:430, McpMod.StateBuilder.cs:1497, McpMod.StateBuilder.cs:1622 … | mod-scan |
 | `Creature._powers` | entity | status（McpMod.StateBuilder.cs:1710・2129） | manual |
@@ -290,13 +303,13 @@
 | `MonsterMoveStateMachine._performedFirstMove` | entity | McpMod.EnemyMoveState.cs:78 | mod-scan |
 | `Player.Character` | entity | McpMod.Actions.cs:2606, McpMod.Actions.cs:2607, McpMod.Actions.cs:2608 … | mod-scan |
 | `Player.Deck` | entity | McpMod.CardIdentity.cs:104, McpMod.ChoiceContinuationState.cs:282, McpMod.StateBuilder.cs:1788 … | mod-scan |
-| `Player.DiscoveredCards` | entity | McpMod.Compendium.cs:129, McpMod.Compendium.cs:85, McpMod.Profile.cs:345 … | mod-scan |
-| `Player.DiscoveredPotions` | entity | McpMod.Compendium.cs:145, McpMod.Compendium.cs:87, McpMod.Profile.cs:347 | mod-scan |
-| `Player.DiscoveredRelics` | entity | McpMod.Compendium.cs:137, McpMod.Compendium.cs:86, McpMod.Profile.cs:346 … | mod-scan |
+| `Player.DiscoveredCards` | entity | McpMod.Compendium.cs:85, McpMod.Profile.cs:345, McpMod.Wiki.cs:74 | mod-scan |
+| `Player.DiscoveredPotions` | entity | McpMod.Compendium.cs:87, McpMod.Profile.cs:347 | mod-scan |
+| `Player.DiscoveredRelics` | entity | McpMod.Compendium.cs:86, McpMod.Profile.cs:346, McpMod.Wiki.cs:78 | mod-scan |
 | `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1157, McpMod.StateBuilder.cs:1637 | mod-scan |
 | `Player.NetId` | entity | McpMod.CardIdentity.cs:110, McpMod.ChoiceContinuationState.cs:132, McpMod.ChoiceContinuationState.cs:221 … | mod-scan |
 | `Player.UnlockState` | entity | McpMod.GenerationPool.cs:36, McpMod.GenerationPool.cs:43, McpMod.UnlockedPools.cs:35 … | mod-scan |
-| `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsability.cs:138, McpMod.PotionUsabilityLive.cs:115 | mod-scan |
+| `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsabilityLive.cs:115 | mod-scan |
 | `Player._gold` | entity | McpMod.MultiplayerState.cs:431, McpMod.PowerInternalState.cs:47, McpMod.StateBuilder.cs:1498 … | mod-scan |
 | `Player._potionSlots` | entity | player.potions（McpMod.StateBuilder.cs:1755） | manual |
 | `Player._relics` | entity | player.relics（McpMod.StateBuilder.cs:1743） | manual |
@@ -338,65 +351,65 @@
 | `WaterfallGiant._currentPressureGunDamage` | monster | McpMod.EnemyCombatState.cs:39 | mod-scan |
 | `WaterfallGiant._isAboutToBlow` | monster | McpMod.EnemyCombatState.cs:34 | mod-scan |
 | `WaterfallGiant._steamEruptionDamage` | monster | McpMod.EnemyCombatState.cs:36 | mod-scan |
-| `OrbModel._owner` | base | McpMod.Actions.cs:321, McpMod.ChoiceContinuationState.cs:132, McpMod.ChoiceContinuationState.cs:217 … | mod-scan |
-| `PotionModel.IsQueued` | base | McpMod.Actions.cs:319, McpMod.PotionUsability.cs:135, McpMod.PotionUsabilityLive.cs:110 | mod-scan |
-| `AdaptablePower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:165 | mod-scan |
-| `AutomationPower.Data.cardsLeft` | colorless | McpMod.PowerInternalState.cs:143 | mod-scan |
-| `BeaconOfHopePower._hasAlreadyBeenGivenBlock` | colorless | McpMod.PowerInternalState.cs:198 | mod-scan |
-| `CacophonyPower.DynamicVars.Cards` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `CalamityPower.Data.amountsForPlayedCards` | colorless | McpMod.PowerInternalState.cs:129 | mod-scan |
-| `ChainsOfBindingPower.Data.boundCardPlayed` | affliction | McpMod.PowerInternalState.cs:239 | mod-scan |
-| `CrimsonMantlePower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `CurlUpPower.Data.playedCard` | monster | McpMod.PowerInternalState.cs:246 | mod-scan |
+| `OrbModel._owner` | base | McpMod.Actions.cs:321, McpMod.ChoiceContinuationState.cs:132, McpMod.ChoiceContinuationState.cs:231 … | mod-scan |
+| `PotionModel.IsQueued` | base | McpMod.Actions.cs:319, McpMod.PotionUsabilityLive.cs:110 | mod-scan |
+| `AdaptablePower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:159 | mod-scan |
+| `AutomationPower.Data.cardsLeft` | colorless | McpMod.PowerInternalState.cs:137 | mod-scan |
+| `BeaconOfHopePower._hasAlreadyBeenGivenBlock` | colorless | McpMod.PowerInternalState.cs:192 | mod-scan |
+| `CacophonyPower.DynamicVars.Cards` | other-character | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `CalamityPower.Data.amountsForPlayedCards` | colorless | McpMod.PowerInternalState.cs:123 | mod-scan |
+| `ChainsOfBindingPower.Data.boundCardPlayed` | affliction | McpMod.PowerInternalState.cs:233 | mod-scan |
+| `CrimsonMantlePower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `CurlUpPower.Data.playedCard` | monster | McpMod.PowerInternalState.cs:240 | mod-scan |
 | `DampenPower.Data.casters` | monster | status の caster_combat_ids（McpMod.PowerInternalState.cs:430） | manual |
 | `DampenPower.Data.downgradedCardsToOldUpgradeLevels` | monster | status の downgraded_cards（McpMod.PowerInternalState.cs:446） | manual |
-| `DarkEmbracePower.Data.etherealCount` | ironclad | McpMod.PowerInternalState.cs:148 | mod-scan |
-| `EncorePower.DynamicVars.PlaysRemaining` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `EnnuiPower.DynamicVars.Cards` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
+| `DarkEmbracePower.Data.etherealCount` | ironclad | McpMod.PowerInternalState.cs:142 | mod-scan |
+| `EncorePower.DynamicVars.PlaysRemaining` | other-character | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `EnnuiPower.DynamicVars.Cards` | other-character | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `GigantificationPower.Data.commandToModify` | shared | status の has_command_to_modify（McpMod.PowerInternalState.cs:154） | manual |
-| `HardenedShellPower.Data.damageReceivedThisTurn` | monster | McpMod.PowerInternalState.cs:159 | mod-scan |
-| `HellraiserPower.Data.autoPlayingCards` | ironclad | McpMod.PowerInternalState.cs:138 | mod-scan |
-| `HellraiserPower.Data.infiniteAutoPlaysThisTurn` | ironclad | McpMod.PowerInternalState.cs:137 | mod-scan |
-| `IllusionPower._followUpStateId` | monster | McpMod.PowerInternalState.cs:175 | mod-scan |
-| `IllusionPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:165 | mod-scan |
-| `ImpaledPower.DynamicVars.HitCounter` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `InfernoPower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `InsatiableDominionPower.DynamicVars.Damage` | unreferenced | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
+| `HardenedShellPower.Data.damageReceivedThisTurn` | monster | McpMod.PowerInternalState.cs:153 | mod-scan |
+| `HellraiserPower.Data.autoPlayingCards` | ironclad | McpMod.PowerInternalState.cs:132 | mod-scan |
+| `HellraiserPower.Data.infiniteAutoPlaysThisTurn` | ironclad | McpMod.PowerInternalState.cs:131 | mod-scan |
+| `IllusionPower._followUpStateId` | monster | McpMod.PowerInternalState.cs:169 | mod-scan |
+| `IllusionPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:159 | mod-scan |
+| `ImpaledPower.DynamicVars.HitCounter` | monster | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `InfernoPower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `InsatiableDominionPower.DynamicVars.Damage` | unreferenced | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `InterceptPower.Data.coveredCreatures` | colorless | McpMod.StateAllowlist.Generated.cs:49 | allowlist |
-| `JugglingPower.Data.attacksPlayedThisTurn` | ironclad | McpMod.PowerInternalState.cs:242 | mod-scan |
-| `JugglingPower.Data.cardToClone` | ironclad | McpMod.PowerInternalState.cs:243 | mod-scan |
-| `MonologuePower.DynamicVars.StrengthApplied` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `MythicFormPower.DynamicVars.Upgraded` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `NemesisPower._shouldApplyIntangible` | monster | McpMod.PowerInternalState.cs:184 | mod-scan |
-| `PanachePower.DynamicVars.CardsLeft` | colorless | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `PanachePower.Data.alreadyApplied` | colorless | McpMod.PowerInternalState.cs:99 | mod-scan |
-| `PlatingPower.DynamicVars.Decrement` | ironclad | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `PossessSpeedPower.Data.stolenDexterity` | monster | McpMod.PowerInternalState.cs:233 | mod-scan |
-| `PossessStrengthPower.Data.stolenStrength` | monster | McpMod.PowerInternalState.cs:230 | mod-scan |
+| `JugglingPower.Data.attacksPlayedThisTurn` | ironclad | McpMod.PowerInternalState.cs:236 | mod-scan |
+| `JugglingPower.Data.cardToClone` | ironclad | McpMod.PowerInternalState.cs:237 | mod-scan |
+| `MonologuePower.DynamicVars.StrengthApplied` | other-character | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `MythicFormPower.DynamicVars.Upgraded` | other-character | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `NemesisPower._shouldApplyIntangible` | monster | McpMod.PowerInternalState.cs:178 | mod-scan |
+| `PanachePower.DynamicVars.CardsLeft` | colorless | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `PanachePower.Data.alreadyApplied` | colorless | McpMod.PowerInternalState.cs:93 | mod-scan |
+| `PlatingPower.DynamicVars.Decrement` | ironclad | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `PossessSpeedPower.Data.stolenDexterity` | monster | McpMod.PowerInternalState.cs:227 | mod-scan |
+| `PossessStrengthPower.Data.stolenStrength` | monster | McpMod.PowerInternalState.cs:224 | mod-scan |
 | `PowerModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
 | `PowerModel._amountOnTurnStart` | base | McpMod.StateAllowlist.Generated.cs:67 | allowlist |
-| `PowerModel._applier` | base | McpMod.PowerInternalState.cs:312 | mod-scan |
-| `PowerModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:405 | mod-scan |
-| `PowerModel._skipNextDurationTick` | base | McpMod.PowerInternalState.cs:220 | mod-scan |
-| `PowerModel._target` | base | McpMod.CombatHistory.cs:138, McpMod.EnemyStunHandler.cs:111, McpMod.EnemyStunHandler.cs:90 … | mod-scan |
-| `ReattachPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:165 | mod-scan |
-| `RitualPower._wasJustAppliedByEnemy` | shared | McpMod.PowerInternalState.cs:73 | mod-scan |
-| `RupturePower.Data.playedCards` | ironclad | McpMod.PowerInternalState.cs:121 | mod-scan |
-| `SkittishPower.Data.hasGainedBlockThisTurn` | monster | McpMod.PowerInternalState.cs:236 | mod-scan |
-| `SlothPower._cardsPlayedThisTurn` | monster | McpMod.PowerInternalState.cs:189 | mod-scan |
-| `SlowPower.DynamicVars.DisplayAmount` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `SlowPower.DynamicVars.SlowAmount` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `StranglePower.Data.amountsForPlayedCards` | event-only | McpMod.PowerInternalState.cs:129 | mod-scan |
-| `SurroundedPower._facing` | monster | McpMod.PowerInternalState.cs:227 | mod-scan |
-| `SwipePower._stolenCard` | monster | McpMod.PowerInternalState.cs:206, McpMod.PowerInternalState.cs:208 | mod-scan |
-| `TenderPower._cardsPlayedThisTurn` | monster | McpMod.PowerInternalState.cs:194 | mod-scan |
-| `TheBombPower.DynamicVars.Damage` | colorless | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `ThieveryPower.DynamicVars.Gold` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `ToricToughnessPower.DynamicVars.Block` | event-only | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
+| `PowerModel._applier` | base | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
+| `PowerModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.PowerInternalState.cs:290, McpMod.PowerInternalState.cs:6 … | mod-scan |
+| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:393[only AdaptablePower,AutomationPower,CalamityPower,ChainsOfBindingPower,CurlUpPower,DampenPower,DarkEmbracePower,GigantificationPower,HardenedShellPower,HellraiserPower,IllusionPower,JugglingPower,PanachePower,PossessSpeedPower,PossessStrengthPower,ReattachPower,RupturePower,SkittishPower,StranglePower,VigorPower] | partial-resolved |
+| `PowerModel._skipNextDurationTick` | base | McpMod.PowerInternalState.cs:214 | mod-scan |
+| `PowerModel._target` | base | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
+| `ReattachPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:159 | mod-scan |
+| `RitualPower._wasJustAppliedByEnemy` | shared | McpMod.PowerInternalState.cs:67 | mod-scan |
+| `RupturePower.Data.playedCards` | ironclad | McpMod.PowerInternalState.cs:115 | mod-scan |
+| `SkittishPower.Data.hasGainedBlockThisTurn` | monster | McpMod.PowerInternalState.cs:230 | mod-scan |
+| `SlothPower._cardsPlayedThisTurn` | monster | McpMod.PowerInternalState.cs:183 | mod-scan |
+| `SlowPower.DynamicVars.DisplayAmount` | monster | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `SlowPower.DynamicVars.SlowAmount` | monster | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `StranglePower.Data.amountsForPlayedCards` | event-only | McpMod.PowerInternalState.cs:123 | mod-scan |
+| `SurroundedPower._facing` | monster | McpMod.PowerInternalState.cs:221 | mod-scan |
+| `SwipePower._stolenCard` | monster | McpMod.PowerInternalState.cs:200, McpMod.PowerInternalState.cs:202 | mod-scan |
+| `TenderPower._cardsPlayedThisTurn` | monster | McpMod.PowerInternalState.cs:188 | mod-scan |
+| `TheBombPower.DynamicVars.Damage` | colorless | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `ThieveryPower.DynamicVars.Gold` | monster | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
+| `ToricToughnessPower.DynamicVars.Block` | event-only | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `VigorPower.Data.amountWhenAttackStarted` | colorless | status の vigor_attack.amount_when_started（McpMod.PowerInternalState.cs:353） | manual |
 | `VigorPower.Data.commandToModify` | colorless | status の vigor_attack.has_command・attacker_is_owner（McpMod.PowerInternalState.cs:378） | manual |
-| `WitheringPresencePower.DynamicVars.CardsLeft` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
+| `WitheringPresencePower.DynamicVars.CardsLeft` | monster | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `ArtOfWar._anyAttacksPlayedLastTurn` | shared | McpMod.RelicCombatState.cs:36 | mod-scan |
 | `ArtOfWar._anyAttacksPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:35 | mod-scan |
 | `BathRobes._wasUsed` | event-only | IsUsedUp => _wasUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
@@ -461,11 +474,11 @@
 | `RainbowRing._skillsPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:27 | mod-scan |
 | `RedSkull._strengthApplied` | ironclad | McpMod.RelicCombatState.cs:54 | mod-scan |
 | `Regalite._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:82 | mod-scan |
-| `RelicModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `RelicModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:76 | allowlist |
+| `RelicModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.PowerInternalState.cs:6, McpMod.RelicCombatState.cs:271 … | mod-scan |
+| `RelicModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:82 | allowlist |
 | `RelicModel._isMelted` | base | McpMod.StateBuilder.cs:1732 | mod-scan |
-| `RelicModel._isWax` | base | McpMod.StateAllowlist.Generated.cs:79 | allowlist |
-| `RelicModel._status` | base | McpMod.StateAllowlist.Generated.cs:82 | allowlist |
+| `RelicModel._isWax` | base | McpMod.StateAllowlist.Generated.cs:85 | allowlist |
+| `RelicModel._status` | base | McpMod.StateAllowlist.Generated.cs:88 | allowlist |
 | `RuinedHelmet._usedThisCombat` | ironclad | McpMod.RelicCombatState.cs:85 | mod-scan |
 | `Shuriken._attacksPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:121 | mod-scan |
 | `SilkenTress._isUsed` | ancient | IsUsedUp => IsUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
@@ -477,11 +490,11 @@
 | `ThrowingAxe._usedThisCombat` | ancient | McpMod.RelicCombatState.cs:70 | mod-scan |
 | `ToyBox._combatsSeen` | ancient | McpMod.RelicCombatState.cs:223 | mod-scan |
 | `TuningFork._skillsPlayed` | shared | McpMod.RelicCombatState.cs:167 | mod-scan |
-| `UnsettlingLamp._doubledPowers` | shared | McpMod.StateAllowlist.Generated.cs:94 | allowlist |
+| `UnsettlingLamp._doubledPowers` | shared | McpMod.StateAllowlist.Generated.cs:100 | allowlist |
 | `UnsettlingLamp._isFinishedTriggering` | shared | McpMod.RelicCombatState.cs:88 | mod-scan |
-| `UnsettlingLamp._triggeringCard` | shared | McpMod.StateAllowlist.Generated.cs:97 | allowlist |
+| `UnsettlingLamp._triggeringCard` | shared | McpMod.StateAllowlist.Generated.cs:103 | allowlist |
 | `Vambrace._blockGainedThisCombat` | shared | McpMod.RelicCombatState.cs:42 | mod-scan |
-| `Vambrace._triggeringCard` | shared | McpMod.StateAllowlist.Generated.cs:100 | allowlist |
+| `Vambrace._triggeringCard` | shared | McpMod.StateAllowlist.Generated.cs:106 | allowlist |
 | `VenerableTeaSet._gainEnergyInNextCombat` | shared | McpMod.RelicCombatState.cs:199 | mod-scan |
 | `WingedBoots.DynamicVars.Rooms` | ancient | McpMod.RelicCombatState.cs:271（DynamicVars を丸ごと出す） | mod-scan |
 | `WingedBoots._timesUsed` | ancient | McpMod.RelicCombatState.cs:215 | mod-scan |

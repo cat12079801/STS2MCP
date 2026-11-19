@@ -3744,6 +3744,7 @@ public static partial class McpMod
                     entry["hidden_in_ui"] = true;
                 AttachPowerInternalState(entry, power, visibilityKnown && isVisible);
                 AttachAllowlistedState(entry, "power", power, $"status.{entry["id"]}");
+                AttachHexApplierCompat(entry, power);
                 powers.Add(entry);
             }
             catch (Exception ex)
@@ -3757,6 +3758,7 @@ public static partial class McpMod
                 var entry = BuildMinimalPowerState(power);
                 AttachPowerInternalState(entry, power, visibilityKnown && isVisible);
                 AttachAllowlistedState(entry, "power", power, $"status.{entry["id"]}");
+                AttachHexApplierCompat(entry, power);
                 powers.Add(entry);
             }
         }

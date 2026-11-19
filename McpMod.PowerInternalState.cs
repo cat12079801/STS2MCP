@@ -57,17 +57,11 @@ public static partial class McpMod
                 // minimal rows carry it too.
                 AttachVigorAttackState(state, power, context);
                 break;
-            case HexPower:
-                // HexPower.AfterDeath removes the power when the dying creature is
-                // PowerModel.Applier (unless removal was prevented), whatever IsVisible
-                // says, so every emitted row carries the applier.
-                AttachHexApplierState(state, power, context);
-                break;
             case RitualPower:
                 // v0.113.1 (sts2-a671e9ef) RitualPower.AfterApplied sets the flag when an enemy
                 // owner gets the power during the enemy side's turn; AfterSideTurnEnd then clears
                 // it instead of applying Strength once (sts2#1018). The private field is read as
-                // is (false is a real value) on every emitted row, like the applier above.
+                // is (false is a real value) on every emitted row.
                 // Never derived from the round or the move history.
                 Read("was_just_applied_by_enemy",
                     () => ReadDeclaredStateField<bool>(power, typeof(RitualPower), "_wasJustAppliedByEnemy"));
@@ -295,27 +289,21 @@ public static partial class McpMod
     private static DynamicVarSet ReadPowerDynamicVarSet(PowerModel power)
         => ReadDeclaredStateField<DynamicVarSet>(power, typeof(PowerModel), "_dynamicVars");
 
-    // v0.113.1 (sts2-a671e9ef): PowerCmd.Apply sets PowerModel.Applier only on a new
-    // instance (HexPower keeps InstanceType None, so FindExistingInstanceForStacking sends a
-    // re-apply to ModifyAmount and the first applier stays); SpectralKnight.HexMove passes its own Creature. The id is the same
-    // Creature.CombatId as enemies[].combat_id. The public getter only returns
-    // _applier (AssertMutable is on the setter only; the failure path is defensive); nothing is initialized or written.
-    // applier_readable=true with a null id is a known "no applier", distinct from a
-    // failed read (readable=false, null id, reason). An applier without a CombatId is a
-    // failed read too: no id is substituted.
-    private static void AttachHexApplierState(Dictionary<string, object?> state, PowerModel power,
-        string context)
+    // v0.113.1 (sts2-a671e9ef): PowerCmd.Apply sets PowerModel.Applier only on a new instance
+    // (HexPower keeps InstanceType None, so FindExistingInstanceForStacking sends a re-apply to
+    // ModifyAmount and the first applier stays); SpectralKnight.HexMove passes its own Creature.
+    // HexPower.AfterDeath removes the power when the dying creature is the applier (unless removal
+    // was prevented), whatever IsVisible says. The generated allowlist reads PowerModel._applier
+    // once for every power row (internal_state.applier_combat_id; Shrink / Constrict / Covered /
+    // ... also act on it). The engine (tools/turnplan/hexpower.py) reads the Hex row's own
+    // applier_combat_id / applier_readable, so that shape is copied here from the allowlist value
+    // instead of reading Applier a second time: readable=true with a null id is a known "no
+    // applier"; a failed read (an applier without a CombatId included) is readable=false, a null
+    // id and the same reason. No id is substituted. Call after AttachAllowlistedState.
+    private static void AttachHexApplierCompat(Dictionary<string, object?> state, PowerModel power)
     {
-        state["applier_readable"] = false;
-        ReadInternalStateValue(state, "applier_combat_id", () =>
-        {
-            var applier = power.Applier;
-            uint? id = null;
-            if (applier != null)
-                id = applier.CombatId ?? throw new InvalidOperationException("Applier に CombatId がありません");
-            state["applier_readable"] = true;
-            return id;
-        }, context);
+        if (power is not HexPower) return;
+        CopyAllowlistedReference(state, "applier_combat_id", "applier_readable", $"status.{state["id"]}");
     }
 
     // v0.113.1 (sts2-a671e9ef) VigorPower.Data: BeforeAttack binds the owner's first

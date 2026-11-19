@@ -919,40 +919,61 @@ public static partial class McpMod
         Unknown(Power(new HeistPower()), "target_player_id", "status.HeistPower");
         Check(!Power(new PowerModel { Target = first }).ContainsKey("target_player_id"), "other targeted powers do not get target fields");
 
-        // Hex: PowerModel.Applier read as-is. AfterDeath / PowerCmd.Apply are not simulated.
+        // Hex: the generated allowlist reads PowerModel._applier once for every power row
+        // (internal_state.applier_combat_id; StateAllowlistContract checks that read).
+        // AttachPowerInternalState no longer reads Applier; AttachHexApplierCompat copies the
+        // allowlist value to the Hex row's own applier_combat_id / applier_readable (the shape
+        // tools/turnplan/hexpower.py reads). Here internal_state stands in for the allowlist output.
         BeginStateWarnings();
         var knight = new Creature { CombatId = 7 };
         var hex = new HexPower { Applier = knight };
-        var hexRow = Power(hex);
+        var plainHex = Power(hex);
+        Check(!plainHex.ContainsKey("applier_combat_id") && !plainHex.ContainsKey("applier_readable") && hex.ApplierReads == 0,
+            "AttachPowerInternalState leaves the applier to the allowlist and reads no Applier");
+        Dictionary<string, object?> HexRow(Dictionary<string, object?>? allowlisted, bool visible = true)
+        {
+            var row = Power(hex, visible);
+            if (allowlisted != null) row["internal_state"] = allowlisted;
+            AttachHexApplierCompat(row, hex);
+            return row;
+        }
+        var hexRow = HexRow(new() { ["applier_combat_id"] = 7u });
         Check(hexRow["applier_readable"] is true && hexRow["applier_combat_id"] is uint knightId && knightId == 7
-            && !hexRow.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "Hex applier is the applier's CombatId");
-        Check(ReferenceEquals(hex.PeekApplier(), knight) && knight.CombatId == 7, "Hex read leaves the applier untouched");
+            && !hexRow.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0 && hex.ApplierReads == 0,
+            "Hex applier is the allowlist's CombatId, copied without a second read");
         Check(FormatPowerInternalState(hexRow).Contains("applier combat id: 7") && !FormatPowerInternalState(hexRow).Contains("applier readable"),
             "Hex markdown shows the id; readable=true is JSON-only");
-        knight.CombatId = 0;
-        var zeroHex = Power(hex);
+        var zeroHex = HexRow(new() { ["applier_combat_id"] = 0u });
         Check(zeroHex["applier_readable"] is true && zeroHex["applier_combat_id"] is uint zeroId && zeroId == 0 && !zeroHex.ContainsKey("unavailable_reasons"),
             "CombatId 0 is a real id, not unknown or none");
         Check(FormatPowerInternalState(zeroHex).Contains("applier combat id: 0"), "Hex markdown shows id 0");
-        Check(hexRow["applier_combat_id"] is uint keptId && keptId == 7, "Hex snapshot independent of later id changes");
-        var noApplier = Power(new HexPower());
+        var noApplier = HexRow(new() { ["applier_combat_id"] = null });
         Check(noApplier["applier_readable"] is true && noApplier.ContainsKey("applier_combat_id") && noApplier["applier_combat_id"] == null
             && !noApplier.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "readable null applier is a known none without reasons");
         Check(FormatPowerInternalState(noApplier).Contains("applier combat id: none") && !FormatPowerInternalState(noApplier).Contains("readable"),
             "known none applier markdown");
-        var hiddenHex = Power(hex, false);
+        var hiddenHex = HexRow(new() { ["applier_combat_id"] = 7u }, false);
         Check(hiddenHex["applier_readable"] is true && hiddenHex["applier_combat_id"] is uint && !hiddenHex.ContainsKey("skip_next_duration_tick"),
             "hidden / visibility-unknown Hex row keeps the applier only");
-        var idless = Power(new HexPower { Applier = new Creature() });
-        Unknown(idless, "applier_combat_id", "status.HexPower");
-        Check(idless["applier_readable"] is false && Reasons(idless)["applier_combat_id"].Contains("CombatId"), "applier without CombatId is a failed read, not none");
+        var idless = HexRow(new()
+        {
+            ["applier_combat_id"] = null,
+            ["unavailable_reasons"] = new Dictionary<string, string> { ["applier_combat_id"] = "InvalidOperationException: Creature に CombatId がない" }
+        });
+        Check(idless["applier_combat_id"] == null && idless["applier_readable"] is false
+            && Reasons(idless)["applier_combat_id"].Contains("CombatId") && _stateWarnings.Count == 0,
+            "a failed allowlist read stays a failed read (null, readable=false, the same reason); no second warning");
         Check(FormatPowerInternalState(idless).Contains("applier combat id: null (InvalidOperationException")
             && FormatPowerInternalState(idless).Contains("applier readable: no"), "failed applier markdown shows reason and readable: no");
-        var failedHex = Power(new HexPower { Applier = knight, ThrowApplier = true, Skip = true });
-        Unknown(failedHex, "applier_combat_id", "status.HexPower");
-        Check(failedHex["applier_readable"] is false && failedHex["skip_next_duration_tick"] is true, "applier getter failure keeps other row fields");
-        Check(!Power(new PowerModel { Applier = knight }).ContainsKey("applier_combat_id") && !Power(new HeistPower { Applier = knight, Target = first }).ContainsKey("applier_readable"),
-            "other powers do not get applier fields");
+        var missing = HexRow(null);
+        Unknown(missing, "applier_combat_id", "status.HexPower");
+        Check(missing["applier_readable"] is false && Reasons(missing)["applier_combat_id"].Contains("internal_state.applier_combat_id"),
+            "no allowlist value is a failed read, never none");
+        var otherRow = new Dictionary<string, object?> { ["id"] = "X", ["internal_state"] = new Dictionary<string, object?> { ["applier_combat_id"] = 7u } };
+        AttachHexApplierCompat(otherRow, new PowerModel { Applier = knight });
+        AttachHexApplierCompat(otherRow, new HeistPower { Applier = knight, Target = first });
+        Check(!otherRow.ContainsKey("applier_combat_id") && !otherRow.ContainsKey("applier_readable"),
+            "other powers keep the applier only in internal_state");
         Check(new PowerModel { Applier = knight }.ApplierReads == 0, "construction does not read Applier");
 
         // Ritual (sts2#1018): the private flag as-is, on every emitted row (hidden too); false is a real value.

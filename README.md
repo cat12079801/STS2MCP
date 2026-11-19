@@ -59,7 +59,7 @@ curl -s http://localhost:15526/
 A successful response looks like:
 
 ```json
-{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "1.2.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
+{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "1.3.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
 ```
 
 `commit` is the git revision the mod was built from (`null` if the build could not determine one) —
@@ -235,6 +235,12 @@ python3 -B tools/state_inventory.py --decompile <decompile> --mod . --check-docs
 
 契約試験 `tests/StateAllowlistContract` も `--check-allowlist` を回し、生成物が分類表と食い違えば落ちる（Python は `STS2_PYTHON`、無ければ PATH の `python3`）。
 md・tsv は MOD のファイルの行番号（被覆の出典）を持つので、MOD の `*.cs` を直すと古くなる。古さは `--check-docs` で分かる（デコンパイルが要るので契約試験では回さない）。
+
+基底クラスのメンバー（`PowerModel._applier` など）は、MOD がすべての派生の行で読むときだけ「出ている」（exposed）と数える。
+`case HexPower:` などの派生の分岐の中（とその分岐からしか呼ばれない補助）だけで読んでいると `partial` と報告し、
+棚卸しの実行と `--check-docs` は終了コード 4 で終わる。全派生に出すなら分類表に `section` を付けて許可リストに載せ、
+ほかの派生が要らないなら `class: exposed` と `partial_reason`（その理由）を書く。
+判定の自己試験は `python3 -B tools/state_inventory_selftest.py`（デコンパイル不要。合成した MOD のソースで case・is・else・見張り・ローカル関数・別の型の同名のプロパティを確かめる）。
 
 ## License
 

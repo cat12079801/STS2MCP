@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.2.0",        // Contract version (semver) — see below
+  "schema": "1.3.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.2.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.3.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,13 +121,16 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.2.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.3.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
 - **1.2.0** — rows carry `internal_state`, the internal state the state inventory classified as public, read through an
   allowlist generated from `docs/state-inventory-classification.json` (card, power, relic, player and battle rows). See
   [棚卸しから生成した内部状態](#棚卸しから生成した内部状態internal_stateschema-120).
+- **1.3.0** — every power row's `internal_state` carries `applier_combat_id` (`PowerModel._applier`) and
+  `target_combat_id` (`PowerModel._target`), whatever the power's subclass. The Hex row's own `applier_combat_id` /
+  `applier_readable` are a copy of that value. See [棚卸しから生成した内部状態](#棚卸しから生成した内部状態internal_stateschema-120).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -1525,7 +1528,7 @@ schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power`、s
 | `THIEVERY_POWER` | `target_player_id` | string（`player.player_id` と同じ） |
 | `HEIST_POWER` | `target_player_id` | string（同上） |
 | `VIGOR_POWER` | `vigor_attack` | `{"readable":true,"has_command":false,"attacker_is_owner":null,"amount_when_started":0}` |
-| `HEX_POWER` | `applier_combat_id` | uint / null（`enemies[].combat_id` と同じ） |
+| `HEX_POWER` | `applier_combat_id` | uint / null（`enemies[].combat_id` と同じ。`internal_state.applier_combat_id` の写し） |
 | `HEX_POWER` | `applier_readable` | bool |
 | `THE_BOMB_POWER` | `damage` | decimal（schema 7。可視性によらず付ける） |
 | `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` | `self_damage` | decimal（schema 7。同上） |
@@ -1608,11 +1611,13 @@ player の札の攻撃では、結合先の `ModelSource` と札の一致も加�
 
 （行の一部を抜粋。Markdown は `(vigor attack: has command: no, attacker is owner: none, amount when started: 0)`。）
 
-呪術（`HEX_POWER`）の `applier_combat_id` は `PowerModel.Applier` の `Creature.CombatId`（`enemies[].combat_id` と同じ識別子。0 も実在する ID）。
+呪術（`HEX_POWER`）の行の直下の `applier_combat_id` は、全パワーの行の `internal_state.applier_combat_id`（`PowerModel._applier` の `Creature.CombatId`。
+`enemies[].combat_id` と同じ識別子で、0 も実在する ID）を写したもの。付与元を読むのは許可リストの 1 回だけで、ここでは読み直さない。
 `PowerCmd.Apply` が新規のインスタンスにだけ設定し、既存の呪術への再付与（`InstanceType` が `None`。`FindExistingInstanceForStacking` → `ModifyAmount`）は付与元を差し替えない。
 `HexPower.AfterDeath` は死んだ creature が `Applier` で除去が防がれなければ呪術を外し、`AfterRemoved` が所有者の全戦闘札から Hexed を消す。
-付与元なし（読めた null）は `applier_readable=true` と null で理由なし。getter の失敗と、参照があるのに `CombatId` が null のときは
-`applier_readable=false`、null、行の `unavailable_reasons.applier_combat_id`、`warnings` の `status.HEX_POWER.applier_combat_id`。
+付与元なし（読めた null）は `applier_readable=true` と null で理由なし。参照があるのに `CombatId` が null のとき（許可リストの読取失敗）は
+`applier_readable=false`、null、行の `unavailable_reasons.applier_combat_id`（`internal_state.unavailable_reasons` と同じ理由）、
+`warnings` の `status.HEX_POWER.internal_state.applier_combat_id`（1 件だけ）。
 `hidden_in_ui`・最小行にも付ける。付与元の生死は `enemies[]` との照合で判断し、MOD は補わない。
 
 ```json
@@ -1765,6 +1770,8 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `card` | `cards_in_hand_at_turn_end` | int | `Regret._cardsInHand` | 後悔（呪い）がターン終了時に写した手札の枚数（`BeforeSideTurnEnd`）。`OnTurnEndInHand` がその量のダメージを与えて 0 に戻す |
 | `power` | `amount_on_turn_start` | int | `PowerModel._amountOnTurnStart` | ターンの開始の前（`Creature.BeforeTurnStart`）に `Amount` を写した値。その後に付いたパワーは 0 のまま。`DrawCardsNextTurnPower.ModifyHandDraw` は 0 なら引く枚数を増やさない |
 | `power` | `covered_creature_ids` | uint[] | `InterceptPower.Data.coveredCreatures` | かばっている味方の `combat_id`（マルチプレイ） |
+| `power` | `applier_combat_id` | uint \| null | `PowerModel._applier` | パワーを付けた creature（schema 1.3.0。全パワー）。`PowerCmd.Apply` が新しい個体にだけ入れ、既存の個体に足すときは最初の付与元のまま。付与元の死で外れる（`ShrinkPower`・`ConstrictPower`・`HexPower`・`CoveredPower`・`GuardedPower`・`MagicBombPower` の `AfterDeath`）、付与元の攻撃だけに効く（`FlankingPower`・`KnockdownPower` の `ModifyDamageMultiplicative`、`ImpaledPower.AfterDamageReceived`）、付与元の札だけ数える（`StranglePower`・`OblivionPower` の `BeforeCardPlayed`、`TagTeamPower.ModifyCardPlayCount`）。付与元なしは null（理由なし） |
+| `power` | `target_combat_id` | uint \| null | `PowerModel._target` | インスタンスごとの対象のプレイヤーの creature（schema 1.3.0。全パワー）。付けるとき（`GremlinMerc`→泥棒、`TheInsatiable`→砂地獄、`Aeonglass`→`WitheringPresencePower`）か `SwipePower.Steal`・`SurprisePower` が入れる。`ThieveryPower.Steal`・`HeistPower.BeforeDeath`・`SwipePower.BeforeDeath`・`SandpitPower`・`WitheringPresencePower.AfterCardPlayed`・`PowerModel.IsVisible` が読む。対象なしは null（理由なし） |
 | `relic` | `status` | string | `RelicModel._status` | `Normal` / `Active` / `Disabled`（画面ではレリックの光り方）。`PaelsFlesh` が条件に使う |
 | `relic` | `is_wax` | bool | `RelicModel._isWax` | 蝋のレリック（`ToyBox` が作る。溶けたかは既存の `melted`） |
 | `relic` | `floor_added_to_deck` | int | `RelicModel._floorAddedToDeck` | 取得した階（`RelicCmd`。保存と履歴に使う） |
@@ -1787,7 +1794,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 
 Markdown は既定値（false・0・空・理由の無い null・`Normal`）を省き、`(internal: is dupe yes, extra damage 5)` の形で行に足す。
 カードは詳細の行（`  - internal: …`）、レリック・パワーは行の末尾、player はステータスの行、battle は `Round` の行。
-`floor_added_to_deck` は出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。`golden_path_act`・`spoils_act_index` は 0（第 1 幕）も -1（未設定）も実値なので常に出す。読めなかった値は `null (理由)`。
+`floor_added_to_deck`・`applier_combat_id`・`target_combat_id`（ほぼ全パワーの行に値がある）は読めたときは出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。`golden_path_act`・`spoils_act_index` は 0（第 1 幕）も -1（未設定）も実値なので常に出す。読めなかった値は `null (理由)`。
 デッキの markdown は同じ札を束ねて表示するので、デッキの行の `internal_state` は JSON だけ。
 
 ```json

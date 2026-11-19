@@ -98,8 +98,14 @@ namespace MegaCrit.Sts2.Core.Models
         public Entities.Creatures.Creature Owner { get; set; } = new();
         private object? _internalData;
         private int _amountOnTurnStart;
+        // v0.113.1 PowerModel._applier / _target (Creature?). The public getters exist in the game; the allowlist
+        // reads the fields, so the double has no getter and a getter call could not compile.
+        private Entities.Creatures.Creature? _applier;
+        private Entities.Creatures.Creature? _target;
         public void SetData(object? data) => _internalData = data;
         public void SetAmountOnTurnStart(int value) => _amountOnTurnStart = value;
+        public void SetApplier(Entities.Creatures.Creature? value) => _applier = value;
+        public void SetTarget(Entities.Creatures.Creature? value) => _target = value;
     }
     public class RelicModel
     {
@@ -132,6 +138,8 @@ namespace MegaCrit.Sts2.Core.Models.Powers
         }
     }
     public sealed class StrengthPower() : PowerModel("STRENGTH_POWER") { }
+    public sealed class HexPower() : PowerModel("HEX_POWER") { }
+    public sealed class ThieveryPower() : PowerModel("THIEVERY_POWER") { }
 }
 namespace MegaCrit.Sts2.Core.Models.Relics
 {

@@ -48,8 +48,10 @@ public static partial class McpMod
     /// 1.1.0: battle.enemies[].combat_state covers GremlinMerc (has_spoken) and KinPriest (speech_used).
     /// 1.2.0: card, power, relic, player and battle rows carry internal_state from the generated allowlist
     /// (McpMod.StateAllowlist.Generated.cs, built from docs/state-inventory-classification.json).
+    /// 1.3.0: every power row's internal_state carries applier_combat_id (PowerModel._applier) and
+    /// target_combat_id (PowerModel._target), whatever the power's subclass.
     /// </summary>
-    public const string StateSchema = "1.2.0";
+    public const string StateSchema = "1.3.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

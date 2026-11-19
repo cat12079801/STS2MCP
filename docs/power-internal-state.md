@@ -11,7 +11,7 @@
 `status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
 
-個別の許可リストの項目とは別に、全パワーの行に `internal_state`（`amount_on_turn_start`。かばう〔`InterceptPower`〕は `covered_creature_ids`）を可視性によらず出す。棚卸しの分類表から生成した許可リストで読む（schema 1.2.0、[入力契約](raw-full.md#棚卸しから生成した内部状態internal_stateschema-120)）。
+個別の許可リストの項目とは別に、全パワーの行に `internal_state`（`amount_on_turn_start`、付与元の `applier_combat_id`・対象の `target_combat_id`〔`PowerModel._applier`・`_target`。派生によらず全パワー、schema 1.3.0〕。かばう〔`InterceptPower`〕は `covered_creature_ids`）を可視性によらず出す。棚卸しの分類表から生成した許可リストで読む（schema 1.2.0、[入力契約](raw-full.md#棚卸しから生成した内部状態internal_stateschema-120)）。
 
 schema 4 の項目は整数の版を上げずに足した。schema 6・7・8・9・12 の項目は整数の版を上げて足した。これらはすべて `schema` 1.x（1.0.0 は整数の版 12 と同じ契約）に揃っているので、`schema` の MAJOR が 1 なら必須として読んでよい。
 
@@ -35,7 +35,7 @@ MOD は履歴から再計算せず、その出来事を保持する現在のゲ�
 | 泥棒（`THIEVERY_POWER`） `stolen_gold` | `ThieveryPower.DynamicVars.Gold.IntValue`（出典は v0.113.1 `sts2-a671e9ef`）。`CanonicalVars` の `GoldVar(0)` から始まり、`Steal` が対象の player から実際に失わせた額（`min(Amount, 所持金)`。対象が死亡・所持金 0 なら何もしない）を `Gold.BaseValue` に足す。`SurprisePower.AfterDeath` はこの値を強奪の量として引き継ぐ。`Amount` は 1 回の上限で、盗んだ累計ではない。 | 盗まれたゴールドは player の所持金の減少として画面に出る。対象別に数えられる。 |
 | 泥棒 `target_player_id` / 強奪（`HEIST_POWER`） `target_player_id` | `PowerModel.Target.Player.NetId` の文字列。泥棒は `GremlinMerc` が player ごとに 1 インスタンス（`Instanced`）付け、`SurprisePower.AfterDeath` が各インスタンスの `Target` を強奪へ写す。強奪の `BeforeDeath` はこの player へ `Amount` のゴールドを報酬として返す。`stolen_gold` が 0 のインスタンスからは強奪を付与しない（`PowerCmd.Apply` が amount 0 を無視）ので、強奪の行は盗んだ額が正の対象だけに出る。 | どの player から盗んだかは所持金の減少で見える。 |
 | 活力（`VIGOR_POWER`） `vigor_attack` | private `VigorPower.Data` の `commandToModify`（`AttackCommand?`）と `amountWhenAttackStarted`（int）（出典は v0.113.1 `sts2-a671e9ef`）。`BeforeAttack` は所有者の powered attack で、未結合かつ `ModelSource` が null（敵の `AttackCommand.FromMonster`）か札のときに、そのコマンドと開始時の `Amount` を記録する。`ModifyDamageAdditive` は結合先の `Attacker` が dealer と違う（札なら `ModelSource` が違う）攻撃には足さない。`AfterAttack` は同じコマンドのときだけ開始時の量を引き、参照は null に戻さない。新規の付与は `PowerCmd.Apply` が正準モデルから複製し、`DeepCloneFields` が `InitInternalData` で未結合の Data を作る。 | 結合は所有者の攻撃の開始で起き、攻撃の終わりの減少は画面の活力の数字と被ダメージに出る。攻撃で結合した活力は、`AfterAttack` が開始時の量を引いて 0 になれば行ごと無くなり（`ShouldRemoveDueToAmount`）、攻撃中に量が増えて残れば結合したまま残る。活力が無い状態で攻撃の後に付与された活力（テラーウツボの `ThrashMove` は攻撃の `Execute` の後に `PowerCmd.Apply<VigorPower>` を呼ぶ）は新しいインスタンスで、未結合の行になる。 |
-| 呪術（`HEX_POWER`） `applier_combat_id` / `applier_readable` | `PowerModel.Applier`（`Creature?`）の `Creature.CombatId`（出典は v0.113.1 `sts2-a671e9ef`）。`PowerCmd.Apply` は新規のインスタンスにだけ `Applier` を設定し、既存のインスタンスへの再付与は、呪術の `InstanceType` が既定の `None` なので `FindExistingInstanceForStacking` が既存のインスタンスを返し、`ModifyAmount` に回って付与元を差し替えない。`SpectralKnight.HexMove` は自身の `Creature` を付与元に渡す。`HexPower.AfterDeath` は死んだ creature が `Applier` で、除去が防がれなければ呪術を外し、`HexPower.AfterRemoved` が所有者の全戦闘札から Hexed を消す。 | 呪術を付けた敵の行動（スペクトルナイトの HEX）は画面に出る。付与元の死亡と呪術の解除も画面で見える。 |
+| 呪術（`HEX_POWER`） `applier_combat_id` / `applier_readable` | 全パワーの `internal_state.applier_combat_id`（`PowerModel._applier`〔`Creature?`〕の `Creature.CombatId`。出典は v0.113.1 `sts2-a671e9ef`）を行の直下に写したもの。`PowerCmd.Apply` は新規のインスタンスにだけ `Applier` を設定し、既存のインスタンスへの再付与は、呪術の `InstanceType` が既定の `None` なので `FindExistingInstanceForStacking` が既存のインスタンスを返し、`ModifyAmount` に回って付与元を差し替えない。`SpectralKnight.HexMove` は自身の `Creature` を付与元に渡す。`HexPower.AfterDeath` は死んだ creature が `Applier` で、除去が防がれなければ呪術を外し、`HexPower.AfterRemoved` が所有者の全戦闘札から Hexed を消す。 | 呪術を付けた敵の行動（スペクトルナイトの HEX）は画面に出る。付与元の死亡と呪術の解除も画面で見える。 |
 | 儀式（`RITUAL_POWER`） `was_just_applied_by_enemy` | private bool `RitualPower._wasJustAppliedByEnemy`（出典は v0.113.1 `sts2-a671e9ef`。schema 6、`cat12079801/sts2#1018`）。`AfterApplied` は所有者が敵で、敵側の手番（`CombatState.CurrentSide == Enemy`）に付与されたとき true にする。`AfterSideTurnEnd`（所有者が participants に含まれる）は true なら false に戻すだけで筋力を足さず、false なら `Amount` の筋力を足す。狂信者などの初回の儀式は付与した敵の手番の終わりに筋力を足さず、次の手番から足す。false も実値。 | 儀式を付ける敵の行動と、その手番の終わりに筋力が増えないことは画面に出る。 |
 | 爆弾（`THE_BOMB_POWER`） `damage` | `TheBombPower.DynamicVars.Damage.BaseValue`（出典は v0.113.1 `sts2-a671e9ef`。schema 7、`cat12079801/sts2#1019`）。schema 7 の 4 種の数値変数は private `PowerModel._dynamicVars` をそのまま読み、null なら getter で作らずに読取失敗（null・理由・warnings）とする。`Instanced` で、札ごとの別インスタンス。`CanonicalVars` の `DamageVar(40)` から始まり、`SetDamage` が札の威力を書く。`Amount` は爆発までの残りターンで、`BeforeSideTurnEnd` は `Amount` が 1 以下のとき全敵にこの変数のダメージを与えて外れる。decimal のまま。 | 爆弾を置いた札とその威力は画面に出る（パワーの説明にも出る）。 |
 | `INFERNO_POWER` / `CRIMSON_MANTLE_POWER` `self_damage` | `DynamicVars["SelfDamage"].BaseValue`（v0.113.1、schema 7）。`CanonicalVars` の 0 から始まり、`IncrementSelfDamage` が 1 ずつ上げる。`AfterPlayerTurnStart` は所有者の手番の初めにこの値（Unblockable・Unpowered）で所有者を傷つける（`CrimsonMantlePower` はその後 `Amount` のブロック）。 | 札を重ねて使った回数と、手番の初めの自傷は画面に出る。 |
@@ -143,13 +143,14 @@ Markdown は `(vigor attack: has command: no, attacker is owner: none, amount wh
 | `applier_combat_id` | uint / null | 付与元の `Creature.CombatId`。`enemies[].combat_id` と同じ識別子で、0 も実在する ID。付与元が無い（読めた null）ときと読取失敗は null |
 
 付与元なしは `applier_readable=true, applier_combat_id=null` で、理由・警告を付けない。
-`Applier` の getter の失敗と、参照があるのに `CombatId` が null のときは読取失敗とし、
-`applier_readable=false`、`applier_combat_id=null`、行の `unavailable_reasons.applier_combat_id`、
-`warnings` の `status.HEX_POWER.applier_combat_id` を付ける。ID を補わない。
+参照があるのに `CombatId` が null のとき（許可リストの読取失敗）は読取失敗とし、
+`applier_readable=false`、`applier_combat_id=null`、行の `unavailable_reasons.applier_combat_id`（`internal_state.unavailable_reasons` と同じ理由）を付ける。
+`warnings` は許可リストの `status.HEX_POWER.internal_state.applier_combat_id` の 1 件だけ。ID を補わない。
 付与元が死んでも参照は残る（呪術はふつう同時に外れて行ごと無くなる。除去が防がれて残った場合は、死んだ付与元の ID のまま）。
 付与元が生きているか・敵の一覧に居るかは、この ID を `enemies[]` の `combat_id` と照合して判断する。
-読取は `PowerModel.Applier` の getter（`_applier` を返すだけ。`AssertMutable` は setter のみで、getter の失敗の経路は防御）と
-`Creature.CombatId`（自動プロパティ）に限る。フックの呼び出しや書き換えはしない。
+付与元を読むのは生成した許可リストの 1 回だけ（`PowerModel._applier` の宣言フィールドと `Creature.CombatId`）で、
+`AttachHexApplierCompat` は `internal_state` の値を写すだけ（getter・フックの呼び出しや書き換えはしない）。
+行の直下の 2 項目は、それを読む engine（`tools/turnplan/hexpower.py`）のための形で、ほかのパワーの付与元は `internal_state` だけに出る。
 Markdown は `(applier combat id: 3)`、付与元なしは `none`、読取失敗は `null (理由); applier readable: no`。
 `applier_readable=true` は Markdown で省略する。
 

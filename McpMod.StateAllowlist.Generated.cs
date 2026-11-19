@@ -66,6 +66,12 @@ public static partial class McpMod
         // PowerModel._amountOnTurnStart（int）
         new("power", "MegaCrit.Sts2.Core.Models.PowerModel", "MegaCrit.Sts2.Core.Models.PowerModel", "_amountOnTurnStart", StateMemberKind.Field, "amount_on_turn_start", StateValueConverter.Int, StateMarkdown.DiffersFromAmount,
             "ターン開始時（Creature.BeforeTurnStart）の量の写し。DrawCardsNextTurnPower は 0 なら（このターンに付いたなら）引く枚数を増やさない。いつ付いたかは人間に見えている"),
+        // PowerModel._applier（Creature?）
+        new("power", "MegaCrit.Sts2.Core.Models.PowerModel", "MegaCrit.Sts2.Core.Models.PowerModel", "_applier", StateMemberKind.Field, "applier_combat_id", StateValueConverter.CreatureCombatId, StateMarkdown.Never,
+            "パワーを付けた Creature（PowerCmd.Apply が新しい個体にだけ入れる。既存の個体に足すときは最初の付与元のまま）。付与元の死で外れる（ShrinkPower・ConstrictPower・HexPower・CoveredPower・GuardedPower・MagicBombPower の AfterDeath）、付与元の攻撃だけに効く（FlankingPower・KnockdownPower の ModifyDamageMultiplicative、ImpaledPower.AfterDamageReceived）、付与元の札だけ数える（StranglePower・OblivionPower の BeforeCardPlayed、TagTeamPower.ModifyCardPlayCount）など、派生の効果が読む。付けた行動・札は人間に見えている。付与元が無い（null・理由なし）は実値、CombatId の無い付与元は読めない（null と理由）。ほかの id で埋めない。Hex の行は互換のため行の直下の applier_combat_id・applier_readable にも同じ値を写す"),
+        // PowerModel._target（Creature?）
+        new("power", "MegaCrit.Sts2.Core.Models.PowerModel", "MegaCrit.Sts2.Core.Models.PowerModel", "_target", StateMemberKind.Field, "target_combat_id", StateValueConverter.CreatureCombatId, StateMarkdown.Never,
+            "インスタンスごとの対象のプレイヤーの Creature。付けるときに設定する（GremlinMerc→ThieveryPower、TheInsatiable→SandpitPower、Aeonglass→WitheringPresencePower）か、SwipePower.Steal・SurprisePower が書く。ThieveryPower.Steal（null なら盗まない）・HeistPower.BeforeDeath・SwipePower の返す報酬・SandpitPower（AllAffectedCreatures・AfterRemoved）・WitheringPresencePower.AfterCardPlayed（対象のプレイヤーの札だけ数える）が読む。説明文の TargetName と IsVisible に出る（人間に見える）。対象が無い（null・理由なし）は実値、CombatId の無い対象は null と理由"),
         // Rampage._extraDamageFromPlays（decimal）
         new("card", "MegaCrit.Sts2.Core.Models.Cards.Rampage", "MegaCrit.Sts2.Core.Models.Cards.Rampage", "_extraDamageFromPlays", StateMemberKind.Field, "extra_damage", StateValueConverter.Decimal, StateMarkdown.NonDefault,
             "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない"),

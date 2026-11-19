@@ -27,6 +27,14 @@
                                     MOD の *.cs を直すと被覆の file:line が動くので、PR の前に回す。
 
 分類が無い候補は unclassified として数え、--list-unclassified で書き込み・読み取りのメソッド付きで出す。
+
+基底クラスのメンバーの被覆（exposed）は、MOD の読み取りがすべての派生の行に届くときだけ数える。MOD の行から
+外側のブロックの見出し（case・is・as・typeof・switch 式の腕・「if (x is not T) return;」の見張り）を字下げでたどり、
+見出しがメソッドなら呼び出し元ごとにたどる。どの経路でも派生の型の判定に当たる読み取りは partial（派生の分岐の中だけ）
+として報告する。partial は、分類表の section（許可リストで全派生に出す）か、partial_reason（ほかの派生が要らない理由。
+class は exposed）で解消する。解消していない partial、または当てはまらない partial_reason があれば、棚卸しの実行と
+--check-docs は終了コード 4 で終わる（文書は書く）。プロパティの読み取り（.Name）は、受け手の変数の宣言の型が
+基底と無関係（別の型の同名のプロパティ）なら数えない。
 分類表にあるが今の版に無い候補は stale として報告する（版が上がって消えた・名前が変わった印）。
 分類表の pool は、参照元から機械的に決めた範囲を上書きする（基底クラスの欄でも他キャラ専用の仕組みなど）。
 
@@ -674,13 +682,264 @@ def block_classes(lines: list[str], idx: int) -> set[str]:
     return found
 
 
-def mod_coverage(mod: ModSource, m: Member, classes: dict[str, ClassInfo]) -> list[str]:
-    """MOD がこの候補を読んでいる箇所（file:line）。"""
+# --- 読み取りの範囲（どの型の行で読むか） -------------------------------------------------
+#
+# 基底クラスのメンバーを MOD が読んでいても、その読み取りが特定の派生だけの分岐（case HexPower:・
+# if (x is HexPower)・その分岐からしか呼ばれない補助メソッド）の中なら、ほかの派生の行には出ていない。
+# MOD の行から外側へ（字下げで）ブロックの見出しをたどり、型の判定を集める。見出しがメソッドなら、
+# その呼び出し元ごとに同じことをする。どの呼び出しの経路でも派生の判定に当たるなら partial。
+
+TYPE_TEST_RE = re.compile(r"\bis\s+(not\s+)?([A-Z]\w*)|\bas\s+([A-Z]\w*)|\btypeof\(([A-Z]\w*)\)")
+SWITCH_ARM_RE = re.compile(r"^\s*([A-Z]\w*)(?:\s+[a-z_]\w*)?\s*(?:when\b.*)?=>")
+CASE_LABEL_RE = re.compile(r"^\s*case\s+([A-Z]\w*)(?:\s+[a-z_]\w*)?\s*(?::|when\b)")
+GUARD_RE = re.compile(r"^\s*if\s*\(.*\bis\s+not\s+([A-Z]\w*)")
+NOT_HEADER_WORDS = {"return", "new", "await", "throw", "yield", "else", "case", "using", "lock", "foreach", "for",
+                    "while", "if", "switch", "catch", "typeof", "nameof", "default", "var", "in", "is", "as", "when"}
+TYPE_DECL_RE = re.compile(r"\b(?:class|struct|record|interface|enum)\s+\w+")
+SCOPE_DEPTH = 8
+
+
+def mod_indent(s: str) -> int:
+    return len(s) - len(s.lstrip(" \t"))
+
+
+def type_tests(code: str) -> set[str]:
+    """1 行の型の判定（is / is not / as / typeof / switch 式の腕）。否定は '!T'。"""
+    out = set()
+    for neg, a, b, c in TYPE_TEST_RE.findall(code):
+        if a:
+            out.add(("!" if neg else "") + a)
+        elif b or c:
+            out.add(b or c)
+    am = SWITCH_ARM_RE.match(code)
+    if am:
+        out.add(am.group(1))
+    return out
+
+
+@dataclass
+class ScopeIndex:
+    mod: ModSource
+    code: dict[str, list[str]]
+    memo: dict[tuple[str, int], frozenset] = field(default_factory=dict)
+    occurrences: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
+
+
+def build_scope_index(mod: ModSource) -> ScopeIndex:
+    code = {f: [code_only(x) for x in lines] for f, lines in mod.files.items()}
+    occ: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for f, lines in code.items():
+        for idx, s in enumerate(lines):
+            for tok in set(re.findall(r"\b([A-Za-z_]\w*)\b", s)):
+                occ[tok].append((f, idx))
+    return ScopeIndex(mod, code, occurrences=occ)
+
+
+def _is_member_decl(s: str) -> str | None:
+    """メソッド（ローカル関数を含む）の宣言の行なら名前。"""
+    st = s.strip()
+    if "(" not in st or '"' in st.split("(")[0] or "=" in st.split("(")[0]:
+        return None
+    head = re.sub(r"<[^<>]*(?:<[^<>]*>[^<>]*)*>", "", st.split("(")[0]).split()
+    if len(head) < 2 or not re.fullmatch(r"[A-Za-z_]\w*", head[-1]):
+        return None
+    if head[0] in NOT_HEADER_WORDS or head[-1] in NOT_HEADER_WORDS:
+        return None
+    return head[-1]
+
+
+def _local_scope(code: list[str], header: int) -> tuple[int, int]:
+    """ローカル関数の見出しから、外側のメソッドの範囲（見出しの行, 閉じ括弧の行）。"""
+    ind = mod_indent(code[header])
+    for j in range(header - 1, -1, -1):
+        s = code[j]
+        if s.strip() and mod_indent(s) < ind and _is_member_decl(s):
+            outer_ind = mod_indent(s)
+            body = next((k for k in range(j + 1, len(code))
+                         if code[k].strip() == "{" and mod_indent(code[k]) == outer_ind), None)
+            if body is None:
+                return j, len(code)
+            for k in range(body + 1, len(code)):
+                if code[k].strip() == "}" and mod_indent(code[k]) == outer_ind:
+                    return j, k
+            return j, len(code)
+    return 0, len(code)
+
+
+def scope_paths(sx: ScopeIndex, fname: str, idx: int, depth: int = 0,
+                stack: tuple = ()) -> frozenset:
+    """MOD の行 idx に届く経路ごとの型の判定の集合（frozenset of frozenset）。空の集合の経路は制限なし。"""
+    key = (fname, idx)
+    if key in sx.memo:
+        return sx.memo[key]
+    code = sx.code[fname]
+    local = set(type_tests(code[idx]))
+    cur = mod_indent(code[idx]) if code[idx].strip() else 10 ** 6
+    method: tuple[str, int] | None = None
+    j = idx - 1
+    while j >= 0:
+        s = code[j]
+        st = s.strip()
+        if not st:
+            j -= 1
+            continue
+        ind = mod_indent(s)
+        if ind == cur:
+            # 同じ深さの前の文: 「if (x is not T) return;」の見張りは、後ろの行を T に絞る
+            gm = GUARD_RE.match(s)
+            if gm:
+                nxt = next((code[k].strip() for k in range(j + 1, idx) if code[k].strip()), "")
+                tail = st + " " + nxt
+                if re.search(r"\b(?:return|throw|continue|break)\b", tail):
+                    local.add(gm.group(1))
+        elif ind < cur:
+            if st == "{":
+                cur = ind + 1
+                j -= 1
+                continue
+            if TYPE_DECL_RE.search(st) and not st.startswith(("if", "else", "case", "return", "var")):
+                break
+            name = _is_member_decl(s)
+            if name:
+                method = (name, j)
+                break
+            cm = CASE_LABEL_RE.match(s)
+            if cm or st.startswith("default:") or st == "default":
+                # 同じ switch の節の見出し（連なる case）を集める。default は兄弟の case を否定で持つ
+                labels = []
+                k = j
+                while k >= 0 and code[k].strip() and mod_indent(code[k]) == ind and (
+                        CASE_LABEL_RE.match(code[k]) or code[k].strip().startswith("default")):
+                    lm = CASE_LABEL_RE.match(code[k])
+                    labels.append(lm.group(1) if lm else None)
+                    k -= 1
+                if None in labels:
+                    for k2 in range(j - 1, -1, -1):
+                        t = code[k2]
+                        if t.strip() and mod_indent(t) < ind:
+                            break
+                        lm = CASE_LABEL_RE.match(t)
+                        if lm and mod_indent(t) == ind:
+                            local.add("!" + lm.group(1))
+                else:
+                    local.update(labels)
+                j = k
+                cur = ind
+                continue
+            if st.startswith("else"):
+                # else / else if: 前の if の判定の否定
+                for k in range(j - 1, -1, -1):
+                    t = code[k]
+                    if not t.strip():
+                        continue
+                    if mod_indent(t) < ind:
+                        break
+                    if mod_indent(t) == ind and re.match(r"^\s*(?:else\s+)?if\b", t):
+                        local.update(("!" + x) if not x.startswith("!") else x[1:] for x in type_tests(t))
+                        if not t.strip().startswith("else"):
+                            break
+            local.update(type_tests(s))
+            cur = ind
+        j -= 1
+    own = frozenset(local)
+    if method is None or depth >= SCOPE_DEPTH or (fname, method[1]) in stack:
+        result = frozenset({own})
+    else:
+        name, header = method
+        if mod_indent(code[header]) > 4:
+            lo, hi = _local_scope(code, header)
+            sites = [(fname, k) for f, k in sx.occurrences.get(name, ()) if f == fname and lo <= k < hi]
+        else:
+            sites = list(sx.occurrences.get(name, ()))
+        sites = [(f, k) for f, k in sites
+                 if (f, k) != (fname, header) and not re.search(rf"nameof\(\s*{re.escape(name)}\s*\)", sx.code[f][k])]
+        if not sites:
+            result = frozenset({own})
+        else:
+            paths = set()
+            for f, k in sites:
+                for p in scope_paths(sx, f, k, depth + 1, stack + ((fname, header),)):
+                    paths.add(own | p)
+            result = frozenset(paths) or frozenset({own})
+    if not stack:
+        sx.memo[key] = result
+    return result
+
+
+def descendant_names(classes: dict[str, ClassInfo]) -> dict[str, set[str]]:
+    """基底の名前 → 派生（中間の抽象クラスを含む）と、派生だけが実装するインターフェースの名前。"""
+    out: dict[str, set[str]] = defaultdict(set)
+    for ci in classes.values():
+        if ci.outer:
+            continue
+        anc = ancestors(ci.name, classes)
+        for a in anc:
+            out[a].add(simple_name(ci.name))
+            out[a].update(b for b in ci.bases if re.match(r"^I[A-Z]", b))
+    for name in list(out):
+        own = set(classes[name].bases) if name in classes else set()
+        for a in ancestors(name, classes):
+            own.update(classes[a].bases if a in classes else ())
+        out[name] -= own
+    return out
+
+
+def restricting(labels: frozenset, owner: str, desc: dict[str, set[str]]) -> set[str]:
+    sub = desc.get(owner, set())
+    return {x for x in labels if x.lstrip("!") in sub}
+
+
+def _declared_type(code: list[str], idx: int, var: str) -> str | None:
+    """MOD の行 idx から上へ、変数 var の宣言の型（単純名）を探す。メソッドの見出しで止まる。分からなければ None。"""
+    v = re.escape(var)
+    pats = [re.compile(rf"\b(?:is|case)\s+([A-Z]\w*)\s+{v}\b"),
+            re.compile(rf"\bforeach\s*\(\s*([A-Z][\w.]*)(?:<[^>]*>)?\??\s+{v}\s+in\b"),
+            re.compile(rf"(?:^|[(,]\s*|^\s*)(?:out\s+|ref\s+|in\s+)?([A-Za-z_][\w.]*)(?:<[^()]*?>)?\??\s+{v}\s*(?:[=,);]|$)")]
+    for j in range(idx, max(-1, idx - 400), -1):
+        s = code[j]
+        if var in s:
+            for p in pats:
+                mt = p.search(s)
+                if mt:
+                    t = mt.group(1).split(".")[-1]
+                    return None if t in ("var", "object", "dynamic", "return", "await", "new", "T") else t
+        if j != idx and _is_member_decl(s) and mod_indent(s) <= 4:
+            break
+    return None
+
+
+def receiver_unrelated(sx: ScopeIndex, fname: str, idx: int, name: str, owner: str,
+                       classes: dict[str, ClassInfo], desc: dict[str, set[str]]) -> bool:
+    """行 idx の `.name` の受け手が、宣言の型から見て owner と無関係な型の変数だけなら True（名前の一致の取り違え）。"""
+    code = sx.code[fname]
+    anc = ancestors(owner, classes)
+    related = {owner} | desc.get(owner, set()) | {simple_name(a) for a in anc}
+    for a in [owner] + anc:
+        # 基底が実装するインターフェース（ICombatState など）越しの読み取りも、その基底の読み取り
+        related.update(classes[a].bases if a in classes else ())
+    occ = list(re.finditer(rf"(?:(\b[a-z_]\w*)\??|(\S))\.{re.escape(name)}\b(?!\s*[(<])", code[idx]))
+    if not occ:
+        return False
+    for mt in occ:
+        var = mt.group(1)
+        if not var or var in ("this", "base"):
+            return False
+        t = _declared_type(code, idx, var)
+        if t is None or t in related:
+            return False
+    return True
+
+
+def mod_coverage(mod: ModSource, m: Member, classes: dict[str, ClassInfo], sx: ScopeIndex | None = None,
+                 desc: dict[str, set[str]] | None = None) -> tuple[list[str], list[str]]:
+    """MOD がこの候補を読んでいる箇所（file:line）。(全派生を覆う読み取り, 派生の分岐の中だけの読み取り)。
+
+    派生の分岐の中だけの読み取りは file:line[only T,...] の形にする（!T は T 以外）。"""
     top = simple_name(m.owner.split(".")[0])
     names = [m.name] + ([m.wrapper] if m.wrapper else [])
     if m.kind == "dynamic_var_mutation":
-        return []
-    hits = []
+        return [], []
+    full, partial = [], []
     for nm in names:
         for fname, idx, how in mod.index.get(nm, ()):
             if how == "acc" and (m.kind == "data_field" or not nm[0].isupper()):
@@ -688,9 +947,23 @@ def mod_coverage(mod: ModSource, m: Member, classes: dict[str, ClassInfo]) -> li
             bc = block_classes(mod.files[fname], idx)
             # 基底クラスの候補も、文字列の一致はブロックのクラス（case・typeof・is）にその型があるときだけ数える。
             # プロパティの参照（.Name）は型を問わず数える（基底のメンバーはどの派生の変数からも読まれる）。
-            if top in bc or (top in BASE_CLASS_NAMES and how == "acc"):
-                hits.append(f"{fname}:{idx + 1}")
-    return sorted(set(hits))
+            if not (top in bc or (top in BASE_CLASS_NAMES and how == "acc")):
+                continue
+            if how == "acc" and sx is not None and desc is not None and top in BASE_CLASS_NAMES \
+                    and receiver_unrelated(sx, fname, idx, nm, top, classes, desc):
+                continue
+            where = f"{fname}:{idx + 1}"
+            if sx is None or desc is None or top not in desc:
+                full.append(where)
+                continue
+            paths = scope_paths(sx, fname, idx)
+            limits = [restricting(p, top, desc) for p in paths]
+            if any(not lim for lim in limits):
+                full.append(where)
+            else:
+                only = sorted(set().union(*limits))
+                partial.append(f"{where}[only {','.join(only)}]")
+    return sorted(set(full)), sorted(set(partial))
 
 
 def ancestors(name: str, classes: dict[str, ClassInfo]) -> list[str]:
@@ -729,7 +1002,7 @@ def generic_dynamic_var_coverage(mod: ModSource) -> dict[str, str]:
 # 分類
 # ---------------------------------------------------------------------------
 
-CLASSES = ("exposed", "public", "hidden", "cosmetic", "static/derived", "out_of_scope", "unknown")
+CLASSES = ("exposed", "partial", "public", "hidden", "cosmetic", "static/derived", "out_of_scope", "unknown")
 
 
 def auto_classify(m: Member) -> tuple[str, str] | None:
@@ -808,8 +1081,11 @@ def main() -> int:
     mod = load_mod(mod_dir)
     generic_dv = generic_dynamic_var_coverage(mod)
     allow_lines = allowlist_lines(allowlist_path)
+    sx = build_scope_index(mod)
+    desc = descendant_names(classes)
 
     rows = []
+    partial_errors: list[str] = []
     for m in members:
         top = m.owner.split(".")[0]
         ci = classes[m.owner] if m.owner in classes else classes[top]
@@ -819,14 +1095,32 @@ def main() -> int:
         if pub and pub in tok_index:
             ext = sorted(x for x in tok_index[pub] if x != top and x not in (m.owner,))
             m.external = set(ext[:8]) | ({f"(+{len(ext) - 8})"} if len(ext) > 8 else set())
-        cov = mod_coverage(mod, m, classes)
+        cov, partial_cov = mod_coverage(mod, m, classes, sx, desc)
         if m.kind == "dynamic_var_mutation" and m.family in generic_dv:
             cov = [generic_dv[m.family] + "（DynamicVars を丸ごと出す）"]
         entry = manual.get(m.key)
+        if entry and entry.get("partial_reason") and (entry.get("section") or entry.get("class") != "exposed"
+                                                        or cov or not partial_cov):
+            partial_errors.append(f"{m.key}: partial_reason は、MOD の読み取りが派生の分岐の中だけで、"
+                                  "分類が exposed（section なし）の項目にだけ書く（今は当てはまらない）")
         if entry and entry.get("section"):
             # 分類（人間に見えるか）は public のまま、出す仕組みは生成した許可リスト
             cls, source = "exposed", "allowlist"
             cov = [f"{ALLOWLIST_FILE}:{allow_lines[m.key]}"] if m.key in allow_lines else []
+        elif entry and entry.get("class", "unknown") != "exposed":
+            cls = entry.get("class", "unknown")
+            source = "manual"
+        elif not cov and partial_cov:
+            # 基底のメンバーを、派生の分岐の中（とその分岐からしか呼ばれない補助）でだけ読んでいる。
+            # ほかの派生の行には出ていない。分類表の partial_reason（ほかの派生が要らない理由）で解消するか、
+            # 許可リスト（section）で全派生に出す。
+            cov = partial_cov
+            if entry and entry.get("partial_reason"):
+                cls, source = "exposed", "partial-resolved"
+                entry = dict(entry, note=entry["partial_reason"])
+            else:
+                cls, source = "partial", "mod-scan"
+                entry = {"note": "基底のメンバーを派生の分岐の中だけで読んでいる（ほかの派生の行に出ていない）"}
         elif entry:
             cls = entry.get("class", "unknown")
             source = "manual"
@@ -857,6 +1151,14 @@ def main() -> int:
         })
     rows.sort(key=lambda r: (r["family"], r["owner"], r["member"]))
     stale = sorted(set(manual) - {r["key"] for r in rows})
+    partial_errors += [f"{r['key']}: 基底のメンバーを派生の分岐の中だけで読んでいる（{', '.join(r['coverage'])}）。"
+                       "許可リスト（section）で全派生に出すか、partial_reason にほかの派生が要らない理由を書く"
+                       for r in rows if r["class"] == "partial"]
+    if partial_errors:
+        print("partial（基底のメンバーの読み取りが派生の分岐の中だけ）を解消していない:", file=sys.stderr)
+        for line in partial_errors:
+            print("  " + line, file=sys.stderr)
+        status = status or 4
 
     # 許可リストの項目が今の版の宣言と合うか（型の完全名・C# の型・種別）
     by_key = {r["key"]: r for r in rows}
@@ -1044,6 +1346,9 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
     out.append("## 分類の意味\n")
     out.append("| 分類 | 意味 |\n|---|---|")
     out.append("| exposed | すでに MOD の state に出ている（MOD のソースで読み取りを検出、分類表で確認、または分類表の section から生成した許可リスト `internal_state` で出す〔判定 allowlist〕） |")
+    out.append("| partial | 基底クラスのメンバーを、MOD が派生の分岐（case・is・その分岐からしか呼ばれない補助）の中だけで読んでいる。"
+               "ほかの派生の行には出ていない。許可リストで全派生に出すか、分類表の `partial_reason` で解消する（判定 partial-resolved）。"
+               "解消していないと棚卸しは終了コード 4 |")
     out.append("| public | 人間が見える・見たものから確定できる。まだ出ていない（出す対象） |")
     out.append("| hidden | 人間に見えない（乱数・未公開の山の順・まだ見せていない生成物）。出さない |")
     out.append("| cosmetic | 戦闘・進行に効かない（台詞・演出・UI）。出す必要は無い |")
@@ -1117,6 +1422,10 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
     table("public（まだ出ていない・出す対象）— アイアンクラッドの範囲", lambda r: r["class"] == "public" and in_scope(r), pub_cols,
           "書き込み・読む側の列は、分類表に記述があればそれを、無ければ同じファイルの中で検出したメソッド名（と別クラスからの参照）を出す。")
     table("public — 範囲外（他キャラ・廃止）", lambda r: r["class"] == "public" and not in_scope(r), pub_cols)
+    table("partial（未解消。棚卸しは終了コード 4）", lambda r: r["class"] == "partial", [
+        ("クラス.メンバー", lambda r: f"`{r['key']}`"), ("型", lambda r: r["type"]), ("範囲", lambda r: r["pool"]),
+        ("MOD の箇所（only は読む派生）", lambda r: ", ".join(r["coverage"])),
+        ("読む側（ゲーム）", lambda r: methods(r["readers"] + r["external"]))])
     table("unknown（ソースから決めきれない）", lambda r: r["class"] == "unknown", [
         ("クラス.メンバー", lambda r: f"`{r['key']}`"), ("型", lambda r: r["type"]), ("範囲", lambda r: r["pool"]),
         ("書き込み", lambda r: methods(r["writers"])), ("読む側", lambda r: methods(r["readers"] + r["external"])),
@@ -1139,6 +1448,11 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
         if r["source"] == "manual":
             out.append(f"- `{r['key']}`（{md_escape(r['type'])}）: {md_escape(r['note'])}")
     out.append("")
+    table("partial-resolved（派生の分岐の中だけで読み、ほかの派生は要らないと判断した基底のメンバー）",
+          lambda r: r["source"] == "partial-resolved", [
+              ("クラス.メンバー", lambda r: f"`{r['key']}`"), ("範囲", lambda r: r["pool"]),
+              ("MOD の箇所（only は読む派生）", lambda r: ", ".join(r["coverage"])), ("ほかの派生が要らない理由", lambda r: r["note"])],
+          "MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T` は T 以外）。")
     table("exposed（出ている）", lambda r: r["class"] == "exposed", [
         ("クラス.メンバー", lambda r: f"`{r['key']}`"), ("範囲", lambda r: r["pool"]),
         ("MOD の箇所", lambda r: ", ".join(r["coverage"][:3]) + (" …" if len(r["coverage"]) > 3 else "") or r["note"]),

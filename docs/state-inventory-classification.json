@@ -1,5 +1,5 @@
 {
- "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Always（常に表示。-1 などの未設定も実値）・Never・DiffersFromAmount。",
+ "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Always（常に表示。-1 などの未設定も実値）・Never・DiffersFromAmount。基底クラスのメンバーを MOD が派生の分岐の中だけで読んでいると、棚卸しはその候補を partial にして終了コード 4 で終わる。全派生に出すなら section を付け、ほかの派生が要らないなら class=exposed と partial_reason（その理由）を書く。",
  "AbstractModel.CategorySortingId": {
   "class": "static/derived",
   "note": "ModelDb の並び順（InitId）。ゲームの状態ではない"
@@ -908,9 +908,40 @@
   "kind": "field",
   "markdown": "DiffersFromAmount"
  },
+ "PowerModel._applier": {
+  "class": "public",
+  "note": "パワーを付けた Creature（PowerCmd.Apply が新しい個体にだけ入れる。既存の個体に足すときは最初の付与元のまま）。付与元の死で外れる（ShrinkPower・ConstrictPower・HexPower・CoveredPower・GuardedPower・MagicBombPower の AfterDeath）、付与元の攻撃だけに効く（FlankingPower・KnockdownPower の ModifyDamageMultiplicative、ImpaledPower.AfterDamageReceived）、付与元の札だけ数える（StranglePower・OblivionPower の BeforeCardPlayed、TagTeamPower.ModifyCardPlayCount）など、派生の効果が読む。付けた行動・札は人間に見えている。付与元が無い（null・理由なし）は実値、CombatId の無い付与元は読めない（null と理由）。ほかの id で埋めない。Hex の行は互換のため行の直下の applier_combat_id・applier_readable にも同じ値を写す",
+  "json_key": "applier_combat_id",
+  "effect": "ShrinkPower・ConstrictPower・HexPower・CoveredPower・GuardedPower・MagicBombPower の AfterDeath、FlankingPower・KnockdownPower・ImpaledPower・StranglePower・OblivionPower・TagTeamPower・TenderPower・SicEmPower・SoulboundPower・InterceptPower・TankPower",
+  "written": "PowerCmd.Apply（新しい個体のとき）",
+  "section": "power",
+  "converter": "CreatureCombatId",
+  "type_full": "MegaCrit.Sts2.Core.Models.PowerModel",
+  "cs_type": "Creature?",
+  "kind": "field",
+  "markdown": "Never"
+ },
+ "PowerModel._internalData": {
+  "class": "exposed",
+  "note": "派生ごとの入れ子の Data を入れる容器",
+  "partial_reason": "容器そのものは値ではない。中身は派生ごとの Data の欄（Power.Data.field の行、kind=data_field）として一つずつ分類し、出すものはその行の判断で出す（PowerInternalState の各 case・許可リストの DataField）。Data を持たない派生には読むものが無い"
+ },
  "PowerModel._owner": {
   "class": "static/derived",
   "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "PowerModel._target": {
+  "class": "public",
+  "note": "インスタンスごとの対象のプレイヤーの Creature。付けるときに設定する（GremlinMerc→ThieveryPower、TheInsatiable→SandpitPower、Aeonglass→WitheringPresencePower）か、SwipePower.Steal・SurprisePower が書く。ThieveryPower.Steal（null なら盗まない）・HeistPower.BeforeDeath・SwipePower の返す報酬・SandpitPower（AllAffectedCreatures・AfterRemoved）・WitheringPresencePower.AfterCardPlayed（対象のプレイヤーの札だけ数える）が読む。説明文の TargetName と IsVisible に出る（人間に見える）。対象が無い（null・理由なし）は実値、CombatId の無い対象は null と理由",
+  "json_key": "target_combat_id",
+  "effect": "ThieveryPower.Steal・HeistPower.BeforeDeath・SwipePower.BeforeDeath・SandpitPower・WitheringPresencePower.AfterCardPlayed・PowerModel.IsVisible",
+  "written": "GremlinMerc・TheInsatiable・Aeonglass（付けるとき）・SwipePower.Steal・SurprisePower",
+  "section": "power",
+  "converter": "CreatureCombatId",
+  "type_full": "MegaCrit.Sts2.Core.Models.PowerModel",
+  "cs_type": "Creature?",
+  "kind": "field",
+  "markdown": "Never"
  },
  "PunchConstruct._startingHpReduction": {
   "class": "static/derived",

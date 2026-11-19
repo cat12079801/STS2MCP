@@ -39,7 +39,7 @@ public static partial class McpMod
     private static void RunGeneratedTableContract()
     {
         var sections = new HashSet<string> { "card", "relic", "power", "player", "battle" };
-        Check(StateAllowlist.Length == 30, "第 2 段で出すのは 30 項目");
+        Check(StateAllowlist.Length == 32, "許可リストは 32 項目");
         Check(!StateAllowlist.Any(e => e.Key == "wongo_points"), "ラン中に読まれない wongo_points は出さない（cosmetic）");
         foreach (var e in StateAllowlist)
         {
@@ -124,7 +124,52 @@ public static partial class McpMod
         var strength = new StrengthPower();
         strength.SetAmountOnTurnStart(0);
         var values = Internal(Row("power", strength));
-        Check(values.Count == 1 && Equals(values["amount_on_turn_start"], 0), "全パワーに amount_on_turn_start");
+        Check(values.Count == 3 && Equals(values["amount_on_turn_start"], 0), "全パワーに amount_on_turn_start");
+        Check(values.ContainsKey("applier_combat_id") && values["applier_combat_id"] == null
+            && values.ContainsKey("target_combat_id") && values["target_combat_id"] == null && Reasons(values) == null,
+            "付与元・対象が無い（null・理由なし）も実値で、全パワーの行に付く");
+
+        // 付与元（PowerModel._applier）と対象（PowerModel._target）は派生によらず全パワーの行に出す。
+        // 縮小・締め付けなどは付与元の死で外れ（ShrinkPower.AfterDeath・ConstrictPower.AfterDeath）、
+        // 泥棒・砂地獄などは対象のプレイヤーに効く（ThieveryPower.Steal・SandpitPower）。
+        var shrink = new StrengthPower();
+        shrink.SetApplier(new Creature { CombatId = 0 });
+        shrink.SetTarget(new Creature { CombatId = 2 });
+        values = Internal(Row("power", shrink));
+        Check(Equals(values["applier_combat_id"], 0u) && Equals(values["target_combat_id"], 2u), "combat_id（0 も実在する id）");
+        var thief = new ThieveryPower();
+        thief.SetTarget(new Creature { CombatId = 1 });
+        values = Internal(Row("power", thief));
+        Check(Equals(values["target_combat_id"], 1u) && values["applier_combat_id"] == null, "派生の行にも基底の項目が付く");
+        var idless = new StrengthPower();
+        idless.SetApplier(new Creature());
+        values = Internal(Row("power", idless, "status.STRENGTH_POWER"));
+        Check(values["applier_combat_id"] == null && Reasons(values)!["applier_combat_id"].Contains("CombatId")
+            && _stateWarnings.Any(w => w.StartsWith("status.STRENGTH_POWER.internal_state.applier_combat_id:"))
+            && Equals(values["amount_on_turn_start"], 0), "CombatId の無い付与元は null・理由・warnings（ほかの id で埋めない）");
+
+        // 呪術: engine（tools/turnplan/hexpower.py）が読む行の直下の applier_combat_id・applier_readable は、
+        // 許可リストの値を写す（AttachHexApplierCompat → CopyAllowlistedReference。読み直さない）。
+        BeginStateWarnings();
+        var hex = new HexPower();
+        hex.SetApplier(new Creature { CombatId = 3 });
+        var hexRow = Row("power", hex, "status.HEX_POWER");
+        CopyAllowlistedReference(hexRow, "applier_combat_id", "applier_readable", "status.HEX_POWER");
+        Check(Equals(hexRow["applier_combat_id"], 3u) && hexRow["applier_readable"] is true && !hexRow.ContainsKey("unavailable_reasons")
+            && Equals(Internal(hexRow)["applier_combat_id"], 3u), "呪術の行の直下にも同じ値");
+        hex.SetApplier(null);
+        hexRow = Row("power", hex, "status.HEX_POWER");
+        CopyAllowlistedReference(hexRow, "applier_combat_id", "applier_readable", "status.HEX_POWER");
+        Check(hexRow["applier_combat_id"] == null && hexRow["applier_readable"] is true && !hexRow.ContainsKey("unavailable_reasons")
+            && _stateWarnings.Count == 0, "付与元なしは readable=true と null（理由なし）");
+        hex.SetApplier(new Creature());
+        hexRow = Row("power", hex, "status.HEX_POWER");
+        CopyAllowlistedReference(hexRow, "applier_combat_id", "applier_readable", "status.HEX_POWER");
+        var rowReasons = (Dictionary<string, string>)hexRow["unavailable_reasons"]!;
+        Check(hexRow["applier_combat_id"] == null && hexRow["applier_readable"] is false
+            && rowReasons["applier_combat_id"] == Reasons(Internal(hexRow))!["applier_combat_id"]
+            && _stateWarnings.Count(w => w.Contains("applier_combat_id")) == 1,
+            "読めなかった付与元は readable=false・null・同じ理由（warnings は許可リストの 1 件だけ）");
 
         var intercept = new InterceptPower();
         intercept.SetData(intercept.NewData(new Creature { CombatId = 5 }, new Creature { CombatId = 2 }));
@@ -250,6 +295,13 @@ public static partial class McpMod
         Check(FormatAllowlistedState(Row("power", power), "power") == "", "amount と同じなら出さない");
         power.SetAmountOnTurnStart(0);
         Check(FormatAllowlistedState(Row("power", power), "power") == " (internal: amount on turn start 0)", "amount と違えば 0 でも出す");
+        power.SetApplier(new Creature { CombatId = 4 });
+        power.SetTarget(new Creature { CombatId = 1 });
+        Check(FormatAllowlistedState(Row("power", power), "power") == " (internal: amount on turn start 0)",
+            "付与元・対象は JSON だけ（ほぼ全行に付くので markdown に出さない）");
+        power.SetApplier(new Creature());
+        Check(FormatAllowlistedState(Row("power", power), "power").Contains("applier combat id null ("),
+            "読めなかった付与元は markdown にも理由を出す");
 
         var relic = new Anchor();
         relic.SetBase(RelicStatus.Normal, wax: false, floor: 9);
@@ -284,6 +336,11 @@ public static partial class McpMod
             Check(builder.Contains(call), "組み立てが呼ぶ: " + call);
         Check(builder.Split("AttachAllowlistedState(entry, \"power\", power, $\"status.{entry[\"id\"]}\");").Length == 3,
             "パワーの行の 2 経路（通常・説明を読めないとき）とも");
+        Check(System.Text.RegularExpressions.Regex.Matches(builder,
+                @"AttachAllowlistedState\(entry, ""power"", power, \$""status\.\{entry\[""id""\]\}""\);\s*AttachHexApplierCompat\(entry, power\);").Count == 2,
+            "呪術の互換の写しは、2 経路とも許可リストの後");
+        string power = Source("McpMod.PowerInternalState.cs");
+        Check(!power.Contains("case HexPower") && !power.Contains("power.Applier"), "パワーの個別の読み取りは付与元を読まない（許可リストの 1 回だけ）");
         string formatting = Source("McpMod.Formatting.cs");
         Check(formatting.Split("FormatAllowlistedState(r, \"relic\")").Length == 3
             && formatting.Split("FormatAllowlistedState(p, \"power\")").Length == 4
