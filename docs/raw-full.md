@@ -466,7 +466,7 @@ Markdown は `Other-character attack pool: N cards` または unknown と理由�
   手番の初めの手札は引くまで分からないので、引きうる札をすべて出す。同じ ID で候補も同じ札は 1 行にまとめ、
   `uids` はその個体の uid の**序数順**（山札の順は出さない）。同じ ID でも候補が違えば別の行。行は ID の昇順。
 - `options` は重複を除いた ID の昇順。本体が候補なしで例外を投げる札は `options: null` と `reason`
-  （本体の変化もその札では例外になる）。warning `player.transformation_options.<ID>`。
+  （本体の変化もその札では例外になる）。これは正常な状態なので warning にしない。
 - 列挙そのものの失敗は `known: false`・`cards: []`・`reason`、warning `player.transformation_options`。
 - 抽選・`CardCmd.Transform`・乱数は呼ばない。候補の集合は元の札の pool・解放状態・ランから決まる公開の情報で、
   どの札に変わるか（抽選の結果）は出さない。
@@ -2977,13 +2977,15 @@ MOD は `CardSelectCmd` の上の 8 つの入口（`PlayerChoiceContext` を取�
 読むだけの Harmony の prefix・postfix を当て、呼ばれたときの引数（`context`・`player`・`FromHand` の `source`・
 choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の Task が終わったら記録を消す。state を作るときは、
 ローカル player・同じ戦闘・その画面を出す入口のうち、開いている最も新しい記録を使う（choose は画面の札が記録の札と
-同じ実体・同じ順のときだけ）。
+同じ実体・同じ順のときだけ）。記録は、別の戦闘で選択が開いたときと、state を作るときに戦闘が終わっている
+（またはいまの戦闘と違う）ときに捨てる（選択の途中で保存して終了すると Task が終わらないため）。戦闘外の記録は残す。
 
 ```jsonc
 "choice_source": {
   "version": 1,
   "known": true,
-  "selector": "FromCombatPile",                 // 選択を開いた CardSelectCmd のメソッド
+  "selector": "FromCombatPile",                 // 選択を開いた CardSelectCmd のメソッド（同じ選択の一番内側）
+  "outer_selectors": [],                        // 同じ context で外側から転送した入口（例: ["FromHandForDiscard"]）
   "chooser_player_id": "1",
   "hand_source": null,                          // FromHand* の source 引数（例: EntropyPower）の行
   "contexts": [                                 // PlayerChoiceContext の連鎖。0 が CardSelectCmd に渡された context
@@ -2998,11 +3000,15 @@ choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の
   ],
   "card_play": { "phase": "started", "uid": "POMMEL_STRIKE#4", "is_auto_play": false, "target": { "combat_id": 3, "entity_id": "NIBBIT_0" },
                  "play_index": 0, "play_count": 1, "model_index": 1, "player_id": "1" },
-  "hook": { "model_index": 0, "declared": ["AfterShuffle"], "name": "AfterShuffle", "scope": "combat",
+  "hook": { "model_index": 0, "declared": ["AfterShuffle"], "name": "AfterShuffle", "name_unavailable_reason": null, "scope": "combat",
             "remaining_listeners": [ { "order": 3, "model_type": "TheAbacus", "model_id": "THE_ABACUS", "declared_by": "TheAbacus", "kind": "relic", "owner_player_id": "1" } ] }
 }
 ```
 
+- `selector` / `outer_selectors`: 外側の入口が同じ context で内側の入口に転送するとき（`FromHandForDiscard` →
+  `FromHand`、`FromCombatPile` の 4 引数 → 5 引数）、`selector` は内側（最も新しい記録）、`outer_selectors` は同じ
+  context・同じ player で開いている外側の入口（古い順）。捨てる選択は `selector: "FromHand"`・
+  `outer_selectors: ["FromHandForDiscard"]` になる。
 - `contexts`: `BranchingPlayerChoiceContext`（`kind: "branching"`。`Source`、別の chooser の context に分岐したかの
   `branched`、次は private の `_originalContext`）、`HookPlayerChoiceContext`（`"hook"`。`Source` と、選択で作った
   `GenericHookGameAction` の `action`）、`GameActionPlayerChoiceContext`（`"game_action"`。`Action`）、
@@ -3022,15 +3028,17 @@ choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の
 - `hook`: `models[0]` について。`declared` は `Hook` が model を積んで走らせる 24 の通知（`AfterShuffle`・
   `AfterPlayerTurnStartEarly` / `AfterPlayerTurnStart` / `AfterPlayerTurnStartLate`・`AfterCardPlayed`・`AfterCardDrawn` など）
   のうち、その型が `AbstractModel` の既定から override しているもの（リフレクションだけ。呼ばない）。`name` は、
-  `models[0]` がプレイ進行中の札（本文の `OnPlay`）でなく、`declared` がちょうど 1 つのときのその通知。それ以外は `null`
-  （どの通知の中かを推測しない）。`scope` はその通知が回す列（`combat` = `Hook.IterateCombatHookListeners`、
+  `models[0]` がプレイ進行中の札（本文の `OnPlay`）でも使用中のポーション（`PotionModel.OnUseWrapper` が自分を積む）でも
+  オーブ（`OrbCmd` が積む）でもなく、`declared` がちょうど 1 つのときのその通知。それ以外は `null`（どの通知の中かを
+  推測しない）で、`name_unavailable_reason` に `card_in_play` / `potion_pushes_itself` / `orb_pushes_itself` /
+  `no_declared_hook` / `several_declared_hooks` のどれか（`name` があれば `null`）。`scope` はその通知が回す列（`combat` = `Hook.IterateCombatHookListeners`、
   `combat_all` = `ICombatState.IterateHookListeners()`、`run` = `IRunState.IterateHookListeners(combat)`）。
 - `remaining_listeners`: `name` が決まったとき、その通知の列を**いま読み直し**、`models[0]` より後ろで同じ通知を
   override している listener。行は `continuation_context` と同じで、山札の listener は `order: null` と `order_group`
   （山札の順を出さない）。`order` は `models[0]` の次を 0 とする位置。本体はその通知を始めたときに取った列を回すので、
   始めてから `models[0]` までの listener が足した・消した model の分は違いうる（選択そのものはまだ何も動かしていない）。
-  `name` が `null`、列に `models[0]` が無い、`ModHelper` に hook の subscriber がいるときは `null`（後の 2 つは
-  `unavailable_reasons` も）。
+  `name` が `null`、`models[0]` が山札の listener（後ろの listener の集合が山札の順の一部になる）、列に `models[0]` が
+  無い、`ModHelper` に hook の subscriber がいるときは `null`（`name` が `null` 以外の 3 つは `unavailable_reasons` も）。
 - 公開の情報だけ: 選択を開いた model は画面で光る・プレイ中の札として見えるもの、listener は場に出ているパワー・
   レリック・ポーション・札で、山札の順は出さない。抽選の結果・乱数・山札の順には触らない。
 - 分からないとき（記録が無い、patch を当てられなかった、知らない種類の context・listener）は `known: false` と

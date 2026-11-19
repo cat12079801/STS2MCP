@@ -90,6 +90,32 @@ namespace STS2_MCP
             Check(OpenCardSelections.Latest(s => ReferenceEquals(s, hand)) == null, "最古の記録から捨てる");
             OpenCardSelections.Clear();
             Check(OpenCardSelections.Count == 0 && OpenCardSelections.Latest(_ => true) == null, "Clear で空になる");
+
+            // FromHandForDiscard forwards to FromHand with the same context: the outer name stays visible.
+            object ctx = new(), otherCtx = new();
+            var outer = OpenCardSelections.Add("FromHandForDiscard", ctx, player, combat, handSource: power);
+            OpenCardSelections.Add("FromHand", otherCtx, player, combat);
+            var inner = OpenCardSelections.Add("FromHand", ctx, player, combat, handSource: power);
+            OpenCardSelections.Add("FromHand", ctx, other, combat);
+            Check(OpenCardSelections.OuterSelectors(inner).SequenceEqual(new[] { "FromHandForDiscard" }), "同じ context・同じ player の外側の入口だけを古い順に出す");
+            Check(OpenCardSelections.OuterSelectors(outer).Count == 0, "外側の記録自身には外側が無い");
+            OpenCardSelections.Remove(outer);
+            Check(OpenCardSelections.OuterSelectors(inner).Count == 0, "閉じた外側は出さない");
+
+            // Records of a fight that is gone are dropped (save and quit mid-selection never completes the task).
+            OpenCardSelections.Clear();
+            var outside = OpenCardSelections.Add("FromSimpleGrid", new object(), player, null);
+            var old = OpenCardSelections.Add("FromCombatPile", new object(), player, combat);
+            OpenCardSelections.DropOtherCombats(combat);
+            Check(OpenCardSelections.Count == 2, "いまの戦闘の記録と戦闘外の記録は残す");
+            OpenCardSelections.DropOtherCombats(null);
+            Check(OpenCardSelections.Latest(r => ReferenceEquals(r, old)) == null && OpenCardSelections.Latest(r => ReferenceEquals(r, outside)) != null,
+                "戦闘が終わったら戦闘の記録を捨て、戦闘外の記録は残す");
+            OpenCardSelections.Add("FromCombatPile", new object(), player, combat);
+            OpenCardSelections.Add("FromHand", new object(), player, nextCombat);
+            Check(OpenCardSelections.Latest(r => ReferenceEquals(r.CombatState, combat)) == null && OpenCardSelections.Count == 2,
+                "別の戦闘で選択が開いたら、前の戦闘の記録を捨てる");
+            OpenCardSelections.Clear();
         }
 
         // player.transformation_options: EntropyPower → CardCmd.TransformToRandom → GetDefaultTransformationOptions.
@@ -115,7 +141,7 @@ namespace STS2_MCP
             Check(((List<string>)strike["options"]!).SequenceEqual(new[] { "ANGER", "UPPERCUT" }), "候補は重複を除いて ID 昇順");
             var burn = rows.Single(r => Equals(r["id"], "BURN"));
             Check(burn["options"] == null && ((string)burn["reason"]!).Contains("no options"), "候補が無い（本体が例外）札は options=null と理由。空の一覧にしない");
-            Check(_stateWarnings.Any(w => w.StartsWith("player.transformation_options.BURN:")), "札ごとの失敗は warning");
+            Check(_stateWarnings.Count == 0, "候補なしは正常な状態で、行の reason だけ（warning にしない）");
 
             cards.Add(new("STRIKE_IRONCLAD", "STRIKE_IRONCLAD#11", new[] { "ANGER" }));
             var split = (List<Dictionary<string, object?>>)BuildTransformationOptions(() => cards, c => c.Id, c => c.Uid,
@@ -222,6 +248,13 @@ namespace STS2_MCP
             Check(Regex.Matches(choice, @"\(""(After|Before)[A-Za-z]+"", ""(combat|combat_all|run)""\)").Count == 24, "フックの表は 24 件（Hook.cs の PushModel(model) の箇所）");
             Check(choice.Contains("OrderPileCardsForDisplay") == false && choice.Contains("BuildHookListenerRows(listeners.Skip(at + 1).ToList()"),
                 "残りの listener は既存の BuildHookListenerRows（山札の位置を隠す）で出す");
+            Check(Regex.IsMatch(choice, @"if \(DrawPileOf\(top\) != null\)\s*\{\s*reasons\.Add\([^\n]*\);\s*return row;"),
+                "山札の listener が選択を開いたら残りの listener を出さない（山札の順の漏れ）");
+            Check(choice.Contains(": top is PotionModel ? \"potion_pushes_itself\"") && choice.Contains(": top is OrbModel ? \"orb_pushes_itself\""),
+                "使用中のポーション・オーブは自分で積むので通知を決めない");
+            Check(choice.Contains("result[\"outer_selectors\"] = OpenCardSelections.OuterSelectors(record);"), "外側の入口を出す");
+            foreach (var file in new[] { "McpMod.StateBuilder.cs", "McpMod.MultiplayerState.cs" })
+                Check(Read(file).Contains("OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());"), $"state を作るたびに終わった戦闘の記録を捨てる（{file}）");
             Check(choice.Contains("CountModHookSubscribers(\"_runHookSubscribers\") + CountModHookSubscribers(\"_combatHookSubscribers\")"),
                 "ModHelper の購読者がいれば残りの listener を出さない");
             Check(!Regex.IsMatch(choice, @"\.Rng|Shuffle\(|NextItem|TakeRandom"), "乱数・抽選に触らない");

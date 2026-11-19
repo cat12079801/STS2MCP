@@ -240,6 +240,8 @@ public static partial class McpMod
 
         // Same as singleplayer: every selection screen of a live fight carries the battle snapshot,
         // and a failure to build it is a warning that leaves battle out.
+        // Selections recorded in a fight that is no longer live can never complete (choice_source).
+        OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());
         bool inCombatRoom = currentRoom is CombatRoom;
         if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),

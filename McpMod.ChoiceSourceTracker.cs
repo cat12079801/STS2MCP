@@ -75,6 +75,8 @@ internal static class OpenCardSelections
                 Pile = pile,
                 Sequence = ++_next
             };
+            // A selection opened in another fight means the old fight's selections can no longer complete.
+            if (combatState != null) Open.RemoveAll(r => r.CombatState != null && !ReferenceEquals(r.CombatState, combatState));
             Open.Add(record);
             while (Open.Count > Capacity) Open.RemoveAt(0);
             return record;
@@ -84,6 +86,29 @@ internal static class OpenCardSelections
     internal static void Remove(OpenCardSelection record)
     {
         lock (Gate) Open.Remove(record);
+    }
+
+    /// <summary>
+    /// Drops the records of any fight other than <paramref name="liveCombat"/> (all fight records when no fight is
+    /// in progress): their tasks never complete once the fight or the run is gone (save and quit mid-selection).
+    /// Records opened outside a fight (no combat state) are kept.
+    /// </summary>
+    internal static void DropOtherCombats(object? liveCombat)
+    {
+        lock (Gate) Open.RemoveAll(r => r.CombatState != null && !ReferenceEquals(r.CombatState, liveCombat));
+    }
+
+    /// <summary>
+    /// The entry points that opened the same selection further out: an outer CardSelectCmd method that forwards
+    /// to another with the same context (FromHandForDiscard → FromHand, FromCombatPile's 4-argument overload)
+    /// leaves an older open record with the same context. Oldest first.
+    /// </summary>
+    internal static List<string> OuterSelectors(OpenCardSelection record)
+    {
+        lock (Gate)
+            return Open.Where(r => r.Sequence < record.Sequence && ReferenceEquals(r.Context, record.Context)
+                    && ReferenceEquals(r.Player, record.Player))
+                .OrderBy(r => r.Sequence).Select(r => r.Selector).ToList();
     }
 
     internal static void Clear()

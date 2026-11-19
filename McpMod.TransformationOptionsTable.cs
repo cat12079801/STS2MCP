@@ -41,8 +41,9 @@ public static partial class McpMod
                 }
                 catch (Exception ex)
                 {
+                    // A card with no candidate is a normal state (the game's transform throws for it too):
+                    // the row's reason says so, and it is not a warning. Warnings are for reading failures.
                     reason = $"{ex.GetType().Name}: {ex.Message}";
-                    Warn($"player.transformation_options.{cardId}", ex);
                 }
                 string key = cardId + "\n" + (list == null ? "!" + reason : string.Join(",", list));
                 if (!groups.TryGetValue(key, out var group))

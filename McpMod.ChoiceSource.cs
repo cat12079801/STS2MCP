@@ -143,6 +143,8 @@ public static partial class McpMod
 
             RefreshEntityIdRegistry(combat);
             result["selector"] = record.Selector;
+            // FromHandForDiscard → FromHand and the like: the outer entry points of the same selection.
+            result["outer_selectors"] = OpenCardSelections.OuterSelectors(record);
             result["chooser_player_id"] = local.NetId.ToString();
             result["hand_source"] = record.HandSource is AbstractModel handSource ? BuildHookListenerRow(handSource, reasons) : null;
 
@@ -263,18 +265,32 @@ public static partial class McpMod
             if (HookOverrideDeclarer(top.GetType(), method, parameters) != null)
                 declared.Add((method, scope, parameters));
         }
-        // A card in the middle of its play is running OnPlay, not a hook. Otherwise the hook is known only
-        // when the model overrides exactly one of the hooks that push it.
-        var hook = !topIsCardInPlay && declared.Count == 1 ? declared[0] : default;
+        // A card in the middle of its play is running OnPlay, not a hook. A potion in use
+        // (PotionModel.OnUseWrapper) and an orb (OrbCmd) are pushed by their own commands too, so the hook
+        // is not decided for them. Otherwise the hook is known only when the model overrides exactly one
+        // of the hooks that push it.
+        string? notHookReason = topIsCardInPlay ? "card_in_play"
+            : top is PotionModel ? "potion_pushes_itself"
+            : top is OrbModel ? "orb_pushes_itself"
+            : declared.Count != 1 ? (declared.Count == 0 ? "no_declared_hook" : "several_declared_hooks")
+            : null;
+        var hook = notHookReason == null ? declared[0] : default;
         var row = new Dictionary<string, object?>
         {
             ["model_index"] = 0,
             ["declared"] = declared.Select(d => d.Method).ToList(),
             ["name"] = hook.Method,
+            ["name_unavailable_reason"] = notHookReason,
             ["scope"] = hook.Scope,
             ["remaining_listeners"] = null
         };
         if (hook.Method == null) return row;
+        // The listeners after a draw-pile listener would be the cards behind it in the hidden draw order.
+        if (DrawPileOf(top) != null)
+        {
+            reasons.Add($"{top.Id.Entry} is a draw-pile listener; the listeners after it would reveal the draw order");
+            return row;
+        }
 
         int modSubscribers = CountModHookSubscribers("_runHookSubscribers") + CountModHookSubscribers("_combatHookSubscribers");
         if (modSubscribers > 0)

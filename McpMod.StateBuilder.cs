@@ -641,6 +641,8 @@ public static partial class McpMod
         // screen. Decided by "a fight is in progress", not by the screen class; never fabricated
         // outside a live fight (see ShouldAttachSelectionBattle). A failure to build it is a warning
         // and leaves battle out; the selection screen itself is still reported.
+        // Selections recorded in a fight that is no longer live can never complete (choice_source).
+        OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());
         bool inCombatRoom = currentRoom is CombatRoom;
         if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
