@@ -78,12 +78,20 @@ namespace STS2_MCP
             int grid = source.IndexOf(gridBranch, StringComparison.Ordinal);
             Check(central > 0 && common > central && grid > 0 && grid < central,
                 $"{label}: 画面の振り分けの後、run・player の前で一度だけ付ける");
-            string block = source[source.LastIndexOf("if (currentRoom is CombatRoom selectionCombatRoom", central, StringComparison.Ordinal)..central];
+            int blockStart = source.LastIndexOf("bool inCombatRoom = currentRoom is CombatRoom;", central, StringComparison.Ordinal);
+            Check(blockStart > grid, $"{label}: 戦闘の部屋かどうかを計算して判定に渡す（真理表の inCombatRoom が実際に効く）");
+            string block = source[blockStart..common];
             Check(block.Contains("ShouldAttachSelectionBattle(", StringComparison.Ordinal)
                 && block.Contains("result.GetValueOrDefault(\"state_type\") as string", StringComparison.Ordinal)
                 && block.Contains("result.ContainsKey(\"battle\")", StringComparison.Ordinal)
-                && block.Contains("CombatManager.Instance.IsInProgress", StringComparison.Ordinal),
-                $"{label}: state_type・既存の battle・IsInProgress で判定する");
+                && block.Contains("inCombatRoom, CombatManager.Instance.IsInProgress)", StringComparison.Ordinal)
+                && !block.Contains("inCombatRoom: true", StringComparison.Ordinal),
+                $"{label}: state_type・既存の battle・戦闘の部屋か・IsInProgress で判定する");
+            Check(block.IndexOf("ShouldAttachSelectionBattle(", StringComparison.Ordinal) < block.IndexOf("currentRoom is CombatRoom selectionCombatRoom", StringComparison.Ordinal),
+                $"{label}: 部屋の取り出しは判定の後で別に行う");
+            Check(block.Contains("try { " + attach + " }", StringComparison.Ordinal)
+                && block.Contains("catch (Exception ex) { Warn(\"battle.selection\", ex); }", StringComparison.Ordinal),
+                $"{label}: battle を作れなければ warning にして battle を省き、残りの state は返す");
 
             // 振り分けの中で battle を付けるのは戦闘の画面（monster / elite / boss）だけ。選択画面は共通の配線に任せる。
             string dispatch = source[grid..central];

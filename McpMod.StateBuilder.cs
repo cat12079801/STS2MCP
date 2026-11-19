@@ -639,12 +639,17 @@ public static partial class McpMod
         // choose-a-card card_select such as Stratagem's or a potion's pick, bundle_select,
         // relic_select, and any later *_select) carries the same battle snapshot as the fight's own
         // screen. Decided by "a fight is in progress", not by the screen class; never fabricated
-        // outside a live fight (see ShouldAttachSelectionBattle).
-        if (currentRoom is CombatRoom selectionCombatRoom
-            && ShouldAttachSelectionBattle(
+        // outside a live fight (see ShouldAttachSelectionBattle). A failure to build it is a warning
+        // and leaves battle out; the selection screen itself is still reported.
+        bool inCombatRoom = currentRoom is CombatRoom;
+        if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
-                inCombatRoom: true, CombatManager.Instance.IsInProgress))
-            result["battle"] = BuildBattleState(runState, selectionCombatRoom);
+                inCombatRoom, CombatManager.Instance.IsInProgress)
+            && currentRoom is CombatRoom selectionCombatRoom)
+        {
+            try { result["battle"] = BuildBattleState(runState, selectionCombatRoom); }
+            catch (Exception ex) { Warn("battle.selection", ex); }
+        }
 
         // Common run info
         result["run"] = new Dictionary<string, object?>

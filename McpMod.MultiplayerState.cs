@@ -238,12 +238,17 @@ public static partial class McpMod
             result["room_type"] = currentRoom?.GetType().Name;
         }
 
-        // Same as singleplayer: every selection screen of a live fight carries the battle snapshot.
-        if (currentRoom is CombatRoom selectionCombatRoom
-            && ShouldAttachSelectionBattle(
+        // Same as singleplayer: every selection screen of a live fight carries the battle snapshot,
+        // and a failure to build it is a warning that leaves battle out.
+        bool inCombatRoom = currentRoom is CombatRoom;
+        if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
-                inCombatRoom: true, CombatManager.Instance.IsInProgress))
-            result["battle"] = BuildMultiplayerBattleState(runState, selectionCombatRoom);
+                inCombatRoom, CombatManager.Instance.IsInProgress)
+            && currentRoom is CombatRoom selectionCombatRoom)
+        {
+            try { result["battle"] = BuildMultiplayerBattleState(runState, selectionCombatRoom); }
+            catch (Exception ex) { Warn("battle.selection", ex); }
+        }
 
         // Common run info
         result["run"] = new Dictionary<string, object?>

@@ -2881,6 +2881,7 @@ Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombat
 `NCombatPileCardSelectScreen`（`screen_type` はクラス名のまま）も、今後 `_select` の state に入る画面も同じく付く。
 
 - `state_type` は変えない。`player` は従来どおり戦闘中なら 4 つの山・手札・エナジー・status を持つ（`battle` の有無によらない）。
+- `battle` を作れなかったときは warning `battle.selection` を出して `battle` を省き、選択画面の残りの state はそのまま返す。
 - `battle` の中身と隠す情報は戦闘の画面と同じ（山札の順は出さない）。手番の初めのドローの途中で開いた画面では
   `is_play_phase` が false のことがある。
 - 戦闘の前後（`IsInProgress` が false）・戦闘外の部屋の選択画面、選択画面でない state（`map`・`menu`・`game_over`・
