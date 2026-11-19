@@ -2312,6 +2312,7 @@ left to reattach to, the fight is over rather than about to restart.
   private の `infiniteAutoPlaysThisTurn`（ヘル・レイザーの行の `status[].infinite_auto_plays_this_turn`）を数え、それが 9 に達した後に引いたストライクは自動プレイしない（その手番の 10 本目以降）。
   条件が成り立たないドローと、所有者の陣営の手番の終わり（`AfterSideTurnEnd`）で数を 0 に戻す。
   判定は当てられる敵（`hittable: true` の行）だけに掛かるので、engine は `hittable` と組にして読む。
+  `hittable: true` の行が 1 つも無いときも条件は成り立つ（`Enumerable.All` は空の集合で true）ので、その手番のドローも数えて上限に掛かる。
   `Creature` の注釈も「表示用だが、HellraiserPower などいくつかの効果がダメージを受けうるかの判定に使う」と書いている。
 - 読み取りは状態を書き換えない（自動プロパティの getter と、列挙の値だけを見る静的メソッド。乱数を引かない）。
 - 読めなければ `hp_display_is_infinite: null`、敵の行の `unavailable_reasons.hp_display_is_infinite` に理由、
