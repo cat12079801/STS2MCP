@@ -25,15 +25,20 @@ move の実行・`TriggerAboutToBlowState`・乱数・Ascension の判定は用�
 - schema 6（`cat12079801/sts2#1018`）の行動の入力の敵 11 種の private フィールド（Axebot は getter）を値のまま
   （false・0・負も実値）、許可リストの項目だけ出す。ファブリケーターの `_lastSpawned` は、読めた null（まだ召喚なし、
   `last_spawned_readable=true`）・召喚したモデルの ID・ID が読めない失敗（`last_spawned_readable=false`・理由）を区別。
+- `cat12079801/sts2#1065`（schema 1.1.0）の台詞の印 2 種、傭兵グレムリン（`GremlinMerc._hasSpoken` → `has_spoken`）と
+  キンの司祭（`KinPriest._speechUsed` → `speech_used`）を、false・true とも bool の実値で出す（wire でも false を省略しない）。
+  読取はフィールドだけで、値を変えず、`AssertMutable` の setter を持つ property（`HasSpoken` / `SpeechUsed`）を呼ばない。
+  読取失敗（欠落フィールド・型違い）は同じ型・同じ項目名で null・理由・warnings・Markdown の `null (理由)` にし、false で補わない。
 - `battle.enemy_move_context`（本番の `McpMod.EnemyMoveContext.cs`）: DLL hash・モード・Dread・`HasAscension` が true の段階（列挙順）・
   人数・遭遇の ID・`Slots` の順と `Enemies` 全体の占有個体。ラン外は Ascension・Dread・Slots を読まず理由付きの null、
   遭遇なしは `[]`、遭遇・Slots・占有個体の読取失敗は項目ごとの null と理由（途中までの列を返さない）。Markdown の 1 行。
 - 敵の行の `slot_name`（実値・スロット無しの null・読取失敗）と Markdown の `| Slot:`。
-- 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・現行の schema 12 をソース文字列で確認。
+- 全敵行への配線（生死で絞らない）・協力プレイの共通 builder・Markdown の配線・整数の schema_version 12 と semver の MAJOR 1 をソース文字列で確認（版の値そのものは `V0113CompatContract`）。
 
 根拠は v0.113.1（`sts2-a671e9ef`）の `WaterfallGiant._isAboutToBlow` / `_steamEruptionDamage`、
 `WaterfallGiant.TriggerAboutToBlowState` / `AboutToBlowMove` / `ExplodeMove`、`SteamEruptionPower.AfterDeath`、
 `WaterfallGiant._currentPressureGunDamage` / `AfterAddedToRoom` / `PressureGunMove` / `SteamBoostAmount` / `PressurizeAmount` /
 `StompDamage` / `RamDamage` / `PressureUpDamage` / `SiphonHeal`、`AscensionHelper.GetValueIfAscension` / `IsDread`、
-`RunManager.HasAscension` / `IsDread` / `IsInProgress`。
+`RunManager.HasAscension` / `IsDread` / `IsInProgress`、`GremlinMerc._hasSpoken` / `HasSpoken` / `GimmeMove`、
+`KinPriest._speechUsed` / `SpeechUsed` / `RitualMove`。
 実機での段階ごとの値の確認は取得担当へ引き渡す。

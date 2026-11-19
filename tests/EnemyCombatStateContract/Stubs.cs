@@ -182,6 +182,33 @@ namespace MegaCrit.Sts2.Core.Models.Monsters
         public void Set(bool value) => _hasBeetleCharged = value;
     }
 
+    // 本物の HasSpoken / SpeechUsed は private で、setter に AssertMutable がある。MOD はフィールドを読み、property は呼ばない。
+    public sealed class GremlinMerc : MonsterModel
+    {
+        private bool _hasSpoken;
+        public int PropertyReads { get; private set; }
+        private bool HasSpoken
+        {
+            get { PropertyReads++; return _hasSpoken; }
+            set { PropertyReads++; _hasSpoken = value; }
+        }
+        public void Set(bool value) => _hasSpoken = value;
+        public bool Peek() => _hasSpoken;
+    }
+
+    public sealed class KinPriest : MonsterModel
+    {
+        private bool _speechUsed;
+        public int PropertyReads { get; private set; }
+        private bool SpeechUsed
+        {
+            get { PropertyReads++; return _speechUsed; }
+            set { PropertyReads++; _speechUsed = value; }
+        }
+        public void Set(bool value) => _speechUsed = value;
+        public bool Peek() => _speechUsed;
+    }
+
     public sealed class KnowledgeDemon : MonsterModel
     {
         private int _curseOfKnowledgeCounter;

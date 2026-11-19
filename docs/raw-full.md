@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.0.0",        // Contract version (semver) — see below
+  "schema": "1.1.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.0.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.1.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,10 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.0.0 (schema_version 12)`.
+`mod 0.4.0+<commit> · schema 1.1.0 (schema_version 12)`. Since `1.0.0`:
+
+- **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
+  (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -2280,7 +2283,7 @@ Markdown は意図の行の `label` の後に `[attack: base 20 | hits 1 | resol
 #### 敵の戦闘内部状態（追加、schema 4）
 
 `battle.enemies[].combat_state` は許可リストの敵にだけ出す。滝の巨人（`WaterfallGiant`、schema 4 のときの追加）と、
-schema 6 で足した行動の入力の敵（下の表）。他の敵・旧 MOD では省略する（欠落は unknown）。生存敵・戦闘に残る死亡中の敵、単独・協力プレイで共通。
+schema 6 で足した行動の入力の敵（下の表）と、schema 1.1.0 で足した台詞の印の敵（傭兵グレムリン・キンの司祭）。他の敵・旧 MOD では省略する（欠落は unknown）。生存敵・戦闘に残る死亡中の敵、単独・協力プレイで共通。
 宣言型 `WaterfallGiant` の private フィールドと、副作用の無い getter を宣言型・型を検査して読むだけで、
 move の実行・初期化・乱数・履歴の集計はしない。HP・行動 ID・パワー・Ascension の値から作らない。
 すべて非負の int（`is_about_to_blow` だけ bool）で、false・0 も実値。
@@ -2337,6 +2340,20 @@ false・0・負の値も実値（`turns_until_summonable` は行動のたびに�
 
 表示・効果音・アニメーションだけに使うフィールド（`LouseProgenitor._curled`、`CubexConstruct._isBurrowed` など）と、
 初期地点の選択だけに使うフィールド（`move_state.initial_state_id` で読める）は載せない。
+
+#### 敵の台詞の印（schema 1.1.0）
+
+`cat12079801/sts2#1065`。行動の本体の条件分岐が読む台詞の印。分岐の先は台詞（`TalkCmd`）と待ちだけで、
+攻撃・盗み・付与の量と行動の遷移は変わらないが、ソースから生成した行動表の条件を未観測のまま残さないために出す。
+宣言型・型を検査した private bool フィールドを読むだけで、`AssertMutable` の setter を持つ property は呼ばない。
+false も実値（まだ話していない）。行動ログ・`move_state.state_log` から作らない。読取失敗は上と同じく該当項目を `null`・理由・warnings にし、false で補わない。
+
+| 敵 | 項目 | 読取元・使われ方 |
+| --- | --- | --- |
+| `GremlinMerc` | `has_spoken` | private bool `_hasSpoken`（`HasSpoken` の実体）。`GimmeMove` の最初と最後の条件分岐（`!HasSpoken && GameMode != Blitz` で攻撃の前、`== Blitz` で `Steal` の後）が true にして台詞を出す。初期値 false、戦闘中に false へ戻す処理は無い。`GameMode` は `battle.enemy_move_context.game_mode`、`Steal` の入力は泥棒（`THIEVERY_POWER`）の status 行（`amount`・`stolen_gold`・`target_player_id`）と player の所持金 |
+| `KinPriest` | `speech_used` | private bool `_speechUsed`（`SpeechUsed` の実体）。`RitualMove` の条件分岐 `!SpeechUsed` が true にして台詞を出す。筋力の付与は分岐の外。初期値 false、戻す処理は無い |
+
+Markdown は `Combat state: has spoken: no` の形（読取失敗は `null (理由)`）。
 
 ### `hand_select` — In-Combat Card Selection
 

@@ -18,6 +18,8 @@ public static partial class McpMod
     // battle.enemy_move_context）に出ないもの（sts2#1018 の抽出器の依存の対応表）。表示・効果音だけに使う
     // フィールド（LouseProgenitor._curled など）と、初期地点の選択だけに使うフィールド
     // （move_state.initial_state_id で読める Chomper._screamFirst など）は載せない。
+    // 台詞だけを分ける印（GremlinMerc._hasSpoken・KinPriest._speechUsed）は、行動の本体の条件分岐が読むので載せる
+    // （sts2#1065。生成表の条件を未観測のまま残さない）。
     private static Dictionary<string, object?>? BuildEnemyCombatState(MonsterModel? monster, string entityId)
     {
         var state = new Dictionary<string, object?>();
@@ -65,6 +67,15 @@ public static partial class McpMod
             case FrogKnight knight:
                 // 条件分岐 HasBeetleCharged || HP >= MaxHp / 2。BeetleChargeMove が true にする。
                 Field<bool>("has_beetle_charged", knight, typeof(FrogKnight), "_hasBeetleCharged");
+                break;
+            case GremlinMerc merc:
+                // GimmeMove の条件分岐（!HasSpoken && GameMode != Blitz / == Blitz）。真の側は true にして台詞（TalkCmd）と
+                // 待ちだけを行い、攻撃・Steal・行動の遷移は変えない。初回の GIMME_MOVE の後に true。
+                Field<bool>("has_spoken", merc, typeof(GremlinMerc), "_hasSpoken");
+                break;
+            case KinPriest priest:
+                // RitualMove の条件分岐（!SpeechUsed）。真の側は true にして台詞（TalkCmd）だけを行い、筋力の付与は変えない。
+                Field<bool>("speech_used", priest, typeof(KinPriest), "_speechUsed");
                 break;
             case KnowledgeDemon demon:
                 // 条件分岐（< 3 なら CURSE_OF_KNOWLEDGE）と、ChooseCurse の呪いの組・DisintegrationDamageValues の添字。

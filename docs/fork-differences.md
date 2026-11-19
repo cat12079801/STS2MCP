@@ -20,7 +20,7 @@
 
 - **版の情報**: state の応答（`state_type` を持つもの。`menu`、マルチの `error`、`wait: true` の POST が返す `state` を含む）と `GET /` が `mod_version`（`GET /` は `version`）/ `mod_commit`（同 `commit`）/ `schema` / `schema_version` を返す。state の読み取りに失敗した 500、503 の `retry: true`、POST のアクションの結果とエラー、profile・図鑑・wiki のエンドポイントは返さない。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.0.0"`（整数の `schema_version` 12 の契約そのもの）。Markdown は先頭の行に `mod … · schema 1.0.0 (schema_version 12)` と出す。
+- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.1.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state` を足した追加）。Markdown は先頭の行に `mod … · schema 1.1.0 (schema_version 12)` と出す。
   - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクション・列挙の値・`state_type` を消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
   - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type`、既存の列挙の項目〔`resolving_reasons`・`upgrade_preview.status`・`can_use_now_reason` など〕の新しい値を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する。知らない値は未観測として安全側で止め、既知の値に読み替えない
   - PATCH: 契約を変えない直し（文書の意味のとおりでなかった値を正す、文書・表示の直し）
@@ -137,6 +137,7 @@
   `combat_state` を行動の分岐・効果量に効く private の現在値の敵（`Nibbit`・`Toadpole` の前列、`Fabricator` の直前の召喚、`TwoTailedRat` の召喚の待ち・回数、`TestSubject` の復活回数など 12 種）に広げ、
   儀式の status 行に `was_just_applied_by_enemy`。`GetNextState`・`RollMove`・乱数・delegate は呼ばない。項目ごとに成否（null・理由・warnings）を持つ。
   [入力契約と出典](raw-full.md#敵の行動の入力schema-6)（`cat12079801/sts2#1018`）
+- **敵の台詞の印**（schema 1.1.0）: 行動の本体の条件分岐が読む台詞の印を `combat_state` に出す。傭兵グレムリン（`GremlinMerc`）の `has_spoken`（private `_hasSpoken`。`GimmeMove` が初回に true にして台詞を出す）と、キンの司祭（`KinPriest`）の `speech_used`（private `_speechUsed`。`RitualMove` が初回に true にして台詞を出す）。どちらも分岐の先は台詞と待ちだけで、攻撃・盗み・筋力の量と行動の遷移は変わらない。false も実値で、行動ログから作らない。読取失敗は null・理由・warnings。[入力契約と出典](raw-full.md#敵の台詞の印schema-110)（`cat12079801/sts2#1065`）
 - **敵の攻撃の意図**: `battle.enemies[].intents[]` の Attack / DeathBlow（`AttackIntent`）に `attack: {readable, base_damage, hits, resolved_damage}` を公開する。`base_damage` は現在の `AttackIntent.DamageCalc()` の補正前の decimal（invariant culture の文字列）、`hits` は `Repeats`、`resolved_damage` はローカルのプレイヤーが対象のときの `GetSingleDamage`（筋力・脆弱・脱力など込み）。ラベル・本文から逆算しない。ローカルのプレイヤーが居ないときの補正前の値を解決値として出さない。三値の取得成功時だけ `readable=true`、失敗項目は null・項目別理由・個体と意図の位置を識別する warnings。Markdown の意図の行に `[attack: base … | hits … | resolved …]` を表示。単独・協力プレイと死亡中の敵で共通、版は上げていない（schema 4 のときの追加）。[入力契約と出典](raw-full.md#敵の攻撃の意図追加schema-4)（#93、`cat12079801/sts2#956`）
 - **パワー（`status[]`）**:
   - `amount` は実効のスタック数（`PowerModel.Amount`）。UI の表示値と違うときだけ `display_amount`（#23）

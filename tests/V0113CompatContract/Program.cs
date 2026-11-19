@@ -10,7 +10,7 @@ namespace STS2_MCP
         private const string Version = "test-mod";
         private const string BuildCommit = "test-mod-commit";
         private const int StateSchemaVersion = 12;
-        private const string StateSchema = "1.0.0";
+        private const string StateSchema = "1.1.0";
         private static int Checks;
         private static void Check(bool condition, string message)
         {
@@ -40,7 +40,7 @@ namespace STS2_MCP
             Check(mod.Contains("[\"schema\"] = StateSchema,") && mod.Contains("[\"schema_version\"] = StateSchemaVersion,"),
                 "GET / hello carries schema and the deprecated schema_version");
             // The Markdown header line, built by the production helper from a stamped state.
-            Check(FormatStampLine(NewStateResult("menu")) == $"mod {Version}+{BuildCommit} · schema 1.0.0 (schema_version 12)",
+            Check(FormatStampLine(NewStateResult("menu")) == $"mod {Version}+{BuildCommit} · schema {StateSchema} (schema_version 12)",
                 "Markdown header line shows the semver and the deprecated integer");
             Check(FormatStampLine(new() { ["mod_version"] = "0.4.0", ["schema"] = "1.2.3" }) == "mod 0.4.0 · schema 1.2.3",
                 "Markdown header without the integer or commit");
@@ -138,7 +138,7 @@ namespace STS2_MCP
                 Check(Equals(state["game_version"], "v0.113.0") && Equals(state["game_commit"], "16ac0fe3"), "release stamp " + type);
                 Check(Equals(state["mod_version"], Version) && Equals(state["mod_commit"], BuildCommit)
                     && Equals(state["schema_version"], 12), "independent mod/schema stamp");
-                Check(Equals(state["schema"], "1.0.0"), "every stamped state carries the semver schema " + type);
+                Check(Equals(state["schema"], StateSchema), "every stamped state carries the semver schema " + type);
                 Check(state["scenario_capabilities"] is Dictionary<string, object?> caps && Equals(caps["setup_guard"], 1)
                     && Equals(caps["selection_uid"], 1) && Equals(caps["potion_availability"], 1), "every stamped state carries scenario_capabilities (sts2#1037, potion_availability sts2#1012)");
             }
@@ -153,7 +153,7 @@ namespace STS2_MCP
                 Check(state["game_version"] == null && state["game_commit"] == null,
                     "release exception leaves nullable metadata");
                 Check(Equals(state["state_type"], "menu") && Equals(state["mod_version"], Version)
-                    && Equals(state["schema_version"], 12) && Equals(state["schema"], "1.0.0"),
+                    && Equals(state["schema_version"], 12) && Equals(state["schema"], StateSchema),
                     "release exception preserves state response");
                 ReleaseInfoManager.FailInstance = ReleaseInfoManager.FailReleaseInfo = false;
             }
@@ -184,7 +184,7 @@ namespace STS2_MCP
             Check(stateSource.Contains("var result = NewStateResult();") &&
                 File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("var result = NewStateResult();"), "both state builders stamped");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
-            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const string StateSchema = \"1.0.0\";"), "published schema is semver 1.0.0 (schema_version 12 is frozen)");
+            Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains($"public const string StateSchema = \"{StateSchema}\";"), $"published schema is semver {StateSchema} (schema_version 12 is frozen)");
             CheckSemverSchema(sources);
             Console.WriteLine($"v0.113 compatibility contract: {Checks} checks passed");
         }

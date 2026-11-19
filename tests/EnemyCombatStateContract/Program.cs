@@ -195,6 +195,8 @@ public static partial class McpMod
         cases.Add((rock, ["is_off_balance"], [true], "is off balance: yes"));
         var knight = new FrogKnight();
         cases.Add((knight, ["has_beetle_charged"], [false], "has beetle charged: no"));
+        cases.Add((new GremlinMerc(), ["has_spoken"], [false], "has spoken: no"));
+        cases.Add((new KinPriest(), ["speech_used"], [false], "speech used: no"));
         var demon = new KnowledgeDemon(); demon.Set(3);
         cases.Add((demon, ["curse_of_knowledge_counter"], [3], "curse of knowledge counter: 3"));
         cases.Add((new LivingFog(), ["bloat_amount"], [1], "bloat amount: 1"));
@@ -221,6 +223,8 @@ public static partial class McpMod
         axebot.Set(1);
         Check(Equals(ReadAny(axebot, "AXEBOT_0")["stock_amount"], 1), "Axebot は StockAmount の getter（_stockOverrideAmount ?? 2）");
 
+        CheckSpeechFlags(wireOptions);
+
         // ファブリケーターの直前の召喚: 実 null（まだ召喚なし）と読取失敗を区別する。
         var fabricator = new Fabricator();
         var first = ReadAny(fabricator, "FABRICATOR_0");
@@ -239,6 +243,63 @@ public static partial class McpMod
             && _stateWarnings.Single().StartsWith("battle.enemies.FABRICATOR_0.combat_state.last_spawned_id"),
             "ID が読めないときは readable=false・理由・warnings（まだ召喚なしと区別）");
         Check(Markdown(noEntry).StartsWith("**Combat state:** last spawned id: null (InvalidOperationException"), "Markdown に理由");
+    }
+
+    // sts2#1065: 台詞だけを分ける印（GremlinMerc._hasSpoken・KinPriest._speechUsed）。行動の本体の条件分岐が読む。
+    // false（まだ話していない）と true は実値、読取失敗は null と理由・warnings で、false に補わない。
+    private static void CheckSpeechFlags(JsonSerializerOptions wireOptions)
+    {
+        var merc = new GremlinMerc();
+        var priest = new KinPriest();
+        var flags = new (MonsterModel Monster, string Entity, string Key, string Label, Action<bool> Set, Func<bool> Peek, Func<int> PropertyReads, Type Declaring, string Field)[]
+        {
+            (merc, "GREMLIN_MERC_0", "has_spoken", "has spoken", merc.Set, merc.Peek, () => merc.PropertyReads, typeof(GremlinMerc), "_hasSpoken"),
+            (priest, "KIN_PRIEST_0", "speech_used", "speech used", priest.Set, priest.Peek, () => priest.PropertyReads, typeof(KinPriest), "_speechUsed")
+        };
+        foreach (var flag in flags)
+        {
+            string name = flag.Monster.GetType().Name;
+            foreach (bool value in new[] { false, true, false })
+            {
+                flag.Set(value);
+                var state = ReadAny(flag.Monster, flag.Entity);
+                Check(state.Keys.SequenceEqual([flag.Key]) && state[flag.Key] is bool read && read == value,
+                    $"{name}: {flag.Key} を bool の実値で出す（{value}）");
+                Check(!state.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, $"{name}: 成功時に理由・警告なし（{value}）");
+                Check(Markdown(state) == $"**Combat state:** {flag.Label}: {(value ? "yes" : "no")}", $"{name}: Markdown（{value}）");
+                Check(flag.Peek() == value && flag.PropertyReads() == 0, $"{name}: 読取でフィールドを変えず、property（AssertMutable の setter）を呼ばない");
+                using var json = JsonDocument.Parse(JsonSerializer.Serialize(state, wireOptions));
+                Check(json.RootElement.GetProperty(flag.Key).ValueKind == (value ? JsonValueKind.True : JsonValueKind.False),
+                    $"{name}: wire でも false を省略せず bool のまま（{value}）");
+            }
+            flag.Set(true);
+            var snapshot = ReadAny(flag.Monster, flag.Entity);
+            flag.Set(false);
+            Check(snapshot[flag.Key] is true && ReadAny(flag.Monster, flag.Entity)[flag.Key] is false, $"{name}: 前回の snapshot は独立");
+
+            // 読取失敗（フィールドの欠落・型違い）は null と理由・warnings。false で補わない。
+            string context = $"battle.enemies.{flag.Entity}.combat_state";
+            foreach (var (read, reason) in new (Func<object?>, string)[]
+            {
+                (() => ReadDeclaredStateField<bool>(flag.Monster, flag.Declaring, flag.Field + "Removed"), "MissingFieldException"),
+                (() => ReadDeclaredStateField<int>(flag.Monster, flag.Declaring, flag.Field), "InvalidOperationException: Expected non-null Int32")
+            })
+            {
+                BeginStateWarnings();
+                var failed = new Dictionary<string, object?>();
+                ReadInternalStateValue(failed, flag.Key, read, context);
+                var reasons = (Dictionary<string, string>)failed["unavailable_reasons"]!;
+                Check(failed.ContainsKey(flag.Key) && failed[flag.Key] == null && reasons[flag.Key].Contains(reason),
+                    $"{name}: 読取失敗は null と理由（{reason}）");
+                Check(_stateWarnings.Single().StartsWith($"{context}.{flag.Key}"), $"{name}: warnings は個体と項目を識別");
+                Check(Markdown(failed) == $"**Combat state:** {flag.Label}: null ({reasons[flag.Key]})" && Markdown(failed).Contains(reason),
+                    $"{name}: Markdown は no と区別して null と理由");
+                using var json = JsonDocument.Parse(JsonSerializer.Serialize(failed, wireOptions));
+                Check(json.RootElement.GetProperty(flag.Key).ValueKind == JsonValueKind.Null
+                    && json.RootElement.GetProperty("unavailable_reasons").TryGetProperty(flag.Key, out _), $"{name}: null と理由が wire に残る");
+                Check(!flag.Peek() && flag.PropertyReads() == 0, $"{name}: 失敗の読取でも値を変えない");
+            }
+        }
     }
 
     private static Dictionary<string, object?> Context(ICombatState combat)

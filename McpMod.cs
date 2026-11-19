@@ -45,8 +45,9 @@ public static partial class McpMod
     /// still moves by the rules above for what changed. Canonical rules: docs/raw-full.md.
     ///
     /// 1.0.0 is exactly the contract of the deprecated integer schema_version 12.
+    /// 1.1.0: battle.enemies[].combat_state covers GremlinMerc (has_spoken) and KinPriest (speech_used).
     /// </summary>
-    public const string StateSchema = "1.0.0";
+    public const string StateSchema = "1.1.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to
