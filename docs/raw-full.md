@@ -907,11 +907,16 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   手番の境界は `from_hand_draw` と、今の手番の `card_play_events_this_turn` との突き合わせで読む。
 - **出さないもの**: 山札の順・まだ引いていない札・乱数・次の対象。ドローの行は手札に入った札（画面に表を向けて出た札）だけで、
   生成の行は札の ID と uid だけ（山の中の位置は出さない。生成札は `draw_pile` などの一覧にもすでに出ている）。
+  また、この列は札の移動のすべてではない。シャッフル（`CardPileCmd.Shuffle`）と、ドローでない山の移動（`CardPileCmd.Add` で
+  山札・捨て札・廃棄札から手札へ、または山札の上へ動かす効果。`Wish`・`LockedIn`・`SeekerStrike` などの札）は `CardDrawnEntry` を作らないので行にならない。
+  手札に入った経路のすべて・山の中身の変化のすべてとして読まず、山の中身は 4 山の一覧（`hand` / `draw_pile` / `discard_pile` / `exhaust_pile`）で読む。
 - **重複・順序**: 同じ札の再ドロー・同じ札の複数回のプレイ（自動プレイ・リプレイ）は行ごとに残す。並べ替え・重複除去・要約をしない。
   入れ子（親の開始 → 子のドローと自動プレイ → 親の完了）も記録の順のまま。
 - **失敗**: 読取（History・entry の判定・各 getter・対象の `CombatId`）のどれかに失敗したら配列全体を `null` にし、
   `unavailable_reasons.card_resolution_events` と warning `player.combat_history.card_resolution_events` を出す。1 行を飛ばした短い列は返さない。
-  正常な空の戦闘履歴は `[]`。
+  正常な空の戦闘履歴は `[]`。行は戦闘の終わりまで消えずに残るので、ある行が読めなくなったら、その戦闘の後の snapshot も
+  `null` のままになりうる（v0.113.1 では起きる経路を確認していない。`CombatId` は消されず、uid は必ず振れる）。
+  利用側はこれを未観測として扱い、止まる側に倒す（短い列や空の列に読み替えない）。
 - **戦闘の終わり**: 勝利の後の state（報酬・マップ）には `combat_history` が無く、本体の履歴も消えるので、最後の操作の後の行は出ない。
   終局の値は報酬の画面の HP などの公開値で読む。
 - **Markdown**: 列が長いので、History 行に `resolution events=13 (draw:4, play:5, generated:4)` のように種類ごとの件数だけを出す
