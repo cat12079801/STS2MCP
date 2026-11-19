@@ -50,8 +50,10 @@ public static partial class McpMod
     /// (McpMod.StateAllowlist.Generated.cs, built from docs/state-inventory-classification.json).
     /// 1.3.0: every power row's internal_state carries applier_combat_id (PowerModel._applier) and
     /// target_combat_id (PowerModel._target), whatever the power's subclass.
+    /// 1.4.0: every selection state (*_select) shown while a fight is in progress carries battle, built the
+    /// same way as the fight's own screen (the grid card_select such as NCombatPileCardSelectScreen too).
     /// </summary>
-    public const string StateSchema = "1.3.0";
+    public const string StateSchema = "1.4.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

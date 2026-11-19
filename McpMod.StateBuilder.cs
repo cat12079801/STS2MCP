@@ -447,10 +447,6 @@ public static partial class McpMod
         {
             result["state_type"] = "card_select";
             result["card_select"] = BuildChooseCardState(chooseCardScreen, runState);
-            // A potion's choose screen pauses PotionModel.OnUse mid-combat: report the same
-            // battle snapshot as hand_select. Never fabricate one outside a live fight.
-            if (currentRoom is CombatRoom chooseCombatRoom && CombatManager.Instance.IsInProgress)
-                result["battle"] = BuildBattleState(runState, chooseCombatRoom);
         }
         else if (topOverlay is NChooseABundleSelectionScreen bundleScreen)
         {
@@ -522,7 +518,7 @@ public static partial class McpMod
                 {
                     result["state_type"] = "hand_select";
                     result["hand_select"] = BuildHandSelectState(playerHand, runState);
-                    result["battle"] = BuildBattleState(runState, combatRoom);
+                    // battle is attached below with every other selection screen of a live fight.
                 }
                 else
                 {
@@ -638,6 +634,17 @@ public static partial class McpMod
             result["state_type"] = "unknown";
             result["room_type"] = currentRoom?.GetType().Name;
         }
+
+        // Every selection screen shown while a fight is in progress (hand_select, the grid and
+        // choose-a-card card_select such as Stratagem's or a potion's pick, bundle_select,
+        // relic_select, and any later *_select) carries the same battle snapshot as the fight's own
+        // screen. Decided by "a fight is in progress", not by the screen class; never fabricated
+        // outside a live fight (see ShouldAttachSelectionBattle).
+        if (currentRoom is CombatRoom selectionCombatRoom
+            && ShouldAttachSelectionBattle(
+                result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
+                inCombatRoom: true, CombatManager.Instance.IsInProgress))
+            result["battle"] = BuildBattleState(runState, selectionCombatRoom);
 
         // Common run info
         result["run"] = new Dictionary<string, object?>

@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.3.0",        // Contract version (semver) — see below
+  "schema": "1.4.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.3.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.4.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.3.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.4.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -131,6 +131,10 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.3.0** — every power row's `internal_state` carries `applier_combat_id` (`PowerModel._applier`) and
   `target_combat_id` (`PowerModel._target`), whatever the power's subclass. The Hex row's own `applier_combat_id` /
   `applier_readable` are a copy of that value. See [棚卸しから生成した内部状態](#棚卸しから生成した内部状態internal_stateschema-120).
+- **1.4.0** — every selection state (`state_type` ending in `_select`) shown while a fight is in progress carries
+  `battle`, built the same way as the fight's own screen: the grid `card_select` (`NCombatPileCardSelectScreen` of
+  Stratagem and the like), `bundle_select` and `relic_select` too, not only `hand_select` and the choose-a-card screen.
+  See [戦闘中の選択画面の battle](#戦闘中の選択画面の-battleschema-140).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -1788,8 +1792,8 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 
 解決中の印（`current_play_index`・`current_target_combat_id`・`transform_into_after_play_id`・`cards_in_hand_at_turn_end`・`card_being_played_uid`・`affected_card_uid`・`attack_to_double_uid`・`doubled_power_ids`）は、
 カードのプレイ・攻撃・ターン終了の解決の途中でだけ値を持ち、安定した state では既定値（null・0・空）が多い。
-解決の途中で値を観測できるのは、`battle` を付ける選択画面（戦闘中の `hand_select` と、ポーションなどの choose-a-card）だけ。
-戦闘中のグリッドの選択画面（`card_select`）は `battle` を付けないので、そこではカードの行の印も出ない。
+解決の途中で値を観測できるのは、戦闘中の選択画面（`hand_select`・`card_select` の grid と choose-a-card など。
+[`battle` を付ける](#戦闘中の選択画面の-battleschema-140)）だけ。
 `triggering_card_uid` は解決の途中でなくても戦闘の終わりまで残る（上の表）。
 
 Markdown は既定値（false・0・空・理由の無い null・`Normal`）を省き、`(internal: is dupe yes, extra damage 5)` の形で行に足す。
@@ -2868,6 +2872,24 @@ list could not be read; do not select using a partial or stale list. Schema 4 re
 produces a `card_select.selected` warning without rewriting the game's selection.
 Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombatPileCardSelectScreen`).
 
+#### 戦闘中の選択画面の battle（schema 1.4.0）
+
+戦闘中（現在の部屋が `CombatRoom` で `CombatManager.IsInProgress`）に出る**選択画面の state すべて**に、戦闘の画面
+（`monster` / `elite` / `boss`）と同じ作り方の `battle`（単独は `BuildBattleState`、マルチは `BuildMultiplayerBattleState`）を付ける。
+選択画面は `state_type` が `_select` で終わるもの（`hand_select`、grid と choose-a-card の `card_select`、`bundle_select`、
+`relic_select`）。画面のクラスでなく `state_type` で決めるので、計略（Stratagem）のシャッフル後の選択・未来視の雫などの
+`NCombatPileCardSelectScreen`（`screen_type` はクラス名のまま）も、今後 `_select` の state に入る画面も同じく付く。
+
+- `state_type` は変えない。`player` は従来どおり戦闘中なら 4 つの山・手札・エナジー・status を持つ（`battle` の有無によらない）。
+- `battle` の中身と隠す情報は戦闘の画面と同じ（山札の順は出さない）。手番の初めのドローの途中で開いた画面では
+  `is_play_phase` が false のことがある。
+- 戦闘の前後（`IsInProgress` が false）・戦闘外の部屋の選択画面、選択画面でない state（`map`・`menu`・`game_over`・
+  `card_reward`・`rewards`・未対応の `overlay`）には付けない。
+- Markdown は `battle` があると戦闘の表示（敵・手札・山）を出し、トップレベルの player の要約を省く（戦闘の画面と同じ）。
+
+出典（v0.113.1、`sts2-a671e9ef`）: `NCombatPileCardSelectScreen : NCardGridSelectionScreen`。
+[SelectionBattleContract](../tests/SelectionBattleContract/README.md)
+
 #### 選択候補の個体（`combat_instance`、schema 7）
 
 戦闘中（`CombatManager.IsInProgress` で combat state が取れる間）の選択画面の候補行（`card_select` の grid・choose、
@@ -3035,8 +3057,8 @@ global のフック（`Hook.ModifyEnergyCostInCombat`）を適用しない。よ
 （`CardModel.CombatState != null`。候補では通常 `false`、読めなければ `null`）を付ける。
 `false` の行の `with_all_modifiers` は `with_local_modifiers` と同じ範囲の値で、手札の行の同名キーと同じ意味ではない。
 
-同じ条件で画面に `battle`（`BuildBattleState`。単独・マルチとも戦闘画面と同じ）を付け、`card_select.continuation_context` に
-選択後の継続で通知を受ける listener を出す。
+画面には戦闘中のほかの選択画面と同じく `battle` が付き（[戦闘中の選択画面の battle](#戦闘中の選択画面の-battleschema-140)）、
+同じ条件で `card_select.continuation_context` に選択後の継続で通知を受ける listener を出す。
 
 この欄は**戦闘中のすべての choose 画面**に付く（3 択ポーションのほか、発見系の札・豊穣・知識の呪いなど敵の手番に出る画面も）。
 MOD は画面を開いた親の操作を区別しない。4 通知はポーション（`AttackPotion` などの `OnUse` → `OnUseWrapper`）の継続の定義で、

@@ -93,9 +93,6 @@ public static partial class McpMod
         {
             result["state_type"] = "card_select";
             result["card_select"] = BuildChooseCardState(chooseCardScreen, runState);
-            // Same as singleplayer: a combat choose screen carries the live battle snapshot.
-            if (currentRoom is CombatRoom chooseCombatRoom && CombatManager.Instance.IsInProgress)
-                result["battle"] = BuildMultiplayerBattleState(runState, chooseCombatRoom);
         }
         else if (topOverlay is NChooseABundleSelectionScreen bundleScreen)
         {
@@ -142,7 +139,7 @@ public static partial class McpMod
                 {
                     result["state_type"] = "hand_select";
                     result["hand_select"] = BuildHandSelectState(playerHand, runState);
-                    result["battle"] = BuildMultiplayerBattleState(runState, combatRoom);
+                    // battle is attached below with every other selection screen of a live fight.
                 }
                 else
                 {
@@ -240,6 +237,13 @@ public static partial class McpMod
             result["state_type"] = "unknown";
             result["room_type"] = currentRoom?.GetType().Name;
         }
+
+        // Same as singleplayer: every selection screen of a live fight carries the battle snapshot.
+        if (currentRoom is CombatRoom selectionCombatRoom
+            && ShouldAttachSelectionBattle(
+                result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
+                inCombatRoom: true, CombatManager.Instance.IsInProgress))
+            result["battle"] = BuildMultiplayerBattleState(runState, selectionCombatRoom);
 
         // Common run info
         result["run"] = new Dictionary<string, object?>

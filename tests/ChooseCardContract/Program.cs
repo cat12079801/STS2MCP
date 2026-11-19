@@ -264,9 +264,10 @@ namespace STS2_MCP
             Check(!choose.Contains("SetToFreeThisTurn") && !choose.Contains("CreateCard") && !choose.Contains("EmitSignal"), "GET で無料化・生成・選択をしない");
             int chooseBranch = builder.IndexOf("BuildChooseCardState(chooseCardScreen, runState);", StringComparison.Ordinal);
             string afterChoose = builder[chooseBranch..builder.IndexOf("NChooseABundleSelectionScreen bundleScreen", chooseBranch, StringComparison.Ordinal)];
-            Check(afterChoose.Contains("currentRoom is CombatRoom chooseCombatRoom && CombatManager.Instance.IsInProgress") && afterChoose.Contains("result[\"battle\"] = BuildBattleState(runState, chooseCombatRoom)"), "戦闘中の choose だけに battle を付ける");
+            // 戦闘中の choose の battle は、選択画面の共通の配線（ShouldAttachSelectionBattle）で付ける。詳細は SelectionBattleContract。
+            Check(!afterChoose.Contains("result[\"battle\"]") && builder.Contains("result[\"battle\"] = BuildBattleState(runState, selectionCombatRoom)"), "戦闘中の choose の battle は選択画面の共通の配線で付ける");
             string multi = File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs"));
-            Check(multi.Contains("result[\"battle\"] = BuildMultiplayerBattleState(runState, chooseCombatRoom)"), "マルチも同じ");
+            Check(multi.Contains("result[\"battle\"] = BuildMultiplayerBattleState(runState, selectionCombatRoom)"), "マルチも同じ");
             string cardState = builder[builder.IndexOf("private static Dictionary<string, object?> BuildCardState", StringComparison.Ordinal)..];
             Check(cardState[..cardState.IndexOf("return state;", StringComparison.Ordinal)].Contains("state[\"star_cost_state\"] = BuildCardStarCostState(card)"), "手札にもスターの状態");
             string piles = builder[builder.IndexOf("private static List<Dictionary<string, object?>> BuildPileCardList", StringComparison.Ordinal)..];
