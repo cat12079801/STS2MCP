@@ -1,0 +1,1192 @@
+{
+ "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。",
+ "AbstractModel.CategorySortingId": {
+  "class": "static/derived",
+  "note": "ModelDb の並び順（InitId）。ゲームの状態ではない"
+ },
+ "AbstractModel.EntrySortingId": {
+  "class": "static/derived",
+  "note": "ModelDb の並び順（InitId）。ゲームの状態ではない"
+ },
+ "AbstractModel.IsMutable": {
+  "class": "static/derived",
+  "note": "インスタンスが可変（正規インスタンスでない）かの印。MOD の内部の検査に使うだけで、ゲームの状態ではない"
+ },
+ "AfflictionModel._card": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "AfterimagePower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "AimPower.Data.amountWhenAttackStarted": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。攻撃の開始時の量（Vigor と同じ形）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。",
+  "json_key": "amount_when_started",
+  "effect": "AfterAttack",
+  "pool": "other-character"
+ },
+ "AimPower.Data.commandToModify": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。",
+  "json_key": "has_command_to_modify",
+  "effect": "ModifyDamageAdditive・AfterAttack",
+  "pool": "other-character"
+ },
+ "ArchaicTooth._serializableAncientCard": {
+  "class": "static/derived",
+  "note": "エンシェントが提示するとき（SetupForPlayer）に決め、取得時（AfterObtained）にだけ効く。取得後は表示（ホバー・タイトル）にしか使わない"
+ },
+ "ArchaicTooth._serializableStarterCard": {
+  "class": "static/derived",
+  "note": "エンシェントが提示するとき（SetupForPlayer）に決め、取得時（AfterObtained）にだけ効く。取得後は表示（ホバー・タイトル）にしか使わない"
+ },
+ "Axebot._stockOverrideAmount": {
+  "class": "exposed",
+  "note": "public getter StockAmount（_stockOverrideAmount ?? 2）として combat_state.stock_amount に出ている（McpMod.EnemyCombatState.cs:58）"
+ },
+ "BathRobes._wasUsed": {
+  "class": "exposed",
+  "note": "IsUsedUp => _wasUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722）"
+ },
+ "BoneTea._combatsLeft": {
+  "class": "exposed",
+  "note": "setter が DynamicVars[\"Combats\"] に写す。レリックの vars.Combats に出ている（McpMod.RelicCombatState.cs:271）"
+ },
+ "BookOfFiveRings._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "Byrdine._hair": {
+  "class": "cosmetic",
+  "note": "見た目（ペットの髪型）"
+ },
+ "Byrdpip[relic]._swoopsPlayed": {
+  "class": "exposed",
+  "note": "DisplayAmount = Math.Min(SwoopsPlayed, 6)。AfterCardPlayed は 6 以上なら数えないので値は 6 を超えず、counter と一致（McpMod.StateBuilder.cs:1721）"
+ },
+ "CardEnergyCost.WasJustUpgraded": {
+  "class": "cosmetic",
+  "note": "強化直後のコストを強調表示する印（CalculatedVar の表示）"
+ },
+ "CardEnergyCost._base": {
+  "class": "exposed",
+  "note": "energy_cost.base_raw（GetWithModifiers(None)。McpMod.CardEnergyCost.cs:46）"
+ },
+ "CardEnergyCost._card": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）"
+ },
+ "CardModel.HasBeenRemovedFromState": {
+  "class": "static/derived",
+  "note": "state から外れたモデルの印（RemoveFromState）。外れたモデルは state の一覧に出ない"
+ },
+ "CardModel.ShouldShowInCardLibrary": {
+  "class": "static/derived",
+  "note": "コンストラクタで決まる定数（図鑑の表示）"
+ },
+ "CardModel._cloneOf": {
+  "class": "public",
+  "note": "複製元のカード（CloneOf / IsClone）。複製でできたカードは手札で見分けがつく。IsClone・DupeOf の判定に使う",
+  "json_key": "clone_of_uid",
+  "effect": "CardModel.IsClone・DupeOf（複製の扱い）"
+ },
+ "CardModel._currentPlayIndex": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む",
+  "json_key": "current_play_index",
+  "effect": "LethalityPower（初回のプレイだけ強化）"
+ },
+ "CardModel._currentTarget": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象",
+  "json_key": "current_target_combat_id",
+  "effect": "OnPlayWrapper の対象"
+ },
+ "CardModel._deckVersion": {
+  "class": "static/derived",
+  "note": "デッキ側の同じカードへの参照（戦闘のコピーの元）。MOD は uid の採番に使うだけ"
+ },
+ "CardModel._floorAddedToDeck": {
+  "class": "public",
+  "note": "デッキに入った階。人間は取得した階を覚えている。今の版で効果に読む箇所は見当たらず、保存と履歴に使う。優先度は低い",
+  "json_key": "floor_added_to_deck",
+  "effect": "保存（ToSerializable）。効果に読む箇所は見つからない",
+  "written": "CardPileCmd・CardCmd・Player・AscensionManager（FloorAddedToDeck = TotalFloor / 1）"
+ },
+ "CardModel._isDupe": {
+  "class": "public",
+  "note": "複製（Dupe）の印。結果の山（GetResultLocationForCardPlay・MoveToResultPileWithoutPlaying）が変わり、ChainsOfBindingPower・FeralPower が見分ける。作った経緯は見えている",
+  "json_key": "is_dupe",
+  "effect": "GetResultLocationForCardPlay・MoveToResultPileWithoutPlaying・ChainsOfBindingPower・FeralPower",
+  "written": "CreateDupe（CardModel.cs:2424 の IsDupe = true）"
+ },
+ "CardModel._isEnchantmentPreview": {
+  "class": "cosmetic",
+  "note": "エンチャントのプレビュー表示用のコピーの印（DamageVar などの表示値の計算を切り替える）"
+ },
+ "CardModel._isUpgrading": {
+  "class": "static/derived",
+  "note": "UpgradeInternal の実行中だけ true の一時値。state を読む安定点では false"
+ },
+ "CardModel._keywords": {
+  "class": "exposed",
+  "note": "キーワードはカードの keywords（HoverTips。McpMod.StateBuilder.cs:1826）に出る"
+ },
+ "CardModel._keywordsAddedFromOutside": {
+  "class": "public",
+  "note": "効果が後から付けたキーワード（AddKeyword）。強化の取り消し（DowngradeInternal・DampenPower）で元に戻すときに残すかを決める。付けた効果は見えている",
+  "json_key": "keywords_added",
+  "effect": "DowngradeInternal・DeepCloneFields"
+ },
+ "CardModel._keywordsRemovedFromOutside": {
+  "class": "public",
+  "note": "効果が後から外したキーワード（RemoveKeyword）。強化の取り消しで戻すときに使う",
+  "json_key": "keywords_removed",
+  "effect": "DowngradeInternal・DeepCloneFields"
+ },
+ "CardModel._lastStarsSpent": {
+  "class": "public",
+  "note": "直前に払った星（SpendStars）。星を X に使うカードの値（ResolveStarXValue）。星はリージェント専用",
+  "json_key": "last_stars_spent",
+  "effect": "ResolveStarXValue",
+  "pool": "other-character"
+ },
+ "CardModel._owner": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "CardModel._pool": {
+  "class": "static/derived",
+  "note": "カードの定義から決まる（プール・CanonicalTags・星のコストの初期化の印）"
+ },
+ "CardModel._starCostSet": {
+  "class": "static/derived",
+  "note": "カードの定義から決まる（プール・CanonicalTags・星のコストの初期化の印）"
+ },
+ "CardModel._tags": {
+  "class": "static/derived",
+  "note": "カードの定義から決まる（プール・CanonicalTags・星のコストの初期化の印）"
+ },
+ "CardModel._transformIntoAfterPlay": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定）",
+  "json_key": "transform_into_after_play_id",
+  "effect": "OnPlayWrapper の最後で TransformTo"
+ },
+ "CardModel._upgradePreviewType": {
+  "class": "cosmetic",
+  "note": "強化プレビューの表示の種類（UI）。MOD は強化プレビューの組み立ての検査に読むだけ"
+ },
+ "CardModel._wasStarCostJustUpgraded": {
+  "class": "cosmetic",
+  "note": "強化直後の星のコストを強調表示する印"
+ },
+ "CeremonialBeast._beastCryState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "CeremonialBeast._inMidCharge": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "CeremonialBeast._isInSecondPhase": {
+  "class": "cosmetic",
+  "note": "SetStunned が書くだけで、読む箇所が無い"
+ },
+ "CeremonialBeast._isStunnedByPlowRemoval": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "Chomper._screamFirst": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "Claw._extraDamageFromClawPlays": {
+  "class": "public",
+  "note": "BuffFromClawPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
+  "json_key": "extra_damage",
+  "effect": "AfterDowngraded"
+ },
+ "CombatState.BadgeModels": {
+  "class": "unknown",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+ },
+ "CombatState.Dominion": {
+  "class": "unknown",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+ },
+ "CombatState.Modifiers": {
+  "class": "unknown",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+ },
+ "CombatState.RunModels": {
+  "class": "unknown",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+ },
+ "CombatState.RunState": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "CombatState._allCards": {
+  "class": "static/derived",
+  "note": "戦闘中の全カード（AddCard・RemoveCard）。各山と手札の和で、山は出ている"
+ },
+ "CombatState._allies": {
+  "class": "public",
+  "note": "味方側のクリーチャー（プレイヤーとペット）。プレイヤー・pets として個別に出ているが、一覧としては出ていない。マルチプレイの味方を含む",
+  "json_key": "allies",
+  "effect": "Allies・Creatures・IterateHookListeners"
+ },
+ "CombatState._enemies": {
+  "class": "exposed",
+  "note": "battle.enemies（McpMod.StateBuilder.cs:1603）"
+ },
+ "CombatState._escapedCreatures": {
+  "class": "public",
+  "note": "逃げた敵（CreatureEscaped。ThievingHopper など）。画面から消えるのが見える。GremlinMercNormal が読む",
+  "json_key": "escaped_creature_ids",
+  "effect": "EscapedCreatures（GremlinMercNormal の報酬）"
+ },
+ "CombatState._nextCreatureId": {
+  "class": "static/derived",
+  "note": "次に振る combat_id の番号（AttachCreature）。採番の内部"
+ },
+ "ConductorsBaton._triggeredThisTurn": {
+  "class": "public",
+  "note": "このターンに発動したか",
+  "json_key": "triggered_this_turn",
+  "effect": "AfterCardPlayed"
+ },
+ "ConfusedPower._testEnergyCostOverride": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "CorpseSlug._isRavenous": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "CorpseSlug._starterMoveIdx": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "Creature.CombatState": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "Creature.HpDisplay": {
+  "class": "cosmetic",
+  "note": "HP の表示の種類（HardenedShellPower などが表示を切り替える）"
+ },
+ "Creature.Monster": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "Creature.MonsterMaxHpBeforeModification": {
+  "class": "static/derived",
+  "note": "修飾前の最大 HP（SetUniqueMonsterHpValue）。修飾後の最大 HP は出ている"
+ },
+ "Creature.Player": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "Creature._petOwner": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）"
+ },
+ "Creature._powers": {
+  "class": "exposed",
+  "note": "status（McpMod.StateBuilder.cs:1710・2129）"
+ },
+ "CrossbowRubyRaider._isCrossbowReloaded": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "CubexConstruct._isBurrowed": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "CubexConstruct._isCharging": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "DampenPower.Data.casters": {
+  "class": "exposed",
+  "note": "status の caster_combat_ids（McpMod.PowerInternalState.cs:430）"
+ },
+ "DampenPower.Data.downgradedCardsToOldUpgradeLevels": {
+  "class": "exposed",
+  "note": "status の downgraded_cards（McpMod.PowerInternalState.cs:446）"
+ },
+ "DarkOrb._evokeVal": {
+  "class": "public",
+  "note": "Passive のたびに増える発動値",
+  "json_key": "evoke_value",
+  "effect": "EvokeVal"
+ },
+ "DecimillipedeSegment._deadState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "DecimillipedeSegment._starterMoveIdx": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "Discovery._mockSelectedCard": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "Dowsing._roomsEntered": {
+  "class": "static/derived",
+  "note": "setter が DynamicVars[\"Rooms\"] = max(1, 4 - RoomsEntered) に写す。4 で変化するので 0〜3 の範囲で dynamic_vars.Rooms から一意に決まる"
+ },
+ "DustyTome._ancientCard": {
+  "class": "static/derived",
+  "note": "エンシェントが提示するとき（SetupForPlayer）に決め、取得時（AfterObtained）にだけ効く。取得後は表示（ホバー・タイトル）にしか使わない"
+ },
+ "EmberTea._combatsLeft": {
+  "class": "exposed",
+  "note": "setter が DynamicVars[\"Combats\"] に写す。レリックの vars.Combats に出ている（McpMod.RelicCombatState.cs:271）"
+ },
+ "EnchantmentModel.Props": {
+  "class": "static/derived",
+  "note": "保存用の SavedProperties の一時置き場（ToSerializable/FromSerializable）。mod-scan の検出（.Props）は戦闘履歴の別の型の誤検出"
+ },
+ "EnchantmentModel._card": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "EncorePower.Data.cardsBeingPlayed": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "json_key": "cards_being_played",
+  "effect": "ShouldPlay"
+ },
+ "EncorePower.Data.numberOfCardsPlayedSinceApplied": {
+  "class": "public",
+  "note": "付いてからプレイしたカードの数。PlaysRemaining・ShouldPlay が読む",
+  "json_key": "cards_played_since_applied",
+  "effect": "PlaysRemaining・ShouldPlay"
+ },
+ "ExtraPlayerFields.CardShopRemovalsUsed": {
+  "class": "public",
+  "note": "ショップでカードを除去した回数。除去の値段（MerchantCardRemovalEntry）が上がる。人間は自分の除去の回数を知っている。戦闘外の判断（runplan）に効く",
+  "json_key": "card_shop_removals_used",
+  "effect": "MerchantCardRemovalEntry（除去の値段）"
+ },
+ "ExtraPlayerFields.CccomboBadgeUnlocked": {
+  "class": "cosmetic",
+  "note": "実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない"
+ },
+ "ExtraPlayerFields.DamageDealt": {
+  "class": "cosmetic",
+  "note": "実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない"
+ },
+ "ExtraPlayerFields.DebuffsApplied": {
+  "class": "cosmetic",
+  "note": "実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない"
+ },
+ "ExtraPlayerFields.IsPlayingRotatingCharacter": {
+  "class": "cosmetic",
+  "note": "実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない"
+ },
+ "ExtraPlayerFields.WongoPoints": {
+  "class": "public",
+  "note": "ウォンゴのポイント。イベント WelcomeToWongos が読む。人間はイベントの画面で見る",
+  "json_key": "wongo_points",
+  "effect": "WelcomeToWongos"
+ },
+ "FakeHappyFlower._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "FakeSneckoEye._testEnergyCostOverride": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "FatGremlin._isAwake": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "FeralPower.Data.zeroCostAttacksPlayed": {
+  "class": "public",
+  "note": "0 コストのアタックをプレイした回数（表示の DisplayAmount にも使う）",
+  "json_key": "zero_cost_attacks_played",
+  "effect": "ModifyCardPlayResultLocation"
+ },
+ "FurCoat._furCoatActIndex": {
+  "class": "exposed",
+  "note": "FurCoatActIndex として地図の印の絞り込みに使い、印のある部屋が map に出る（McpMod.StateBuilder.cs:3012）"
+ },
+ "FuzzyWurmCrawler._isPuffed": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "GalacticDust._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "GalacticDust._starsSpent": {
+  "class": "public",
+  "note": "使った星の累計（DisplayAmount にも使う。星はリージェント専用）",
+  "json_key": "stars_spent",
+  "effect": "AfterStarsSpent"
+ },
+ "GasBomb._hasExploded": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "GeneticAlgorithm._currentBlock": {
+  "class": "static/derived",
+  "note": "CanonicalVars の初期値に使う写し（Update* で更新）。今の値は DynamicVars.Block として dynamic_vars に出る"
+ },
+ "GeneticAlgorithm._increasedBlock": {
+  "class": "public",
+  "note": "プレイのたびに増える累計（保存される）。Update* が基礎値に足して今の値を作る",
+  "json_key": "increased_amount",
+  "effect": "Update*"
+ },
+ "GigantificationPower.Data.commandToModify": {
+  "class": "exposed",
+  "note": "status の has_command_to_modify（McpMod.PowerInternalState.cs:154）"
+ },
+ "GlassOrb._passiveVal": {
+  "class": "public",
+  "note": "Passive のたびに減る値",
+  "json_key": "passive_value",
+  "effect": "Passive・PassiveVal"
+ },
+ "GoldenCompass._goldenPathAct": {
+  "class": "public",
+  "note": "黄金の道を引いた幕（AfterObtained）。その幕の地図の生成と、不明マスの部屋の種類（ModifyUnknownMapPointRoomTypes）を変える。取得した幕は人間に分かる",
+  "json_key": "golden_path_act",
+  "effect": "ModifyGeneratedMap・ModifyUnknownMapPointRoomTypes"
+ },
+ "GravityPower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "Guilty._combatsSeen": {
+  "class": "static/derived",
+  "note": "setter が DynamicVars[\"Combats\"] = 5 - CombatsSeen に写す。dynamic_vars.Combats から決まる"
+ },
+ "HappyFlower._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "HellraiserPower.Data.showedCapReachedMessage": {
+  "class": "cosmetic",
+  "note": "自動プレイの上限に達したメッセージを一度だけ出す印"
+ },
+ "ImitationLearningPower._playerTarget": {
+  "class": "public",
+  "note": "対象のプレイヤー（マルチプレイ）",
+  "json_key": "player_target_id",
+  "effect": "BeforeCardPlayed"
+ },
+ "ImpaledPower.Data.arrowSources": {
+  "class": "public",
+  "note": "刺さった矢の出どころ（AddArrow・RemoveFirstArrow）。ImpaledPower を付けるのはフールのカード（Nail・BowSmack など）で、ToughEgg.cs:161 は孵化時に除外するだけなので、範囲は other-character に上書きする",
+  "json_key": "arrow_sources",
+  "effect": "Arrows・RemoveFirstArrow",
+  "pool": "other-character"
+ },
+ "Inklet._middleInklet": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "InterceptPower.Data.coveredCreatures": {
+  "class": "public",
+  "note": "かばっている味方（マルチプレイ）。ModifyDamageMultiplicative・IsCovering が読む",
+  "json_key": "covered_creature_ids",
+  "effect": "ModifyDamageMultiplicative・IsCovering"
+ },
+ "IronClub._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "JossPaper._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "KinFollower._index": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "KinglyPunch._extraDamage": {
+  "class": "public",
+  "note": "AfterCardDrawn で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
+  "json_key": "extra_damage",
+  "effect": "AfterDowngraded"
+ },
+ "KnowledgeDemon.DynamicVars.DisintegrationPower": {
+  "class": "exposed",
+  "note": "ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72）"
+ },
+ "KnowledgeDemon._isBurnt": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "Kunai._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "Kusarigama._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "LagavulinMatriarch._isAwake": {
+  "class": "cosmetic",
+  "note": "WakeUpMove の効果音・アニメーションの重複を防ぐだけ（目覚めの効果は AsleepPower の除去と行動の遷移で決まり、status・move_state に出る）"
+ },
+ "LagavulinMatriarch._isShellAwake": {
+  "class": "cosmetic",
+  "note": "AfterDamageReceived で目を開くアニメーションを一度だけ流す印"
+ },
+ "LastingCandy._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "LetterOpener._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "LizardTail._wasUsed": {
+  "class": "exposed",
+  "note": "IsUsedUp => _wasUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722）"
+ },
+ "LordsParasol.LastPurchaseEverythingTask": {
+  "class": "static/derived",
+  "note": "非同期処理の参照（AfterRoomEntered）。ゲームの状態ではない"
+ },
+ "LouseProgenitor._curled": {
+  "class": "cosmetic",
+  "note": "PounceMove・WebMove が丸まりを解くアニメーション・効果音を流すかだけ。丸まりの効果は CurlUpPower（status）"
+ },
+ "LullabyPower._proccdThisTurn": {
+  "class": "public",
+  "note": "このターンに発動したか",
+  "json_key": "procced_this_turn",
+  "effect": "AfterCardPlayed"
+ },
+ "MadScience._mockedChaosCard": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "MadScience._tinkerTimeType": {
+  "class": "exposed",
+  "note": "Type の getter がこの値を返し、カードの type に出る（McpMod.StateBuilder.cs:1829）"
+ },
+ "Maul._extraDamageFromMaulPlays": {
+  "class": "public",
+  "note": "BuffFromMaulPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
+  "json_key": "extra_damage",
+  "effect": "AfterDowngraded"
+ },
+ "MawBank._hasItemBeenBought": {
+  "class": "exposed",
+  "note": "IsUsedUp => HasItemBeenBought。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722）"
+ },
+ "MechaKnight._isWoundUp": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "Metronome._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "Metronome._orbsChanneled": {
+  "class": "public",
+  "note": "チャネルしたオーブの数（ディフェクト専用）",
+  "json_key": "orbs_channeled",
+  "effect": "AfterOrbChanneled"
+ },
+ "MonologuePower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "MonsterModel._creature": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）"
+ },
+ "MonsterModel._isPerformingMove": {
+  "class": "static/derived",
+  "note": "PerformMove の実行中だけ true の一時値（CreatureCmd が死亡時の除去を遅らせる）。state を読む安定点では false"
+ },
+ "MusicBox._cardBeingPlayed": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "json_key": "card_being_played_uid",
+  "effect": "AfterCardPlayed"
+ },
+ "NightmarePower.Data.selectedCard": {
+  "class": "public",
+  "note": "選んだカード（SetSelectedCard）。BeforeHandDraw で複製する。選んだのは人間",
+  "json_key": "selected_card_uid",
+  "effect": "BeforeHandDraw"
+ },
+ "Nunchaku._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "OblivionPower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "OrbModel.HasBeenRemovedFromState": {
+  "class": "static/derived",
+  "note": "state から外れたモデルの印（RemoveFromState）。外れたモデルは state の一覧に出ない"
+ },
+ "OrbitPower.Data.energySpent": {
+  "class": "public",
+  "note": "使ったエネルギーの累計（表示にも使う）",
+  "json_key": "energy_spent",
+  "effect": "AfterEnergySpent"
+ },
+ "OrbitPower.Data.triggerCount": {
+  "class": "public",
+  "note": "発動した回数",
+  "json_key": "trigger_count",
+  "effect": "AfterEnergySpent"
+ },
+ "OrnamentalFan._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "OwlMagistrate._isFlying": {
+  "class": "cosmetic",
+  "note": "飛行中の効果音のループ（DeathSfx・HurtSfx・BeforeRemovedFromRoom）だけ"
+ },
+ "PaelsLegion[relic]._affectedCardPlay": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ",
+  "json_key": "affected_card_play",
+  "effect": "ModifyBlockMultiplicative"
+ },
+ "PaelsLegion[relic]._triggeredBlockLastTurn": {
+  "class": "cosmetic",
+  "note": "AfterSideTurnStart でペットの眠りのアニメーションを選ぶだけ"
+ },
+ "PaelsTooth._serializableCards": {
+  "class": "public",
+  "note": "預けたカード（人間が選んだもの）。戦闘の終わりに 1 枚を乱数で返す。枚数は counter に出ているが、中身は出ていない",
+  "json_key": "stored_cards",
+  "effect": "AfterCombatEnd"
+ },
+ "PaelsWing._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "PaleBlueDotPower.Data.alreadyActivatedThisTurn": {
+  "class": "public",
+  "note": "このターンに発動したか",
+  "json_key": "already_activated_this_turn",
+  "effect": "AfterCardPlayed"
+ },
+ "PenNib._attackToDouble": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする",
+  "json_key": "attack_to_double_uid",
+  "effect": "ModifyDamageMultiplicative"
+ },
+ "PenNib._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "Pendulum._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "PhantasmalGardener.CurrentScale": {
+  "class": "cosmetic",
+  "note": "EnlargeMove の見た目の大きさ（SetDefaultScaleTo）だけ"
+ },
+ "PhantasmalGardener._enlargeTriggers": {
+  "class": "cosmetic",
+  "note": "EnlargeMove の見た目の大きさ（SetDefaultScaleTo）だけ"
+ },
+ "Player.BaseOrbSlotCount": {
+  "class": "static/derived",
+  "note": "オーブの枠の初期値（キャラクターの定義）。ディフェクト専用"
+ },
+ "Player.Creature": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "Player.DiscoveredEnemies": {
+  "class": "cosmetic",
+  "note": "図鑑・年代記の発見の記録。ランの判断に効かない"
+ },
+ "Player.DiscoveredEpochs": {
+  "class": "cosmetic",
+  "note": "図鑑・年代記の発見の記録。ランの判断に効かない"
+ },
+ "Player.ExtraFields": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）"
+ },
+ "Player.IsActiveForHooks": {
+  "class": "static/derived",
+  "note": "フックの対象かの印（ActivateHooks・DeactivateHooks。マルチプレイの切断など）"
+ },
+ "Player.PlayerCombatState": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "Player.PlayerOdds": {
+  "class": "unknown",
+  "note": "カードのレア度・ポーションの出現率のオフセット（CardRarityOdds・PotionRewardOdds）。乱数そのものではなく、見た報酬の履歴から決まるが、画面には出ない。人間が追える情報として扱うかはユーザーの判断が要る（オフセットの中身は CardRarityOdds を読んで別途確認）"
+ },
+ "Player.RelicGrabBag": {
+  "class": "hidden",
+  "note": "これから出るレリックの袋（順番を含む）。まだ見せていない生成物"
+ },
+ "Player._potionSlots": {
+  "class": "exposed",
+  "note": "player.potions（McpMod.StateBuilder.cs:1755）"
+ },
+ "Player._relics": {
+  "class": "exposed",
+  "note": "player.relics（McpMod.StateBuilder.cs:1743）"
+ },
+ "Player._runPiles": {
+  "class": "exposed",
+  "note": "player.deck（McpMod.StateBuilder.cs:1794）"
+ },
+ "Player._runState": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "PlayerCombatState._arrows": {
+  "class": "public",
+  "note": "矢の枠（GainArrow。フール専用の仕組み）",
+  "json_key": "arrows",
+  "effect": "Arrows・AvailableArrowCount",
+  "pool": "other-character"
+ },
+ "PlayerCombatState._pets": {
+  "class": "exposed",
+  "note": "player.pets（McpMod.StateBuilder.cs:1700）"
+ },
+ "PlayerCombatState._piles": {
+  "class": "exposed",
+  "note": "draw_pile ほかの山（McpMod.StateBuilder.cs:1661）。山札は画面の表示順に並べ替えて出し、引く順（hidden）は出さない"
+ },
+ "PlayerCombatState._player": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）"
+ },
+ "PollinousCore._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "PotionModel.HasBeenRemovedFromState": {
+  "class": "static/derived",
+  "note": "state から外れたモデルの印（RemoveFromState）。外れたモデルは state の一覧に出ない"
+ },
+ "PotionModel._dynamicVars": {
+  "class": "static/derived",
+  "note": "ポーションの DynamicVars を実行時に書き換える箇所が無く（dynamic_var_mutation 0 件）、定義の値のまま。mod-scan の検出（.DynamicVars）はカードの誤検出"
+ },
+ "PotionModel._owner": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "PowerModel._amountOnTurnStart": {
+  "class": "public",
+  "note": "ターン開始時（Creature.BeforeTurnStart）の量の写し。DrawCardsNextTurnPower は 0 なら（このターンに付いたなら）引く枚数を増やさない。いつ付いたかは人間に見えている",
+  "json_key": "amount_on_turn_start",
+  "effect": "DrawCardsNextTurnPower.ModifyHandDraw・HelloWorldPower・GodByrdPower・SummonNextTurnPower",
+  "written": "Creature.BeforeTurnStart"
+ },
+ "PowerModel._owner": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "PunchConstruct._startingHpReduction": {
+  "class": "static/derived",
+  "note": "AfterAddedToRoom で HP を減らすだけ（イベントの戦闘 PunchOffEventEncounter が設定）。減らした後の HP は出ている"
+ },
+ "PunchConstruct._startsWithFastPunch": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "Queen._amalgam": {
+  "class": "cosmetic",
+  "note": "AfterAddedToRoom・AfterDeath が書くだけで、読む箇所が無い（分岐は _hasAmalgamDied）"
+ },
+ "Queen._burnBrightForMeState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "Queen._enragedState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "QuietusPower.Data.commandToModify": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）",
+  "json_key": "has_command_to_modify",
+  "effect": "ModifyDamageMultiplicative・AfterAttack"
+ },
+ "Rampage._extraDamageFromPlays": {
+  "class": "public",
+  "note": "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
+  "json_key": "extra_damage",
+  "effect": "AfterDowngraded"
+ },
+ "Regret._cardsInHand": {
+  "class": "static/derived",
+  "note": "BeforeSideTurnEnd がターン終了時の手札の枚数を写し、OnTurnEndInHand が使う。手札の枚数は出ている"
+ },
+ "RelicModel.HasBeenRemovedFromState": {
+  "class": "static/derived",
+  "note": "state から外れたモデルの印（RemoveFromState）。外れたモデルは state の一覧に出ない"
+ },
+ "RelicModel.StackCount": {
+  "class": "static/derived",
+  "note": "IncrementStackCount の呼び出しが v0.113.1 のどこにも無く、常に 1"
+ },
+ "RelicModel._floorAddedToDeck": {
+  "class": "public",
+  "note": "取得した階。効果に読む箇所は見つからず、保存と履歴に使う。優先度は低い",
+  "json_key": "floor_added_to_deck",
+  "effect": "保存（ToSerializable）",
+  "written": "RelicCmd（FloorAddedToDeck = TotalFloor）・FromSerializable"
+ },
+ "RelicModel._isWax": {
+  "class": "public",
+  "note": "蝋のレリック（ToyBox が付ける。一定の戦闘で溶ける）。見た目で分かる。溶けたかは melted に出ているが、溶ける前の蝋かどうかは出ていない",
+  "json_key": "is_wax",
+  "effect": "Title・UpdateTexture・ToyBox・Player（溶かす処理）",
+  "written": "ToyBox（蝋のレリックを作るときに IsWax を立てる）"
+ },
+ "RelicModel._owner": {
+  "class": "static/derived",
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+ },
+ "RelicModel._status": {
+  "class": "public",
+  "note": "RelicStatus（Normal/Active/Disabled）。画面ではレリックの光り方で見える。PaelsFlesh が Status を条件に使う（IsUsedUp・AfterSideTurnStart の base.Status == Active）。mod-scan の検出（.Status）はエンチャントの status の誤検出",
+  "json_key": "status",
+  "effect": "PaelsFlesh の条件分岐（Status == Active / Normal）。ほかのレリックは表示",
+  "written": "各レリックの base.Status =（UpdateDisplay・AfterSideTurnStart など）"
+ },
+ "SandpitPower._initialAmount": {
+  "class": "cosmetic",
+  "note": "UpdateCreaturePositions（クリーチャーの表示位置）だけ"
+ },
+ "SandpitPower._initialTargetPosition": {
+  "class": "cosmetic",
+  "note": "UpdateCreaturePositions（クリーチャーの表示位置）だけ"
+ },
+ "ScrollOfBiting._starterMoveIdx": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "SeaGlass._characterId": {
+  "class": "static/derived",
+  "note": "エンシェントが提示するとき（SetupForPlayer）に決め、取得時（AfterObtained）にだけ効く。取得後は表示（ホバー・タイトル）にしか使わない"
+ },
+ "SerpentFormPower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "ShowOff._currentAim": {
+  "class": "static/derived",
+  "note": "CanonicalVars の初期値に使う写し（Update* で更新）。今の値は DynamicVars（AimPower） として dynamic_vars に出る"
+ },
+ "ShowOff._increasedAim": {
+  "class": "public",
+  "note": "プレイのたびに増える累計（保存される）。Update* が基礎値に足して今の値を作る",
+  "json_key": "increased_amount",
+  "effect": "Update*"
+ },
+ "ShowOffPower._showOffInstance": {
+  "class": "static/derived",
+  "note": "元のカード ShowOff への参照（AfterDeath で使う）"
+ },
+ "Shuriken._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "SilkenTress._isUsed": {
+  "class": "exposed",
+  "note": "IsUsedUp => IsUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722）"
+ },
+ "Slither._testEnergyCostOverride": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "SlumberingBeetle._isAwake": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "SneakyGremlin._isAwake": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "SneckoEye._testEnergyCostOverride": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "SneckoOil._testEnergyCostOverride": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "SoulFysh._isInvisible": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "SoulboundPower._isAddingSoul": {
+  "class": "static/derived",
+  "note": "AfterCardGeneratedForCombat の再入を防ぐ一時値。安定点では false"
+ },
+ "SovereignBlade._createdThroughForge": {
+  "class": "public",
+  "note": "鍛造（ForgeCmd）で作られたか。AfterCardChangedPiles が読む",
+  "json_key": "created_through_forge",
+  "effect": "AfterCardChangedPiles"
+ },
+ "SovereignBlade._currentDamage": {
+  "class": "public",
+  "note": "AddDamage の累計。AfterDowngraded で戻す",
+  "json_key": "current_damage",
+  "effect": "AfterDowngraded"
+ },
+ "SovereignBlade._currentRepeats": {
+  "class": "public",
+  "note": "SetRepeats の値。AfterDowngraded で戻す",
+  "json_key": "current_repeats",
+  "effect": "AfterDowngraded"
+ },
+ "SpinyToad._isSpiny": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "Splash._mockGeneratedCard": {
+  "class": "static/derived",
+  "note": "テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま"
+ },
+ "SpoilsMap.SpoilsCoord": {
+  "class": "exposed",
+  "note": "ModifyGeneratedMapLate で地図の点に AddQuest する。地図の点の quests に出る（McpMod.StateBuilder.cs:2976）"
+ },
+ "SpoilsMap._spoilsActIndex": {
+  "class": "public",
+  "note": "宝の地図の印を付ける幕（AfterCreated で 1）。印の付いた点は地図の quests に出るが、どの幕の印かはこの値で決まる",
+  "json_key": "spoils_act_index",
+  "effect": "AfterMapGenerated・ModifyGeneratedMap・BeforeCardRemoved"
+ },
+ "StoneCalendar._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "StormPower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "StretchPower.Data.amountWhenCardStarted": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "json_key": "amount_when_card_started",
+  "effect": "AfterCardPlayed"
+ },
+ "StretchPower.Data.cardPlay": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "json_key": "card_play_in_progress",
+  "effect": "ModifyBlockAdditive・AfterCardPlayed"
+ },
+ "StretchPower.Data.gaveBonusBlock": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "json_key": "gave_bonus_block",
+  "effect": "AfterCardPlayed"
+ },
+ "SubroutinePower.Data.amountsForPlayedCards": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "json_key": "amounts_for_played_cards",
+  "effect": "AfterCardPlayed"
+ },
+ "TeaOfDiscourtesy._combatsLeft": {
+  "class": "exposed",
+  "note": "setter が DynamicVars[\"Combats\"] に写す。レリックの vars.Combats に出ている（McpMod.RelicCombatState.cs:271）"
+ },
+ "TerrorEel._terrorState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "TestSubject._deadState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "TheBall._extraDamageFromPlays": {
+  "class": "public",
+  "note": "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
+  "json_key": "extra_damage",
+  "effect": "AfterDowngraded"
+ },
+ "TheInsatiable._hasLiquified": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "TheObscura._hasSummoned": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "TheScythe._currentDamage": {
+  "class": "static/derived",
+  "note": "CanonicalVars の初期値に使う写し（Update* で更新）。今の値は DynamicVars.Damage として dynamic_vars に出る"
+ },
+ "TheScythe._increasedDamage": {
+  "class": "public",
+  "note": "プレイのたびに増える累計（保存される）。Update* が基礎値に足して今の値を作る",
+  "json_key": "increased_amount",
+  "effect": "Update*"
+ },
+ "TheShot._cardsExhaustedByFlorescence": {
+  "class": "public",
+  "note": "BuffFromFlorescence の累計。CalculatedDamageVar の倍率で、今のダメージはカードの表示値に出るが、倍率そのものは出ていない",
+  "json_key": "cards_exhausted_by_florescence",
+  "effect": "CanonicalVars（CalculatedDamageVar.WithMultiplier）"
+ },
+ "ThievingHopper._isHovering": {
+  "class": "cosmetic",
+  "note": "効果音（AttackSfx・FleeSfx のホバー版）とループの停止だけ"
+ },
+ "Thrash._extraDamage": {
+  "class": "public",
+  "note": "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
+  "json_key": "extra_damage",
+  "effect": "AfterDowngraded"
+ },
+ "TouchOfOrobas._starterRelic": {
+  "class": "static/derived",
+  "note": "エンシェントが提示するとき（SetupForPlayer）に決め、取得時（AfterObtained）にだけ効く。取得後は表示（ホバー・タイトル）にしか使わない"
+ },
+ "TouchOfOrobas._upgradedRelic": {
+  "class": "static/derived",
+  "note": "エンシェントが提示するとき（SetupForPlayer）に決め、取得時（AfterObtained）にだけ効く。取得後は表示（ホバー・タイトル）にしか使わない"
+ },
+ "ToughEgg._afterHatchedState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "ToughEgg._hatched": {
+  "class": "cosmetic",
+  "note": "Title・DeathSfx（孵化後の名前・効果音）だけ"
+ },
+ "ToughEgg._isHatched": {
+  "class": "static/derived",
+  "note": "AfterAddedToRoom で孵化済みなら HatchPower を付けずに孵化後の状態へ飛ばす（部屋に入る時だけ）。孵化したかは HatchPower の有無と move_state で分かる"
+ },
+ "ToyBox._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "TuningFork._isActivating": {
+  "class": "cosmetic",
+  "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
+ },
+ "Tunneler._isStunned": {
+  "class": "cosmetic",
+  "note": "アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない"
+ },
+ "TwoTailedRat._starterMoveIndex": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "UnsettlingLamp._doubledPowers": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）",
+  "json_key": "doubled_power_ids",
+  "effect": "HasDoubledTemporaryPowerSource"
+ },
+ "UnsettlingLamp._triggeringCard": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。戦闘で最初にデバフを付けたカード。ModifyPowerAmountGivenMultiplicative が 2 倍にする",
+  "json_key": "triggering_card_uid",
+  "effect": "ModifyPowerAmountGivenMultiplicative・AfterCardPlayed"
+ },
+ "UpMySleeve._timesPlayedThisCombat": {
+  "class": "cosmetic",
+  "note": "OnPlay が足すだけで、読む箇所が無い"
+ },
+ "Vambrace._triggeringCard": {
+  "class": "public",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカード",
+  "json_key": "triggering_card_uid",
+  "effect": "ModifyBlockMultiplicative"
+ },
+ "VigorPower.Data.amountWhenAttackStarted": {
+  "class": "exposed",
+  "note": "status の vigor_attack.amount_when_started（McpMod.PowerInternalState.cs:353）"
+ },
+ "VigorPower.Data.commandToModify": {
+  "class": "exposed",
+  "note": "status の vigor_attack.has_command・attacker_is_owner（McpMod.PowerInternalState.cs:378）"
+ },
+ "VoidFormPower.Data.cardsPlayedThisTurn": {
+  "class": "public",
+  "note": "このターンにプレイしたカードの数",
+  "json_key": "cards_played_this_turn",
+  "effect": "AfterCardPlayed・ShouldSkip"
+ },
+ "WaterfallGiant._aboutToBlowState": {
+  "class": "static/derived",
+  "note": "行動の状態機械の状態オブジェクトへの参照（GenerateMoveStateMachine で作る）。今の状態・遷移は move_state に出る"
+ },
+ "WaterfallGiant._pressureBuildupIdx": {
+  "class": "cosmetic",
+  "note": "BGM のトラック（IncrementBuildUpAnimationTrack）と死亡時のフェード（ShouldFadeAfterDeath）だけ"
+ },
+ "Wither._fakeUpgradeLevel": {
+  "class": "cosmetic",
+  "note": "Title（+N）と絵だけ。ダメージは FakeUpgrade が DynamicVars.Damage を直接上げる（dynamic_vars に出る）"
+ },
+ "WongosMysteryTicket._gaveRelic": {
+  "class": "exposed",
+  "note": "IsUsedUp => GaveRelic。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722）"
+ },
+ "Wriggler._startStunned": {
+  "class": "static/derived",
+  "note": "行動の状態機械の初期状態を選ぶだけ（GenerateMoveStateMachine）。選ばれた初期状態は move_state.initial_state_id に出る"
+ },
+ "Wuppy[relic]._combatWuppy": {
+  "class": "static/derived",
+  "note": "召喚したペットのクリーチャーへの参照。ペットは pets に出る"
+ },
+ "Wuppy[relic]._currentHp": {
+  "class": "exposed",
+  "note": "setter が DynamicVars（CurrentHp・MaxHp）に写す。レリックの vars に出ている（McpMod.RelicCombatState.cs:271）"
+ },
+ "Wuppy[relic]._currentHpSet": {
+  "class": "static/derived",
+  "note": "CurrentHp の初期化済みの印（AfterObtained）"
+ },
+ "Wuppy[relic]._maxHp": {
+  "class": "exposed",
+  "note": "setter が DynamicVars（CurrentHp・MaxHp）に写す。レリックの vars に出ている（McpMod.RelicCombatState.cs:271）"
+ },
+ "YahPower.Data.triggeredThisTurn": {
+  "class": "public",
+  "note": "このターンに発動したか",
+  "json_key": "triggered_this_turn",
+  "effect": "AfterArrowDislodged"
+ }
+}
