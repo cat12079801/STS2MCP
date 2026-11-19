@@ -13,8 +13,8 @@ namespace STS2_MCP;
 public static partial class McpMod
 {
     // 棚卸し（docs/state-inventory.md）で public と分類し、分類表に section を付けた内部状態を、
-    // 各行の internal_state に出す。読むのは宣言フィールド（DeclaredOnly）と自動実装プロパティの getter だけで、
-    // ゲームのフック・遅延初期化の getter・乱数は呼ばない。読めない値は null と internal_state.unavailable_reasons
+    // 各行の internal_state に出す。読むのは宣言フィールド（DeclaredOnly）と、自動実装プロパティの backing field だけで、
+    // getter・ゲームのフック・遅延初期化・乱数は呼ばない。読めない値は null と internal_state.unavailable_reasons
     // （と warnings）にし、ほかの項目は残す。行のモデルに当てはまる項目が無ければ internal_state を付けない。
     private static readonly Dictionary<string, Type?> _allowlistTypes = new(StringComparer.Ordinal);
 
@@ -63,29 +63,14 @@ public static partial class McpMod
                 throw new InvalidOperationException($"Expected {entry.DeclaringType}, got {target.GetType().FullName}");
         }
 
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-        Type memberType;
-        object? raw;
-        if (entry.Kind == StateMemberKind.AutoProperty)
-        {
-            var property = declaring.GetProperty(entry.Member, flags)
-                ?? throw new MissingMemberException(declaring.Name, entry.Member);
-            if (property.GetMethod == null || property.GetIndexParameters().Length != 0)
-                throw new InvalidOperationException($"{declaring.Name}.{entry.Member} は読めるプロパティでない");
-            memberType = property.PropertyType;
-            try { raw = property.GetValue(target); }
-            catch (TargetInvocationException ex) when (ex.InnerException != null)
-            {
-                throw new InvalidOperationException($"Cannot read {declaring.Name}.{entry.Member}: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}", ex.InnerException);
-            }
-        }
-        else
-        {
-            var field = declaring.GetField(entry.Member, flags)
-                ?? throw new MissingFieldException(declaring.Name, entry.Member);
-            memberType = field.FieldType;
-            raw = field.GetValue(target);
-        }
+        // 自動実装プロパティは getter を呼ばず、コンパイラが作る backing field（<Name>k__BackingField）を読む。
+        // 版が上がって getter に処理が入った（backing field が無くなった）ら、読まずに null と理由にする。
+        string fieldName = entry.Kind == StateMemberKind.AutoProperty ? $"<{entry.Member}>k__BackingField" : entry.Member;
+        var field = declaring.GetField(fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            ?? throw new MissingFieldException(declaring.Name, fieldName);
+        Type memberType = field.FieldType;
+        object? raw = field.GetValue(target);
         RequireAllowlistMemberType(entry, memberType);
         return ConvertAllowlistedValue(entry, raw);
     }

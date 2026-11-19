@@ -221,6 +221,21 @@ cp mod_manifest.json "$MODS_DIR/STS2_MCP.json"
 > [!NOTE] 
 > `mod_manifest.json` is renamed to `STS2_MCP.json` on copy — the game's mod loader expects the manifest filename to match the mod ID.
 
+### 内部状態の棚卸しと許可リスト（`internal_state`）
+
+ゲームのモデルの内部状態の棚卸しは [`docs/state-inventory.md`](docs/state-inventory.md)、人の判断は `docs/state-inventory-classification.json` にある。
+分類表で `section` を付けた public の項目は、`McpMod.StateAllowlist.Generated.cs`（生成物。手で直さない）を通して state の `internal_state` に出る。
+分類表または MOD の `*.cs` を直した PR では、次を回して差分が無いことを確かめる（`<decompile>` はゲームの版のデコンパイル）:
+
+```fish
+python3 -B tools/state_inventory.py --mod . --write-allowlist          # 分類表を直したとき
+python3 -B tools/state_inventory.py --decompile <decompile> --mod . --game-version <版>   # md・tsv を生成し直す
+python3 -B tools/state_inventory.py --decompile <decompile> --mod . --check-docs --check-allowlist   # 差分 0 なら終了コード 0
+```
+
+契約試験 `tests/StateAllowlistContract` も `--check-allowlist` を回し、生成物が分類表と食い違えば落ちる（Python は `STS2_PYTHON`、無ければ PATH の `python3`）。
+md・tsv は MOD のファイルの行番号（被覆の出典）を持つので、MOD の `*.cs` を直すと古くなる。古さは `--check-docs` で分かる（デコンパイルが要るので契約試験では回さない）。
+
 ## License
 
 MIT

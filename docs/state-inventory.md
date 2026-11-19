@@ -29,14 +29,14 @@
 | monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
 | relic | 95 | 3 | 0 | 29 | 15 | 0 | 0 | 0 | 142 |
 | power | 57 | 25 | 0 | 9 | 5 | 0 | 0 | 0 | 96 |
-| card | 43 | 10 | 0 | 7 | 18 | 0 | 0 | 0 | 78 |
+| card | 44 | 10 | 0 | 7 | 17 | 0 | 0 | 0 | 78 |
 | potion | 1 | 0 | 0 | 1 | 5 | 0 | 0 | 0 | 7 |
 | enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
 | affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | orb | 1 | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 5 |
 | base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 50 | 1 | 3 | 8 | 16 | 4 | 0 | 0 | 82 |
-| **計** | 279 | 41 | 5 | 93 | 92 | 4 | 0 | 0 | 514 |
+| entity | 49 | 1 | 3 | 9 | 16 | 4 | 0 | 0 | 82 |
+| **計** | 279 | 41 | 5 | 94 | 91 | 4 | 0 | 0 | 514 |
 
 ### アイアンクラッドの範囲だけ（他キャラ・廃止・モックを除く）
 
@@ -45,14 +45,14 @@
 | monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
 | relic | 93 | 0 | 0 | 27 | 15 | 0 | 0 | 0 | 135 |
 | power | 51 | 0 | 0 | 5 | 3 | 0 | 0 | 0 | 59 |
-| card | 35 | 0 | 0 | 5 | 15 | 0 | 0 | 0 | 55 |
+| card | 36 | 0 | 0 | 5 | 14 | 0 | 0 | 0 | 55 |
 | potion | 1 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 6 |
 | enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
 | affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | orb | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 50 | 0 | 3 | 8 | 16 | 4 | 0 | 0 | 81 |
-| **計** | 263 | 0 | 5 | 84 | 87 | 4 | 0 | 0 | 443 |
+| entity | 49 | 0 | 3 | 9 | 16 | 4 | 0 | 0 | 81 |
+| **計** | 263 | 0 | 5 | 85 | 86 | 4 | 0 | 0 | 443 |
 
 範囲（pool）: `ironclad`・`colorless`・`curse`・`status`・`event-only`・`shared`・`ancient`・`monster`・`enchantment`・`affliction`・`base`（モデルの基底）・`entity`（Creature・Player など）を範囲に入れる。`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。
 
@@ -79,29 +79,29 @@
 | `PlayerCombatState._arrows` | List<ArrowSlot> | field | other-character | GainArrow, PlayerCombatState | Arrows・AvailableArrowCount | `arrows` | 矢の枠（GainArrow。フール専用の仕組み） |
 | `DarkOrb._evokeVal` | decimal | field | other-character | Passive | EvokeVal | `evoke_value` | Passive のたびに増える発動値 |
 | `GlassOrb._passiveVal` | decimal | field | other-character | Passive | Passive・PassiveVal | `passive_value` | Passive のたびに減る値 |
-| `AfterimagePower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
-| `AimPower.Data.amountWhenAttackStarted` | int | data_field | other-character | BeforeAttack | AfterAttack | `amount_when_started` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。攻撃の開始時の量（Vigor と同じ形）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。 |
-| `AimPower.Data.commandToModify` | AttackCommand? | data_field | other-character | BeforeAttack | ModifyDamageAdditive・AfterAttack | `has_command_to_modify` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。 |
-| `EncorePower.Data.cardsBeingPlayed` | List<CardModel> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | ShouldPlay | `cards_being_played` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。 |
+| `AfterimagePower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `AimPower.Data.amountWhenAttackStarted` | int | data_field | other-character | BeforeAttack | AfterAttack | `amount_when_started` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。攻撃の開始時の量（Vigor と同じ形）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。 |
+| `AimPower.Data.commandToModify` | AttackCommand? | data_field | other-character | BeforeAttack | ModifyDamageAdditive・AfterAttack | `has_command_to_modify` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。 |
+| `EncorePower.Data.cardsBeingPlayed` | List<CardModel> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | ShouldPlay | `cards_being_played` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。 |
 | `EncorePower.Data.numberOfCardsPlayedSinceApplied` | int | data_field | other-character | AfterCardPlayed | PlaysRemaining・ShouldPlay | `cards_played_since_applied` | 付いてからプレイしたカードの数。PlaysRemaining・ShouldPlay が読む |
 | `FeralPower.Data.zeroCostAttacksPlayed` | int | data_field | other-character | SetZeroCostAttacksPlayed | ModifyCardPlayResultLocation | `zero_cost_attacks_played` | 0 コストのアタックをプレイした回数（表示の DisplayAmount にも使う） |
-| `GravityPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | unreferenced | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `GravityPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | unreferenced | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
 | `ImitationLearningPower._playerTarget` | Player? | field | other-character | PlayerTarget | BeforeCardPlayed | `player_target_id` | 対象のプレイヤー（マルチプレイ） |
 | `ImpaledPower.Data.arrowSources` | List<ArrowSlot> | data_field | other-character | AddArrow, ForceRemoveArrow, RemoveFirstArrow | Arrows・RemoveFirstArrow | `arrow_sources` | 刺さった矢の出どころ（AddArrow・RemoveFirstArrow）。ImpaledPower を付けるのはフールのカード（Nail・BowSmack など）で、ToughEgg.cs:161 は孵化時に除外するだけなので、範囲は other-character に上書きする |
 | `LullabyPower._proccdThisTurn` | bool | field | other-character | AfterApplied, AfterCardPlayed, BeforeSideTurnStart | AfterCardPlayed | `procced_this_turn` | このターンに発動したか |
-| `MonologuePower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `MonologuePower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
 | `NightmarePower.Data.selectedCard` | CardModel? | data_field | other-character | SetSelectedCard | BeforeHandDraw | `selected_card_uid` | 選んだカード（SetSelectedCard）。BeforeHandDraw で複製する。選んだのは人間 |
-| `OblivionPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `OblivionPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
 | `OrbitPower.Data.energySpent` | int | data_field | other-character | AfterEnergySpent | AfterEnergySpent | `energy_spent` | 使ったエネルギーの累計（表示にも使う） |
 | `OrbitPower.Data.triggerCount` | int | data_field | other-character | AfterEnergySpent | AfterEnergySpent | `trigger_count` | 発動した回数 |
 | `PaleBlueDotPower.Data.alreadyActivatedThisTurn` | bool | data_field | other-character | AfterCardPlayed, AfterSideTurnEnd | AfterCardPlayed | `already_activated_this_turn` | このターンに発動したか |
-| `QuietusPower.Data.commandToModify` | AttackCommand? | data_field | other-character | BeforeAttack | ModifyDamageMultiplicative・AfterAttack | `has_command_to_modify` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている） |
-| `SerpentFormPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
-| `StormPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
-| `StretchPower.Data.amountWhenCardStarted` | int | data_field | other-character | BeforeCardPlayed | AfterCardPlayed | `amount_when_card_started` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。 |
-| `StretchPower.Data.cardPlay` | CardPlay? | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | ModifyBlockAdditive・AfterCardPlayed | `card_play_in_progress` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。 |
-| `StretchPower.Data.gaveBonusBlock` | bool | data_field | other-character | AfterCardPlayed, ModifyBlockAdditive | AfterCardPlayed | `gave_bonus_block` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。 |
-| `SubroutinePower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `QuietusPower.Data.commandToModify` | AttackCommand? | data_field | other-character | BeforeAttack | ModifyDamageMultiplicative・AfterAttack | `has_command_to_modify` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている） |
+| `SerpentFormPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `StormPower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
+| `StretchPower.Data.amountWhenCardStarted` | int | data_field | other-character | BeforeCardPlayed | AfterCardPlayed | `amount_when_card_started` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。 |
+| `StretchPower.Data.cardPlay` | CardPlay? | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | ModifyBlockAdditive・AfterCardPlayed | `card_play_in_progress` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。 |
+| `StretchPower.Data.gaveBonusBlock` | bool | data_field | other-character | AfterCardPlayed, ModifyBlockAdditive | AfterCardPlayed | `gave_bonus_block` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。 |
+| `SubroutinePower.Data.amountsForPlayedCards` | Dictionary<CardModel, int> | data_field | other-character | AfterCardPlayed, BeforeCardPlayed | AfterCardPlayed | `amounts_for_played_cards` | カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている） |
 | `VoidFormPower.Data.cardsPlayedThisTurn` | int | data_field | other-character | AfterCardPlayed, BeforeSideTurnStart, HideTemporaryZeroCostVisual | AfterCardPlayed・ShouldSkip | `cards_played_this_turn` | このターンにプレイしたカードの数 |
 | `YahPower.Data.triggeredThisTurn` | bool | data_field | other-character | AfterArrowDislodged, BeforeSideTurnStart | AfterArrowDislodged | `triggered_this_turn` | このターンに発動したか |
 | `ConductorsBaton._triggeredThisTurn` | bool | field | other-character | AfterCardPlayed, BeforeSideTurnStart | AfterCardPlayed | `triggered_this_turn` | このターンに発動したか |
@@ -137,7 +137,7 @@
 
 ## cosmetic（効果なし。engine は効果なしとして扱ってよい）
 
-93 件。型・名前の規則で決めたもの（ノード・効果音・アイコンの path など）は `source=rule`、判断したものは `source=manual`。全件は TSV。判断したものだけ列挙する。
+94 件。型・名前の規則で決めたもの（ノード・効果音・アイコンの path など）は `source=rule`、判断したものは `source=manual`。全件は TSV。判断したものだけ列挙する。
 
 - `CardModel._isEnchantmentPreview`（bool）: エンチャントのプレビュー表示用のコピーの印（DamageVar などの表示値の計算を切り替える）
 - `CardModel._upgradePreviewType`（CardUpgradePreviewType）: 強化プレビューの表示の種類（UI）。MOD は強化プレビューの組み立ての検査に読むだけ
@@ -150,6 +150,7 @@
 - `ExtraPlayerFields.DamageDealt`（int）: 実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない
 - `ExtraPlayerFields.DebuffsApplied`（int）: 実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない
 - `ExtraPlayerFields.IsPlayingRotatingCharacter`（bool）: 実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない
+- `ExtraPlayerFields.WongoPoints`（int）: ラン中に得たウォンゴのポイント。WelcomeToWongos は書くだけ（WelcomeToWongos.cs:131。条件に読むのはプロファイルの SaveManager.Instance.Progress.WongoPoints）で、ランの終わりに進捗へ足す（ProgressSaveManager）。ラン中に読む効果は無い統計（DamageDealt・DebuffsApplied と同じ）。PR #108 のレビュー P3-1
 - `Player.DiscoveredEnemies`（List<ModelId>）: 図鑑・年代記の発見の記録。ランの判断に効かない
 - `Player.DiscoveredEpochs`（List<string>）: 図鑑・年代記の発見の記録。ランの判断に効かない
 - `CeremonialBeast._inMidCharge`（bool）: アニメーション（GenerateAnimator の遷移条件）・効果音だけが読む。行動の選択・数値に効かない
@@ -215,7 +216,7 @@
 | `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
 | `AbstractModel.Id` | base | McpMod.Actions.cs:1014, McpMod.Actions.cs:1729, McpMod.Actions.cs:2607 … | mod-scan |
 | `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:168, McpMod.CombatHistory.cs:100 | mod-scan |
-| `CardModel.Enchantment` | base | McpMod.CardDetails.cs:117, McpMod.CardDetails.cs:65, McpMod.ChoiceContinuationState.cs:169 … | mod-scan |
+| `CardModel.Enchantment` | base | McpMod.CardDetails.cs:117, McpMod.CardDetails.cs:65, McpMod.ChoiceContinuationState.cs:169 | mod-scan |
 | `CardModel._baseReplayCount` | base | McpMod.CardDetails.cs:110 | mod-scan |
 | `CardModel._baseStarCost` | base | McpMod.CardStarCost.cs:23 | mod-scan |
 | `CardModel._cloneOf` | base | McpMod.StateAllowlist.Generated.cs:13 | allowlist |
@@ -243,10 +244,11 @@
 | `MadScience._tinkerTimeRider` | event-only | McpMod.CardDetails.cs:125 | mod-scan |
 | `MadScience._tinkerTimeType` | event-only | Type の getter がこの値を返し、カードの type に出る（McpMod.StateBuilder.cs:1829） | manual |
 | `Maul.DynamicVars.Damage` | event-only | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
-| `Maul._extraDamageFromMaulPlays` | event-only | McpMod.StateAllowlist.Generated.cs:55 | allowlist |
+| `Maul._extraDamageFromMaulPlays` | event-only | McpMod.StateAllowlist.Generated.cs:52 | allowlist |
 | `Monologue.DynamicVars.Strength` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Rampage.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
-| `Rampage._extraDamageFromPlays` | ironclad | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
+| `Rampage._extraDamageFromPlays` | ironclad | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
+| `Regret._cardsInHand` | curse | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
 | `ShowOff.DynamicVars.AimPower` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SovereignBlade.DynamicVars.Damage` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SovereignBlade.DynamicVars.HitCount` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
@@ -260,13 +262,13 @@
 | `Adroit.DynamicVars.Block` | enchantment | McpMod.CardDetails.cs:130（DynamicVars を丸ごと出す） | mod-scan |
 | `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
 | `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130, McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72 … | mod-scan |
-| `EnchantmentModel._status` | base | McpMod.CardDetails.cs:140, McpMod.Formatting.cs:441, McpMod.StateAllowlist.Generated.cs:82 | mod-scan |
+| `EnchantmentModel._status` | base | McpMod.CardDetails.cs:140 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
 | `CardEnergyCost.Canonical` | entity | McpMod.CardEnergyCost.cs:47 | mod-scan |
 | `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1810 | mod-scan |
 | `CardEnergyCost._base` | entity | energy_cost.base_raw（GetWithModifiers(None)。McpMod.CardEnergyCost.cs:46） | manual |
 | `CardEnergyCost._capturedXValue` | entity | McpMod.CardEnergyCost.cs:49 | mod-scan |
-| `CardEnergyCost._localModifiers` | entity | McpMod.CardEnergyCost.cs:105, McpMod.CardEnergyCost.cs:107 | mod-scan |
+| `CardEnergyCost._localModifiers` | entity | energy_cost の local_modifiers（McpMod.CardEnergyCost.cs:52。ReadLocalEnergyCostModifiers〔同 :103〕が cost.GetType() で読むので型の文脈が無く、mod-scan では数えない） | manual |
 | `CombatState.CurrentSide` | entity | McpMod.Helpers.cs:46, McpMod.MultiplayerState.cs:279, McpMod.PotionUsabilityLive.cs:126 … | mod-scan |
 | `CombatState.RoundNumber` | entity | McpMod.MultiplayerActions.cs:127, McpMod.MultiplayerActions.cs:99, McpMod.MultiplayerState.cs:278 … | mod-scan |
 | `CombatState._allies` | entity | McpMod.StateAllowlist.Generated.cs:37 | allowlist |
@@ -276,15 +278,14 @@
 | `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:140 … | mod-scan |
 | `Creature.Side` | entity | McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
-| `Creature._block` | entity | McpMod.CardPreview.cs:25, McpMod.MultiplayerState.cs:436, McpMod.PowerInternalState.cs:224 … | mod-scan |
+| `Creature._block` | entity | McpMod.MultiplayerState.cs:436, McpMod.PowerInternalState.cs:224, McpMod.StateBuilder.cs:1623 … | mod-scan |
 | `Creature._currentHp` | entity | McpMod.MultiplayerState.cs:429, McpMod.StateBuilder.cs:1496, McpMod.StateBuilder.cs:1621 … | mod-scan |
 | `Creature._maxHp` | entity | McpMod.MultiplayerState.cs:430, McpMod.StateBuilder.cs:1497, McpMod.StateBuilder.cs:1622 … | mod-scan |
 | `Creature._powers` | entity | status（McpMod.StateBuilder.cs:1710・2129） | manual |
 | `ExtraPlayerFields.CardShopRemovalsUsed` | entity | McpMod.StateAllowlist.Generated.cs:43 | allowlist |
-| `ExtraPlayerFields.WongoPoints` | entity | McpMod.StateAllowlist.Generated.cs:46 | allowlist |
 | `MonsterMoveStateMachine.StateLog` | entity | McpMod.EnemyMoveState.cs:103, McpMod.EnemyMoveState.cs:45 | mod-scan |
 | `MonsterMoveStateMachine.States` | entity | McpMod.EnemyMoveState.cs:72 | mod-scan |
-| `MonsterMoveStateMachine._currentState` | entity | McpMod.EnemyMoveState.cs:65, McpMod.EnemyMoveState.cs:71 | mod-scan |
+| `MonsterMoveStateMachine._currentState` | entity | McpMod.EnemyMoveState.cs:71 | mod-scan |
 | `MonsterMoveStateMachine._initialState` | entity | McpMod.EnemyMoveState.cs:76 | mod-scan |
 | `MonsterMoveStateMachine._performedFirstMove` | entity | McpMod.EnemyMoveState.cs:78 | mod-scan |
 | `Player.Character` | entity | McpMod.Actions.cs:2606, McpMod.Actions.cs:2607, McpMod.Actions.cs:2608 … | mod-scan |
@@ -361,7 +362,7 @@
 | `ImpaledPower.DynamicVars.HitCounter` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
 | `InfernoPower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
 | `InsatiableDominionPower.DynamicVars.Damage` | unreferenced | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
-| `InterceptPower.Data.coveredCreatures` | colorless | McpMod.StateAllowlist.Generated.cs:52 | allowlist |
+| `InterceptPower.Data.coveredCreatures` | colorless | McpMod.StateAllowlist.Generated.cs:49 | allowlist |
 | `JugglingPower.Data.attacksPlayedThisTurn` | ironclad | McpMod.PowerInternalState.cs:242 | mod-scan |
 | `JugglingPower.Data.cardToClone` | ironclad | McpMod.PowerInternalState.cs:243 | mod-scan |
 | `MonologuePower.DynamicVars.StrengthApplied` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
@@ -373,10 +374,10 @@
 | `PossessSpeedPower.Data.stolenDexterity` | monster | McpMod.PowerInternalState.cs:233 | mod-scan |
 | `PossessStrengthPower.Data.stolenStrength` | monster | McpMod.PowerInternalState.cs:230 | mod-scan |
 | `PowerModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
-| `PowerModel._amountOnTurnStart` | base | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
+| `PowerModel._amountOnTurnStart` | base | McpMod.StateAllowlist.Generated.cs:67 | allowlist |
 | `PowerModel._applier` | base | McpMod.PowerInternalState.cs:312 | mod-scan |
 | `PowerModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:405, McpMod.StateAllowlist.cs:61 | mod-scan |
+| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:405 | mod-scan |
 | `PowerModel._skipNextDurationTick` | base | McpMod.PowerInternalState.cs:220 | mod-scan |
 | `PowerModel._target` | base | McpMod.CombatHistory.cs:138, McpMod.EnemyStunHandler.cs:111, McpMod.EnemyStunHandler.cs:90 … | mod-scan |
 | `ReattachPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:165 | mod-scan |
@@ -420,7 +421,7 @@
 | `FurCoat.FurCoatCoordsSet` | ancient | McpMod.RelicCombatState.cs:294 | mod-scan |
 | `FurCoat._furCoatActIndex` | ancient | FurCoatActIndex として地図の印の絞り込みに使い、印のある部屋が map に出る（McpMod.StateBuilder.cs:3012） | manual |
 | `Girya._timesLifted` | shared | McpMod.RelicCombatState.cs:185 | mod-scan |
-| `GoldenCompass._goldenPathAct` | ancient | McpMod.StateAllowlist.Generated.cs:49 | allowlist |
+| `GoldenCompass._goldenPathAct` | ancient | McpMod.StateAllowlist.Generated.cs:46 | allowlist |
 | `HappyFlower._turnsSeen` | shared | McpMod.RelicCombatState.cs:180 | mod-scan |
 | `IronClub._cardsPlayed` | ancient | McpMod.RelicCombatState.cs:170 | mod-scan |
 | `JossPaper._cardsExhausted` | shared | McpMod.RelicCombatState.cs:101 | mod-scan |
@@ -434,19 +435,19 @@
 | `LizardTail._wasUsed` | shared | IsUsedUp => _wasUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
 | `MawBank._hasItemBeenBought` | event-only | IsUsedUp => HasItemBeenBought。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
 | `MiniRegent._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:79 | mod-scan |
-| `MusicBox._cardBeingPlayed` | ancient | McpMod.StateAllowlist.Generated.cs:58 | allowlist |
+| `MusicBox._cardBeingPlayed` | ancient | McpMod.StateAllowlist.Generated.cs:55 | allowlist |
 | `MusicBox._wasUsedThisTurn` | ancient | McpMod.RelicCombatState.cs:63 | mod-scan |
 | `Nunchaku._attacksPlayed` | shared | McpMod.RelicCombatState.cs:164 | mod-scan |
 | `Orichalcum._shouldTrigger` | shared | McpMod.RelicCombatState.cs:131 | mod-scan |
 | `OrnamentalFan._attacksPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:121 | mod-scan |
 | `PaelsEye._usedThisCombat` | ancient | McpMod.RelicCombatState.cs:66 | mod-scan |
 | `PaelsEye._wasOwnerPartOfLastPlayerTurn` | ancient | McpMod.RelicCombatState.cs:67 | mod-scan |
-| `PaelsLegion[relic]._affectedCardPlay` | ancient | McpMod.StateAllowlist.Generated.cs:61 | allowlist |
+| `PaelsLegion[relic]._affectedCardPlay` | ancient | McpMod.StateAllowlist.Generated.cs:58 | allowlist |
 | `PaelsLegion[relic]._cooldown` | ancient | McpMod.RelicCombatState.cs:73 | mod-scan |
 | `PaelsTears._hadLeftoverEnergy` | ancient | McpMod.RelicCombatState.cs:39 | mod-scan |
-| `PaelsTooth._serializableCards` | ancient | McpMod.StateAllowlist.Generated.cs:64 | allowlist |
+| `PaelsTooth._serializableCards` | ancient | McpMod.StateAllowlist.Generated.cs:61 | allowlist |
 | `PaelsWing._rewardsSacrificed` | ancient | McpMod.RelicCombatState.cs:229 | mod-scan |
-| `PenNib._attackToDouble` | shared | McpMod.StateAllowlist.Generated.cs:67 | allowlist |
+| `PenNib._attackToDouble` | shared | McpMod.StateAllowlist.Generated.cs:64 | allowlist |
 | `PenNib._attacksPlayed` | shared | McpMod.RelicCombatState.cs:94 | mod-scan |
 | `Pendulum._turnsSeen` | shared | McpMod.RelicCombatState.cs:180 | mod-scan |
 | `Permafrost._activatedThisCombat` | shared | McpMod.RelicCombatState.cs:32 | mod-scan |
@@ -492,7 +493,7 @@
 | `Wuppy[relic]._currentHp` | event-only | setter が DynamicVars（CurrentHp・MaxHp）に写す。レリックの vars に出ている（McpMod.RelicCombatState.cs:271） | manual |
 | `Wuppy[relic]._maxHp` | event-only | setter が DynamicVars（CurrentHp・MaxHp）に写す。レリックの vars に出ている（McpMod.RelicCombatState.cs:271） | manual |
 
-## static/derived（出す必要が無い）（92 件）
+## static/derived（出す必要が無い）（91 件）
 
 | クラス.メンバー | 型 | 範囲 | 何から決まるか |
 |---|---|---|---|
@@ -515,7 +516,6 @@
 | `GeneticAlgorithm._currentBlock` | int | other-character | CanonicalVars の初期値に使う写し（Update* で更新）。今の値は DynamicVars.Block として dynamic_vars に出る |
 | `Guilty._combatsSeen` | int | curse | setter が DynamicVars["Combats"] = 5 - CombatsSeen に写す。dynamic_vars.Combats から決まる |
 | `MadScience._mockedChaosCard` | CardModel? | event-only | テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま |
-| `Regret._cardsInHand` | int | curse | BeforeSideTurnEnd がターン終了時の手札の枚数を写し、OnTurnEndInHand が使う。手札の枚数は出ている |
 | `ShowOff._currentAim` | int | other-character | CanonicalVars の初期値に使う写し（Update* で更新）。今の値は DynamicVars（AimPower） として dynamic_vars に出る |
 | `Splash._mockGeneratedCard` | CardModel? | colorless | テスト用の上書き（SetupForTests・Mock*・Set*Test* からだけ書く）。通常のランでは既定値のまま |
 | `TheScythe._currentDamage` | int | other-character | CanonicalVars の初期値に使う写し（Update* で更新）。今の値は DynamicVars.Damage として dynamic_vars に出る |

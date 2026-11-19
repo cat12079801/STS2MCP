@@ -11,13 +11,13 @@ public static partial class McpMod
     {
         // CardModel._cloneOf（CardModel?）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_cloneOf", StateMemberKind.Field, "clone_of_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
-            "複製元のカード（CloneOf / IsClone）。複製でできたカードは手札で見分けがつく。IsClone・DupeOf の判定に使う"),
+            "複製元のカード（CloneOf / IsClone。CardModel.cs:2391 で複製を作るときに入れる）。複製を作った効果は人間に見えている。IsClone・DupeOf の判定に使う"),
         // CardModel._currentPlayIndex（int）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_currentPlayIndex", StateMemberKind.Field, "current_play_index", StateValueConverter.Int, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む"),
         // CardModel._currentTarget（Creature?）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_currentTarget", StateMemberKind.Field, "current_target_combat_id", StateValueConverter.CreatureCombatId, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象"),
         // CardModel._floorAddedToDeck（int?）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_floorAddedToDeck", StateMemberKind.Field, "floor_added_to_deck", StateValueConverter.NullableInt, StateMarkdown.Never,
             "デッキに入った階。人間は取得した階を覚えている。今の版で効果に読む箇所は見当たらず、保存と履歴に使う。優先度は低い"),
@@ -32,7 +32,7 @@ public static partial class McpMod
             "効果が後から外したキーワード（RemoveKeyword）。強化の取り消しで戻すときに使う"),
         // CardModel._transformIntoAfterPlay（CardModel?）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_transformIntoAfterPlay", StateMemberKind.Field, "transform_into_after_play_id", StateValueConverter.CardModelId, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定）"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定）"),
         // CombatState._allies（List<Creature>）
         new("battle", "MegaCrit.Sts2.Core.Combat.CombatState", "MegaCrit.Sts2.Core.Combat.CombatState", "_allies", StateMemberKind.Field, "ally_combat_ids", StateValueConverter.CreatureCombatIds, StateMarkdown.NonDefault,
             "味方側のクリーチャー（プレイヤーとペット）。プレイヤー・pets として個別に出ているが、一覧としては出ていない。マルチプレイの味方を含む"),
@@ -42,11 +42,8 @@ public static partial class McpMod
         // ExtraPlayerFields.CardShopRemovalsUsed（int）
         new("player", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "CardShopRemovalsUsed", StateMemberKind.AutoProperty, "card_shop_removals_used", StateValueConverter.Int, StateMarkdown.NonDefault,
             "ショップでカードを除去した回数。除去の値段（MerchantCardRemovalEntry）が上がる。人間は自分の除去の回数を知っている。戦闘外の判断（runplan）に効く"),
-        // ExtraPlayerFields.WongoPoints（int）
-        new("player", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "WongoPoints", StateMemberKind.AutoProperty, "wongo_points", StateValueConverter.Int, StateMarkdown.NonDefault,
-            "ウォンゴのポイント。イベント WelcomeToWongos が読む。人間はイベントの画面で見る"),
         // GoldenCompass._goldenPathAct（int）
-        new("relic", "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass", "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass", "_goldenPathAct", StateMemberKind.Field, "golden_path_act", StateValueConverter.Int, StateMarkdown.NonDefault,
+        new("relic", "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass", "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass", "_goldenPathAct", StateMemberKind.Field, "golden_path_act", StateValueConverter.Int, StateMarkdown.Always,
             "黄金の道を引いた幕（AfterObtained）。その幕の地図の生成と、不明マスの部屋の種類（ModifyUnknownMapPointRoomTypes）を変える。取得した幕は人間に分かる"),
         // InterceptPower.Data.coveredCreatures（List<Creature>）
         new("power", "MegaCrit.Sts2.Core.Models.Powers.InterceptPower", "MegaCrit.Sts2.Core.Models.Powers.InterceptPower+Data", "coveredCreatures", StateMemberKind.DataField, "covered_creature_ids", StateValueConverter.CreatureCombatIds, StateMarkdown.NonDefault,
@@ -56,22 +53,25 @@ public static partial class McpMod
             "BuffFromMaulPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない"),
         // MusicBox._cardBeingPlayed（CardModel?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.MusicBox", "MegaCrit.Sts2.Core.Models.Relics.MusicBox", "_cardBeingPlayed", StateMemberKind.Field, "card_being_played_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。このターン最初の自分のアタック（BeforeCardPlayed で入れる）。AfterCardPlayed でその複製（エセリアル付き）を手札に加えて null に戻す。BeforeSideTurnStart でも null に戻す"),
         // PaelsLegion[relic]._affectedCardPlay（CardPlay?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.PaelsLegion", "MegaCrit.Sts2.Core.Models.Relics.PaelsLegion", "_affectedCardPlay", StateMemberKind.Field, "affected_card_uid", StateValueConverter.CardPlayCardUid, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ"),
         // PaelsTooth._serializableCards（List<SerializableCard>）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.PaelsTooth", "MegaCrit.Sts2.Core.Models.Relics.PaelsTooth", "_serializableCards", StateMemberKind.Field, "stored_cards", StateValueConverter.SerializableCards, StateMarkdown.NonDefault,
             "預けたカード（人間が選んだもの）。戦闘の終わりに 1 枚を乱数で返す。枚数は counter に出ているが、中身は出ていない"),
         // PenNib._attackToDouble（CardModel?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.PenNib", "MegaCrit.Sts2.Core.Models.Relics.PenNib", "_attackToDouble", StateMemberKind.Field, "attack_to_double_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする"),
         // PowerModel._amountOnTurnStart（int）
         new("power", "MegaCrit.Sts2.Core.Models.PowerModel", "MegaCrit.Sts2.Core.Models.PowerModel", "_amountOnTurnStart", StateMemberKind.Field, "amount_on_turn_start", StateValueConverter.Int, StateMarkdown.DiffersFromAmount,
             "ターン開始時（Creature.BeforeTurnStart）の量の写し。DrawCardsNextTurnPower は 0 なら（このターンに付いたなら）引く枚数を増やさない。いつ付いたかは人間に見えている"),
         // Rampage._extraDamageFromPlays（decimal）
         new("card", "MegaCrit.Sts2.Core.Models.Cards.Rampage", "MegaCrit.Sts2.Core.Models.Cards.Rampage", "_extraDamageFromPlays", StateMemberKind.Field, "extra_damage", StateValueConverter.Decimal, StateMarkdown.NonDefault,
             "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない"),
+        // Regret._cardsInHand（int）
+        new("card", "MegaCrit.Sts2.Core.Models.Cards.Regret", "MegaCrit.Sts2.Core.Models.Cards.Regret", "_cardsInHand", StateMemberKind.Field, "cards_in_hand_at_turn_end", StateValueConverter.Int, StateMarkdown.NonDefault,
+            "BeforeSideTurnEnd がターン終了時の手札の枚数を写し、OnTurnEndInHand がその値のダメージを与えて 0 に戻す。写しと使用の間（ターン終了の解決の途中）では今の手札の枚数と違いうるので、ほかの解決中の印と同じく出す（PR #108 のレビュー P3-8）"),
         // RelicModel._floorAddedToDeck（int）
         new("relic", "MegaCrit.Sts2.Core.Models.RelicModel", "MegaCrit.Sts2.Core.Models.RelicModel", "_floorAddedToDeck", StateMemberKind.Field, "floor_added_to_deck", StateValueConverter.Int, StateMarkdown.Never,
             "取得した階。効果に読む箇所は見つからず、保存と履歴に使う。優先度は低い"),
@@ -82,7 +82,7 @@ public static partial class McpMod
         new("relic", "MegaCrit.Sts2.Core.Models.RelicModel", "MegaCrit.Sts2.Core.Models.RelicModel", "_status", StateMemberKind.Field, "status", StateValueConverter.EnumName, StateMarkdown.NonDefault,
             "RelicStatus（Normal/Active/Disabled）。画面ではレリックの光り方で見える。PaelsFlesh が Status を条件に使う（IsUsedUp・AfterSideTurnStart の base.Status == Active）。mod-scan の検出（.Status）はエンチャントの status の誤検出。Normal 以外のときだけ markdown に出す"),
         // SpoilsMap._spoilsActIndex（int）
-        new("card", "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap", "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap", "_spoilsActIndex", StateMemberKind.Field, "spoils_act_index", StateValueConverter.Int, StateMarkdown.NonDefault,
+        new("card", "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap", "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap", "_spoilsActIndex", StateMemberKind.Field, "spoils_act_index", StateValueConverter.Int, StateMarkdown.Always,
             "宝の地図の印を付ける幕（AfterCreated で 1）。印の付いた点は地図の quests に出るが、どの幕の印かはこの値で決まる"),
         // TheBall._extraDamageFromPlays（decimal）
         new("card", "MegaCrit.Sts2.Core.Models.Cards.TheBall", "MegaCrit.Sts2.Core.Models.Cards.TheBall", "_extraDamageFromPlays", StateMemberKind.Field, "extra_damage", StateValueConverter.Decimal, StateMarkdown.NonDefault,
@@ -92,12 +92,12 @@ public static partial class McpMod
             "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない"),
         // UnsettlingLamp._doubledPowers（List<PowerModel>?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.UnsettlingLamp", "MegaCrit.Sts2.Core.Models.Relics.UnsettlingLamp", "_doubledPowers", StateMemberKind.Field, "doubled_power_ids", StateValueConverter.PowerRefs, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）。リストが未作成（null）の間は空として出す"),
+            "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）。リストが未作成（null）の間は空として出す"),
         // UnsettlingLamp._triggeringCard（CardModel?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.UnsettlingLamp", "MegaCrit.Sts2.Core.Models.Relics.UnsettlingLamp", "_triggeringCard", StateMemberKind.Field, "triggering_card_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。戦闘で最初にデバフを付けたカード。ModifyPowerAmountGivenMultiplicative が 2 倍にする"),
+            "戦闘で最初にデバフを付けたカード（BeforePowerAmountChanged で入れる）。そのカードの解決中は ModifyPowerAmountGivenMultiplicative がデバフを 2 倍にし、AfterCardPlayed は消さずに is_finished_triggering（combat_state の used_this_combat）を true にする。消すのは BeforeCombatStart・AfterCombatEnd だけなので、安定した state でも戦闘の終わりまで残る。効くかは used_this_combat で決まる（PR #108 のレビュー P3-2）"),
         // Vambrace._triggeringCard（CardModel?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.Vambrace", "MegaCrit.Sts2.Core.Models.Relics.Vambrace", "_triggeringCard", StateMemberKind.Field, "triggering_card_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
-            "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカード"),
+            "戦闘で最初にブロックを得たカード（AfterModifyingBlockAmount で入れる）。そのカードの解決中は ModifyBlockMultiplicative がブロックを 2 倍にし、AfterCardPlayed が block_gained_this_combat（combat_state）を true にする。消すのは BeforeCombatStart・AfterCombatEnd だけなので、安定した state でも戦闘の終わりまで残る。効くかは block_gained_this_combat で決まる（PR #108 のレビュー P3-2）"),
     };
 }

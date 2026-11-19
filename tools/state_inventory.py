@@ -23,6 +23,8 @@
                                     この 2 つだけなら --decompile は要らない。棚卸しを回すと、許可リストの
                                     項目が今の版の宣言（型の完全名・C# の型・種別）と合うかも確かめ、
                                     合わなければ終了コード 2。
+  --check-docs                      md・tsv を書かずに生成し直して比べ、違えば終了コード 3（--decompile が要る）。
+                                    MOD の *.cs を直すと被覆の file:line が動くので、PR の前に回す。
 
 分類が無い候補は unclassified として数え、--list-unclassified で書き込み・読み取りのメソッド付きで出す。
 分類表にあるが今の版に無い候補は stale として報告する（版が上がって消えた・名前が変わった印）。
@@ -38,6 +40,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -628,6 +631,10 @@ def load_mod(mod_dir: Path) -> ModSource:
     files = {}
     index: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
     for p in sorted(mod_dir.glob("*.cs")):
+        if p.name in ALLOWLIST_SOURCE_FILES:
+            # 生成した許可リストとその読み取り・整形は、被覆を分類表の section から決める。
+            # 文字列・プロパティの一致では数えない（SerializableCard.Enchantment などを基底の項目と取り違える）。
+            continue
         lines = p.read_text(encoding="utf-8-sig").splitlines()
         files[p.name] = lines
         for idx, raw in enumerate(lines):
@@ -679,7 +686,9 @@ def mod_coverage(mod: ModSource, m: Member, classes: dict[str, ClassInfo]) -> li
             if how == "acc" and (m.kind == "data_field" or not nm[0].isupper()):
                 continue
             bc = block_classes(mod.files[fname], idx)
-            if top in bc or (top in BASE_CLASS_NAMES and (how == "acc" or not bc or top in bc)):
+            # 基底クラスの候補も、文字列の一致はブロックのクラス（case・typeof・is）にその型があるときだけ数える。
+            # プロパティの参照（.Name）は型を問わず数える（基底のメンバーはどの派生の変数からも読まれる）。
+            if top in bc or (top in BASE_CLASS_NAMES and how == "acc"):
                 hits.append(f"{fname}:{idx + 1}")
     return sorted(set(hits))
 
@@ -756,6 +765,9 @@ def main() -> int:
     ap.add_argument("--filter", default=None, help="--list-unclassified の対象を owner の正規表現で絞る")
     ap.add_argument("--write-allowlist", action="store_true",
                     help=f"分類表の section 付きの項目から {ALLOWLIST_FILE} を書く")
+    ap.add_argument("--check-docs", action="store_true",
+                    help="棚卸しの文書（md・tsv）を書かずに生成し直して比べ、違えば終了コード 3。--decompile が要る。"
+                         "--game-version を省くと今の md の版を使う")
     ap.add_argument("--check-allowlist", action="store_true",
                     help=f"{ALLOWLIST_FILE} が分類表から生成した内容と一致するかを調べる（違えば終了コード 1）")
     args = ap.parse_args()
@@ -876,6 +888,23 @@ def main() -> int:
         print(f"# unclassified: {sum(1 for r in rows if r['class'] == 'unclassified')}", file=sys.stderr)
         return status
 
+    if args.check_docs:
+        version = args.game_version
+        if version == "未確認" and out_md.exists():
+            m = re.search(r"ゲームの版: \*\*(.+?)\*\*", out_md.read_text(encoding="utf-8"))
+            if m:
+                version = m.group(1)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_tsv, tmp_md = Path(tmp) / out_tsv.name, Path(tmp) / out_md.name
+            write_tsv(tmp_tsv, rows)
+            write_md(tmp_md, rows, stale, decompile, version, mod_dir)
+            stale_docs = [str(dst) for src, dst in ((tmp_tsv, out_tsv), (tmp_md, out_md))
+                          if not dst.exists() or src.read_bytes() != dst.read_bytes()]
+        if stale_docs:
+            print("棚卸しの文書が古い（--check-docs を外して生成し直す）: " + ", ".join(stale_docs), file=sys.stderr)
+            return 3
+        print("棚卸しの文書: 生成し直した内容と一致")
+        return status
     write_tsv(out_tsv, rows)
     write_md(out_md, rows, stale, decompile, args.game_version, mod_dir)
     counts = Counter(r["class"] for r in rows)
@@ -890,12 +919,13 @@ def main() -> int:
 # ---------------------------------------------------------------------------
 
 ALLOWLIST_FILE = "McpMod.StateAllowlist.Generated.cs"
+ALLOWLIST_SOURCE_FILES = (ALLOWLIST_FILE, "McpMod.StateAllowlist.cs", "McpMod.StateAllowlistFormatting.cs")
 ALLOWLIST_SECTIONS = ("card", "relic", "power", "player", "battle")
 ALLOWLIST_KINDS = {"field": "Field", "auto_property": "AutoProperty", "data_field": "DataField"}
 ALLOWLIST_CONVERTERS = ("Bool", "Int", "NullableInt", "Decimal", "EnumName", "CardUid", "CardModelId",
                         "CardPlayCardUid", "CreatureCombatId", "CreatureCombatIds", "KeywordNames",
                         "PowerRefs", "SerializableCards")
-ALLOWLIST_MARKDOWN = ("NonDefault", "Never", "DiffersFromAmount")
+ALLOWLIST_MARKDOWN = ("NonDefault", "Always", "Never", "DiffersFromAmount")
 # 種別をまたいで同じ section・キーを使ってよいのは、互いに継承関係の無い具象クラスどうしだけ
 BASE_TYPE_FULL = {f"{ns}.{name}" for ns, name, _ in BASE_CLASS_FILES}
 

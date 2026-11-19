@@ -40,6 +40,7 @@ public static partial class McpMod
     {
         var sections = new HashSet<string> { "card", "relic", "power", "player", "battle" };
         Check(StateAllowlist.Length == 30, "第 2 段で出すのは 30 項目");
+        Check(!StateAllowlist.Any(e => e.Key == "wongo_points"), "ラン中に読まれない wongo_points は出さない（cosmetic）");
         foreach (var e in StateAllowlist)
         {
             Check(sections.Contains(e.Section), $"{e.Key}: section {e.Section}");
@@ -111,6 +112,10 @@ public static partial class McpMod
             && Equals(Internal(Row("card", new Maul()))["extra_damage"], 0m)
             && Equals(Internal(Row("card", new TheBall()))["extra_damage"], 0m), "累計の 0 も実値");
         Check(Equals(Internal(Row("card", new SpoilsMap()))["spoils_act_index"], -1), "SpoilsMap の幕（未設定の -1 も実値）");
+        var regret = new Regret();
+        regret.SetCardsInHand(6);
+        values = Internal(Row("card", regret));
+        Check(values.Count == 9 && Equals(values["cards_in_hand_at_turn_end"], 6), "後悔のターン終了時の手札の枚数（解決中の印）");
     }
 
     private static void RunPowerContract()
@@ -187,9 +192,16 @@ public static partial class McpMod
     private static void RunPlayerBattleContract()
     {
         BeginStateWarnings();
-        var extra = new ExtraPlayerFields { CardShopRemovalsUsed = 2, WongoPoints = 0 };
+        var extra = new ExtraPlayerFields { CardShopRemovalsUsed = 2, WongoPoints = 7 };
         var values = Internal(Row("player", extra));
-        Check(Equals(values["card_shop_removals_used"], 2) && Equals(values["wongo_points"], 0), "自動実装プロパティを読む");
+        Check(values.Count == 1 && Equals(values["card_shop_removals_used"], 2), "自動実装プロパティを backing field から読む（wongo_points は出さない）");
+        var computed = new StateAllowlistEntry("player", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields",
+            "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "Computed", StateMemberKind.AutoProperty, "computed",
+            StateValueConverter.Int, StateMarkdown.NonDefault, "test");
+        var guard = new Dictionary<string, object?>();
+        ReadInternalStateValue(guard, "computed", () => ReadAllowlistedValue(computed, extra), "guard");
+        Check(guard["computed"] == null && Reasons(guard)!["computed"].Contains("<Computed>k__BackingField"),
+            "backing field の無いプロパティは getter を呼ばず null と理由");
 
         var combat = new CombatState();
         combat.SetAllies(new Creature { CombatId = 4 }, new Creature { CombatId = 1 });
@@ -244,6 +256,13 @@ public static partial class McpMod
         Check(FormatAllowlistedState(Row("relic", relic), "relic") == "", "Normal・false・階は出さない");
         relic.SetBase(RelicStatus.Active, wax: true, floor: 9);
         Check(FormatAllowlistedState(Row("relic", relic), "relic") == " (internal: is wax yes, status Active)", "Active と蝋は出す");
+        var compass = new GoldenCompass();
+        compass.SetAct(0);
+        Check(FormatAllowlistedState(Row("relic", compass), "relic") == " (internal: golden path act 0)", "第 1 幕（0）も出す");
+        compass.SetAct(-1);
+        Check(FormatAllowlistedState(Row("relic", compass), "relic") == " (internal: golden path act -1)", "未設定の -1 も出す");
+        Check(FormatAllowlistedState(Row("card", new SpoilsMap { Owner = player }), "card") == " (internal: spoils act index -1)",
+            "宝の地図の幕は常に出す");
         var combat = new CombatState();
         combat.SetAllies(new Creature { CombatId = 1 });
         Check(FormatAllowlistedState(Row("battle", combat), "battle") == " (internal: ally combat ids [1])", "リストは角括弧");
@@ -274,8 +293,32 @@ public static partial class McpMod
             && Source("McpMod.CardDetailsFormatting.cs").Contains("FormatAllowlistedParts(card, \"card\")"), "カードの markdown");
     }
 
+    // 生成物が分類表から生成し直した内容と一致するか（PR #108 のレビュー P3-6）。tools/state_inventory.py --check-allowlist を
+    // そのまま回す。Python は STS2_PYTHON（無ければ PATH の python3）。標準ライブラリだけで 3.9 以降なら動く。
+    private static void RunGeneratedIsCurrentContract()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "tools", "state_inventory.py")))
+            root = root.Parent;
+        Check(root != null, "リポジトリのルート（tools/state_inventory.py）が見つかる");
+        string python = Environment.GetEnvironmentVariable("STS2_PYTHON") is { Length: > 0 } configured ? configured : "python3";
+        var start = new System.Diagnostics.ProcessStartInfo(python)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            WorkingDirectory = root!.FullName
+        };
+        foreach (string arg in new[] { "-B", "tools/state_inventory.py", "--mod", ".", "--check-allowlist" })
+            start.ArgumentList.Add(arg);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Check(process.ExitCode == 0, "McpMod.StateAllowlist.Generated.cs が分類表と一致する（--write-allowlist で作り直す）: " + output.Trim());
+    }
+
     public static int Main()
     {
+        RunGeneratedIsCurrentContract();
         RunGeneratedTableContract();
         RunCardContract();
         RunPowerContract();

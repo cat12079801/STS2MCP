@@ -1742,7 +1742,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 形と読み方:
 
 - `internal_state` は `{キー: 値}`。行のモデルに当てはまる項目が無ければ `internal_state` を省く。
-- 読むのは、宣言した型の宣言フィールド（`DeclaredOnly`）と、自動実装プロパティの getter だけ。フック・遅延初期化の getter・乱数は呼ばない。
+- 読むのは、宣言した型の宣言フィールド（`DeclaredOnly`）だけ。自動実装プロパティも getter を呼ばず、コンパイラが作る backing field（`<Name>k__BackingField`）を読む（無ければ null と理由）。getter・フック・遅延初期化・乱数は呼ばない。
   パワーの `Data` は private `PowerModel._internalData` をそのまま読み、型が入れ子の `Data` と違えば読まない。
 - 宣言の型が値の変換の前提と違う（版が上がって型が変わった）とき、メンバーが無いときは、その項目を `null` にし、`internal_state.unavailable_reasons` に理由、`warnings` に `<行>.internal_state.<キー>` を出す。ほかの項目は残す。
   `null` で理由が無いのは、参照が無い・未設定という実値。型そのものが見つからない版では、`warnings` に出してその項目を付けない。
@@ -1762,29 +1762,32 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `card` | `transform_into_after_play_id` | string \| null | `CardModel._transformIntoAfterPlay` | プレイの後に変化する先のモデル id（`MourningBlow` が `SADNESS` を入れる） |
 | `card` | `extra_damage` | decimal | `Rampage._extraDamageFromPlays`・`Thrash._extraDamage`・`TheBall._extraDamageFromPlays`・`Maul._extraDamageFromMaulPlays` | プレイ・効果で `DynamicVars.Damage` に足した累計。`AfterDowngraded`（弱化などの強化の取り消し）で基礎値に足し戻す |
 | `card` | `spoils_act_index` | int | `SpoilsMap._spoilsActIndex` | 宝の地図が印を付ける幕（`AfterCreated` で入れる。未設定は -1） |
+| `card` | `cards_in_hand_at_turn_end` | int | `Regret._cardsInHand` | 後悔（呪い）がターン終了時に写した手札の枚数（`BeforeSideTurnEnd`）。`OnTurnEndInHand` がその量のダメージを与えて 0 に戻す |
 | `power` | `amount_on_turn_start` | int | `PowerModel._amountOnTurnStart` | ターンの開始の前（`Creature.BeforeTurnStart`）に `Amount` を写した値。その後に付いたパワーは 0 のまま。`DrawCardsNextTurnPower.ModifyHandDraw` は 0 なら引く枚数を増やさない |
 | `power` | `covered_creature_ids` | uint[] | `InterceptPower.Data.coveredCreatures` | かばっている味方の `combat_id`（マルチプレイ） |
 | `relic` | `status` | string | `RelicModel._status` | `Normal` / `Active` / `Disabled`（画面ではレリックの光り方）。`PaelsFlesh` が条件に使う |
 | `relic` | `is_wax` | bool | `RelicModel._isWax` | 蝋のレリック（`ToyBox` が作る。溶けたかは既存の `melted`） |
 | `relic` | `floor_added_to_deck` | int | `RelicModel._floorAddedToDeck` | 取得した階（`RelicCmd`。保存と履歴に使う） |
 | `relic` | `golden_path_act` | int | `GoldenCompass._goldenPathAct` | 黄金の道を引いた幕（`AfterObtained`）。その幕の地図と不明マスの部屋の種類（`ModifyUnknownMapPointRoomTypes`）を変える |
-| `relic` | `card_being_played_uid` | string \| null | `MusicBox._cardBeingPlayed` | 解決中のカード |
+| `relic` | `card_being_played_uid` | string \| null | `MusicBox._cardBeingPlayed` | このターン最初の自分のアタックで、解決中のもの（`BeforeCardPlayed` で入れ、`AfterCardPlayed` で複製を手札に加えて null に戻す） |
 | `relic` | `affected_card_uid` | string \| null | `PaelsLegion._affectedCardPlay`（の `Card`） | ブロックを 2 倍にする解決中のカード |
 | `relic` | `stored_cards` | `[{id, upgrade_level, enchantment_id}]` | `PaelsTooth._serializableCards` | 預けたカード（人間が選んだもの）。戦闘の終わりに乱数で 1 枚を返すので、並びは id・強化段階の順 |
 | `relic` | `attack_to_double_uid` | string \| null | `PenNib._attackToDouble` | 2 倍にする解決中のアタック |
-| `relic` | `triggering_card_uid` | string \| null | `UnsettlingLamp._triggeringCard`・`Vambrace._triggeringCard` | 効果を 2 倍にする解決中のカード |
+| `relic` | `triggering_card_uid` | string \| null | `UnsettlingLamp._triggeringCard`・`Vambrace._triggeringCard` | 戦闘で最初にデバフを付けた（UnsettlingLamp）・ブロックを得た（Vambrace）カード。そのカードの解決中だけ 2 倍にする。消すのは `BeforeCombatStart`・`AfterCombatEnd` だけなので、安定した state でも戦闘の終わりまで残る。効くかは `combat_state` の `used_this_combat`（UnsettlingLamp）・`block_gained_this_combat`（Vambrace）で決まる |
 | `relic` | `doubled_power_ids` | `[{id, owner_combat_id}]` | `UnsettlingLamp._doubledPowers` | 2 倍にしたパワー（一時パワーの内側を二重に倍にしないため）。リストが未作成なら空 |
 | `player` | `card_shop_removals_used` | int | `ExtraPlayerFields.CardShopRemovalsUsed` | ショップでカードを除去した回数（除去の値段が上がる） |
-| `player` | `wongo_points` | int | `ExtraPlayerFields.WongoPoints` | ウォンゴのポイント（イベント `WelcomeToWongos` が読む） |
 | `battle` | `ally_combat_ids` | uint[] | `CombatState._allies` | 味方側のクリーチャー（プレイヤー・ペット・マルチプレイの味方） |
 | `battle` | `escaped_creature_ids` | uint[] | `CombatState._escapedCreatures` | 逃げた敵（`CreatureEscaped`） |
 
-解決中の印（`current_play_index`・`current_target_combat_id`・`transform_into_after_play_id`・`card_being_played_uid`・`affected_card_uid`・`attack_to_double_uid`・`triggering_card_uid`・`doubled_power_ids`）は、
-カードのプレイ・攻撃の解決の途中で選択画面が開いたときに値を持つ。安定した state では既定値（null・0・空）が多い。
+解決中の印（`current_play_index`・`current_target_combat_id`・`transform_into_after_play_id`・`cards_in_hand_at_turn_end`・`card_being_played_uid`・`affected_card_uid`・`attack_to_double_uid`・`doubled_power_ids`）は、
+カードのプレイ・攻撃・ターン終了の解決の途中でだけ値を持ち、安定した state では既定値（null・0・空）が多い。
+解決の途中で値を観測できるのは、`battle` を付ける選択画面（戦闘中の `hand_select` と、ポーションなどの choose-a-card）だけ。
+戦闘中のグリッドの選択画面（`card_select`）は `battle` を付けないので、そこではカードの行の印も出ない。
+`triggering_card_uid` は解決の途中でなくても戦闘の終わりまで残る（上の表）。
 
 Markdown は既定値（false・0・空・理由の無い null・`Normal`）を省き、`(internal: is dupe yes, extra damage 5)` の形で行に足す。
 カードは詳細の行（`  - internal: …`）、レリック・パワーは行の末尾、player はステータスの行、battle は `Round` の行。
-`floor_added_to_deck` は出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。読めなかった値は `null (理由)`。
+`floor_added_to_deck` は出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。`golden_path_act`・`spoils_act_index` は 0（第 1 幕）も -1（未設定）も実値なので常に出す。読めなかった値は `null (理由)`。
 デッキの markdown は同じ札を束ねて表示するので、デッキの行の `internal_state` は JSON だけ。
 
 ```json

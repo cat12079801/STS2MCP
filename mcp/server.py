@@ -201,7 +201,7 @@ async def get_game_state(format: str = "markdown") -> str:
     has_spoken、KinPriest speech_used。分岐の先は台詞だけ）を足した。儀式の status 行は was_just_applied_by_enemy。
     schema 1.2.0 で、棚卸し（docs/state-inventory.md）で public と分類した内部状態を、分類表から生成した
     許可リストで読み、カード・パワー・レリック・player・battle の行の internal_state に出す（解決中の札の uid、
-    Rampage などの extra_damage、パワーの amount_on_turn_start、レリックの status・is_wax、除去の回数など。
+    Rampage などの extra_damage、後悔の cards_in_hand_at_turn_end、パワーの amount_on_turn_start、レリックの status・is_wax、除去の回数など。
     一覧は docs/raw-full.md）。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と

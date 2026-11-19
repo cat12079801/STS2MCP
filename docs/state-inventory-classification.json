@@ -1,5 +1,5 @@
 {
- "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Never・DiffersFromAmount。",
+ "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Always（常に表示。-1 などの未設定も実値）・Never・DiffersFromAmount。",
  "AbstractModel.CategorySortingId": {
   "class": "static/derived",
   "note": "ModelDb の並び順（InitId）。ゲームの状態ではない"
@@ -18,20 +18,20 @@
  },
  "AfterimagePower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
  "AimPower.Data.amountWhenAttackStarted": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。攻撃の開始時の量（Vigor と同じ形）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。攻撃の開始時の量（Vigor と同じ形）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。",
   "json_key": "amount_when_started",
   "effect": "AfterAttack",
   "pool": "other-character"
  },
  "AimPower.Data.commandToModify": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）。AimPower を付けるのは ShowOff（他キャラのカード）と PrecisionPotion（どのポーションのプールにも無い）。範囲は other-character に上書きする。",
   "json_key": "has_command_to_modify",
   "effect": "ModifyDamageAdditive・AfterAttack",
   "pool": "other-character"
@@ -80,6 +80,10 @@
   "class": "static/derived",
   "note": "他のモデルへの参照（所属）"
  },
+ "CardEnergyCost._localModifiers": {
+  "class": "exposed",
+  "note": "energy_cost の local_modifiers（McpMod.CardEnergyCost.cs:52。ReadLocalEnergyCostModifiers〔同 :103〕が cost.GetType() で読むので型の文脈が無く、mod-scan では数えない）"
+ },
  "CardModel.HasBeenRemovedFromState": {
   "class": "static/derived",
   "note": "state から外れたモデルの印（RemoveFromState）。外れたモデルは state の一覧に出ない"
@@ -90,7 +94,7 @@
  },
  "CardModel._cloneOf": {
   "class": "public",
-  "note": "複製元のカード（CloneOf / IsClone）。複製でできたカードは手札で見分けがつく。IsClone・DupeOf の判定に使う",
+  "note": "複製元のカード（CloneOf / IsClone。CardModel.cs:2391 で複製を作るときに入れる）。複製を作った効果は人間に見えている。IsClone・DupeOf の判定に使う",
   "json_key": "clone_of_uid",
   "effect": "CardModel.IsClone・DupeOf（複製の扱い）",
   "section": "card",
@@ -101,7 +105,7 @@
  },
  "CardModel._currentPlayIndex": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む",
   "json_key": "current_play_index",
   "effect": "LethalityPower（初回のプレイだけ強化）",
   "section": "card",
@@ -112,7 +116,7 @@
  },
  "CardModel._currentTarget": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象",
   "json_key": "current_target_combat_id",
   "effect": "OnPlayWrapper の対象",
   "section": "card",
@@ -209,7 +213,7 @@
  },
  "CardModel._transformIntoAfterPlay": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定）",
   "json_key": "transform_into_after_play_id",
   "effect": "OnPlayWrapper の最後で TransformTo",
   "section": "card",
@@ -412,7 +416,7 @@
  },
  "EncorePower.Data.cardsBeingPlayed": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。",
   "json_key": "cards_being_played",
   "effect": "ShouldPlay"
  },
@@ -450,15 +454,8 @@
   "note": "実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない"
  },
  "ExtraPlayerFields.WongoPoints": {
-  "class": "public",
-  "note": "ウォンゴのポイント。イベント WelcomeToWongos が読む。人間はイベントの画面で見る",
-  "json_key": "wongo_points",
-  "effect": "WelcomeToWongos",
-  "section": "player",
-  "converter": "Int",
-  "type_full": "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields",
-  "cs_type": "int",
-  "kind": "auto_property"
+  "class": "cosmetic",
+  "note": "ラン中に得たウォンゴのポイント。WelcomeToWongos は書くだけ（WelcomeToWongos.cs:131。条件に読むのはプロファイルの SaveManager.Instance.Progress.WongoPoints）で、ランの終わりに進捗へ足す（ProgressSaveManager）。ラン中に読む効果は無い統計（DamageDealt・DebuffsApplied と同じ）。PR #108 のレビュー P3-1"
  },
  "FakeHappyFlower._isActivating": {
   "class": "cosmetic",
@@ -529,11 +526,12 @@
   "converter": "Int",
   "type_full": "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass",
   "cs_type": "int",
-  "kind": "field"
+  "kind": "field",
+  "markdown": "Always"
  },
  "GravityPower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
@@ -684,7 +682,7 @@
  },
  "MonologuePower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
@@ -698,7 +696,7 @@
  },
  "MusicBox._cardBeingPlayed": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。このターン最初の自分のアタック（BeforeCardPlayed で入れる）。AfterCardPlayed でその複製（エセリアル付き）を手札に加えて null に戻す。BeforeSideTurnStart でも null に戻す",
   "json_key": "card_being_played_uid",
   "effect": "AfterCardPlayed",
   "section": "relic",
@@ -719,7 +717,7 @@
  },
  "OblivionPower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
@@ -749,7 +747,7 @@
  },
  "PaelsLegion[relic]._affectedCardPlay": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ",
   "json_key": "affected_card_uid",
   "effect": "ModifyBlockMultiplicative",
   "section": "relic",
@@ -785,7 +783,7 @@
  },
  "PenNib._attackToDouble": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする",
   "json_key": "attack_to_double_uid",
   "effect": "ModifyDamageMultiplicative",
   "section": "relic",
@@ -936,7 +934,7 @@
  },
  "QuietusPower.Data.commandToModify": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeAttack で修正する攻撃を記録する（Vigor・Gigantification と同じ形で、そちらは出ている）",
   "json_key": "has_command_to_modify",
   "effect": "ModifyDamageMultiplicative・AfterAttack"
  },
@@ -952,8 +950,16 @@
   "kind": "field"
  },
  "Regret._cardsInHand": {
-  "class": "static/derived",
-  "note": "BeforeSideTurnEnd がターン終了時の手札の枚数を写し、OnTurnEndInHand が使う。手札の枚数は出ている"
+  "class": "public",
+  "note": "BeforeSideTurnEnd がターン終了時の手札の枚数を写し、OnTurnEndInHand がその値のダメージを与えて 0 に戻す。写しと使用の間（ターン終了の解決の途中）では今の手札の枚数と違いうるので、ほかの解決中の印と同じく出す（PR #108 のレビュー P3-8）",
+  "json_key": "cards_in_hand_at_turn_end",
+  "effect": "OnTurnEndInHand（CreatureCmd.Damage の量）",
+  "written": "BeforeSideTurnEnd・OnTurnEndInHand",
+  "section": "card",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Models.Cards.Regret",
+  "cs_type": "int",
+  "kind": "field"
  },
  "RelicModel.HasBeenRemovedFromState": {
   "class": "static/derived",
@@ -1022,7 +1028,7 @@
  },
  "SerpentFormPower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
@@ -1115,7 +1121,8 @@
   "converter": "Int",
   "type_full": "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap",
   "cs_type": "int",
-  "kind": "field"
+  "kind": "field",
+  "markdown": "Always"
  },
  "StoneCalendar._isActivating": {
   "class": "cosmetic",
@@ -1123,31 +1130,31 @@
  },
  "StormPower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
  "StretchPower.Data.amountWhenCardStarted": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。",
   "json_key": "amount_when_card_started",
   "effect": "AfterCardPlayed"
  },
  "StretchPower.Data.cardPlay": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。",
   "json_key": "card_play_in_progress",
   "effect": "ModifyBlockAdditive・AfterCardPlayed"
  },
  "StretchPower.Data.gaveBonusBlock": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。",
   "json_key": "gave_bonus_block",
   "effect": "AfterCardPlayed"
  },
  "SubroutinePower.Data.amountsForPlayedCards": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed でプレイ中のカードと量を記録し、AfterCardPlayed で使う（Calamity・Strangle と同じ形で、そちらは出ている）",
   "json_key": "amounts_for_played_cards",
   "effect": "AfterCardPlayed"
  },
@@ -1251,7 +1258,7 @@
  },
  "UnsettlingLamp._doubledPowers": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）。リストが未作成（null）の間は空として出す",
+  "note": "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）。リストが未作成（null）の間は空として出す",
   "json_key": "doubled_power_ids",
   "effect": "HasDoubledTemporaryPowerSource",
   "section": "relic",
@@ -1262,7 +1269,7 @@
  },
  "UnsettlingLamp._triggeringCard": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。戦闘で最初にデバフを付けたカード。ModifyPowerAmountGivenMultiplicative が 2 倍にする",
+  "note": "戦闘で最初にデバフを付けたカード（BeforePowerAmountChanged で入れる）。そのカードの解決中は ModifyPowerAmountGivenMultiplicative がデバフを 2 倍にし、AfterCardPlayed は消さずに is_finished_triggering（combat_state の used_this_combat）を true にする。消すのは BeforeCombatStart・AfterCombatEnd だけなので、安定した state でも戦闘の終わりまで残る。効くかは used_this_combat で決まる（PR #108 のレビュー P3-2）",
   "json_key": "triggering_card_uid",
   "effect": "ModifyPowerAmountGivenMultiplicative・AfterCardPlayed",
   "section": "relic",
@@ -1277,9 +1284,9 @@
  },
  "Vambrace._triggeringCard": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカード",
+  "note": "戦闘で最初にブロックを得たカード（AfterModifyingBlockAmount で入れる）。そのカードの解決中は ModifyBlockMultiplicative がブロックを 2 倍にし、AfterCardPlayed が block_gained_this_combat（combat_state）を true にする。消すのは BeforeCombatStart・AfterCombatEnd だけなので、安定した state でも戦闘の終わりまで残る。効くかは block_gained_this_combat で決まる（PR #108 のレビュー P3-2）",
   "json_key": "triggering_card_uid",
-  "effect": "ModifyBlockMultiplicative",
+  "effect": "ModifyBlockMultiplicative・AfterCardPlayed",
   "section": "relic",
   "converter": "CardUid",
   "type_full": "MegaCrit.Sts2.Core.Models.Relics.Vambrace",

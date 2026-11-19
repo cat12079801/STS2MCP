@@ -21,8 +21,9 @@ internal enum StateValueConverter
     KeywordNames, PowerRefs, SerializableCards
 }
 
-/// <summary>markdown に出す条件。NonDefault は false・0・空・null（理由なし）・Normal を省く。</summary>
-internal enum StateMarkdown { NonDefault, Never, DiffersFromAmount }
+/// <summary>markdown に出す条件。NonDefault は false・0・空・null（理由なし）・Normal を省く。
+/// Always は常に出す（幕の番号のように 0 が実値で -1 が未設定の項目）。</summary>
+internal enum StateMarkdown { NonDefault, Always, Never, DiffersFromAmount }
 
 /// <summary>
 /// 生成した許可リスト（McpMod.StateAllowlist.Generated.cs）の 1 項目。

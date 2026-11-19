@@ -50,6 +50,8 @@ namespace MegaCrit.Sts2.Core.Entities.Players
     {
         public int CardShopRemovalsUsed { get; set; }
         public int WongoPoints { get; set; }
+        // 手書きの getter（backing field が無い）。自動実装プロパティとして読もうとすると null と理由になる。
+        public int Computed => CardShopRemovalsUsed + 1;
     }
 }
 namespace MegaCrit.Sts2.Core.Saves.Runs
@@ -115,6 +117,7 @@ namespace MegaCrit.Sts2.Core.Models.Cards
     public sealed class TheBall() : CardModel("THE_BALL") { private decimal _extraDamageFromPlays; }
     public sealed class Maul() : CardModel("MAUL") { private decimal _extraDamageFromMaulPlays; }
     public sealed class SpoilsMap() : CardModel("SPOILS_MAP") { private int _spoilsActIndex = -1; }
+    public sealed class Regret() : CardModel("REGRET") { private int _cardsInHand; public void SetCardsInHand(int v) => _cardsInHand = v; }
 }
 namespace MegaCrit.Sts2.Core.Models.Powers
 {
@@ -132,7 +135,7 @@ namespace MegaCrit.Sts2.Core.Models.Powers
 }
 namespace MegaCrit.Sts2.Core.Models.Relics
 {
-    public sealed class GoldenCompass : RelicModel { private int _goldenPathAct = -1; }
+    public sealed class GoldenCompass : RelicModel { private int _goldenPathAct = -1; public void SetAct(int v) => _goldenPathAct = v; }
     public sealed class MusicBox : RelicModel { private CardModel? _cardBeingPlayed; }
     public sealed class PaelsLegion : RelicModel { private Entities.Cards.CardPlay? _affectedCardPlay; public void Set(Entities.Cards.CardPlay? p) => _affectedCardPlay = p; }
     public sealed class PaelsTooth : RelicModel { private List<Saves.Runs.SerializableCard> _serializableCards = []; public List<Saves.Runs.SerializableCard> Cards => _serializableCards; }
