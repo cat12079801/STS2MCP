@@ -976,12 +976,12 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 |---|---|---|
 | `auto_play_reservation` | `call_id` | 戦闘ごとの呼出しの通し番号（1 から。全 Player の呼出しで数える） |
 | | `parent_call_id` | 親のプレイが別の呼出しの消化から始まったなら、その呼出しの `call_id`（カスケードで出た荒廃の確保など）。それ以外は null |
-| | `parent` | 呼出しの時点の `PlayerChoiceContext.LastInvolvedModel`。札の `OnPlay` なら、`CardModel.OnPlayWrapper` が札を積んだ `BranchingPlayerChoiceContext` の先頭がその札。フックなら `Hook` が積んだ listener（騒乱など）、ポーションなら `PotionModel.OnUseWrapper` が積んだポーション。`{ kind, model_id, uid, hidden_reason }`。`kind` は `card` / `potion` / `power` / `relic` / `other`、`uid` は札のときだけ。親の札が山札にある（`IAmInvincible` の自分のフック）ときは、移す前の山札の先頭を明かさないよう `model_id`・`uid` を null、`hidden_reason: "draw_pile"`。context にモデルが無ければ `parent` 自体が null |
+| | `parent` | 呼出しの時点の `PlayerChoiceContext.LastInvolvedModel`。札の `OnPlay` なら、`CardModel.OnPlayWrapper` が札を積んだ `BranchingPlayerChoiceContext` の先頭がその札。フックなら `Hook` が積んだ listener（騒乱など）、ポーションなら `PotionModel.OnUseWrapper` が積んだポーション。`{ kind, model_id, uid, hidden_reason }`。`kind` は `card` / `potion` / `power` / `relic` / `other`、`uid` は札のときだけ。親の札が山札にある（`IAmInvincible` の自分のフック）ときは、移す前の山札の先頭を明かさないよう `kind`・`model_id`・`uid` を null、`hidden_reason: "draw_pile"`（その手のフックを持つ札は 1 種類なので、`kind` だけでも、確保が失敗して確保の行が続かないときに山札の先頭が推せる。行は記録の後に変えないので、確保の行が続いても伏せたまま）。context にモデルが無ければ `parent` 自体が null |
 | | `parent_play_started_index` | 親の札の、まだ完了していないプレイ（`CardPlayStartedEntry` があって同じ `CardPlay` の `CardPlayFinishedEntry` が無い、最後のもの）の開始の行の、この配列での添字。親が札のプレイでない・そのプレイが別の Player の列にあるときは null |
 | | `requested_count` | 引数 `count`（カスケードは X〔強化で +1〕、荒廃は 1） |
 | | `position` | 引数 `position` の小文字（`top` / `bottom` / `random`） |
 | | `force_exhaust` | 引数 `forceExhaust`（荒廃は true） |
-| `auto_play_reserved` | `call_id`・`reserve_index`・`uid` | 札が所有者の Play に入った（`CardPile.AddInternal`）時点。`reserve_index` はゲームの一覧 `cards` での位置（0 から）。`Add` が失敗した札（所有者の死亡・`CombatManager.IsEnding`）は Play に入らず、表にも出ないので行を作らない（そのとき `reserve_index` が飛ぶ） |
+| `auto_play_reserved` | `call_id`・`reserve_index`・`uid` | 札が所有者の Play に入った（`CardPile.AddInternal`）時点。`reserve_index` はゲームの一覧 `cards` での位置（0 から）。`Add` が失敗した札（戦闘の山への移動で `CombatManager.IsEnding`・`!CombatManager.IsInProgress`、札ごとに `HasBeenRemovedFromState`・所有者の死亡）は Play に入らず、表にも出ないので行を作らない（そのとき `reserve_index` が飛ぶ） |
 | `auto_play_dispatch` | `call_id`・`reserve_index`・`uid` | 消化のループが `CardCmd.AutoPlay` を呼び、`AutoPlay` が冒頭で戻らなかった（戦闘が続いていて所有者が生きている）時点。この後に `reservation` の付いた開始の行が無ければ、札はプレイされずに結果の山に送られた（プレイ不可など）か、開始の前に戦闘が終わった |
 
 - **子のプレイ**: 消化から始まったプレイ（リプレイで複数回になるものも）の開始・完了の行には `reservation: { call_id, reserve_index }` が付く。
@@ -989,6 +989,9 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 - **残った予約**: `auto_play_reserved` があって `auto_play_dispatch` が無い札は、まだ消化されていない（解決の途中の snapshot）か、
   所有者の死亡・終戦で Play に残った。戦闘が続いているあいだ、消化されない札は残らない。
 - **入れ子**: 子の荒廃の確保は、子の開始の行の後に、`parent_call_id` を親の呼出しにした `auto_play_reservation` として出る。
+  `parent_call_id` は親が札のプレイのときだけ決まる。フックが呼ぶ予約（子のプレイの `AfterCardPlayed` から呼ぶ `LostLutePower` など）は、
+  親が札でないので `parent_call_id: null` になり、どの子のプレイの中で起きたかは行の位置（その子の開始と完了の間）からしか読めない。
+  アイアンクラッドの範囲（カスケード・荒廃・悪魔・騒乱）では、フックの呼出しが子のプレイの中で起きることはない。
 - **読めないとき**: 下の読取専用の patch が入らなかったとき（版の更新で名前が変わったなど）と、この戦闘で記録に 1 回でも失敗したときは、
   予約の無い短い列を返さず、配列全体を null・理由・warning にする（記録の失敗は次の戦闘で消える）。
 - **ゲームへの影響**: Harmony の patch はすべて読み取りで、ゲームの呼出しを飛ばさず・順を変えず・乱数を引かない。
@@ -1022,9 +1025,17 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 ```
 
 - 取る時点: 勝利は `CombatHistory.Clear` の前（`EndCombatInternal` の中。turn state がまだある）で `outcome: "victory"`、敗北は
-  `ProcessPendingLoss` の前（`IsAboutToLose`）で `outcome: "loss"`。戦闘の破棄（`CancelCombat`。turn state を先に捨てる）では取らない。
+  `ProcessPendingLoss(turnState)` の前で、引数の turn state の `PendingLoss` があるときにその `State` から `outcome: "loss"`
+  （現在の turn state でなく引数を読むので、古い turn state が再開して自分の戦闘を終えるときに別の戦闘を取らない）。
+  戦闘の破棄（`CancelCombat`。turn state を先に捨てる）では取らない。
+- 敗北の取得は別の patch（Harmony ID `com.sts2mcp.endedcombatloss`）。これが入らなくても失うのは敗北の `ended_combat` だけで、
+  `card_resolution_events` は出る（ゲームのログに `Ended combat capture of a loss unavailable`）。敗北の応答に `ended_combat` が無いことを、
+  列が空だった証拠にしない。
 - 付ける応答: 操作の前に控えた取得の通し番号より後に取ったものがあれば付ける。`wait: true` なら落ち着くまでの間に終わった戦闘も入る。
   `wait` なしの応答は、メインスレッドでの操作の実行の中で終わった戦闘だけ（ふつうは後で終わるので付かない）。後の操作には繰り返さない。マルチの POST には付けない。
+- **engine は `wait: true` で落ち着いた（`settled: true`）応答の `ended_combat` だけを信じる。** `wait` なし・待ちの上限（`settled: false`）では、
+  `EndCombatInternal` の `History.Clear` より前に応答が返ることがあり、そのときの取得は応答に付かず、戦闘の終わりと期間が重なっただけの
+  次の POST に付くことがある（その POST の操作の結果ではない）。
 - 列が読めなければ `card_resolution_events: null` と `unavailable_reasons.card_resolution_events`。
 
 出典は v0.113.1 `sts2-a671e9ef` の `CombatManager.EndCombatInternal` / `ProcessPendingLoss` / `CancelCombat` / `DebugOnlyGetState` / `IsAboutToLose`、

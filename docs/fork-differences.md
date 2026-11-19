@@ -40,7 +40,7 @@
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
-- **`ended_combat`**: 単独の POST の間に戦闘が終わったら、戦闘が終わった時点（勝利は `CombatHistory.Clear` の前、敗北は `CombatManager.ProcessPendingLoss` の前）のローカル Player の `card_resolution_events` を、その応答の `ended_combat`（`outcome`・`card_resolution_events`・`unavailable_reasons`）で返す。終戦後の state には `combat_history` が無いため（schema 1.7.0、`cat12079801/sts2#1113`）
+- **`ended_combat`**: 単独の POST の間に戦闘が終わったら、戦闘が終わった時点（勝利は `CombatHistory.Clear` の前、敗北は `CombatManager.ProcessPendingLoss` の前）のローカル Player の `card_resolution_events` を、その応答の `ended_combat`（`outcome`・`card_resolution_events`・`unavailable_reasons`）で返す。終戦後の state には `combat_history` が無いため。信じてよいのは `wait: true` で落ち着いた応答のものだけ（`wait` なし・待ちの上限では次の POST にずれて付くことがある）。敗北の取得は別の patch で、入らなくても列は出る（schema 1.7.0、`cat12079801/sts2#1113`）
 - **`is_resolving` / `resolving_reasons`**: アクションの解決中かを state で示す。呼び出し側の入力を待っている画面では false（#39・#41）。
   手番の初めのドローと手番開始時のフックの間も、戦闘の画面では `player_turn_starting` で解決中と返す（ゲームはこの間 `PlayerActionsDisabled` を戻し、action の列の外でドローする）（#87）
   戦闘の部屋に入ってから戦闘が始まるまでと、戦闘が終わってから報酬画面などが出るまでの `battle` の無い state も、`combat_starting` / `combat_ending` で解決中と返し、

@@ -14,4 +14,4 @@
 
 `ended_combat`（schema 1.7.0、`cat12079801/sts2#1113`）: `McpMod.EndedCombatCapture.cs` もリンクし、操作の間に戦闘が終わった（取得の通し番号が進んだ）ときだけ
 その応答に `ended_combat` を付け、後の操作には繰り返さないこと、`wait` なしでも操作の実行の中で終わったものは付くことを検証する。
-戦闘の終わりの列を取る patch（`CombatHistory.Clear` / `CombatManager.ProcessPendingLoss` の前置）は実機で確かめる。
+戦闘の終わりの列を取る patch（`CombatHistory.Clear` / `CombatManager.ProcessPendingLoss` の前置。敗北の方は別の Harmony ID で入れ、失敗しても列は残る）は実機で確かめる。

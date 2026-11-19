@@ -188,7 +188,9 @@ public static partial class McpMod
         {
             parent = new Dictionary<string, object?>
             {
-                ["kind"] = call.ParentKind,
+                // Only IAmInvincible's own hook calls with its card on top of the draw pile: even the kind would
+                // name the top card when its move fails, so the row says nothing about the parent but the reason.
+                ["kind"] = call.ParentInDrawPile ? null : call.ParentKind,
                 // A card still in the draw pile (IAmInvincible's own hook) is not named before it moves.
                 ["model_id"] = call.ParentInDrawPile ? null : call.ParentModelId,
                 ["uid"] = call.ParentCard == null || call.ParentInDrawPile ? null : GetStableCardUid(call.ParentCard),

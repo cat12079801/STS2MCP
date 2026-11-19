@@ -181,7 +181,8 @@ public static partial class McpMod
         var tail = Stream(BuildCombatHistoryState(owner)).TakeLast(3).ToList();
         Check(ReservationRow(tail[0]) == "call 3<-> parent=power:MAYHEM_POWER:?@- n=1 top", "パワーの呼出し: uid と開始位置は null");
         var hidden = (Dictionary<string, object?>)tail[1]["parent"]!;
-        Check(hidden["model_id"] == null && hidden["uid"] == null && Equals(hidden["hidden_reason"], "draw_pile"), "山札にある親札は名前も uid も出さない");
+        Check(hidden["kind"] == null && hidden["model_id"] == null && hidden["uid"] == null && Equals(hidden["hidden_reason"], "draw_pile"),
+            "山札にある親札は種類も名前も uid も出さない（確保が失敗しても山札の先頭を推せない）");
         Check(tail[2]["parent"] == null, "モデルの無い context は parent null");
 
         // Failures make the whole array unknown, never a stream without its reservations.

@@ -20,6 +20,7 @@ namespace STS2_MCP;
 public static partial class McpMod
 {
     private const string AutoPlayReservationHarmonyId = "com.sts2mcp.autoplayreservation";
+    private const string EndedCombatLossHarmonyId = "com.sts2mcp.endedcombatloss";
 
     // Read-only patches (v0.113.1, decompile sts2-a671e9ef). None skips, reorders or repeats a game call, and
     // none draws from an RNG. The one argument they touch is AutoPlayFromDrawPile's cardModification: it is
@@ -59,10 +60,6 @@ public static partial class McpMod
                 prefix: new HarmonyMethod(typeof(McpMod), nameof(HistoryClearing)),
                 postfix: new HarmonyMethod(typeof(McpMod), nameof(HistoryCleared)));
 
-            var pendingLoss = AccessTools.DeclaredMethod(typeof(CombatManager), "ProcessPendingLoss")
-                ?? throw new MissingMethodException(nameof(CombatManager), "ProcessPendingLoss");
-            harmony.Patch(pendingLoss, prefix: new HarmonyMethod(typeof(McpMod), nameof(CombatLossProcessing)));
-
             AutoPlayReservations.TrackingError = null;
         }
         catch (Exception ex)
@@ -71,6 +68,28 @@ public static partial class McpMod
             catch (Exception cleanupError) { GD.PrintErr($"[STS2 MCP] Auto-play reservation cleanup failed: {cleanupError.Message}"); }
             AutoPlayReservations.TrackingError = $"{ex.GetType().Name}: {ex.Message}";
             GD.PrintErr($"[STS2 MCP] Auto-play reservation tracking unavailable: {ex}");
+        }
+        InstallEndedCombatLossCapture();
+    }
+
+    // A loss is captured on its own patch: failing to install it only costs a lost fight's ended_combat,
+    // never card_resolution_events (which needs only the reservation patches above).
+    private static void InstallEndedCombatLossCapture()
+    {
+        var harmony = new Harmony(EndedCombatLossHarmonyId);
+        try
+        {
+            var pendingLoss = AccessTools.DeclaredMethod(typeof(CombatManager), "ProcessPendingLoss")
+                ?? throw new MissingMethodException(nameof(CombatManager), "ProcessPendingLoss");
+            harmony.Patch(pendingLoss, prefix: new HarmonyMethod(typeof(McpMod), nameof(CombatLossProcessing)));
+            EndedCombatCaptures.LossCaptureError = null;
+        }
+        catch (Exception ex)
+        {
+            try { harmony.UnpatchAll(EndedCombatLossHarmonyId); }
+            catch (Exception cleanupError) { GD.PrintErr($"[STS2 MCP] Ended combat loss capture cleanup failed: {cleanupError.Message}"); }
+            EndedCombatCaptures.LossCaptureError = $"{ex.GetType().Name}: {ex.Message}";
+            GD.PrintErr($"[STS2 MCP] Ended combat capture of a loss unavailable: {ex}");
         }
     }
 
@@ -115,8 +134,10 @@ public static partial class McpMod
             var original = cardModification;
             cardModification = card =>
             {
+                // The game's own delegate runs first and its exceptions pass through untouched.
                 original(card);
-                AutoPlayReservations.Selected(call, card);
+                try { AutoPlayReservations.Selected(call, card); }
+                catch (Exception ex) { ReservationTrackingFailed("cardModification", ex); }
             };
             __state = call;
         }
@@ -186,13 +207,21 @@ public static partial class McpMod
 
     private static void HistoryCleared() => AutoPlayReservations.Reset();
 
-    // CombatManager.ProcessPendingLoss ends a lost fight without clearing History (CancelCombat clears it later).
-    private static void CombatLossProcessing()
+    // CombatManager.ProcessPendingLoss(CombatTurnState turnState) ends a lost fight without clearing History
+    // (CancelCombat clears it later). Read the turn state it was given, not the current one: a stale turn state
+    // resuming to end its own fight must not capture another fight. CombatTurnState is internal: by reflection.
+    private static void CombatLossProcessing(object[] __args)
     {
         try
         {
-            if (CombatManager.Instance.IsAboutToLose && CombatManager.Instance.DebugOnlyGetState() is { } combat)
-                CaptureEndedCombat(combat, "loss");
+            object turnState = __args.Length > 0 && __args[0] != null ? __args[0]
+                : throw new InvalidOperationException("ProcessPendingLoss has no turn state argument");
+            var type = turnState.GetType();
+            object? pendingLoss = (AccessTools.Property(type, "PendingLoss")
+                ?? throw new MissingMemberException(type.Name, "PendingLoss")).GetValue(turnState);
+            var combat = (AccessTools.Property(type, "State")
+                ?? throw new MissingMemberException(type.Name, "State")).GetValue(turnState) as CombatState;
+            if (pendingLoss != null && combat != null) CaptureEndedCombat(combat, "loss");
         }
         catch (Exception ex) { GD.PrintErr($"[STS2 MCP] Ended combat capture failed: {ex.GetType().Name}: {ex.Message}"); }
     }

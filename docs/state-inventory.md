@@ -288,7 +288,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59 | mod-scan |
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
 | `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
-| `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:267 … | mod-scan |
+| `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:269 … | mod-scan |
 | `Creature.Side` | entity | McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
 | `Creature._block` | entity | McpMod.MultiplayerState.cs:447, McpMod.PowerInternalState.cs:218, McpMod.StateBuilder.cs:1637 … | mod-scan |

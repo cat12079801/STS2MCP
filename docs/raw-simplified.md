@@ -249,7 +249,7 @@ Extra response fields, appended after the action's own keys:
 | `changed` | `false` means nothing observable moved — the action was a no-op. |
 | `state` | The settled state, same shape as `GET /api/v1/singleplayer` (omitted when `include_state` is `false`). |
 | `wait_error` | Only present if the wait itself failed; the action still ran. |
-| `ended_combat` | schema 1.7.0。この操作の間に戦闘が終わったときだけ。戦闘が終わった時点のローカル Player の `card_resolution_events`（`outcome`・`card_resolution_events`・`unavailable_reasons`）。終戦後の state には `combat_history` が無いため。[契約](raw-full.md#戦闘を終えた操作の応答ended_combatschema-170)。 |
+| `ended_combat` | schema 1.7.0。この操作の間に戦闘が終わったときだけ。戦闘が終わった時点のローカル Player の `card_resolution_events`（`outcome`・`card_resolution_events`・`unavailable_reasons`）。終戦後の state には `combat_history` が無いため。信じてよいのは `wait: true` で `settled: true` の応答のものだけ。[契約](raw-full.md#戦闘を終えた操作の応答ended_combatschema-170)。 |
 
 A state counts as settled when `is_resolving` is false and — in `monster` / `elite` / `boss` — the
 battle is back in its play phase, and that has held for 3 consecutive polls (~180 ms). One poll is

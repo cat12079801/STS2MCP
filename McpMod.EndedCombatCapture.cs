@@ -14,6 +14,9 @@ internal static class EndedCombatCaptures
     private static long _sequence;
     private static Dictionary<string, object?>? _latest;
 
+    /// <summary>Why a lost fight is not captured (the ProcessPendingLoss patch is missing); null once installed.</summary>
+    internal static string? LossCaptureError { get; set; } = "not installed";
+
     internal static long Sequence
     {
         get { lock (Gate) return _sequence; }

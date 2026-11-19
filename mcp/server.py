@@ -528,7 +528,8 @@ async def use_potion(slot: int, target: str | None = None, wait: bool = False,
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
             reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
-            card_resolution_events（終戦後の state には combat_history が無い）。
+            card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
+            settled の応答のものだけを信じる。
     """
     body: dict = {"action": "use_potion", "slot": slot}
     if target is not None:
@@ -588,7 +589,8 @@ async def proceed_to_map(wait: bool = False) -> str:
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
             reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
-            card_resolution_events（終戦後の state には combat_history が無い）。
+            card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
+            settled の応答のものだけを信じる。
     """
     try:
         return await _post({"action": "proceed"}, wait=wait)
@@ -625,7 +627,8 @@ async def combat_play_card(
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
             reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
-            card_resolution_events（終戦後の state には combat_history が無い）。
+            card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
+            settled の応答のものだけを信じる。
 
     card_index is a position in the hand, so playing a card shifts the indices of
     everything behind it; re-read state between plays if you use it.
@@ -656,7 +659,8 @@ async def combat_end_turn(wait: bool = False) -> str:
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
             reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
-            card_resolution_events（終戦後の state には combat_history が無い）。
+            card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
+            settled の応答のものだけを信じる。
     """
     try:
         return await _post({"action": "end_turn"}, wait=wait)
