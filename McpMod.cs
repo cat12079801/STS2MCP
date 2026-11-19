@@ -58,8 +58,10 @@ public static partial class McpMod
     /// it belongs to, the listeners still to run; StratagemPower, EntropyPower, Splash).
     /// 1.6.0: player.combat_history.card_resolution_events, the owner's draw / play / generated entries of the
     /// whole combat in History order, across turn boundaries (sts2#1088).
+    /// 1.7.0: battle.enemies[].hp_display_is_infinite, HpDisplayExtensions.IsInfinite over Creature.HpDisplay
+    /// (HellraiserPower, HardenedShellPower's cap, WaterfallGiant's death continuation; sts2#1088).
     /// </summary>
-    public const string StateSchema = "1.6.0";
+    public const string StateSchema = "1.7.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

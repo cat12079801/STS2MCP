@@ -333,8 +333,8 @@
   "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
  },
  "Creature.HpDisplay": {
-  "class": "cosmetic",
-  "note": "HP の表示の種類（HardenedShellPower などが表示を切り替える）"
+  "class": "exposed",
+  "note": "HP の表示の種類。効果で読む: HellraiserPower.AfterCardDrawnEarly が CombatState.HittableEnemies.All(c => c.HpDisplay.IsInfinite()) のときに、手番ごとの自動プレイの回数の上限を掛ける（Creature の注釈も、表示用だがいくつかの効果がダメージを受けうるかの判定に使うと書く）。書くのは HardenedShellPower（上限到達で InfiniteWithNumbers、陣営の手番の開始で Normal）と WaterfallGiant.TriggerAboutToBlowState（InfiniteWithoutNumbers）で、どちらも敵自身。enemies[].hp_display_is_infinite に本体の HpDisplayExtensions.IsInfinite の bool で出す（McpMod.EnemyHpDisplay.cs）。InfiniteWithNumbers と InfiniteWithoutNumbers の違い（ShowsNumbers）は NHealthBar の見た目にしか効かないので出さない。プレイヤーの値を変える通常の経路が無いので player には出さない。schema 1.7.0 より前は、名前と HardenedShellPower による表示の切り替えだけを見て cosmetic に分類し、参照元（TSV の external の列）に出ていた HellraiserPower の読み取り（Creature の外から IsInfinite で読むので readers の列には出ない）を確かめていなかったため、state に出ていなかった"
  },
  "Creature.Monster": {
   "class": "static/derived",

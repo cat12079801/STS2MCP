@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.6.0",        // Contract version (semver) — see below
+  "schema": "1.7.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.6.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.7.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.6.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.7.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -146,6 +146,9 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.6.0** — `player.combat_history.card_resolution_events`: the owner's draw, play (started / finished) and
   generated-card entries of the whole combat, in History order, across the end of a turn, the enemy turn and the next
   turn's start (`cat12079801/sts2#1088`). See [札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160).
+- **1.7.0** — `battle.enemies[].hp_display_is_infinite`: the game's `HpDisplayExtensions.IsInfinite` over
+  `Creature.HpDisplay` on every enemy row (HellraiserPower's per-turn cap, HardenedShellPower reaching its cap,
+  WaterfallGiant's death continuation; `cat12079801/sts2#1088`). See [HP の無限表示](#hp-の無限表示hp_display_is_infiniteschema-170).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -2209,6 +2212,7 @@ Run state or room type not recognized.
         "name": "Jaw Worm",
         "alive": true,                 // Always present. false = dead but still in the fight
         "hittable": true,              // Creature.IsHittable; null when unreadable (see below)
+        "hp_display_is_infinite": false, // HpDisplayExtensions.IsInfinite(Creature.HpDisplay) (schema 1.7.0)
         "slot_name": "front",          // Creature.SlotName; null = no slot (schema 6)
         "hp": 44,
         "max_hp": 44,
@@ -2289,6 +2293,35 @@ left to reattach to, the fight is over rather than about to restart.
   false と区別する。旧 MOD では欠落し、未観測として扱う。
 - Markdown は HP の行に `| Hittable: yes|no`（読めなければ `null (理由)`）。追加だけなので版は上げていない（schema 4 のときの追加）。
 - 契約試験は [`tests/EnemyHittableContract`](../tests/EnemyHittableContract/README.md)。
+
+#### HP の無限表示（`hp_display_is_infinite`、schema 1.7.0）
+
+`battle.enemies[]` の**すべての行**（生存・戦闘に残る死亡個体、単独・協力プレイで共通）に `hp_display_is_infinite` を出す。
+値は本体の拡張 `HpDisplayExtensions.IsInfinite(Creature.HpDisplay)` の bool をそのまま。HP・最大 HP・パワー名・行動 ID から作らない
+（`cat12079801/sts2#1088`）。
+
+- 出典（v0.113.1 `sts2-a671e9ef`）: `Creature.HpDisplay` は列挙 `HpDisplay`（`Normal` / `InfiniteWithNumbers` / `InfiniteWithoutNumbers`）の
+  public な自動プロパティ。`HpDisplayExtensions.IsInfinite` は `InfiniteWithNumbers` と `InfiniteWithoutNumbers` で true、`Normal` で false。
+  2 つの無限の違い（数字を見せるか）は `HpDisplayExtensions.ShowsNumbers` で、読むのは `NHealthBar`（HP バーの見た目）だけなので出さない。
+- 書き込み（本体の全件）:
+  - `HardenedShellPower.AfterDamageReceived`: その手番に受けた防がれなかったダメージの累計が `Amount` に達したら `InfiniteWithNumbers`。
+    `HardenedShellPower.BeforeSideTurnStart`（どちらの陣営の手番の開始でも）で `Normal` に戻す。付けるのは `SkulkingColony.AfterAddedToRoom`（自分自身に。量の引数は 20）
+  - `WaterfallGiant.TriggerAboutToBlowState`: 最大 HP と HP を 999999999 にしたうえで `InfiniteWithoutNumbers`。呼ぶのは `SteamEruptionPower.AfterDeath`
+    （所有者の死亡で、除去が防がれていないとき）で、死亡の継続にあたる。以後 `Normal` に戻す箇所は無い
+- 効果で読む箇所: `HellraiserPower.AfterCardDrawnEarly` が `CombatState.HittableEnemies.All(c => c.HpDisplay.IsInfinite())` のとき、
+  private の `infiniteAutoPlaysThisTurn`（ヘル・レイザーの行の `status[].infinite_auto_plays_this_turn`）を数え、それが 9 に達した後に引いたストライクは自動プレイしない（その手番の 10 本目以降）。
+  条件が成り立たないドローと、所有者の陣営の手番の終わり（`AfterSideTurnEnd`）で数を 0 に戻す。
+  判定は当てられる敵（`hittable: true` の行）だけに掛かるので、engine は `hittable` と組にして読む。
+  `Creature` の注釈も「表示用だが、HellraiserPower などいくつかの効果がダメージを受けうるかの判定に使う」と書いている。
+- 読み取りは状態を書き換えない（自動プロパティの getter と、列挙の値だけを見る静的メソッド。乱数を引かない）。
+- 読めなければ `hp_display_is_infinite: null`、敵の行の `unavailable_reasons.hp_display_is_infinite` に理由、
+  warning `battle.enemies.<entity_id>.hp_display_is_infinite`。false と区別する。旧 MOD（schema 1.7.0 より前）では欠落し、未観測として扱う。
+- プレイヤー（`player`・味方の行）には出さない。本体で `HpDisplay` を書くのは上の 2 か所だけで、どちらも敵自身に掛かる
+  （`HardenedShellPower` の所有者は付けた `SkulkingColony` 自身、`WaterfallGiant` は自分の `Creature`）。プレイヤーにこの値を変える
+  通常の経路は無く（開発コンソールの `ApplyPowerConsoleCmd` で任意のパワーを付けた場合を除く）、効果で読む `HellraiserPower` も
+  `CombatState.HittableEnemies`（敵の側）しか見ない。
+- Markdown は HP の数字の直後に ` ∞`（例 `HP: 999999999/999999999 ∞ | Block: 0`）。false なら何も付けない。読めなければ ` ∞: null (理由)`。
+- 契約試験は [`tests/EnemyHpDisplayContract`](../tests/EnemyHpDisplayContract/README.md)。
 
 #### 敵の行動状態（追加、schema 4。入力の追加は schema 6）
 

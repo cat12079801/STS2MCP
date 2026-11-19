@@ -36,8 +36,8 @@
 | affliction | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | orb | 1 | 0 | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 5 |
 | base | 1 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 49 | 0 | 1 | 3 | 9 | 16 | 4 | 0 | 0 | 82 |
-| **計** | 279 | 0 | 41 | 5 | 94 | 91 | 4 | 0 | 0 | 514 |
+| entity | 50 | 0 | 1 | 3 | 8 | 16 | 4 | 0 | 0 | 82 |
+| **計** | 280 | 0 | 41 | 5 | 93 | 91 | 4 | 0 | 0 | 514 |
 
 ### アイアンクラッドの範囲だけ（他キャラ・廃止・モックを除く）
 
@@ -52,8 +52,8 @@
 | affliction | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | orb | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | base | 1 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 49 | 0 | 0 | 3 | 9 | 16 | 4 | 0 | 0 | 81 |
-| **計** | 263 | 0 | 0 | 5 | 85 | 86 | 4 | 0 | 0 | 443 |
+| entity | 50 | 0 | 0 | 3 | 8 | 16 | 4 | 0 | 0 | 81 |
+| **計** | 264 | 0 | 0 | 5 | 84 | 86 | 4 | 0 | 0 | 443 |
 
 範囲（pool）: `ironclad`・`colorless`・`curse`・`status`・`event-only`・`shared`・`ancient`・`monster`・`enchantment`・`affliction`・`base`（モデルの基底）・`entity`（Creature・Player など）を範囲に入れる。`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。
 
@@ -142,7 +142,7 @@
 
 ## cosmetic（効果なし。engine は効果なしとして扱ってよい）
 
-94 件。型・名前の規則で決めたもの（ノード・効果音・アイコンの path など）は `source=rule`、判断したものは `source=manual`。全件は TSV。判断したものだけ列挙する。
+93 件。型・名前の規則で決めたもの（ノード・効果音・アイコンの path など）は `source=rule`、判断したものは `source=manual`。全件は TSV。判断したものだけ列挙する。
 
 - `CardModel._isEnchantmentPreview`（bool）: エンチャントのプレビュー表示用のコピーの印（DamageVar などの表示値の計算を切り替える）
 - `CardModel._upgradePreviewType`（CardUpgradePreviewType）: 強化プレビューの表示の種類（UI）。MOD は強化プレビューの組み立ての検査に読むだけ
@@ -150,7 +150,6 @@
 - `UpMySleeve._timesPlayedThisCombat`（int）: OnPlay が足すだけで、読む箇所が無い
 - `Wither._fakeUpgradeLevel`（int）: Title（+N）と絵だけ。ダメージは FakeUpgrade が DynamicVars.Damage を直接上げる（dynamic_vars に出る）
 - `CardEnergyCost.WasJustUpgraded`（bool）: 強化直後のコストを強調表示する印（CalculatedVar の表示）
-- `Creature.HpDisplay`（HpDisplay）: HP の表示の種類（HardenedShellPower などが表示を切り替える）
 - `ExtraPlayerFields.CccomboBadgeUnlocked`（bool）: 実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない
 - `ExtraPlayerFields.DamageDealt`（int）: 実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない
 - `ExtraPlayerFields.DebuffsApplied`（int）: 実績・バッジ・統計の集計（CccCombo・DamageLeader・Debuffer・ProgressSaveManager）。ランの判断に効かない
@@ -222,7 +221,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 |---|---|---|---|
 | `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:393[only AdaptablePower,AutomationPower,CalamityPower,ChainsOfBindingPower,CurlUpPower,DampenPower,DarkEmbracePower,GigantificationPower,HardenedShellPower,HellraiserPower,IllusionPower,JugglingPower,PanachePower,PossessSpeedPower,PossessStrengthPower,ReattachPower,RupturePower,SkittishPower,StranglePower,VigorPower] | 容器そのものは値ではない。中身は派生ごとの Data の欄（Power.Data.field の行、kind=data_field）として一つずつ分類し、出すものはその行の判断で出す（PowerInternalState の各 case・許可リストの DataField）。Data を持たない派生には読むものが無い |
 
-## exposed（出ている）（279 件）
+## exposed（出ている）（280 件）
 
 | クラス.メンバー | 範囲 | MOD の箇所 | 判定 |
 |---|---|---|---|
@@ -289,6 +288,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
 | `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
 | `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:202 … | mod-scan |
+| `Creature.HpDisplay` | entity | McpMod.EnemyHpDisplay.cs:22 | manual |
 | `Creature.Side` | entity | McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
 | `Creature._block` | entity | McpMod.MultiplayerState.cs:447, McpMod.PowerInternalState.cs:218, McpMod.StateBuilder.cs:1637 … | mod-scan |
@@ -337,7 +337,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `KnowledgeDemon.DynamicVars.DisintegrationPower` | monster | ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72） | manual |
 | `KnowledgeDemon._curseOfKnowledgeCounter` | monster | McpMod.EnemyCombatState.cs:82 | mod-scan |
 | `LivingFog._bloatAmount` | monster | McpMod.EnemyCombatState.cs:86 | mod-scan |
-| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2178 … | mod-scan |
+| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2179 … | mod-scan |
 | `MonsterModel._moveStateMachine` | base | McpMod.EnemyMoveState.cs:32 | mod-scan |
 | `MonsterModel._spawnedThisTurn` | base | McpMod.EnemyMoveState.cs:80 | mod-scan |
 | `Nibbit._isAlone` | monster | McpMod.EnemyCombatState.cs:90 | mod-scan |
