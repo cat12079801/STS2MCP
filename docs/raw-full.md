@@ -149,6 +149,11 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.7.0** — `battle.enemies[].hp_display_is_infinite`: the game's `HpDisplayExtensions.IsInfinite` over
   `Creature.HpDisplay` on every enemy row (HellraiserPower's per-turn cap, HardenedShellPower reaching its cap,
   WaterfallGiant's death continuation; `cat12079801/sts2#1088`). See [HP の無限表示](#hp-の無限表示hp_display_is_infiniteschema-170).
+- **1.8.0** — `card_resolution_events` に `CardPileCmd.AutoPlayFromDrawPile`（カスケード・荒廃・騒乱など）の予約を出す。
+  呼出しごとの `auto_play_reservation`（呼出し ID・親の呼出し ID・親のモデル・親プレイの開始行の添字）、Play に移した札ごとの
+  `auto_play_reserved`（確保の順の添字と uid）、`CardCmd.AutoPlay` に渡した札ごとの `auto_play_dispatch` の行と、play の行の
+  `reservation`。単独の POST の応答には、その操作の間に終わった戦闘の最後の列を `ended_combat` で付ける（`cat12079801/sts2#1113`）。
+  [自動プレイの予約](#自動プレイの予約card_resolution_events-の予約の行schema-180) と [戦闘を終えた操作の応答](#戦闘を終えた操作の応答ended_combatschema-180)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -733,8 +738,17 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
   "card_resolution_events": [
     { "kind": "draw", "uid": "STRIKE_IRONCLAD#1", "from_hand_draw": false },
     { "kind": "generated", "card_id": "BURN", "uid": "BURN#g1182", "creator": null },
-    { "kind": "draw", "uid": "HAVOC#10", "from_hand_draw": true },
-    { "kind": "play", "phase": "started", "uid": "HAVOC#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1 }
+    { "kind": "draw", "uid": "CASCADE#10", "from_hand_draw": true },
+    { "kind": "play", "phase": "started", "uid": "CASCADE#10", "is_auto_play": false, "target": null, "play_index": 0, "play_count": 1, "reservation": null },
+    { "kind": "auto_play_reservation", "call_id": 1, "parent_call_id": null,
+      "parent": { "kind": "card", "model_id": "CASCADE", "uid": "CASCADE#10", "hidden_reason": null },
+      "parent_play_started_index": 3, "requested_count": 2, "position": "top", "force_exhaust": false },
+    { "kind": "auto_play_reserved", "call_id": 1, "reserve_index": 0, "uid": "TAUNT#20" },
+    { "kind": "auto_play_reserved", "call_id": 1, "reserve_index": 1, "uid": "BURN#g1182" },
+    { "kind": "auto_play_dispatch", "call_id": 1, "reserve_index": 0, "uid": "TAUNT#20" },
+    { "kind": "play", "phase": "started", "uid": "TAUNT#20", "is_auto_play": true,
+      "target": { "combat_id": 12, "entity_id": "WRIGGLER_1" }, "play_index": 0, "play_count": 1,
+      "reservation": { "call_id": 1, "reserve_index": 0 } }
   ],
   "last_player_turn_card_uids": ["BOLAS#0", "BOLAS#0", "STRIKE_IRONCLAD#1"],
   "cards_exhausted_this_turn": 1,
@@ -759,7 +773,7 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
 | `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
-| `card_resolution_events` | schema 1.6.0。`History.Entries` を元の順のまま走査し、所有者の `CardDrawnEntry`・`CardPlayStartedEntry` / `CardPlayFinishedEntry`・`CardGeneratedEntry` を戦闘全体（手番の条件なし）で出す。下の「[札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160)」。 |
+| `card_resolution_events` | schema 1.6.0。`History.Entries` を元の順のまま走査し、所有者の `CardDrawnEntry`・`CardPlayStartedEntry` / `CardPlayFinishedEntry`・`CardGeneratedEntry` を戦闘全体（手番の条件なし）で出す。下の「[札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160)」。schema 1.7.0 で、山札からの自動プレイの予約の行と play の行の `reservation` を足した（「[自動プレイの予約](#自動プレイの予約card_resolution_events-の予約の行schema-170)」）。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
 | `bound_afflictions_this_turn` | `History.Entries.OfType<CardAfflictedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature && e.Affliction is Bound`。`ChainsOfBindingPower.AfterCardDrawn` と同じ集合の件数。 |
@@ -900,6 +914,8 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   | `draw` | `uid` | `CardDrawnEntry.Card` を手札・各パイルと共通の `GetStableCardUid` で変換 |
   | | `from_hand_draw` | `CardDrawnEntry.FromHandDraw`（bool）。手番の初めの通常のドロー（`CombatManager.SetupPlayerTurn` の `fromHandDraw: true`）なら true、札・レリック・パワーが引かせたドローは false |
   | `play` | `phase` ほか | `card_play_events_this_turn` の要素と同じ `phase`・`uid`・`is_auto_play`・`target`・`play_index`・`play_count`（同じ `BuildCardPlayEvent` で作る） |
+  | | `reservation` | schema 1.7.0。このプレイが山札からの自動プレイの予約の消化（`auto_play_dispatch`）から始まったなら `{ call_id, reserve_index }`、それ以外は null。下の「自動プレイの予約」 |
+  | `auto_play_reservation` ほか | | schema 1.7.0。下の「自動プレイの予約」 |
   | `generated` | `card_id` | `CardGeneratedEntry.Card.Id.Entry` |
   | | `uid` | 同じく `GetStableCardUid`（生成札は `#g<number>` の空間） |
   | | `creator` | `CardGeneratedEntry.Creator`（`Player?`）。所有者なら `"owner"`、ほかのプレイヤーなら `"other_player"`、プレイヤーでない（敵の行動など）なら `null` |
@@ -920,8 +936,9 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   正常な空の戦闘履歴は `[]`。行は戦闘の終わりまで消えずに残るので、ある行が読めなくなったら、その戦闘の後の snapshot も
   `null` のままになりうる（v0.113.1 では起きる経路を確認していない。`CombatId` は消されず、uid は必ず振れる）。
   利用側はこれを未観測として扱い、止まる側に倒す（短い列や空の列に読み替えない）。
-- **戦闘の終わり**: 勝利の後の state（報酬・マップ）には `combat_history` が無く、本体の履歴も消えるので、最後の操作の後の行は出ない。
-  終局の値は報酬の画面の HP などの公開値で読む。
+- **戦闘の終わり**: 勝利の後の state（報酬・マップ）・敗北の後の state には `combat_history` が無く、勝利では本体の履歴も消える。
+  戦闘を終えた単独の POST の応答には、戦闘が終わった時点の列を `ended_combat` で付ける（下の「戦闘を終えた操作の応答」。schema 1.7.0）。
+  終局の HP などは報酬の画面の公開値で読む。
 - **Markdown**: 列が長いので、History 行に `resolution events=13 (draw:4, play:5, generated:4)` のように種類ごとの件数だけを出す
   （`play` は開始・完了の行の数）。行そのものは JSON で読む。
 
@@ -930,6 +947,88 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 `CardPileCmd.DrawInternal / AddGeneratedCardsToCombat`、`CardCmd.Transform`、`CombatManager.EndCombatInternal / CancelCombat`。
 
 契約試験と実機確認の観点は [`tests/CombatHistoryContract`](../tests/CombatHistoryContract/README.md)。
+
+#### 自動プレイの予約（card_resolution_events の予約の行、schema 1.7.0）
+
+カスケード（`Cascade.OnPlay`）・荒廃（`Havoc.OnPlay`）・悪魔（`TheDevil.OnPlay`）・騒乱（`MayhemPower.AfterAutoPrePlayPhaseEntered`）・
+`IAmInvincible.AfterAutoPostPlayPhaseEntered`・`DistilledChaos.OnUse`・`LostLutePower` は、どれも
+`CardPileCmd.AutoPlayFromDrawPile` の 6 引数の版（5 引数の版はそのまま 6 引数の版を呼ぶ）を通る。この版は 2 段で動く:
+
+1. **確保**: `CombatManager.IsOverOrEnding` なら何もせずに戻る。そうでなければ、最大 `count` 回、`ShuffleIfNecessary` の後に
+   山札の先頭（`CardPilePosition.Top`）の札を選び、`cardModification` を呼んでゲームの一覧 `cards` に積み、`CardPileCmd.Add(card, PileType.Play)` で
+   Play に移す。山札と捨て札が両方とも空になると、そこで確保を打ち切る。
+2. **消化**: `cards` の順に、所有者が死んでいれば打ち切り（残りの札は Play に残る）、そうでなければ `ExhaustOnNextPlay = forceExhaust` を付けて
+   `CardCmd.AutoPlay(choiceContext, card, null)` を呼ぶ。`AutoPlay` は `IsOverOrEnding` か所有者の死亡で何もせずに戻り（子が戦闘を終わらせると、
+   後ろの札は Play に残ったまま消化されない）、プレイ不可（`CardKeyword.Unplayable`）・`Hook.ShouldPlay` の拒否・対象が無いときは、開始の履歴を作らずに
+   `CardCmd.MoveToResultPileWithoutPlaying` → `CardModel.MoveToResultPileWithoutPlaying` で結果の山（廃棄〔`ExhaustOnNextPlay`・廃棄のキーワード〕・
+   捨て札・複製は戦闘から除外）に送る。それ以外は `CardModel.OnPlayWrapper` で普通にプレイする（開始・完了の行が出る）。
+
+**プレイヤーに見えるもの**: 確保の 1 枚ごとに、`CardPileCmd.Add` が札の node を作って表を向けて描き（`CreateCardNodeAndUpdateVisuals` →
+`NCard.UpdateVisuals`。絵・名前・本文。`NCard.Visibility` は戦闘中つねに `Visible`）、山札の位置から画面中央の Play の位置
+（`PileType.Play.GetTargetPosition`）へ飛ばす tween（`AppendPlayPileLerpTween`）の終わりを待ってから次の札に進む。したがって確保した札と、
+その確保の順は、移した時点で画面に表で出る（後の札が前の札に重なる）。既存の `play_pile` の一覧も、同じ時点の `PlayPile.Cards` を同じ順で出している。
+まだ移していない札（山札の残りの順）・選ぶのに使う乱数（`CardPilePosition.Random` の `CombatCardSelection`。いまの呼び手はどれも `Top`）は出さない。
+
+**行**（`card_resolution_events` の中に、記録した時点の `History.Entries` の件数の後ろ、つまりその時点までの entry の後・その後に記録された entry の前に置く。
+同じ位置の行は記録の順。記録の後に変わらないので、接頭部の性質はそのまま保たれる）:
+
+| `kind` | キー | 値 |
+|---|---|---|
+| `auto_play_reservation` | `call_id` | 戦闘ごとの呼出しの通し番号（1 から。全 Player の呼出しで数える） |
+| | `parent_call_id` | 親のプレイが別の呼出しの消化から始まったなら、その呼出しの `call_id`（カスケードで出た荒廃の確保など）。それ以外は null |
+| | `parent` | 呼出しの時点の `PlayerChoiceContext.LastInvolvedModel`。札の `OnPlay` なら、`CardModel.OnPlayWrapper` が札を積んだ `BranchingPlayerChoiceContext` の先頭がその札。フックなら `Hook` が積んだ listener（騒乱など）、ポーションなら `PotionModel.OnUseWrapper` が積んだポーション。`{ kind, model_id, uid, hidden_reason }`。`kind` は `card` / `potion` / `power` / `relic` / `other`、`uid` は札のときだけ。親の札が山札にある（`IAmInvincible` の自分のフック）ときは、移す前の山札の先頭を明かさないよう `model_id`・`uid` を null、`hidden_reason: "draw_pile"`。context にモデルが無ければ `parent` 自体が null |
+| | `parent_play_started_index` | 親の札の、まだ完了していないプレイ（`CardPlayStartedEntry` があって同じ `CardPlay` の `CardPlayFinishedEntry` が無い、最後のもの）の開始の行の、この配列での添字。親が札のプレイでない・そのプレイが別の Player の列にあるときは null |
+| | `requested_count` | 引数 `count`（カスケードは X〔強化で +1〕、荒廃は 1） |
+| | `position` | 引数 `position` の小文字（`top` / `bottom` / `random`） |
+| | `force_exhaust` | 引数 `forceExhaust`（荒廃は true） |
+| `auto_play_reserved` | `call_id`・`reserve_index`・`uid` | 札が所有者の Play に入った（`CardPile.AddInternal`）時点。`reserve_index` はゲームの一覧 `cards` での位置（0 から）。`Add` が失敗した札（所有者の死亡・`CombatManager.IsEnding`）は Play に入らず、表にも出ないので行を作らない（そのとき `reserve_index` が飛ぶ） |
+| `auto_play_dispatch` | `call_id`・`reserve_index`・`uid` | 消化のループが `CardCmd.AutoPlay` を呼び、`AutoPlay` が冒頭で戻らなかった（戦闘が続いていて所有者が生きている）時点。この後に `reservation` の付いた開始の行が無ければ、札はプレイされずに結果の山に送られた（プレイ不可など）か、開始の前に戦闘が終わった |
+
+- **子のプレイ**: 消化から始まったプレイ（リプレイで複数回になるものも）の開始・完了の行には `reservation: { call_id, reserve_index }` が付く。
+  対象は既存の `target`。消化の外の自動プレイ（予約を通らないもの）は `reservation: null`。
+- **残った予約**: `auto_play_reserved` があって `auto_play_dispatch` が無い札は、まだ消化されていない（解決の途中の snapshot）か、
+  所有者の死亡・終戦で Play に残った。戦闘が続いているあいだ、消化されない札は残らない。
+- **入れ子**: 子の荒廃の確保は、子の開始の行の後に、`parent_call_id` を親の呼出しにした `auto_play_reservation` として出る。
+- **読めないとき**: 下の読取専用の patch が入らなかったとき（版の更新で名前が変わったなど）と、この戦闘で記録に 1 回でも失敗したときは、
+  予約の無い短い列を返さず、配列全体を null・理由・warning にする（記録の失敗は次の戦闘で消える）。
+- **ゲームへの影響**: Harmony の patch はすべて読み取りで、ゲームの呼出しを飛ばさず・順を変えず・乱数を引かない。
+  `AutoPlayFromDrawPile` の前置（呼出しの記録と、`cardModification` を「元の delegate を同じ札で呼んでから札を控える」delegate に包む）・
+  後置（`Task` の完了で呼出しを閉じる）、`CardPile.AddInternal` の後置、`CardCmd.AutoPlay` の前置・後置、`CombatHistory.CardPlayStarted` の前置
+  （開始の entry に予約を結ぶ）、`CombatHistory.Clear` の前置・後置（戦闘の終わりの列を取ってから予約を捨てる）、`CombatManager.ProcessPendingLoss` の前置。
+- **Markdown**: 既存の History 行の件数に `auto_play_reservation:1, auto_play_reserved:3, auto_play_dispatch:3` のように種類ごとに足される。
+
+出典は v0.113.1 `sts2-a671e9ef` の `CardPileCmd.AutoPlayFromDrawPile`（5・6 引数）/ `ShuffleIfNecessary` / `Add` / `GetTweenForCardsChangingPiles` /
+`CreateCardNodeAndUpdateVisuals` / `AppendPlayPileLerpTween`、`PileTypeExtensions.GetTargetPosition`、`NCard.UpdateVisuals`、
+`CardCmd.AutoPlay` / `MoveToResultPileWithoutPlaying`、`CardModel.OnPlayWrapper` / `MoveToResultPileWithoutPlaying`、`CardPile.AddInternal`、
+`PlayerChoiceContext.LastInvolvedModel`、`BranchingPlayerChoiceContext`、`Hook.AfterCardPlayed` などの `PushModel` / `PopModel`、
+`Cascade.OnPlay`、`Havoc.OnPlay`、`TheDevil.OnPlay`、`MayhemPower`、`IAmInvincible`、`DistilledChaos`、`LostLutePower`。
+
+#### 戦闘を終えた操作の応答（ended_combat、schema 1.7.0）
+
+戦闘の勝利では `CombatManager.EndCombatInternal` が `History.Clear()` を呼び、敗北では `CombatManager.ProcessPendingLoss` が `IsInProgress` を下ろすので、
+戦闘を終えた操作の後の state には `combat_history` が無い。最後の子のプレイで戦闘が終わったカスケードの予約・子の解決を同じ操作から読めるように、
+戦闘が終わった時点のローカル Player の `card_resolution_events` を取っておき、**その間に戦闘が終わった単独の POST の応答**に付ける:
+
+```jsonc
+{
+  "status": "ok",
+  "...": "...",
+  "ended_combat": {
+    "outcome": "victory",
+    "card_resolution_events": [ /* 戦闘が終わった時点の列。行は上と同じ */ ],
+    "unavailable_reasons": {}
+  }
+}
+```
+
+- 取る時点: 勝利は `CombatHistory.Clear` の前（`EndCombatInternal` の中。turn state がまだある）で `outcome: "victory"`、敗北は
+  `ProcessPendingLoss` の前（`IsAboutToLose`）で `outcome: "loss"`。戦闘の破棄（`CancelCombat`。turn state を先に捨てる）では取らない。
+- 付ける応答: 操作の前に控えた取得の通し番号より後に取ったものがあれば付ける。`wait: true` なら落ち着くまでの間に終わった戦闘も入る。
+  `wait` なしの応答は、メインスレッドでの操作の実行の中で終わった戦闘だけ（ふつうは後で終わるので付かない）。後の操作には繰り返さない。マルチの POST には付けない。
+- 列が読めなければ `card_resolution_events: null` と `unavailable_reasons.card_resolution_events`。
+
+出典は v0.113.1 `sts2-a671e9ef` の `CombatManager.EndCombatInternal` / `ProcessPendingLoss` / `CancelCombat` / `DebugOnlyGetState` / `IsAboutToLose`、
+`CombatHistory.Clear`、`LocalContext.GetMe`。試験は [`tests/DevConsoleContract`](../tests/DevConsoleContract/README.md)（応答への付け方）。
 
 ### レリックの数値変数（追加、schema 3）
 
@@ -3810,6 +3909,7 @@ Response, with the wait's own fields appended after the action's:
 | `changed` | Whether anything observable moved compared with the state read just before the action. `false` means the action was a no-op. |
 | `state` | The final state, identical in shape to `GET /api/v1/singleplayer`. Omitted when `include_state` is `false`, and when the wait could not read a state at all. |
 | `wait_error` | Present only when the wait itself failed (the main thread stopped answering, or the state could not be built). The action already ran, so this is not a `503`. |
+| `ended_combat` | schema 1.7.0。この操作の間に戦闘が終わったときだけ。戦闘が終わった時点のローカル Player の `card_resolution_events`（[戦闘を終えた操作の応答](#戦闘を終えた操作の応答ended_combatschema-170)）。`wait` なしの応答にも、操作の実行の中で終わったなら付く。 |
 
 **The settle rule.** Every ~60 ms the server re-reads the state on the main thread and calls it
 settled when `is_resolving` is false and, for `monster` / `elite` / `boss`, `battle.is_play_phase`

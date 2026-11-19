@@ -11,3 +11,7 @@
 実行直前の判定をメインスレッドの配送の中で `ProcessCommand` より前に読み、画面が動いた・許可されない・読めないときに実行しないこと、
 空入力はガード付きなら判定を通したうえで従来の拒否文をそのまま返すこと、ガードの無い要求・許可リスト外・無効化の挙動が変わらないことを検証する。
 実行直前の判定の読取（`ReadScenarioSetupGuardNow`）はダブル。
+
+`ended_combat`（schema 1.7.0、`cat12079801/sts2#1113`）: `McpMod.EndedCombatCapture.cs` もリンクし、操作の間に戦闘が終わった（取得の通し番号が進んだ）ときだけ
+その応答に `ended_combat` を付け、後の操作には繰り返さないこと、`wait` なしでも操作の実行の中で終わったものは付くことを検証する。
+戦闘の終わりの列を取る patch（`CombatHistory.Clear` / `CombatManager.ProcessPendingLoss` の前置）は実機で確かめる。

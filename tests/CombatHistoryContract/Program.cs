@@ -46,6 +46,8 @@ public static partial class McpMod
 
     public static void Main()
     {
+        // The Harmony patches are not linked here; the tracker is driven directly (ReservationChecks.cs).
+        AutoPlayReservations.TrackingError = null;
         BeginStateWarnings();
         var combat = new CombatState();
         var owner = new Player { Creature = new Creature { CombatState = combat } };
@@ -248,6 +250,7 @@ public static partial class McpMod
         CheckManualCardPlayHistory();
         CheckCardPlayEvents();
         CheckCardResolutionEvents();
+        CheckAutoPlayReservations();
 
         string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
         string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));

@@ -218,6 +218,11 @@ async def get_game_state(format: str = "markdown") -> str:
     schema 1.7.0 で、battle.enemies[].hp_display_is_infinite（本体の
     HpDisplayExtensions.IsInfinite(Creature.HpDisplay)。硬い殻の上限到達・滝の巨人の
     死亡の継続で true。ヘル・レイザーの自動プレイの上限の判定の入力。プレイヤーの行には出さない）を足した。
+    schema 1.8.0 で、その列に山札からの自動プレイ（CardPileCmd.AutoPlayFromDrawPile。カスケード・
+    荒廃・騒乱など）の予約の行（auto_play_reservation〔call_id・parent_call_id・parent・
+    parent_play_started_index・requested_count・position・force_exhaust〕、Play に移して表で見せた札の
+    auto_play_reserved〔reserve_index・uid〕、CardCmd.AutoPlay に渡した札の auto_play_dispatch）と、
+    play の行の reservation（{call_id, reserve_index} か null）を足した。まだ移していない山札の札は出さない。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
@@ -521,7 +526,9 @@ async def use_potion(slot: int, target: str | None = None, wait: bool = False,
             resolution and the redraw finished) and return the settled state with it,
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
-            `waited_ms`, `polls` and `state`.
+            `waited_ms`, `polls` and `state`. If the fight ended during the action, the
+            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            card_resolution_events（終戦後の state には combat_history が無い）。
     """
     body: dict = {"action": "use_potion", "slot": slot}
     if target is not None:
@@ -579,7 +586,9 @@ async def proceed_to_map(wait: bool = False) -> str:
             resolution and the redraw finished) and return the settled state with it,
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
-            `waited_ms`, `polls` and `state`.
+            `waited_ms`, `polls` and `state`. If the fight ended during the action, the
+            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            card_resolution_events（終戦後の state には combat_history が無い）。
     """
     try:
         return await _post({"action": "proceed"}, wait=wait)
@@ -614,7 +623,9 @@ async def combat_play_card(
             resolution and the redraw finished) and return the settled state with it,
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
-            `waited_ms`, `polls` and `state`.
+            `waited_ms`, `polls` and `state`. If the fight ended during the action, the
+            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            card_resolution_events（終戦後の state には combat_history が無い）。
 
     card_index is a position in the hand, so playing a card shifts the indices of
     everything behind it; re-read state between plays if you use it.
@@ -643,7 +654,9 @@ async def combat_end_turn(wait: bool = False) -> str:
             resolution and the redraw finished) and return the settled state with it,
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
-            `waited_ms`, `polls` and `state`.
+            `waited_ms`, `polls` and `state`. If the fight ended during the action, the
+            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            card_resolution_events（終戦後の state には combat_history が無い）。
     """
     try:
         return await _post({"action": "end_turn"}, wait=wait)

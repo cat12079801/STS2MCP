@@ -79,22 +79,7 @@ public static partial class McpMod
             }
             return events;
         });
-        Read("card_resolution_events", () =>
-        {
-            var combat = CurrentCombat();
-            RefreshEntityIdRegistry(combat);
-            // The whole combat's draw / play / generated entries in History order, across the end of a
-            // turn, the enemy turn and the next turn's start (sts2#1088). Every row is fixed once
-            // recorded (entry, CardPlay and the combat's uid / entity id registries never change), so a
-            // later snapshot's array starts with an earlier one's. Never re-sort, dedupe or summarize.
-            var events = new List<Dictionary<string, object?>>();
-            foreach (var entry in CombatManager.Instance.History.Entries)
-            {
-                var row = BuildCardResolutionEvent(entry, owner);
-                if (row != null) events.Add(row);
-            }
-            return events;
-        });
+        Read("card_resolution_events", () => BuildCardResolutionEvents(owner, CurrentCombat()));
         Read("last_player_turn_card_uids", () =>
         {
             _ = owner.PlayerCombatState ?? throw new InvalidOperationException("PlayerCombatState is unavailable");
@@ -150,6 +135,82 @@ public static partial class McpMod
         }
     }
 
+    // The whole combat's draw / play / generated entries in History order, across the end of a turn, the
+    // enemy turn and the next turn's start (sts2#1088), with the owner's auto-play reservations
+    // (AutoPlayReservations) placed after the History entries that existed when each was recorded. Every
+    // row is fixed once recorded (entry, CardPlay, reservation record and the combat's uid / entity id
+    // registries never change), so a later snapshot's array starts with an earlier one's. Never re-sort,
+    // dedupe or summarize. Any unreadable row throws so the caller reports the whole array as unknown.
+    internal static List<Dictionary<string, object?>> BuildCardResolutionEvents(Player owner, ICombatState combat)
+    {
+        RefreshEntityIdRegistry(combat);
+        AutoPlayReservations.ThrowIfUnavailable();
+        var entries = CombatManager.Instance.History.Entries.ToList();
+        var reservations = AutoPlayReservations.RowsOf(owner);
+        if (reservations.Any(r => r.Position < 0 || r.Position > entries.Count))
+            throw new InvalidOperationException(
+                $"auto-play reservation recorded after History entry {reservations.Max(r => r.Position)} but History has {entries.Count}");
+        var events = new List<Dictionary<string, object?>>();
+        var startedRow = new Dictionary<CardPlay, int>(ReferenceEqualityComparer.Instance);
+        int next = 0;
+        for (int i = 0; i <= entries.Count; i++)
+        {
+            for (; next < reservations.Count && reservations[next].Position == i; next++)
+                events.Add(BuildReservationEvent(reservations[next], startedRow));
+            if (i == entries.Count) break;
+            var row = BuildCardResolutionEvent(entries[i], owner);
+            if (row == null) continue;
+            if (entries[i] is CardPlayStartedEntry started) startedRow[started.CardPlay] = events.Count;
+            events.Add(row);
+        }
+        if (next != reservations.Count)
+            throw new InvalidOperationException("auto-play reservations are not in History order");
+        return events;
+    }
+
+    // One reservation row: the call (auto_play_reservation), a card the call moved from the draw pile to
+    // the Play pile (auto_play_reserved), or the call's loop handing a reserved card to CardCmd.AutoPlay
+    // (auto_play_dispatch). Only cards already moved to the Play pile (on screen, face up) are named.
+    private static Dictionary<string, object?> BuildReservationEvent(AutoPlayReservationRow row,
+        Dictionary<CardPlay, int> startedRow)
+    {
+        var call = row.Call;
+        if (row.Kind != AutoPlayReservations.KindReservation)
+            return new Dictionary<string, object?>
+            {
+                ["kind"] = row.Kind,
+                ["call_id"] = call.CallId,
+                ["reserve_index"] = row.ReserveIndex ?? throw new InvalidOperationException("reservation row without index"),
+                ["uid"] = GetStableCardUid(row.Card ?? throw new InvalidOperationException("reservation row without card"))
+            };
+        Dictionary<string, object?>? parent = null;
+        if (call.ParentKind != null)
+        {
+            parent = new Dictionary<string, object?>
+            {
+                ["kind"] = call.ParentKind,
+                // A card still in the draw pile (IAmInvincible's own hook) is not named before it moves.
+                ["model_id"] = call.ParentInDrawPile ? null : call.ParentModelId,
+                ["uid"] = call.ParentCard == null || call.ParentInDrawPile ? null : GetStableCardUid(call.ParentCard),
+                ["hidden_reason"] = call.ParentInDrawPile ? "draw_pile" : null
+            };
+        }
+        return new Dictionary<string, object?>
+        {
+            ["kind"] = row.Kind,
+            ["call_id"] = call.CallId,
+            ["parent_call_id"] = call.ParentCallId,
+            ["parent"] = parent,
+            // The parent's play in this array (its started row comes before the call). Null when the parent is
+            // not a card being played, or the play belongs to another player's array.
+            ["parent_play_started_index"] = call.ParentPlay != null && startedRow.TryGetValue(call.ParentPlay, out int at)
+                ? at : null,
+            ["requested_count"] = call.RequestedCount,
+            ["position"] = call.Position,
+            ["force_exhaust"] = call.ForceExhaust
+        };
+    }
+
     // One row of card_resolution_events, or null for an entry that is not the owner's draw, play
     // or generated card. Draws and generated cards belong to the owner whose pile the card entered:
     // their entries record Actor = Card.Owner.Creature when created (CardDrawnEntry /
@@ -177,17 +238,21 @@ public static partial class McpMod
                         : generated.Creator == owner ? "owner" : "other_player"
                 };
             case CardPlayStartedEntry started when started.CardPlay.Player == owner:
-                return WithKind(BuildCardPlayEvent("started", started.CardPlay));
+                return WithKind(BuildCardPlayEvent("started", started.CardPlay), started.CardPlay);
             case CardPlayFinishedEntry finished when finished.CardPlay.Player == owner:
-                return WithKind(BuildCardPlayEvent("finished", finished.CardPlay));
+                return WithKind(BuildCardPlayEvent("finished", finished.CardPlay), finished.CardPlay);
             default:
                 return null;
         }
 
-        static Dictionary<string, object?> WithKind(Dictionary<string, object?> play)
+        static Dictionary<string, object?> WithKind(Dictionary<string, object?> play, CardPlay cardPlay)
         {
             var row = new Dictionary<string, object?> { ["kind"] = "play" };
             foreach (var (key, value) in play) row[key] = value;
+            // The auto_play_dispatch this play belongs to (a card reserved by AutoPlayFromDrawPile), else null.
+            row["reservation"] = AutoPlayReservations.TagOf(cardPlay) is { } tag
+                ? new Dictionary<string, object?> { ["call_id"] = tag.CallId, ["reserve_index"] = tag.ReserveIndex }
+                : null;
             return row;
         }
     }

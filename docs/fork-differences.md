@@ -20,7 +20,7 @@
 
 - **版の情報**: state の応答（`state_type` を持つもの。`menu`、マルチの `error`、`wait: true` の POST が返す `state` を含む）と `GET /` が `mod_version`（`GET /` は `version`）/ `mod_commit`（同 `commit`）/ `schema` / `schema_version` を返す。state の読み取りに失敗した 500、503 の `retry: true`、POST のアクションの結果とエラー、profile・図鑑・wiki のエンドポイントは返さない。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.7.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state`、`1.2.0` は棚卸しから生成した `internal_state`、`1.3.0` は全パワーの付与元・対象の `combat_id`、`1.4.0` は戦闘中の選択画面すべての `battle`、`1.5.0` は無色 4 札（金の斧・エントロピー・スプラッシュ・計略）の入力、`1.6.0` は戦闘全体の札の解決の通し列 `card_resolution_events`、`1.7.0` は敵の HP の無限表示 `hp_display_is_infinite` を足した追加）。Markdown は先頭の行に `mod … · schema 1.7.0 (schema_version 12)` と出す。
+- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.8.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state`、`1.2.0` は棚卸しから生成した `internal_state`、`1.3.0` は全パワーの付与元・対象の `combat_id`、`1.4.0` は戦闘中の選択画面すべての `battle`、`1.5.0` は無色 4 札（金の斧・エントロピー・スプラッシュ・計略）の入力、`1.6.0` は戦闘全体の札の解決の通し列 `card_resolution_events`、`1.7.0` は敵の HP の無限表示 `hp_display_is_infinite`、`1.8.0` は札の解決の通し列への山札からの自動プレイの予約の行と、戦闘を終えた POST の応答の `ended_combat` を足した追加）。Markdown は先頭の行に `mod … · schema 1.8.0 (schema_version 12)` と出す。
   - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクション・列挙の値・`state_type` を消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
   - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type`、既存の列挙の項目〔`resolving_reasons`・`upgrade_preview.status`・`can_use_now_reason` など〕の新しい値を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する。知らない値は未観測として安全側で止め、既知の値に読み替えない
   - PATCH: 契約を変えない直し（文書の意味のとおりでなかった値を正す、文書・表示の直し）
@@ -40,6 +40,7 @@
 - **POST の応答は必ず `status` を持つ**（転送の失敗も含む）（#50）
 - **メインスレッド待ちの上限**: メインスレッドが 10 秒応答しないか、待ちの列が 32 件を超えたら、アクションを実行せず 503 と `retry: true` を返す。クライアントが諦めた要求は捨てる（#51）
 - **`wait: true`**: POST がゲームの落ち着くまで応答を保留し、落ち着いた state ごと返す（`settled` / `changed` / `waited_ms` / `polls` / `state`。`wait_timeout_ms` で上限）（#52）
+- **`ended_combat`**: 単独の POST の間に戦闘が終わったら、戦闘が終わった時点（勝利は `CombatHistory.Clear` の前、敗北は `CombatManager.ProcessPendingLoss` の前）のローカル Player の `card_resolution_events` を、その応答の `ended_combat`（`outcome`・`card_resolution_events`・`unavailable_reasons`）で返す。終戦後の state には `combat_history` が無いため（schema 1.7.0、`cat12079801/sts2#1113`）
 - **`is_resolving` / `resolving_reasons`**: アクションの解決中かを state で示す。呼び出し側の入力を待っている画面では false（#39・#41）。
   手番の初めのドローと手番開始時のフックの間も、戦闘の画面では `player_turn_starting` で解決中と返す（ゲームはこの間 `PlayerActionsDisabled` を戻し、action の列の外でドローする）（#87）
   戦闘の部屋に入ってから戦闘が始まるまでと、戦闘が終わってから報酬画面などが出るまでの `battle` の無い state も、`combat_starting` / `combat_ending` で解決中と返し、
@@ -150,6 +151,7 @@
 - **戦闘の履歴の要約**（`player.combat_history`）: 開始・完了・廃棄・被ダメ・ブロック獲得の件数、前の手番の uid、この手番の束縛の付与（#76・#81）、金の斧の倍率と同じ戦闘全体・全員の完了したカードの数 `card_plays_finished_this_combat`（schema 1.5.0、`cat12079801/sts2#1084`）。
   この手番の開始・完了の明細 `card_play_events_this_turn`（履歴順。各件に uid・自動プレイの印・実際の対象の `combat_id` / `entity_id`・`play_index` / `play_count`）。荒廃などの自動プレイの照合用。読めなければ配列ごと null（#95、`cat12079801/sts2#937`）
   戦闘全体の札の解決の通し列 `card_resolution_events`（schema 1.6.0）: 所有者のドロー（uid・`from_hand_draw`）・プレイの開始と完了（`card_play_events_this_turn` の要素と同じ形）・生成（`card_id`・uid・`creator`〔`owner` / `other_player` / 敵などプレイヤー以外は null〕）を、本体の `CombatHistory.Entries` の順のまま、前の手番の終わり・敵の手番・次の手番の初めをまたいで 1 本で出す。行は記録されたら変わらないので、後の snapshot の列は前の snapshot の列で始まる。同じ札の再ドローも行ごとに残す。山札の順・まだ引いていない札は出さない。1 行でも読めなければ配列ごと null。Markdown は種類ごとの件数だけ（`cat12079801/sts2#1088`）
+  この列に、山札からの自動プレイ（`CardPileCmd.AutoPlayFromDrawPile`。カスケード・荒廃・騒乱など）の予約を出す（schema 1.7.0）: 呼出しごとの `auto_play_reservation`（`call_id`・親の呼出しの `parent_call_id`・親のモデル `parent`・親プレイの開始行の添字 `parent_play_started_index`・`requested_count`・`position`・`force_exhaust`）、Play に移して画面に表で出した札ごとの `auto_play_reserved`（確保の順の `reserve_index` と uid）、`CardCmd.AutoPlay` に渡した札ごとの `auto_play_dispatch`。子のプレイの開始・完了の行には `reservation: { call_id, reserve_index }` が付く。プレイ不可で開始の行の無い札・終戦で Play に残った札も、確保と消化の行で区別できる。まだ移していない山札の札・乱数は出さない。読取専用の Harmony の patch で記録し、patch が入らない・記録に失敗した戦闘では配列ごと null（`cat12079801/sts2#1113`）
 - **生成の候補**:
   - `player.generation_pool`: オロビックの酸液の抽選前の候補。本体の `CardModel.IsAllowedInRun`（`CardFactory.FilterForRun`。人数と Blitz）→ `FilterForCombat` を通した一覧で、`filter_version: 2`（#63・#95、`cat12079801/sts2#940`）
   - `player.colorless_generation_pool`: 何でも屋の抽選前の候補（無色の解放済み pool から自身を除き、`IsAllowedInRun` → `FilterForCombat`）。戦闘中だけ（#95、`cat12079801/sts2#940`）

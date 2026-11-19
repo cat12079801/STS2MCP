@@ -298,6 +298,16 @@ namespace STS2_MCP
             // The optional deadline path must leave existing ordinary actions intact.
             result = ExecuteWithOptionalWait(null!, Args(true), () => new() { ["status"] = "ok" });
             Check(result["settled"] is true && !result.ContainsKey("task_completed"), "ordinary action uses existing settle contract");
+            Check(!result.ContainsKey("ended_combat"), "no ended_combat when no fight ended during the action");
+
+            // A fight that ended while the action ran: its last card_resolution_events ride on that response only.
+            var capture = new Dictionary<string, object?> { ["outcome"] = "victory", ["card_resolution_events"] = new List<object>() };
+            result = ExecuteWithOptionalWait(null!, Args(true), () => { EndedCombatCaptures.Record(capture); return new() { ["status"] = "ok" }; });
+            Check(ReferenceEquals(result["ended_combat"], capture), "the action during which the fight ended answers ended_combat");
+            result = ExecuteWithOptionalWait(null!, Args(true), () => new() { ["status"] = "ok" });
+            Check(!result.ContainsKey("ended_combat"), "a later action does not repeat an earlier fight's ended_combat");
+            result = ExecuteWithOptionalWait(null!, Args(false), () => { EndedCombatCaptures.Record(capture); return new() { ["status"] = "ok" }; });
+            Check(ReferenceEquals(result["ended_combat"], capture), "without wait, a fight that ended inside the main-thread action is also answered");
             Console.WriteLine($"PASS: {checks} dev_console contract checks (boundary doubles; no live game).");
         }
     }

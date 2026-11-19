@@ -60,6 +60,9 @@ public static partial class McpMod
     /// whole combat in History order, across turn boundaries (sts2#1088).
     /// 1.7.0: battle.enemies[].hp_display_is_infinite, HpDisplayExtensions.IsInfinite over Creature.HpDisplay
     /// (HellraiserPower, HardenedShellPower's cap, WaterfallGiant's death continuation; sts2#1088).
+    /// 1.8.0: card_resolution_events carries CardPileCmd.AutoPlayFromDrawPile's reservations (auto_play_reservation /
+    /// auto_play_reserved / auto_play_dispatch rows; Cascade, Havoc, Mayhem) and each play row's reservation; a POST
+    /// whose fight ended while it ran answers ended_combat with the stream as the fight ended (sts2#1113).
     /// </summary>
     public const string StateSchema = "1.7.0";
 
@@ -332,6 +335,8 @@ public static partial class McpMod
             InstallRewardTracking();
             // Who opened a card selection (choice_source on the in-combat selection screens).
             InstallChoiceSourceTracking();
+            // AutoPlayFromDrawPile's reservations in card_resolution_events, and the stream at the end of a fight.
+            InstallAutoPlayReservationTracking();
 
             // Connect to main thread process frame for action execution
             var tree = (SceneTree)Engine.GetMainLoop();

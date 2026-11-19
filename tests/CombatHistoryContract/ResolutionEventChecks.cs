@@ -106,8 +106,9 @@ public static partial class McpMod
         Check(Events(state).Select(e => $"{e["phase"]}:{e["uid"]}").SequenceEqual(new[]
             { $"started:{s1}", $"finished:{s1}", $"started:{s2}" }), "既存の card_play_events_this_turn は今の手番だけのまま");
         var play = events[1];
-        Check(play.Keys.SequenceEqual(new[] { "kind", "phase", "uid", "is_auto_play", "target", "play_index", "play_count" }),
-            "play の行は card_play_events_this_turn の要素に kind を足した形");
+        Check(play.Keys.SequenceEqual(new[] { "kind", "phase", "uid", "is_auto_play", "target", "play_index", "play_count", "reservation" }),
+            "play の行は card_play_events_this_turn の要素に kind と reservation を足した形");
+        Check(play["reservation"] == null, "予約から出ていないプレイの reservation は null");
         var target = (Dictionary<string, object?>)play["target"]!;
         Check(Equals(target["combat_id"], 21u) && Equals(target["entity_id"], "INKLET_0"), "対象は combat_id と安定 entity_id");
         Check(events[0].Keys.SequenceEqual(new[] { "kind", "uid", "from_hand_draw" })

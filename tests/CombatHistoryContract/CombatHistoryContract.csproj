@@ -7,11 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.CombatHistory.cs" Link="CombatHistory.cs" />
+    <Compile Include="../../McpMod.AutoPlayReservation.cs" Link="AutoPlayReservation.cs" />
     <Compile Include="../../McpMod.CardIdentity.cs" Link="CardIdentity.cs" />
     <Compile Include="../../McpMod.CombatHistoryFormatting.cs" Link="CombatHistoryFormatting.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
     <Compile Include="../../McpMod.EntityIdentity.cs" Link="EntityIdentity.cs" />
-    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs"
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs;../../McpMod.AutoPlayReservationPatches.cs;../../McpMod.ActionWait.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

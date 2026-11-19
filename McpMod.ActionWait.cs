@@ -124,11 +124,14 @@ public static partial class McpMod
         // Other actions retain their existing wait behavior. Console requests also bound the
         // pre-state and dispatch, so stalled frames cannot add separate main-thread timeouts.
         var deadline = completeOnHttpThread == null ? null : new ActionDeadline(timeoutMs);
+        // A fight that ends while this action runs takes its combat_history with it; its last stream is kept.
+        long endedCombatsBefore = EndedCombatCaptures.Sequence;
         if (!wait)
         {
             var immediate = RunOnMainThreadBlocking(action, deadline?.MainThreadWaitMs ?? MainThreadTimeoutMs);
             completeOnHttpThread?.Invoke(immediate, deadline!);
             if (deadline != null) immediate["waited_ms"] = deadline.ElapsedMs;
+            AppendEndedCombat(immediate, endedCombatsBefore);
             return EnsureStatus(immediate);
         }
 
@@ -160,6 +163,15 @@ public static partial class McpMod
         }
 
         if (deadline != null) result["waited_ms"] = deadline.ElapsedMs;
+        AppendEndedCombat(result, endedCombatsBefore);
         return result;
+    }
+
+    // ended_combat: the local player's card_resolution_events captured when the fight ended (a win clears
+    // History in CombatManager.EndCombatInternal; a loss ends in CombatManager.ProcessPendingLoss), only on the
+    // response of the action during which it ended.
+    private static void AppendEndedCombat(Dictionary<string, object?> result, long sequenceBefore)
+    {
+        if (EndedCombatCaptures.Since(sequenceBefore) is { } capture) result["ended_combat"] = capture;
     }
 }
