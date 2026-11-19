@@ -1,5 +1,5 @@
 {
- "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。",
+ "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Never・DiffersFromAmount。",
  "AbstractModel.CategorySortingId": {
   "class": "static/derived",
   "note": "ModelDb の並び順（InitId）。ゲームの状態ではない"
@@ -92,19 +92,34 @@
   "class": "public",
   "note": "複製元のカード（CloneOf / IsClone）。複製でできたカードは手札で見分けがつく。IsClone・DupeOf の判定に使う",
   "json_key": "clone_of_uid",
-  "effect": "CardModel.IsClone・DupeOf（複製の扱い）"
+  "effect": "CardModel.IsClone・DupeOf（複製の扱い）",
+  "section": "card",
+  "converter": "CardUid",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "CardModel?",
+  "kind": "field"
  },
  "CardModel._currentPlayIndex": {
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む",
   "json_key": "current_play_index",
-  "effect": "LethalityPower（初回のプレイだけ強化）"
+  "effect": "LethalityPower（初回のプレイだけ強化）",
+  "section": "card",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "int",
+  "kind": "field"
  },
  "CardModel._currentTarget": {
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象",
   "json_key": "current_target_combat_id",
-  "effect": "OnPlayWrapper の対象"
+  "effect": "OnPlayWrapper の対象",
+  "section": "card",
+  "converter": "CreatureCombatId",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "Creature?",
+  "kind": "field"
  },
  "CardModel._deckVersion": {
   "class": "static/derived",
@@ -115,14 +130,25 @@
   "note": "デッキに入った階。人間は取得した階を覚えている。今の版で効果に読む箇所は見当たらず、保存と履歴に使う。優先度は低い",
   "json_key": "floor_added_to_deck",
   "effect": "保存（ToSerializable）。効果に読む箇所は見つからない",
-  "written": "CardPileCmd・CardCmd・Player・AscensionManager（FloorAddedToDeck = TotalFloor / 1）"
+  "written": "CardPileCmd・CardCmd・Player・AscensionManager（FloorAddedToDeck = TotalFloor / 1）",
+  "section": "card",
+  "converter": "NullableInt",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "int?",
+  "kind": "field",
+  "markdown": "Never"
  },
  "CardModel._isDupe": {
   "class": "public",
   "note": "複製（Dupe）の印。結果の山（GetResultLocationForCardPlay・MoveToResultPileWithoutPlaying）が変わり、ChainsOfBindingPower・FeralPower が見分ける。作った経緯は見えている",
   "json_key": "is_dupe",
   "effect": "GetResultLocationForCardPlay・MoveToResultPileWithoutPlaying・ChainsOfBindingPower・FeralPower",
-  "written": "CreateDupe（CardModel.cs:2424 の IsDupe = true）"
+  "written": "CreateDupe（CardModel.cs:2424 の IsDupe = true）",
+  "section": "card",
+  "converter": "Bool",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "bool",
+  "kind": "field"
  },
  "CardModel._isEnchantmentPreview": {
   "class": "cosmetic",
@@ -140,13 +166,23 @@
   "class": "public",
   "note": "効果が後から付けたキーワード（AddKeyword）。強化の取り消し（DowngradeInternal・DampenPower）で元に戻すときに残すかを決める。付けた効果は見えている",
   "json_key": "keywords_added",
-  "effect": "DowngradeInternal・DeepCloneFields"
+  "effect": "DowngradeInternal・DeepCloneFields",
+  "section": "card",
+  "converter": "KeywordNames",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "HashSet<CardKeyword>",
+  "kind": "field"
  },
  "CardModel._keywordsRemovedFromOutside": {
   "class": "public",
   "note": "効果が後から外したキーワード（RemoveKeyword）。強化の取り消しで戻すときに使う",
   "json_key": "keywords_removed",
-  "effect": "DowngradeInternal・DeepCloneFields"
+  "effect": "DowngradeInternal・DeepCloneFields",
+  "section": "card",
+  "converter": "KeywordNames",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "HashSet<CardKeyword>",
+  "kind": "field"
  },
  "CardModel._lastStarsSpent": {
   "class": "public",
@@ -175,7 +211,12 @@
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定）",
   "json_key": "transform_into_after_play_id",
-  "effect": "OnPlayWrapper の最後で TransformTo"
+  "effect": "OnPlayWrapper の最後で TransformTo",
+  "section": "card",
+  "converter": "CardModelId",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "CardModel?",
+  "kind": "field"
  },
  "CardModel._upgradePreviewType": {
   "class": "cosmetic",
@@ -212,20 +253,20 @@
   "effect": "AfterDowngraded"
  },
  "CombatState.BadgeModels": {
-  "class": "unknown",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+  "class": "out_of_scope",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
  },
  "CombatState.Dominion": {
-  "class": "unknown",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+  "class": "out_of_scope",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
  },
  "CombatState.Modifiers": {
-  "class": "unknown",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+  "class": "out_of_scope",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
  },
  "CombatState.RunModels": {
-  "class": "unknown",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外"
+  "class": "out_of_scope",
+  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
  },
  "CombatState.RunState": {
   "class": "static/derived",
@@ -238,8 +279,13 @@
  "CombatState._allies": {
   "class": "public",
   "note": "味方側のクリーチャー（プレイヤーとペット）。プレイヤー・pets として個別に出ているが、一覧としては出ていない。マルチプレイの味方を含む",
-  "json_key": "allies",
-  "effect": "Allies・Creatures・IterateHookListeners"
+  "json_key": "ally_combat_ids",
+  "effect": "Allies・Creatures・IterateHookListeners",
+  "section": "battle",
+  "converter": "CreatureCombatIds",
+  "type_full": "MegaCrit.Sts2.Core.Combat.CombatState",
+  "cs_type": "List<Creature>",
+  "kind": "field"
  },
  "CombatState._enemies": {
   "class": "exposed",
@@ -249,7 +295,12 @@
   "class": "public",
   "note": "逃げた敵（CreatureEscaped。ThievingHopper など）。画面から消えるのが見える。GremlinMercNormal が読む",
   "json_key": "escaped_creature_ids",
-  "effect": "EscapedCreatures（GremlinMercNormal の報酬）"
+  "effect": "EscapedCreatures（GremlinMercNormal の報酬）",
+  "section": "battle",
+  "converter": "CreatureCombatIds",
+  "type_full": "MegaCrit.Sts2.Core.Combat.CombatState",
+  "cs_type": "List<Creature>",
+  "kind": "field"
  },
  "CombatState._nextCreatureId": {
   "class": "static/derived",
@@ -375,7 +426,12 @@
   "class": "public",
   "note": "ショップでカードを除去した回数。除去の値段（MerchantCardRemovalEntry）が上がる。人間は自分の除去の回数を知っている。戦闘外の判断（runplan）に効く",
   "json_key": "card_shop_removals_used",
-  "effect": "MerchantCardRemovalEntry（除去の値段）"
+  "effect": "MerchantCardRemovalEntry（除去の値段）",
+  "section": "player",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields",
+  "cs_type": "int",
+  "kind": "auto_property"
  },
  "ExtraPlayerFields.CccomboBadgeUnlocked": {
   "class": "cosmetic",
@@ -397,7 +453,12 @@
   "class": "public",
   "note": "ウォンゴのポイント。イベント WelcomeToWongos が読む。人間はイベントの画面で見る",
   "json_key": "wongo_points",
-  "effect": "WelcomeToWongos"
+  "effect": "WelcomeToWongos",
+  "section": "player",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields",
+  "cs_type": "int",
+  "kind": "auto_property"
  },
  "FakeHappyFlower._isActivating": {
   "class": "cosmetic",
@@ -463,7 +524,12 @@
   "class": "public",
   "note": "黄金の道を引いた幕（AfterObtained）。その幕の地図の生成と、不明マスの部屋の種類（ModifyUnknownMapPointRoomTypes）を変える。取得した幕は人間に分かる",
   "json_key": "golden_path_act",
-  "effect": "ModifyGeneratedMap・ModifyUnknownMapPointRoomTypes"
+  "effect": "ModifyGeneratedMap・ModifyUnknownMapPointRoomTypes",
+  "section": "relic",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass",
+  "cs_type": "int",
+  "kind": "field"
  },
  "GravityPower.Data.amountsForPlayedCards": {
   "class": "public",
@@ -504,7 +570,12 @@
   "class": "public",
   "note": "かばっている味方（マルチプレイ）。ModifyDamageMultiplicative・IsCovering が読む",
   "json_key": "covered_creature_ids",
-  "effect": "ModifyDamageMultiplicative・IsCovering"
+  "effect": "ModifyDamageMultiplicative・IsCovering",
+  "section": "power",
+  "converter": "CreatureCombatIds",
+  "type_full": "MegaCrit.Sts2.Core.Models.Powers.InterceptPower+Data",
+  "cs_type": "List<Creature>",
+  "kind": "data_field"
  },
  "IronClub._isActivating": {
   "class": "cosmetic",
@@ -586,7 +657,12 @@
   "class": "public",
   "note": "BuffFromMaulPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
   "json_key": "extra_damage",
-  "effect": "AfterDowngraded"
+  "effect": "AfterDowngraded",
+  "section": "card",
+  "converter": "Decimal",
+  "type_full": "MegaCrit.Sts2.Core.Models.Cards.Maul",
+  "cs_type": "decimal",
+  "kind": "field"
  },
  "MawBank._hasItemBeenBought": {
   "class": "exposed",
@@ -624,7 +700,12 @@
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。",
   "json_key": "card_being_played_uid",
-  "effect": "AfterCardPlayed"
+  "effect": "AfterCardPlayed",
+  "section": "relic",
+  "converter": "CardUid",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.MusicBox",
+  "cs_type": "CardModel?",
+  "kind": "field"
  },
  "NightmarePower.Data.selectedCard": {
   "class": "public",
@@ -669,8 +750,13 @@
  "PaelsLegion[relic]._affectedCardPlay": {
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ",
-  "json_key": "affected_card_play",
-  "effect": "ModifyBlockMultiplicative"
+  "json_key": "affected_card_uid",
+  "effect": "ModifyBlockMultiplicative",
+  "section": "relic",
+  "converter": "CardPlayCardUid",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.PaelsLegion",
+  "cs_type": "CardPlay?",
+  "kind": "field"
  },
  "PaelsLegion[relic]._triggeredBlockLastTurn": {
   "class": "cosmetic",
@@ -680,7 +766,12 @@
   "class": "public",
   "note": "預けたカード（人間が選んだもの）。戦闘の終わりに 1 枚を乱数で返す。枚数は counter に出ているが、中身は出ていない",
   "json_key": "stored_cards",
-  "effect": "AfterCombatEnd"
+  "effect": "AfterCombatEnd",
+  "section": "relic",
+  "converter": "SerializableCards",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.PaelsTooth",
+  "cs_type": "List<SerializableCard>",
+  "kind": "field"
  },
  "PaelsWing._isActivating": {
   "class": "cosmetic",
@@ -696,7 +787,12 @@
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする",
   "json_key": "attack_to_double_uid",
-  "effect": "ModifyDamageMultiplicative"
+  "effect": "ModifyDamageMultiplicative",
+  "section": "relic",
+  "converter": "CardUid",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.PenNib",
+  "cs_type": "CardModel?",
+  "kind": "field"
  },
  "PenNib._isActivating": {
   "class": "cosmetic",
@@ -743,8 +839,8 @@
   "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
  },
  "Player.PlayerOdds": {
-  "class": "unknown",
-  "note": "カードのレア度・ポーションの出現率のオフセット（CardRarityOdds・PotionRewardOdds）。乱数そのものではなく、見た報酬の履歴から決まるが、画面には出ない。人間が追える情報として扱うかはユーザーの判断が要る（オフセットの中身は CardRarityOdds を読んで別途確認）"
+  "class": "hidden",
+  "note": "カードのレア度・ポーションの出現率のオフセット（CardRarityOdds・PotionRewardOdds）。見た報酬の履歴から決まるが、画面には出ないので出さない（人間に見えない情報で遊ばない。調整役の判断 2026-11-19）"
  },
  "Player.RelicGrabBag": {
   "class": "hidden",
@@ -806,7 +902,13 @@
   "note": "ターン開始時（Creature.BeforeTurnStart）の量の写し。DrawCardsNextTurnPower は 0 なら（このターンに付いたなら）引く枚数を増やさない。いつ付いたかは人間に見えている",
   "json_key": "amount_on_turn_start",
   "effect": "DrawCardsNextTurnPower.ModifyHandDraw・HelloWorldPower・GodByrdPower・SummonNextTurnPower",
-  "written": "Creature.BeforeTurnStart"
+  "written": "Creature.BeforeTurnStart",
+  "section": "power",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Models.PowerModel",
+  "cs_type": "int",
+  "kind": "field",
+  "markdown": "DiffersFromAmount"
  },
  "PowerModel._owner": {
   "class": "static/derived",
@@ -842,7 +944,12 @@
   "class": "public",
   "note": "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
   "json_key": "extra_damage",
-  "effect": "AfterDowngraded"
+  "effect": "AfterDowngraded",
+  "section": "card",
+  "converter": "Decimal",
+  "type_full": "MegaCrit.Sts2.Core.Models.Cards.Rampage",
+  "cs_type": "decimal",
+  "kind": "field"
  },
  "Regret._cardsInHand": {
   "class": "static/derived",
@@ -861,14 +968,25 @@
   "note": "取得した階。効果に読む箇所は見つからず、保存と履歴に使う。優先度は低い",
   "json_key": "floor_added_to_deck",
   "effect": "保存（ToSerializable）",
-  "written": "RelicCmd（FloorAddedToDeck = TotalFloor）・FromSerializable"
+  "written": "RelicCmd（FloorAddedToDeck = TotalFloor）・FromSerializable",
+  "section": "relic",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Models.RelicModel",
+  "cs_type": "int",
+  "kind": "field",
+  "markdown": "Never"
  },
  "RelicModel._isWax": {
   "class": "public",
   "note": "蝋のレリック（ToyBox が付ける。一定の戦闘で溶ける）。見た目で分かる。溶けたかは melted に出ているが、溶ける前の蝋かどうかは出ていない",
   "json_key": "is_wax",
   "effect": "Title・UpdateTexture・ToyBox・Player（溶かす処理）",
-  "written": "ToyBox（蝋のレリックを作るときに IsWax を立てる）"
+  "written": "ToyBox（蝋のレリックを作るときに IsWax を立てる）",
+  "section": "relic",
+  "converter": "Bool",
+  "type_full": "MegaCrit.Sts2.Core.Models.RelicModel",
+  "cs_type": "bool",
+  "kind": "field"
  },
  "RelicModel._owner": {
   "class": "static/derived",
@@ -876,10 +994,15 @@
  },
  "RelicModel._status": {
   "class": "public",
-  "note": "RelicStatus（Normal/Active/Disabled）。画面ではレリックの光り方で見える。PaelsFlesh が Status を条件に使う（IsUsedUp・AfterSideTurnStart の base.Status == Active）。mod-scan の検出（.Status）はエンチャントの status の誤検出",
+  "note": "RelicStatus（Normal/Active/Disabled）。画面ではレリックの光り方で見える。PaelsFlesh が Status を条件に使う（IsUsedUp・AfterSideTurnStart の base.Status == Active）。mod-scan の検出（.Status）はエンチャントの status の誤検出。Normal 以外のときだけ markdown に出す",
   "json_key": "status",
   "effect": "PaelsFlesh の条件分岐（Status == Active / Normal）。ほかのレリックは表示",
-  "written": "各レリックの base.Status =（UpdateDisplay・AfterSideTurnStart など）"
+  "written": "各レリックの base.Status =（UpdateDisplay・AfterSideTurnStart など）",
+  "section": "relic",
+  "converter": "EnumName",
+  "type_full": "MegaCrit.Sts2.Core.Models.RelicModel",
+  "cs_type": "RelicStatus",
+  "kind": "field"
  },
  "SandpitPower._initialAmount": {
   "class": "cosmetic",
@@ -987,7 +1110,12 @@
   "class": "public",
   "note": "宝の地図の印を付ける幕（AfterCreated で 1）。印の付いた点は地図の quests に出るが、どの幕の印かはこの値で決まる",
   "json_key": "spoils_act_index",
-  "effect": "AfterMapGenerated・ModifyGeneratedMap・BeforeCardRemoved"
+  "effect": "AfterMapGenerated・ModifyGeneratedMap・BeforeCardRemoved",
+  "section": "card",
+  "converter": "Int",
+  "type_full": "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap",
+  "cs_type": "int",
+  "kind": "field"
  },
  "StoneCalendar._isActivating": {
   "class": "cosmetic",
@@ -1039,7 +1167,12 @@
   "class": "public",
   "note": "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
   "json_key": "extra_damage",
-  "effect": "AfterDowngraded"
+  "effect": "AfterDowngraded",
+  "section": "card",
+  "converter": "Decimal",
+  "type_full": "MegaCrit.Sts2.Core.Models.Cards.TheBall",
+  "cs_type": "decimal",
+  "kind": "field"
  },
  "TheInsatiable._hasLiquified": {
   "class": "cosmetic",
@@ -1073,7 +1206,12 @@
   "class": "public",
   "note": "OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない",
   "json_key": "extra_damage",
-  "effect": "AfterDowngraded"
+  "effect": "AfterDowngraded",
+  "section": "card",
+  "converter": "Decimal",
+  "type_full": "MegaCrit.Sts2.Core.Models.Cards.Thrash",
+  "cs_type": "decimal",
+  "kind": "field"
  },
  "TouchOfOrobas._starterRelic": {
   "class": "static/derived",
@@ -1113,15 +1251,25 @@
  },
  "UnsettlingLamp._doubledPowers": {
   "class": "public",
-  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）",
+  "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource）。リストが未作成（null）の間は空として出す",
   "json_key": "doubled_power_ids",
-  "effect": "HasDoubledTemporaryPowerSource"
+  "effect": "HasDoubledTemporaryPowerSource",
+  "section": "relic",
+  "converter": "PowerRefs",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.UnsettlingLamp",
+  "cs_type": "List<PowerModel>?",
+  "kind": "field"
  },
  "UnsettlingLamp._triggeringCard": {
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。戦闘で最初にデバフを付けたカード。ModifyPowerAmountGivenMultiplicative が 2 倍にする",
   "json_key": "triggering_card_uid",
-  "effect": "ModifyPowerAmountGivenMultiplicative・AfterCardPlayed"
+  "effect": "ModifyPowerAmountGivenMultiplicative・AfterCardPlayed",
+  "section": "relic",
+  "converter": "CardUid",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.UnsettlingLamp",
+  "cs_type": "CardModel?",
+  "kind": "field"
  },
  "UpMySleeve._timesPlayedThisCombat": {
   "class": "cosmetic",
@@ -1131,7 +1279,12 @@
   "class": "public",
   "note": "カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカード",
   "json_key": "triggering_card_uid",
-  "effect": "ModifyBlockMultiplicative"
+  "effect": "ModifyBlockMultiplicative",
+  "section": "relic",
+  "converter": "CardUid",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.Vambrace",
+  "cs_type": "CardModel?",
+  "kind": "field"
  },
  "VigorPower.Data.amountWhenAttackStarted": {
   "class": "exposed",

@@ -6,6 +6,8 @@
 戦闘上のカード選択・ポーズ等でも、同じ player が構築されれば含む。
 既存項目の意味は変えないため、版は上げていない（schema 4 のときの追加）。旧 MOD・旧 dump では追加項目が省略される。
 
+`combat_state`・`run_state` とは別に、全所有レリックの行に `internal_state`（`status`・`is_wax`・`floor_added_to_deck` と、PenNib・Vambrace・UnsettlingLamp・MusicBox・PaelsLegion の解決中のカード、PaelsTooth の預けたカード、GoldenCompass の幕）を出す。棚卸しの分類表から生成した許可リストで読む（schema 1.2.0、[入力契約](raw-full.md#棚卸しから生成した内部状態internal_stateschema-120)）。
+
 ```json
 {
   "id": "CENTENNIAL_PUZZLE",

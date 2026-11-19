@@ -1602,6 +1602,8 @@ public static partial class McpMod
 
         battle["enemies"] = BuildEnemyList(combatState);
         battle["enemy_move_context"] = BuildEnemyMoveContext(combatState);
+        // 生成した許可リストの CombatState の項目（味方・逃げた敵の combat_id。McpMod.StateAllowlist.cs）。
+        AttachAllowlistedState(battle, "battle", combatState, "battle");
 
         return battle;
     }
@@ -1705,6 +1707,13 @@ public static partial class McpMod
         }
 
         state["gold"] = player.Gold;
+        // 生成した許可リストの ExtraPlayerFields の項目（ショップの除去回数など。McpMod.StateAllowlist.cs）。
+        try { AttachAllowlistedState(state, "player", player.ExtraFields, "player"); }
+        catch (Exception ex)
+        {
+            state["internal_state"] = null;
+            RecordInternalStateFailure(state, "internal_state", ex, "player");
+        }
 
         // Powers (status effects)
         state["status"] = BuildPowersState(creature);
@@ -1738,6 +1747,8 @@ public static partial class McpMod
             {
                 AttachRelicSection(relicState, "combat_state", () => BuildRelicCombatState(relic), relic.Id.Entry);
             }
+            // 生成した許可リストのレリックの項目（status・is_wax・途中の印など。McpMod.StateAllowlist.cs）。
+            AttachAllowlistedState(relicState, "relic", relic, $"player.relics.{relic.Id.Entry}");
             relics.Add(relicState);
         }
         state["relics"] = relics;
@@ -1788,6 +1799,7 @@ public static partial class McpMod
         {
             var cardInfo = BuildCardInfo(card, PileType.Deck);
             cardInfo["index"] = deckIndex;
+            AttachAllowlistedState(cardInfo, "card", card, "deck");
             deck.Add(cardInfo);
             deckIndex++;
         }
@@ -1868,6 +1880,7 @@ public static partial class McpMod
     {
         var state = BuildCardInfo(card, includeType: false);
         AttachCardDetails(state, card);
+        AttachAllowlistedState(state, "card", card, "hand");
         state["index"] = index;
         state["uid"] = GetStableCardUid(card);
         // Combat-only state: keep it out of BuildCardInfo, which also builds deck/preview rows.
@@ -2051,6 +2064,7 @@ public static partial class McpMod
                 ["description"] = SafeGetCardDescription(card, pile)
             };
             AttachCardDetails(state, card);
+            AttachAllowlistedState(state, "card", card, pile.ToString().ToLowerInvariant() + "_pile");
             AttachCardPlayability(state, card);
             AttachCombatUpgradeState(state, card, pile);
             list.Add(state);
@@ -3729,6 +3743,7 @@ public static partial class McpMod
                 if (!isVisible)
                     entry["hidden_in_ui"] = true;
                 AttachPowerInternalState(entry, power, visibilityKnown && isVisible);
+                AttachAllowlistedState(entry, "power", power, $"status.{entry["id"]}");
                 powers.Add(entry);
             }
             catch (Exception ex)
@@ -3741,6 +3756,7 @@ public static partial class McpMod
                 Warn("status.description", ex);
                 var entry = BuildMinimalPowerState(power);
                 AttachPowerInternalState(entry, power, visibilityKnown && isVisible);
+                AttachAllowlistedState(entry, "power", power, $"status.{entry["id"]}");
                 powers.Add(entry);
             }
         }

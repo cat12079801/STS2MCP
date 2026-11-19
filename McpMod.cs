@@ -46,8 +46,10 @@ public static partial class McpMod
     ///
     /// 1.0.0 is exactly the contract of the deprecated integer schema_version 12.
     /// 1.1.0: battle.enemies[].combat_state covers GremlinMerc (has_spoken) and KinPriest (speech_used).
+    /// 1.2.0: card, power, relic, player and battle rows carry internal_state from the generated allowlist
+    /// (McpMod.StateAllowlist.Generated.cs, built from docs/state-inventory-classification.json).
     /// </summary>
-    public const string StateSchema = "1.1.0";
+    public const string StateSchema = "1.2.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

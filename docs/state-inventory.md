@@ -5,16 +5,18 @@
 - ゲームの版: **v0.113.1**（デコンパイル `sts2-a671e9ef`）
 - 全候補の機械向けの表: [`state-inventory-members.tsv`](state-inventory-members.tsv)
 - 生成: `bin/sts2-python -B tools/state_inventory.py --decompile <dir> --mod . --game-version <版>`
+- 許可リスト: 分類表で `section` を付けた public の項目から `--write-allowlist` が [`../McpMod.StateAllowlist.Generated.cs`](../McpMod.StateAllowlist.Generated.cs) を作り、state の各行の `internal_state` に出す。`--check-allowlist` が分類表との一致を、棚卸しの実行が今の版の宣言との一致を確かめる
 
 ## 分類の意味
 
 | 分類 | 意味 |
 |---|---|
-| exposed | すでに MOD の state に出ている（MOD のソースで読み取りを検出、または分類表で確認） |
+| exposed | すでに MOD の state に出ている（MOD のソースで読み取りを検出、分類表で確認、または分類表の section から生成した許可リスト `internal_state` で出す〔判定 allowlist〕） |
 | public | 人間が見える・見たものから確定できる。まだ出ていない（出す対象） |
 | hidden | 人間に見えない（乱数・未公開の山の順・まだ見せていない生成物）。出さない |
 | cosmetic | 戦闘・進行に効かない（台詞・演出・UI）。出す必要は無い |
 | static/derived | 定数、または出ている値・アセンション・強化から決まる。出す必要は無い |
+| out_of_scope | 標準のモード以外（Blitz・Dread・カスタム）だけのもの。対象外 |
 | unknown | ソースからは決めきれない（理由を備考に書く） |
 | unclassified | 分類表に無い（版が上がって増えた候補など） |
 
@@ -22,74 +24,43 @@
 
 ## 件数（種別 × 分類）
 
-| 種別 | exposed | public | hidden | cosmetic | static/derived | unknown | unclassified | 計 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 87 |
-| relic | 84 | 14 | 0 | 29 | 15 | 0 | 0 | 142 |
-| power | 55 | 27 | 0 | 9 | 5 | 0 | 0 | 96 |
-| card | 30 | 23 | 0 | 7 | 18 | 0 | 0 | 78 |
-| potion | 1 | 0 | 0 | 1 | 5 | 0 | 0 | 7 |
-| enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 10 |
-| affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 3 |
-| orb | 1 | 2 | 0 | 0 | 2 | 0 | 0 | 5 |
-| base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 4 |
-| entity | 46 | 5 | 2 | 8 | 16 | 5 | 0 | 82 |
-| **計** | 249 | 71 | 4 | 93 | 92 | 5 | 0 | 514 |
+| 種別 | exposed | public | hidden | cosmetic | static/derived | out_of_scope | unknown | unclassified | 計 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
+| relic | 95 | 3 | 0 | 29 | 15 | 0 | 0 | 0 | 142 |
+| power | 57 | 25 | 0 | 9 | 5 | 0 | 0 | 0 | 96 |
+| card | 43 | 10 | 0 | 7 | 18 | 0 | 0 | 0 | 78 |
+| potion | 1 | 0 | 0 | 1 | 5 | 0 | 0 | 0 | 7 |
+| enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
+| affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
+| orb | 1 | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 5 |
+| base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
+| entity | 50 | 1 | 3 | 8 | 16 | 4 | 0 | 0 | 82 |
+| **計** | 279 | 41 | 5 | 93 | 92 | 4 | 0 | 0 | 514 |
 
 ### アイアンクラッドの範囲だけ（他キャラ・廃止・モックを除く）
 
-| 種別 | exposed | public | hidden | cosmetic | static/derived | unknown | unclassified | 計 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 87 |
-| relic | 82 | 11 | 0 | 27 | 15 | 0 | 0 | 135 |
-| power | 49 | 2 | 0 | 5 | 3 | 0 | 0 | 59 |
-| card | 22 | 13 | 0 | 5 | 15 | 0 | 0 | 55 |
-| potion | 1 | 0 | 0 | 0 | 5 | 0 | 0 | 6 |
-| enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 10 |
-| affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 3 |
-| orb | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 3 |
-| base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 4 |
-| entity | 46 | 4 | 2 | 8 | 16 | 5 | 0 | 81 |
-| **計** | 233 | 30 | 4 | 84 | 87 | 5 | 0 | 443 |
+| 種別 | exposed | public | hidden | cosmetic | static/derived | out_of_scope | unknown | unclassified | 計 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| monster | 25 | 0 | 2 | 38 | 22 | 0 | 0 | 0 | 87 |
+| relic | 93 | 0 | 0 | 27 | 15 | 0 | 0 | 0 | 135 |
+| power | 51 | 0 | 0 | 5 | 3 | 0 | 0 | 0 | 59 |
+| card | 35 | 0 | 0 | 5 | 15 | 0 | 0 | 0 | 55 |
+| potion | 1 | 0 | 0 | 0 | 5 | 0 | 0 | 0 | 6 |
+| enchantment | 5 | 0 | 0 | 1 | 4 | 0 | 0 | 0 | 10 |
+| affliction | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
+| orb | 1 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
+| base | 1 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
+| entity | 50 | 0 | 3 | 8 | 16 | 4 | 0 | 0 | 81 |
+| **計** | 263 | 0 | 5 | 84 | 87 | 4 | 0 | 0 | 443 |
 
 範囲（pool）: `ironclad`・`colorless`・`curse`・`status`・`event-only`・`shared`・`ancient`・`monster`・`enchantment`・`affliction`・`base`（モデルの基底）・`entity`（Creature・Player など）を範囲に入れる。`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。
 
-## public（まだ出ていない・出す対象）— アイアンクラッドの範囲（30 件）
+## public（まだ出ていない・出す対象）— アイアンクラッドの範囲（0 件）
 
 書き込み・読む側の列は、分類表に記述があればそれを、無ければ同じファイルの中で検出したメソッド名（と別クラスからの参照）を出す。
 
-| クラス.メンバー | 型 | kind | 範囲 | 書き込み | 効果（読む側） | 提案キー | 備考 |
-|---|---|---|---|---|---|---|---|
-| `CardModel._cloneOf` | CardModel? | field | base | CreateClone | CardModel.IsClone・DupeOf（複製の扱い） | `clone_of_uid` | 複製元のカード（CloneOf / IsClone）。複製でできたカードは手札で見分けがつく。IsClone・DupeOf の判定に使う |
-| `CardModel._currentPlayIndex` | int | field | base | AfterCloned, OnPlayWrapper | LethalityPower（初回のプレイだけ強化） | `current_play_index` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。繰り返しプレイ（replay）の何回目か。LethalityPower が読む |
-| `CardModel._currentTarget` | Creature? | field | base | AfterCloned, OnPlayWrapper | OnPlayWrapper の対象 | `current_target_combat_id` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象 |
-| `CardModel._floorAddedToDeck` | int? | field | base | CardPileCmd・CardCmd・Player・AscensionManager（FloorAddedToDeck = TotalFloor / 1） | 保存（ToSerializable）。効果に読む箇所は見つからない | `floor_added_to_deck` | デッキに入った階。人間は取得した階を覚えている。今の版で効果に読む箇所は見当たらず、保存と履歴に使う。優先度は低い |
-| `CardModel._isDupe` | bool | field | base | CreateDupe（CardModel.cs:2424 の IsDupe = true） | GetResultLocationForCardPlay・MoveToResultPileWithoutPlaying・ChainsOfBindingPower・FeralPower | `is_dupe` | 複製（Dupe）の印。結果の山（GetResultLocationForCardPlay・MoveToResultPileWithoutPlaying）が変わり、ChainsOfBindingPower・FeralPower が見分ける。作った経緯は見えている |
-| `CardModel._keywordsAddedFromOutside` | HashSet<CardKeyword> | field | base | AddKeyword, DeepCloneFields, RemoveKeyword | DowngradeInternal・DeepCloneFields | `keywords_added` | 効果が後から付けたキーワード（AddKeyword）。強化の取り消し（DowngradeInternal・DampenPower）で元に戻すときに残すかを決める。付けた効果は見えている |
-| `CardModel._keywordsRemovedFromOutside` | HashSet<CardKeyword> | field | base | AddKeyword, DeepCloneFields, RemoveKeyword | DowngradeInternal・DeepCloneFields | `keywords_removed` | 効果が後から外したキーワード（RemoveKeyword）。強化の取り消しで戻すときに使う |
-| `CardModel._transformIntoAfterPlay` | CardModel? | field | base | AfterCloned, OnPlayWrapper | OnPlayWrapper の最後で TransformTo | `transform_into_after_play_id` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。プレイ後に変化する先（MourningBlow が設定） |
-| `Maul._extraDamageFromMaulPlays` | decimal | field | event-only | BuffFromMaulPlay | AfterDowngraded | `extra_damage` | BuffFromMaulPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない |
-| `Rampage._extraDamageFromPlays` | decimal | field | ironclad | OnPlay | AfterDowngraded | `extra_damage` | OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない |
-| `SpoilsMap._spoilsActIndex` | int | field · saved | event-only | AfterCreated | AfterMapGenerated・ModifyGeneratedMap・BeforeCardRemoved | `spoils_act_index` | 宝の地図の印を付ける幕（AfterCreated で 1）。印の付いた点は地図の quests に出るが、どの幕の印かはこの値で決まる |
-| `TheBall._extraDamageFromPlays` | decimal | field | colorless | OnPlay | AfterDowngraded | `extra_damage` | OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない |
-| `Thrash._extraDamage` | decimal | field | ironclad | OnPlay | AfterDowngraded | `extra_damage` | OnPlay で DynamicVars.Damage と同じだけ足す累計。AfterDowngraded（DampenPower などの強化の取り消し）で基礎値に足し戻す。今の Damage は dynamic_vars に出ているが、取り消し後の値はこれが無いと決まらない |
-| `CombatState._allies` | List<Creature> | field | entity | RemoveCreature | Allies・Creatures・IterateHookListeners | `allies` | 味方側のクリーチャー（プレイヤーとペット）。プレイヤー・pets として個別に出ているが、一覧としては出ていない。マルチプレイの味方を含む |
-| `CombatState._escapedCreatures` | List<Creature> | field | entity | CreatureEscaped | EscapedCreatures（GremlinMercNormal の報酬） | `escaped_creature_ids` | 逃げた敵（CreatureEscaped。ThievingHopper など）。画面から消えるのが見える。GremlinMercNormal が読む |
-| `ExtraPlayerFields.CardShopRemovalsUsed` | int | auto_property | entity | FromSerializable, ToSerializable | MerchantCardRemovalEntry（除去の値段） | `card_shop_removals_used` | ショップでカードを除去した回数。除去の値段（MerchantCardRemovalEntry）が上がる。人間は自分の除去の回数を知っている。戦闘外の判断（runplan）に効く |
-| `ExtraPlayerFields.WongoPoints` | int | auto_property | entity | FromSerializable, ToSerializable | WelcomeToWongos | `wongo_points` | ウォンゴのポイント。イベント WelcomeToWongos が読む。人間はイベントの画面で見る |
-| `InterceptPower.Data.coveredCreatures` | List<Creature> | data_field | colorless | RemoveCoveredCreature | ModifyDamageMultiplicative・IsCovering | `covered_creature_ids` | かばっている味方（マルチプレイ）。ModifyDamageMultiplicative・IsCovering が読む |
-| `PowerModel._amountOnTurnStart` | int | field | base | Creature.BeforeTurnStart | DrawCardsNextTurnPower.ModifyHandDraw・HelloWorldPower・GodByrdPower・SummonNextTurnPower | `amount_on_turn_start` | ターン開始時（Creature.BeforeTurnStart）の量の写し。DrawCardsNextTurnPower は 0 なら（このターンに付いたなら）引く枚数を増やさない。いつ付いたかは人間に見えている |
-| `GoldenCompass._goldenPathAct` | int | field · saved | ancient | AfterObtained | ModifyGeneratedMap・ModifyUnknownMapPointRoomTypes | `golden_path_act` | 黄金の道を引いた幕（AfterObtained）。その幕の地図の生成と、不明マスの部屋の種類（ModifyUnknownMapPointRoomTypes）を変える。取得した幕は人間に分かる |
-| `MusicBox._cardBeingPlayed` | CardModel? | field | ancient | AfterCardPlayed, AfterCombatEnd, BeforeCardPlayed, BeforeSideTurnStart | AfterCardPlayed | `card_being_played_uid` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。 |
-| `PaelsLegion[relic]._affectedCardPlay` | CardPlay? | field | ancient | AfterCardPlayed, AfterCombatEnd, AfterModifyingBlockAmount | ModifyBlockMultiplicative | `affected_card_play` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカードのプレイ |
-| `PaelsTooth._serializableCards` | List<SerializableCard> | field · saved | ancient | AfterCloned, AfterCombatEnd, AfterObtained, DebugAddCard | AfterCombatEnd | `stored_cards` | 預けたカード（人間が選んだもの）。戦闘の終わりに 1 枚を乱数で返す。枚数は counter に出ているが、中身は出ていない |
-| `PenNib._attackToDouble` | CardModel? | field | shared | AfterCardPlayed, BeforeCardPlayed | ModifyDamageMultiplicative | `attack_to_double_uid` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする |
-| `RelicModel._floorAddedToDeck` | int | field | base | RelicCmd（FloorAddedToDeck = TotalFloor）・FromSerializable | 保存（ToSerializable） | `floor_added_to_deck` | 取得した階。効果に読む箇所は見つからず、保存と履歴に使う。優先度は低い |
-| `RelicModel._isWax` | bool | field · saved | base | ToyBox（蝋のレリックを作るときに IsWax を立てる） | Title・UpdateTexture・ToyBox・Player（溶かす処理） | `is_wax` | 蝋のレリック（ToyBox が付ける。一定の戦闘で溶ける）。見た目で分かる。溶けたかは melted に出ているが、溶ける前の蝋かどうかは出ていない |
-| `RelicModel._status` | RelicStatus | field | base | 各レリックの base.Status =（UpdateDisplay・AfterSideTurnStart など） | PaelsFlesh の条件分岐（Status == Active / Normal）。ほかのレリックは表示 | `status` | RelicStatus（Normal/Active/Disabled）。画面ではレリックの光り方で見える。PaelsFlesh が Status を条件に使う（IsUsedUp・AfterSideTurnStart の base.Status == Active）。mod-scan の検出（.Status）はエンチャントの status の誤検出 |
-| `UnsettlingLamp._doubledPowers` | List<PowerModel>? | field | shared | AfterCombatEnd, BeforeCombatStart, BeforePowerAmountChanged | HasDoubledTemporaryPowerSource | `doubled_power_ids` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。2 倍にしたパワー（一時パワーの内側のデバフを二重に倍にしないため。HasDoubledTemporaryPowerSource） |
-| `UnsettlingLamp._triggeringCard` | CardModel? | field | shared | AfterCombatEnd, BeforeCombatStart, BeforePowerAmountChanged | ModifyPowerAmountGivenMultiplicative・AfterCardPlayed | `triggering_card_uid` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。戦闘で最初にデバフを付けたカード。ModifyPowerAmountGivenMultiplicative が 2 倍にする |
-| `Vambrace._triggeringCard` | CardModel? | field | shared | AfterCombatEnd, AfterModifyingBlockAmount, BeforeCombatStart | ModifyBlockMultiplicative | `triggering_card_uid` | カードのプレイ・攻撃の解決の途中だけ値を持つ（Before* で入れ、After* で消す）。解決の途中で選択画面が開いたときに効くので出す。ブロックを 2 倍にするカード |
+（なし）
 
 ## public — 範囲外（他キャラ・廃止）（41 件）
 
@@ -137,28 +108,32 @@
 | `GalacticDust._starsSpent` | int | field · saved | other-character | AfterStarsSpent | AfterStarsSpent | `stars_spent` | 使った星の累計（DisplayAmount にも使う。星はリージェント専用） |
 | `Metronome._orbsChanneled` | int | field | other-character | AfterCombatEnd, AfterOrbChanneled, AfterRoomEntered | AfterOrbChanneled | `orbs_channeled` | チャネルしたオーブの数（ディフェクト専用） |
 
-## unknown（ソースから決めきれない）（5 件）
+## unknown（ソースから決めきれない）（0 件）
 
-| クラス.メンバー | 型 | 範囲 | 書き込み | 読む側 | 理由 |
-|---|---|---|---|---|---|
-| `CombatState.BadgeModels` | IReadOnlyList<BadgeModel> | entity | CombatState | IterateHookListeners, CombatRoom, EventCombatSynchronizer, RunState | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外 |
-| `CombatState.Dominion` | DominionModel? | entity | CombatState, SetDominion | IterateHookListeners, (+9), ActEntryCheck, AeonglassBoss, CeremonialBeastBoss, CombatRoom …(+4) | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外 |
-| `CombatState.Modifiers` | IReadOnlyList<ModifierModel> | entity | CombatState | IterateHookListeners, (+24), AbstractModel, AbstractModelSubtypes, AllStar, BigGameHunter …(+4) | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外 |
-| `CombatState.RunModels` | IReadOnlyList<RunModel> | entity | CombatState | IterateHookListeners, CombatManager, CombatRoom, EventCombatSynchronizer, Neow, RunManager …(+1) | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。今回の棚卸しの対象外 |
-| `Player.PlayerOdds` | PlayerOddsSet | entity | InitializeSeed, Player | SyncWithSerializedPlayer, ToSerializable, CardFactory, RewardsSet | カードのレア度・ポーションの出現率のオフセット（CardRarityOdds・PotionRewardOdds）。乱数そのものではなく、見た報酬の履歴から決まるが、画面には出ない。人間が追える情報として扱うかはユーザーの判断が要る（オフセットの中身は CardRarityOdds を読んで別途確認） |
+（なし）
 
 ## unclassified（分類表に無い）（0 件）
 
 （なし）
 
-## hidden（出さない）（4 件）
+## hidden（出さない）（5 件）
 
 | クラス.メンバー | 型 | 範囲 | 理由 |
 |---|---|---|---|
+| `Player.PlayerOdds` | PlayerOddsSet | entity | カードのレア度・ポーションの出現率のオフセット（CardRarityOdds・PotionRewardOdds）。見た報酬の履歴から決まるが、画面には出ないので出さない（人間に見えない情報で遊ばない。調整役の判断 2026-11-19） |
 | `Player.PlayerRng` | PlayerRngSet | entity | 型が乱数（Rng 系） |
 | `Player.RelicGrabBag` | RelicGrabBag | entity | これから出るレリックの袋（順番を含む）。まだ見せていない生成物 |
 | `MonsterModel._rng` | Rng? | base | 型が乱数（Rng 系） |
 | `MonsterModel._runRng` | RunRngSet? | base | 型が乱数（Rng 系） |
+
+## out_of_scope（対象外）（4 件）
+
+| クラス.メンバー | 型 | 範囲 | 理由 |
+|---|---|---|---|
+| `CombatState.BadgeModels` | IReadOnlyList<BadgeModel> | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
+| `CombatState.Dominion` | DominionModel? | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
+| `CombatState.Modifiers` | IReadOnlyList<ModifierModel> | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
+| `CombatState.RunModels` | IReadOnlyList<RunModel> | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
 
 ## cosmetic（効果なし。engine は効果なしとして扱ってよい）
 
@@ -233,25 +208,33 @@
 - `ToyBox._isActivating`（bool）: DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用
 - `TuningFork._isActivating`（bool）: DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用
 
-## exposed（出ている）（249 件）
+## exposed（出ている）（279 件）
 
 | クラス.メンバー | 範囲 | MOD の箇所 | 判定 |
 |---|---|---|---|
 | `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
 | `AbstractModel.Id` | base | McpMod.Actions.cs:1014, McpMod.Actions.cs:1729, McpMod.Actions.cs:2607 … | mod-scan |
 | `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:168, McpMod.CombatHistory.cs:100 | mod-scan |
-| `CardModel.Enchantment` | base | McpMod.CardDetails.cs:117, McpMod.CardDetails.cs:65, McpMod.ChoiceContinuationState.cs:169 | mod-scan |
+| `CardModel.Enchantment` | base | McpMod.CardDetails.cs:117, McpMod.CardDetails.cs:65, McpMod.ChoiceContinuationState.cs:169 … | mod-scan |
 | `CardModel._baseReplayCount` | base | McpMod.CardDetails.cs:110 | mod-scan |
 | `CardModel._baseStarCost` | base | McpMod.CardStarCost.cs:23 | mod-scan |
+| `CardModel._cloneOf` | base | McpMod.StateAllowlist.Generated.cs:13 | allowlist |
+| `CardModel._currentPlayIndex` | base | McpMod.StateAllowlist.Generated.cs:16 | allowlist |
+| `CardModel._currentTarget` | base | McpMod.StateAllowlist.Generated.cs:19 | allowlist |
 | `CardModel._currentUpgradeLevel` | base | McpMod.CombatUpgradePreview.cs:165, McpMod.CombatUpgradePreview.cs:52, McpMod.CombatUpgradePreview.cs:99 … | mod-scan |
 | `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.StateBuilder.cs:1798 | mod-scan |
+| `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.StateBuilder.cs:1810 | mod-scan |
 | `CardModel._exhaustOnNextPlay` | base | McpMod.CardSelection.cs:143, McpMod.ChooseCardSelection.cs:43, McpMod.SelectionCandidate.cs:92 … | mod-scan |
 | `CardModel._extraReplayThisTurn` | base | McpMod.CardDetails.cs:111 | mod-scan |
+| `CardModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:22 | allowlist |
 | `CardModel._hasSingleTurnRetain` | base | McpMod.CardDetails.cs:106 | mod-scan |
 | `CardModel._hasSingleTurnSly` | base | McpMod.CardDetails.cs:109 | mod-scan |
+| `CardModel._isDupe` | base | McpMod.StateAllowlist.Generated.cs:25 | allowlist |
 | `CardModel._keywords` | base | キーワードはカードの keywords（HoverTips。McpMod.StateBuilder.cs:1826）に出る | manual |
+| `CardModel._keywordsAddedFromOutside` | base | McpMod.StateAllowlist.Generated.cs:28 | allowlist |
+| `CardModel._keywordsRemovedFromOutside` | base | McpMod.StateAllowlist.Generated.cs:31 | allowlist |
 | `CardModel._temporaryStarCosts` | base | McpMod.CardStarCost.cs:26 | mod-scan |
+| `CardModel._transformIntoAfterPlay` | base | McpMod.StateAllowlist.Generated.cs:34 | allowlist |
 | `Claw.DynamicVars.Damage` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Dowsing.DynamicVars.Rooms` | event-only | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `GeneticAlgorithm.DynamicVars.Block` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
@@ -260,47 +243,56 @@
 | `MadScience._tinkerTimeRider` | event-only | McpMod.CardDetails.cs:125 | mod-scan |
 | `MadScience._tinkerTimeType` | event-only | Type の getter がこの値を返し、カードの type に出る（McpMod.StateBuilder.cs:1829） | manual |
 | `Maul.DynamicVars.Damage` | event-only | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
+| `Maul._extraDamageFromMaulPlays` | event-only | McpMod.StateAllowlist.Generated.cs:55 | allowlist |
 | `Monologue.DynamicVars.Strength` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Rampage.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
+| `Rampage._extraDamageFromPlays` | ironclad | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
 | `ShowOff.DynamicVars.AimPower` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SovereignBlade.DynamicVars.Damage` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SovereignBlade.DynamicVars.HitCount` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `SpoilsMap.SpoilsCoord` | event-only | ModifyGeneratedMapLate で地図の点に AddQuest する。地図の点の quests に出る（McpMod.StateBuilder.cs:2976） | manual |
+| `SpoilsMap._spoilsActIndex` | event-only | McpMod.StateAllowlist.Generated.cs:85 | allowlist |
 | `TheBall.DynamicVars.Damage` | colorless | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
+| `TheBall._extraDamageFromPlays` | colorless | McpMod.StateAllowlist.Generated.cs:88 | allowlist |
 | `TheScythe.DynamicVars.Damage` | other-character | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Thrash.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
+| `Thrash._extraDamage` | ironclad | McpMod.StateAllowlist.Generated.cs:91 | allowlist |
 | `Adroit.DynamicVars.Block` | enchantment | McpMod.CardDetails.cs:130（DynamicVars を丸ごと出す） | mod-scan |
 | `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
 | `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130, McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72 … | mod-scan |
-| `EnchantmentModel._status` | base | McpMod.CardDetails.cs:140, McpMod.Formatting.cs:441 | mod-scan |
+| `EnchantmentModel._status` | base | McpMod.CardDetails.cs:140, McpMod.Formatting.cs:441, McpMod.StateAllowlist.Generated.cs:82 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
 | `CardEnergyCost.Canonical` | entity | McpMod.CardEnergyCost.cs:47 | mod-scan |
-| `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1798 | mod-scan |
+| `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1810 | mod-scan |
 | `CardEnergyCost._base` | entity | energy_cost.base_raw（GetWithModifiers(None)。McpMod.CardEnergyCost.cs:46） | manual |
 | `CardEnergyCost._capturedXValue` | entity | McpMod.CardEnergyCost.cs:49 | mod-scan |
 | `CardEnergyCost._localModifiers` | entity | McpMod.CardEnergyCost.cs:105, McpMod.CardEnergyCost.cs:107 | mod-scan |
 | `CombatState.CurrentSide` | entity | McpMod.Helpers.cs:46, McpMod.MultiplayerState.cs:279, McpMod.PotionUsabilityLive.cs:126 … | mod-scan |
 | `CombatState.RoundNumber` | entity | McpMod.MultiplayerActions.cs:127, McpMod.MultiplayerActions.cs:99, McpMod.MultiplayerState.cs:278 … | mod-scan |
+| `CombatState._allies` | entity | McpMod.StateAllowlist.Generated.cs:37 | allowlist |
 | `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59, McpMod.StateBuilder.cs:813 | mod-scan |
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
+| `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
 | `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:140 … | mod-scan |
 | `Creature.Side` | entity | McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
 | `Creature._block` | entity | McpMod.CardPreview.cs:25, McpMod.MultiplayerState.cs:436, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `Creature._currentHp` | entity | McpMod.MultiplayerState.cs:429, McpMod.StateBuilder.cs:1496, McpMod.StateBuilder.cs:1619 … | mod-scan |
-| `Creature._maxHp` | entity | McpMod.MultiplayerState.cs:430, McpMod.StateBuilder.cs:1497, McpMod.StateBuilder.cs:1620 … | mod-scan |
+| `Creature._currentHp` | entity | McpMod.MultiplayerState.cs:429, McpMod.StateBuilder.cs:1496, McpMod.StateBuilder.cs:1621 … | mod-scan |
+| `Creature._maxHp` | entity | McpMod.MultiplayerState.cs:430, McpMod.StateBuilder.cs:1497, McpMod.StateBuilder.cs:1622 … | mod-scan |
 | `Creature._powers` | entity | status（McpMod.StateBuilder.cs:1710・2129） | manual |
+| `ExtraPlayerFields.CardShopRemovalsUsed` | entity | McpMod.StateAllowlist.Generated.cs:43 | allowlist |
+| `ExtraPlayerFields.WongoPoints` | entity | McpMod.StateAllowlist.Generated.cs:46 | allowlist |
 | `MonsterMoveStateMachine.StateLog` | entity | McpMod.EnemyMoveState.cs:103, McpMod.EnemyMoveState.cs:45 | mod-scan |
 | `MonsterMoveStateMachine.States` | entity | McpMod.EnemyMoveState.cs:72 | mod-scan |
 | `MonsterMoveStateMachine._currentState` | entity | McpMod.EnemyMoveState.cs:65, McpMod.EnemyMoveState.cs:71 | mod-scan |
 | `MonsterMoveStateMachine._initialState` | entity | McpMod.EnemyMoveState.cs:76 | mod-scan |
 | `MonsterMoveStateMachine._performedFirstMove` | entity | McpMod.EnemyMoveState.cs:78 | mod-scan |
 | `Player.Character` | entity | McpMod.Actions.cs:2606, McpMod.Actions.cs:2607, McpMod.Actions.cs:2608 … | mod-scan |
-| `Player.Deck` | entity | McpMod.CardIdentity.cs:104, McpMod.ChoiceContinuationState.cs:282, McpMod.StateBuilder.cs:1777 … | mod-scan |
+| `Player.Deck` | entity | McpMod.CardIdentity.cs:104, McpMod.ChoiceContinuationState.cs:282, McpMod.StateBuilder.cs:1788 … | mod-scan |
 | `Player.DiscoveredCards` | entity | McpMod.Compendium.cs:129, McpMod.Compendium.cs:85, McpMod.Profile.cs:345 … | mod-scan |
 | `Player.DiscoveredPotions` | entity | McpMod.Compendium.cs:145, McpMod.Compendium.cs:87, McpMod.Profile.cs:347 | mod-scan |
 | `Player.DiscoveredRelics` | entity | McpMod.Compendium.cs:137, McpMod.Compendium.cs:86, McpMod.Profile.cs:346 … | mod-scan |
-| `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1157, McpMod.StateBuilder.cs:1635 | mod-scan |
+| `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1157, McpMod.StateBuilder.cs:1637 | mod-scan |
 | `Player.NetId` | entity | McpMod.CardIdentity.cs:110, McpMod.ChoiceContinuationState.cs:132, McpMod.ChoiceContinuationState.cs:221 … | mod-scan |
 | `Player.UnlockState` | entity | McpMod.GenerationPool.cs:36, McpMod.GenerationPool.cs:43, McpMod.UnlockedPools.cs:35 … | mod-scan |
 | `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsability.cs:138, McpMod.PotionUsabilityLive.cs:115 | mod-scan |
@@ -308,18 +300,18 @@
 | `Player._potionSlots` | entity | player.potions（McpMod.StateBuilder.cs:1755） | manual |
 | `Player._relics` | entity | player.relics（McpMod.StateBuilder.cs:1743） | manual |
 | `Player._runPiles` | entity | player.deck（McpMod.StateBuilder.cs:1794） | manual |
-| `PlayerCombatState.DiscardPile` | entity | McpMod.StateBuilder.cs:1656, McpMod.StateBuilder.cs:1662 | mod-scan |
-| `PlayerCombatState.DrawPile` | entity | McpMod.StateBuilder.cs:1655, McpMod.StateBuilder.cs:1661 | mod-scan |
-| `PlayerCombatState.ExhaustPile` | entity | McpMod.StateBuilder.cs:1657, McpMod.StateBuilder.cs:1663 | mod-scan |
+| `PlayerCombatState.DiscardPile` | entity | McpMod.StateBuilder.cs:1658, McpMod.StateBuilder.cs:1664 | mod-scan |
+| `PlayerCombatState.DrawPile` | entity | McpMod.StateBuilder.cs:1657, McpMod.StateBuilder.cs:1663 | mod-scan |
+| `PlayerCombatState.ExhaustPile` | entity | McpMod.StateBuilder.cs:1659, McpMod.StateBuilder.cs:1665 | mod-scan |
 | `PlayerCombatState.Hand` | entity | McpMod.Actions.cs:189, McpMod.Actions.cs:261, McpMod.Helpers.cs:49 … | mod-scan |
-| `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1668 | mod-scan |
-| `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1658, McpMod.StateBuilder.cs:1664 | mod-scan |
+| `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1670 | mod-scan |
+| `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1660, McpMod.StateBuilder.cs:1666 | mod-scan |
 | `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:28 | mod-scan |
-| `PlayerCombatState._energy` | entity | McpMod.StateBuilder.cs:1634 | mod-scan |
+| `PlayerCombatState._energy` | entity | McpMod.StateBuilder.cs:1636 | mod-scan |
 | `PlayerCombatState._pets` | entity | player.pets（McpMod.StateBuilder.cs:1700） | manual |
 | `PlayerCombatState._phase` | entity | McpMod.Helpers.cs:26, McpMod.Helpers.cs:36, McpMod.StateBuilder.cs:745 | mod-scan |
 | `PlayerCombatState._piles` | entity | draw_pile ほかの山（McpMod.StateBuilder.cs:1661）。山札は画面の表示順に並べ替えて出し、引く順（hidden）は出さない | manual |
-| `PlayerCombatState._stars` | entity | McpMod.StateBuilder.cs:1638, McpMod.StateBuilder.cs:1640 | mod-scan |
+| `PlayerCombatState._stars` | entity | McpMod.StateBuilder.cs:1640, McpMod.StateBuilder.cs:1642 | mod-scan |
 | `Aeonglass._additionalStrength` | monster | McpMod.EnemyCombatState.cs:52 | mod-scan |
 | `Aeonglass._witherUpgradeCount` | monster | McpMod.EnemyCombatState.cs:54 | mod-scan |
 | `Axebot._stockOverrideAmount` | monster | public getter StockAmount（_stockOverrideAmount ?? 2）として combat_state.stock_amount に出ている（McpMod.EnemyCombatState.cs:58） | manual |
@@ -331,7 +323,7 @@
 | `KnowledgeDemon.DynamicVars.DisintegrationPower` | monster | ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72） | manual |
 | `KnowledgeDemon._curseOfKnowledgeCounter` | monster | McpMod.EnemyCombatState.cs:82 | mod-scan |
 | `LivingFog._bloatAmount` | monster | McpMod.EnemyCombatState.cs:86 | mod-scan |
-| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2145 … | mod-scan |
+| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2159 … | mod-scan |
 | `MonsterModel._moveStateMachine` | base | McpMod.EnemyMoveState.cs:32 | mod-scan |
 | `MonsterModel._spawnedThisTurn` | base | McpMod.EnemyMoveState.cs:80 | mod-scan |
 | `Nibbit._isAlone` | monster | McpMod.EnemyCombatState.cs:90 | mod-scan |
@@ -369,6 +361,7 @@
 | `ImpaledPower.DynamicVars.HitCounter` | monster | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
 | `InfernoPower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
 | `InsatiableDominionPower.DynamicVars.Damage` | unreferenced | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
+| `InterceptPower.Data.coveredCreatures` | colorless | McpMod.StateAllowlist.Generated.cs:52 | allowlist |
 | `JugglingPower.Data.attacksPlayedThisTurn` | ironclad | McpMod.PowerInternalState.cs:242 | mod-scan |
 | `JugglingPower.Data.cardToClone` | ironclad | McpMod.PowerInternalState.cs:243 | mod-scan |
 | `MonologuePower.DynamicVars.StrengthApplied` | other-character | McpMod.PowerInternalState.cs:296（DynamicVars を丸ごと出す） | mod-scan |
@@ -380,9 +373,10 @@
 | `PossessSpeedPower.Data.stolenDexterity` | monster | McpMod.PowerInternalState.cs:233 | mod-scan |
 | `PossessStrengthPower.Data.stolenStrength` | monster | McpMod.PowerInternalState.cs:230 | mod-scan |
 | `PowerModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
+| `PowerModel._amountOnTurnStart` | base | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
 | `PowerModel._applier` | base | McpMod.PowerInternalState.cs:312 | mod-scan |
 | `PowerModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:405 | mod-scan |
+| `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:405, McpMod.StateAllowlist.cs:61 | mod-scan |
 | `PowerModel._skipNextDurationTick` | base | McpMod.PowerInternalState.cs:220 | mod-scan |
 | `PowerModel._target` | base | McpMod.CombatHistory.cs:138, McpMod.EnemyStunHandler.cs:111, McpMod.EnemyStunHandler.cs:90 … | mod-scan |
 | `ReattachPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:165 | mod-scan |
@@ -426,6 +420,7 @@
 | `FurCoat.FurCoatCoordsSet` | ancient | McpMod.RelicCombatState.cs:294 | mod-scan |
 | `FurCoat._furCoatActIndex` | ancient | FurCoatActIndex として地図の印の絞り込みに使い、印のある部屋が map に出る（McpMod.StateBuilder.cs:3012） | manual |
 | `Girya._timesLifted` | shared | McpMod.RelicCombatState.cs:185 | mod-scan |
+| `GoldenCompass._goldenPathAct` | ancient | McpMod.StateAllowlist.Generated.cs:49 | allowlist |
 | `HappyFlower._turnsSeen` | shared | McpMod.RelicCombatState.cs:180 | mod-scan |
 | `IronClub._cardsPlayed` | ancient | McpMod.RelicCombatState.cs:170 | mod-scan |
 | `JossPaper._cardsExhausted` | shared | McpMod.RelicCombatState.cs:101 | mod-scan |
@@ -439,15 +434,19 @@
 | `LizardTail._wasUsed` | shared | IsUsedUp => _wasUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
 | `MawBank._hasItemBeenBought` | event-only | IsUsedUp => HasItemBeenBought。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
 | `MiniRegent._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:79 | mod-scan |
+| `MusicBox._cardBeingPlayed` | ancient | McpMod.StateAllowlist.Generated.cs:58 | allowlist |
 | `MusicBox._wasUsedThisTurn` | ancient | McpMod.RelicCombatState.cs:63 | mod-scan |
 | `Nunchaku._attacksPlayed` | shared | McpMod.RelicCombatState.cs:164 | mod-scan |
 | `Orichalcum._shouldTrigger` | shared | McpMod.RelicCombatState.cs:131 | mod-scan |
 | `OrnamentalFan._attacksPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:121 | mod-scan |
 | `PaelsEye._usedThisCombat` | ancient | McpMod.RelicCombatState.cs:66 | mod-scan |
 | `PaelsEye._wasOwnerPartOfLastPlayerTurn` | ancient | McpMod.RelicCombatState.cs:67 | mod-scan |
+| `PaelsLegion[relic]._affectedCardPlay` | ancient | McpMod.StateAllowlist.Generated.cs:61 | allowlist |
 | `PaelsLegion[relic]._cooldown` | ancient | McpMod.RelicCombatState.cs:73 | mod-scan |
 | `PaelsTears._hadLeftoverEnergy` | ancient | McpMod.RelicCombatState.cs:39 | mod-scan |
+| `PaelsTooth._serializableCards` | ancient | McpMod.StateAllowlist.Generated.cs:64 | allowlist |
 | `PaelsWing._rewardsSacrificed` | ancient | McpMod.RelicCombatState.cs:229 | mod-scan |
+| `PenNib._attackToDouble` | shared | McpMod.StateAllowlist.Generated.cs:67 | allowlist |
 | `PenNib._attacksPlayed` | shared | McpMod.RelicCombatState.cs:94 | mod-scan |
 | `Pendulum._turnsSeen` | shared | McpMod.RelicCombatState.cs:180 | mod-scan |
 | `Permafrost._activatedThisCombat` | shared | McpMod.RelicCombatState.cs:32 | mod-scan |
@@ -462,7 +461,10 @@
 | `RedSkull._strengthApplied` | ironclad | McpMod.RelicCombatState.cs:54 | mod-scan |
 | `Regalite._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:82 | mod-scan |
 | `RelicModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:224 … | mod-scan |
-| `RelicModel._isMelted` | base | McpMod.StateBuilder.cs:1723 | mod-scan |
+| `RelicModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:76 | allowlist |
+| `RelicModel._isMelted` | base | McpMod.StateBuilder.cs:1732 | mod-scan |
+| `RelicModel._isWax` | base | McpMod.StateAllowlist.Generated.cs:79 | allowlist |
+| `RelicModel._status` | base | McpMod.StateAllowlist.Generated.cs:82 | allowlist |
 | `RuinedHelmet._usedThisCombat` | ironclad | McpMod.RelicCombatState.cs:85 | mod-scan |
 | `Shuriken._attacksPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:121 | mod-scan |
 | `SilkenTress._isUsed` | ancient | IsUsedUp => IsUsed。レリックの used_up に出ている（McpMod.StateBuilder.cs:1722） | manual |
@@ -474,8 +476,11 @@
 | `ThrowingAxe._usedThisCombat` | ancient | McpMod.RelicCombatState.cs:70 | mod-scan |
 | `ToyBox._combatsSeen` | ancient | McpMod.RelicCombatState.cs:223 | mod-scan |
 | `TuningFork._skillsPlayed` | shared | McpMod.RelicCombatState.cs:167 | mod-scan |
+| `UnsettlingLamp._doubledPowers` | shared | McpMod.StateAllowlist.Generated.cs:94 | allowlist |
 | `UnsettlingLamp._isFinishedTriggering` | shared | McpMod.RelicCombatState.cs:88 | mod-scan |
+| `UnsettlingLamp._triggeringCard` | shared | McpMod.StateAllowlist.Generated.cs:97 | allowlist |
 | `Vambrace._blockGainedThisCombat` | shared | McpMod.RelicCombatState.cs:42 | mod-scan |
+| `Vambrace._triggeringCard` | shared | McpMod.StateAllowlist.Generated.cs:100 | allowlist |
 | `VenerableTeaSet._gainEnergyInNextCombat` | shared | McpMod.RelicCombatState.cs:199 | mod-scan |
 | `WingedBoots.DynamicVars.Rooms` | ancient | McpMod.RelicCombatState.cs:271（DynamicVars を丸ごと出す） | mod-scan |
 | `WingedBoots._timesUsed` | ancient | McpMod.RelicCombatState.cs:215 | mod-scan |

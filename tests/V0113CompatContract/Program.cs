@@ -10,7 +10,7 @@ namespace STS2_MCP
         private const string Version = "test-mod";
         private const string BuildCommit = "test-mod-commit";
         private const int StateSchemaVersion = 12;
-        private const string StateSchema = "1.1.0";
+        private const string StateSchema = "1.2.0";
         private static int Checks;
         private static void Check(bool condition, string message)
         {

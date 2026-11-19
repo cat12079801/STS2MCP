@@ -10,6 +10,9 @@
 全パワーの `type_for_current_amount` / `is_temporary_power`（schema 9）と `dynamic_vars`、下表の schema 12 の private Data・フィールドの項目で、
 `status[]` に出る行には可視性によらず付ける（下記）。
 既存の `amount`・`display_amount`・`hidden_in_ui` の扱いは維持する。
+
+個別の許可リストの項目とは別に、全パワーの行に `internal_state`（`amount_on_turn_start`。かばう〔`InterceptPower`〕は `covered_creature_ids`）を可視性によらず出す。棚卸しの分類表から生成した許可リストで読む（schema 1.2.0、[入力契約](raw-full.md#棚卸しから生成した内部状態internal_stateschema-120)）。
+
 schema 4 の項目は整数の版を上げずに足した。schema 6・7・8・9・12 の項目は整数の版を上げて足した。これらはすべて `schema` 1.x（1.0.0 は整数の版 12 と同じ契約）に揃っているので、`schema` の MAJOR が 1 なら必須として読んでよい。
 
 以下の出典は v0.113.0 のデコンパイル `sts2-d009478a`。

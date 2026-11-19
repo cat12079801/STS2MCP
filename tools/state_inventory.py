@@ -16,6 +16,13 @@
 出力:
   docs/state-inventory-members.tsv  全候補の一覧（版の差分を取るための機械向けの表。行は安定に並ぶ）
   docs/state-inventory.md           要約（種別×分類の件数、public の未公開の表、unknown、cosmetic）
+  McpMod.StateAllowlist.Generated.cs
+                                    --write-allowlist で、分類表の section 付きの public 項目から生成する
+                                    MOD の許可リスト（state の各行の internal_state に出す）。
+                                    --check-allowlist は生成し直した内容と一致しなければ終了コード 1。
+                                    この 2 つだけなら --decompile は要らない。棚卸しを回すと、許可リストの
+                                    項目が今の版の宣言（型の完全名・C# の型・種別）と合うかも確かめ、
+                                    合わなければ終了コード 2。
 
 分類が無い候補は unclassified として数え、--list-unclassified で書き込み・読み取りのメソッド付きで出す。
 分類表にあるが今の版に無い候補は stale として報告する（版が上がって消えた・名前が変わった印）。
@@ -713,7 +720,7 @@ def generic_dynamic_var_coverage(mod: ModSource) -> dict[str, str]:
 # 分類
 # ---------------------------------------------------------------------------
 
-CLASSES = ("exposed", "public", "hidden", "cosmetic", "static/derived", "unknown")
+CLASSES = ("exposed", "public", "hidden", "cosmetic", "static/derived", "out_of_scope", "unknown")
 
 
 def auto_classify(m: Member) -> tuple[str, str] | None:
@@ -726,9 +733,19 @@ def auto_classify(m: Member) -> tuple[str, str] | None:
     return None
 
 
+def type_full_name(ci: ClassInfo) -> str:
+    """ゲームの型の完全名（入れ子は +）。"""
+    top = simple_name(ci.outer or ci.name)
+    full = f"{ci.namespace}.{top}"
+    if ci.outer:
+        full += "+" + ci.name.split(".", 1)[1]
+    return full
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--decompile", required=True, type=Path)
+    ap.add_argument("--decompile", type=Path, default=None,
+                    help="棚卸しを回すときに要る。許可リストの生成・検査だけなら省ける")
     ap.add_argument("--mod", required=True, type=Path)
     ap.add_argument("--game-version", default="未確認")
     ap.add_argument("--classification", type=Path, default=None)
@@ -737,12 +754,40 @@ def main() -> int:
     ap.add_argument("--list-unclassified", action="store_true",
                     help="分類の無い候補を、宣言・書き込み・読み取りのメソッド付きで標準出力に出す")
     ap.add_argument("--filter", default=None, help="--list-unclassified の対象を owner の正規表現で絞る")
+    ap.add_argument("--write-allowlist", action="store_true",
+                    help=f"分類表の section 付きの項目から {ALLOWLIST_FILE} を書く")
+    ap.add_argument("--check-allowlist", action="store_true",
+                    help=f"{ALLOWLIST_FILE} が分類表から生成した内容と一致するかを調べる（違えば終了コード 1）")
     args = ap.parse_args()
 
     mod_dir = args.mod.resolve()
     cls_path = args.classification or mod_dir / "docs" / "state-inventory-classification.json"
     out_tsv = args.out_tsv or mod_dir / "docs" / "state-inventory-members.tsv"
     out_md = args.out_md or mod_dir / "docs" / "state-inventory.md"
+    allowlist_path = mod_dir / ALLOWLIST_FILE
+
+    manual = {}
+    if cls_path.exists():
+        manual = json.loads(cls_path.read_text(encoding="utf-8"))
+        manual.pop("_comment", None)
+
+    entries = allowlist_entries(manual)
+    generated = render_allowlist(entries)
+    status = 0
+    if args.write_allowlist:
+        allowlist_path.write_text(generated, encoding="utf-8")
+        print(f"{ALLOWLIST_FILE}: {len(entries)} 項目を書いた")
+    if args.check_allowlist:
+        current = allowlist_path.read_text(encoding="utf-8") if allowlist_path.exists() else ""
+        if current != generated:
+            print(f"{ALLOWLIST_FILE} が分類表と一致しない。--write-allowlist で作り直す", file=sys.stderr)
+            status = 1
+        else:
+            print(f"{ALLOWLIST_FILE}: 分類表と一致（{len(entries)} 項目）")
+    if args.decompile is None:
+        if not (args.write_allowlist or args.check_allowlist):
+            ap.error("--decompile が要る（許可リストの生成・検査だけなら --write-allowlist / --check-allowlist）")
+        return status
     decompile = args.decompile.expanduser().resolve()
 
     classes, members, _ = collect(decompile)
@@ -750,15 +795,12 @@ def main() -> int:
     tok_index = build_token_index(decompile)
     mod = load_mod(mod_dir)
     generic_dv = generic_dynamic_var_coverage(mod)
-
-    manual = {}
-    if cls_path.exists():
-        manual = json.loads(cls_path.read_text(encoding="utf-8"))
-        manual.pop("_comment", None)
+    allow_lines = allowlist_lines(allowlist_path)
 
     rows = []
     for m in members:
         top = m.owner.split(".")[0]
+        ci = classes[m.owner] if m.owner in classes else classes[top]
         # 外部（別クラス）からの参照。公開の包みのプロパティ・公開フィールドだけ
         pub = m.wrapper if (m.wrapper and m.wrapper_access in ("public", "internal")) else (
             m.name if m.access in ("public", "internal") and m.kind != "data_field" else None)
@@ -769,7 +811,11 @@ def main() -> int:
         if m.kind == "dynamic_var_mutation" and m.family in generic_dv:
             cov = [generic_dv[m.family] + "（DynamicVars を丸ごと出す）"]
         entry = manual.get(m.key)
-        if entry:
+        if entry and entry.get("section"):
+            # 分類（人間に見えるか）は public のまま、出す仕組みは生成した許可リスト
+            cls, source = "exposed", "allowlist"
+            cov = [f"{ALLOWLIST_FILE}:{allow_lines[m.key]}"] if m.key in allow_lines else []
+        elif entry:
             cls = entry.get("class", "unknown")
             source = "manual"
         elif cov:
@@ -788,16 +834,37 @@ def main() -> int:
         rows.append({
             "key": m.key, "owner": m.owner, "member": m.name, "type": m.ctype, "kind": m.kind,
             "access": m.access, "wrapper": m.wrapper or "", "saved": m.saved,
-            "declared_on": m.declared_on, "family": m.family,
+            "declared_on": m.declared_on, "family": m.family, "type_full": type_full_name(ci),
             "pool": (entry or {}).get("pool") or owner_pool(m, classes, pool_of),
             "line": f"{classes[top].file.name}:{m.line}",
             "writers": sorted(m.writers), "readers": sorted(m.readers), "external": sorted(m.external),
             "coverage": cov, "class": cls, "source": source,
             "note": entry.get("note", ""), "json_key": entry.get("json_key", ""),
             "effect": entry.get("effect", ""), "written": entry.get("written", ""),
+            "section": entry.get("section", ""),
         })
     rows.sort(key=lambda r: (r["family"], r["owner"], r["member"]))
     stale = sorted(set(manual) - {r["key"] for r in rows})
+
+    # 許可リストの項目が今の版の宣言と合うか（型の完全名・C# の型・種別）
+    by_key = {r["key"]: r for r in rows}
+    problems = []
+    for e in entries:
+        r = by_key.get(e["key"])
+        if r is None:
+            problems.append(f"{e['key']}: 今の版に無い")
+            continue
+        if r["type_full"] != e["type_full"]:
+            problems.append(f"{e['key']}: 型の完全名 {e['type_full']} ≠ {r['type_full']}")
+        if r["type"] != e["cs_type"]:
+            problems.append(f"{e['key']}: C# の型 {e['cs_type']} ≠ {r['type']}")
+        if r["kind"] != e["kind"]:
+            problems.append(f"{e['key']}: 種別 {e['kind']} ≠ {r['kind']}")
+    if problems:
+        print("許可リストの項目が今の版の宣言と合わない:", file=sys.stderr)
+        for line in problems:
+            print("  " + line, file=sys.stderr)
+        status = 2
 
     if args.list_unclassified:
         flt = re.compile(args.filter) if args.filter else None
@@ -807,7 +874,7 @@ def main() -> int:
             print(f"{r['key']}\t{r['type']}\t{r['kind']}\t{r['pool']}\tW={','.join(r['writers'])}\t"
                   f"R={','.join(r['readers'])}\tX={','.join(r['external'])}\t{r['line']}")
         print(f"# unclassified: {sum(1 for r in rows if r['class'] == 'unclassified')}", file=sys.stderr)
-        return 0
+        return status
 
     write_tsv(out_tsv, rows)
     write_md(out_md, rows, stale, decompile, args.game_version, mod_dir)
@@ -815,12 +882,106 @@ def main() -> int:
     print(f"候補 {len(rows)} 件: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
     if stale:
         print(f"stale（分類表にあるが今の版に無い）: {len(stale)} 件", file=sys.stderr)
-    return 0
+    return status
+
+
+# ---------------------------------------------------------------------------
+# 生成する許可リスト（MOD の C#）
+# ---------------------------------------------------------------------------
+
+ALLOWLIST_FILE = "McpMod.StateAllowlist.Generated.cs"
+ALLOWLIST_SECTIONS = ("card", "relic", "power", "player", "battle")
+ALLOWLIST_KINDS = {"field": "Field", "auto_property": "AutoProperty", "data_field": "DataField"}
+ALLOWLIST_CONVERTERS = ("Bool", "Int", "NullableInt", "Decimal", "EnumName", "CardUid", "CardModelId",
+                        "CardPlayCardUid", "CreatureCombatId", "CreatureCombatIds", "KeywordNames",
+                        "PowerRefs", "SerializableCards")
+ALLOWLIST_MARKDOWN = ("NonDefault", "Never", "DiffersFromAmount")
+# 種別をまたいで同じ section・キーを使ってよいのは、互いに継承関係の無い具象クラスどうしだけ
+BASE_TYPE_FULL = {f"{ns}.{name}" for ns, name, _ in BASE_CLASS_FILES}
+
+
+def allowlist_entries(manual: dict) -> list[dict]:
+    """分類表の section 付きの項目（第 2 段で出すもの）。キーの順に並べる。"""
+    out, errors = [], []
+    for key, e in sorted(manual.items()):
+        if not isinstance(e, dict) or not e.get("section"):
+            continue
+        need = ("json_key", "converter", "type_full", "cs_type", "kind")
+        miss = [n for n in need if not e.get(n)]
+        if miss:
+            errors.append(f"{key}: {', '.join(miss)} が無い")
+            continue
+        if e.get("class") != "public":
+            errors.append(f"{key}: section を付けてよいのは class=public だけ（{e.get('class')}）")
+        if e["section"] not in ALLOWLIST_SECTIONS:
+            errors.append(f"{key}: 不明な section {e['section']}")
+        if e["converter"] not in ALLOWLIST_CONVERTERS:
+            errors.append(f"{key}: 不明な converter {e['converter']}")
+        if e["kind"] not in ALLOWLIST_KINDS:
+            errors.append(f"{key}: 許可リストに載せられない種別 {e['kind']}")
+        md = e.get("markdown", "NonDefault")
+        if md not in ALLOWLIST_MARKDOWN:
+            errors.append(f"{key}: 不明な markdown {md}")
+        model_type = e["type_full"].split("+")[0]
+        member = key.rsplit(".", 1)[1]
+        out.append({"key": key, "section": e["section"], "model_type": model_type, "type_full": e["type_full"],
+                    "member": member, "kind": e["kind"], "json_key": e["json_key"], "cs_type": e["cs_type"],
+                    "converter": e["converter"], "markdown": md, "note": e.get("note", "")})
+    seen: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for e in out:
+        seen[(e["section"], e["json_key"])].append(e)
+    for (section, json_key), group in seen.items():
+        if len(group) > 1 and any(g["model_type"] in BASE_TYPE_FULL for g in group):
+            errors.append(f"{section}.{json_key}: 基底クラスの項目と同じキーを別の項目が使っている")
+    if errors:
+        raise SystemExit("分類表の許可リストの項目に誤り:\n  " + "\n  ".join(errors))
+    return out
+
+
+def cs_string(s: str) -> str:
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ") + '"'
+
+
+def render_allowlist(entries: list[dict]) -> str:
+    lines = [
+        "// <auto-generated>",
+        "// tools/state_inventory.py --write-allowlist が docs/state-inventory-classification.json から生成する。手で書き換えない。",
+        "// 項目を足す・変えるときは分類表を直して生成し直し、--check-allowlist で一致を確かめる。",
+        "// 各項目の最後の文字列は分類表の備考（人間に見える根拠）。レビューではここを読む。",
+        "// </auto-generated>",
+        "namespace STS2_MCP;",
+        "",
+        "public static partial class McpMod",
+        "{",
+        "    internal static readonly StateAllowlistEntry[] StateAllowlist =",
+        "    {",
+    ]
+    for e in entries:
+        lines.append(f"        // {e['key']}（{e['cs_type']}）")
+        lines.append(
+            f"        new({cs_string(e['section'])}, {cs_string(e['model_type'])}, {cs_string(e['type_full'])}, "
+            f"{cs_string(e['member'])}, StateMemberKind.{ALLOWLIST_KINDS[e['kind']]}, {cs_string(e['json_key'])}, "
+            f"StateValueConverter.{e['converter']}, StateMarkdown.{e['markdown']},")
+        lines.append(f"            {cs_string(e['note'])}),")
+    lines += ["    };", "}", ""]
+    return "\n".join(lines)
+
+
+def allowlist_lines(path: Path) -> dict[str, int]:
+    """生成した許可リストの各項目の行番号（棚卸しの被覆の出典）。"""
+    out = {}
+    if not path.exists():
+        return out
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        m = re.match(r"\s*// (\S+)（", line)
+        if m:
+            out[m.group(1)] = i + 1
+    return out
 
 
 def write_tsv(path: Path, rows: list[dict]) -> None:
     cols = ["key", "family", "pool", "kind", "type", "access", "wrapper", "saved", "declared_on", "line",
-            "class", "source", "coverage", "writers", "readers", "external", "json_key"]
+            "class", "source", "coverage", "writers", "readers", "external", "json_key", "section", "type_full"]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         f.write("\t".join(cols) + "\n")
@@ -847,14 +1008,17 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
                "分類は `docs/state-inventory-classification.json` に書き、生成し直す。\n")
     out.append(f"- ゲームの版: **{version}**（デコンパイル `{decompile.name}`）")
     out.append(f"- 全候補の機械向けの表: [`state-inventory-members.tsv`](state-inventory-members.tsv)")
-    out.append("- 生成: `bin/sts2-python -B tools/state_inventory.py --decompile <dir> --mod . --game-version <版>`\n")
+    out.append("- 生成: `bin/sts2-python -B tools/state_inventory.py --decompile <dir> --mod . --game-version <版>`")
+    out.append(f"- 許可リスト: 分類表で `section` を付けた public の項目から `--write-allowlist` が [`../{ALLOWLIST_FILE}`](../{ALLOWLIST_FILE}) を作り、"
+               "state の各行の `internal_state` に出す。`--check-allowlist` が分類表との一致を、棚卸しの実行が今の版の宣言との一致を確かめる\n")
     out.append("## 分類の意味\n")
     out.append("| 分類 | 意味 |\n|---|---|")
-    out.append("| exposed | すでに MOD の state に出ている（MOD のソースで読み取りを検出、または分類表で確認） |")
+    out.append("| exposed | すでに MOD の state に出ている（MOD のソースで読み取りを検出、分類表で確認、または分類表の section から生成した許可リスト `internal_state` で出す〔判定 allowlist〕） |")
     out.append("| public | 人間が見える・見たものから確定できる。まだ出ていない（出す対象） |")
     out.append("| hidden | 人間に見えない（乱数・未公開の山の順・まだ見せていない生成物）。出さない |")
     out.append("| cosmetic | 戦闘・進行に効かない（台詞・演出・UI）。出す必要は無い |")
     out.append("| static/derived | 定数、または出ている値・アセンション・強化から決まる。出す必要は無い |")
+    out.append("| out_of_scope | 標準のモード以外（Blitz・Dread・カスタム）だけのもの。対象外 |")
     out.append("| unknown | ソースからは決めきれない（理由を備考に書く） |")
     out.append("| unclassified | 分類表に無い（版が上がって増えた候補など） |\n")
     out.append("種別（kind）: `field` = インスタンスのフィールド、`auto_property` = 自動実装プロパティ（setter あり）、"
@@ -932,6 +1096,9 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
         ("範囲", lambda r: r["pool"]), ("書き込み", lambda r: methods(r["writers"])),
         ("読む側", lambda r: methods(r["readers"] + r["external"]))])
     table("hidden（出さない）", lambda r: r["class"] == "hidden", [
+        ("クラス.メンバー", lambda r: f"`{r['key']}`"), ("型", lambda r: r["type"]), ("範囲", lambda r: r["pool"]),
+        ("理由", lambda r: r["note"])])
+    table("out_of_scope（対象外）", lambda r: r["class"] == "out_of_scope", [
         ("クラス.メンバー", lambda r: f"`{r['key']}`"), ("型", lambda r: r["type"]), ("範囲", lambda r: r["pool"]),
         ("理由", lambda r: r["note"])])
     out.append("## cosmetic（効果なし。engine は効果なしとして扱ってよい）\n")

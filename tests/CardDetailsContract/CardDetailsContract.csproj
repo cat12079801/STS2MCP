@@ -8,6 +8,8 @@
   <ItemGroup>
     <Compile Include="../../McpMod.CardDetails.cs" Link="CardDetails.cs" />
     <Compile Include="../../McpMod.CardDetailsFormatting.cs" Link="CardDetailsFormatting.cs" />
+    <Compile Include="../../McpMod.StateAllowlistFormatting.cs" Link="StateAllowlistFormatting.cs" />
+    <Compile Include="../../McpMod.StateAllowlist.Generated.cs" Link="StateAllowlist.Generated.cs" />
     <Compile Include="../../McpMod.PileFormatting.cs" Link="PileFormatting.cs" />
     <Compile Include="../../McpMod.UpgradePreviewFormatting.cs" Link="UpgradePreviewFormatting.cs" />
     <Compile Include="../../McpMod.CardEnergyCostFormatting.cs" Link="CardEnergyCostFormatting.cs" />

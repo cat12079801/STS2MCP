@@ -150,7 +150,7 @@ public static partial class McpMod
         {
             sb.AppendLine("## Player (You)");
             string stars = topPlayer.TryGetValue("stars", out var s) && s != null ? $" | Stars: {s}" : "";
-            sb.AppendLine($"**{topPlayer["character"]}** - HP: {topPlayer["hp"]}/{topPlayer["max_hp"]} | Gold: {topPlayer["gold"]}{stars}");
+            sb.AppendLine($"**{topPlayer["character"]}** - HP: {topPlayer["hp"]}/{topPlayer["max_hp"]} | Gold: {topPlayer["gold"]}{stars}{FormatAllowlistedState(topPlayer, "player")}");
             sb.AppendLine();
 
             FormatListSection(sb, "Relics", topPlayer, "relics", r =>
@@ -158,7 +158,7 @@ public static partial class McpMod
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
                 string used = r.GetValueOrDefault("used_up") is true ? " (used)" : "";
                 string melted = r.GetValueOrDefault("melted") is true ? " (melted)" : "";
-                return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}: {r["description"]}";
+                return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}{FormatAllowlistedState(r, "relic")}: {r["description"]}";
             });
             FormatPotionsSection(sb, topPlayer);
             FormatMasterDeckMarkdown(sb, topPlayer);
@@ -428,23 +428,23 @@ public static partial class McpMod
     private static void FormatBattleMarkdown(StringBuilder sb, Dictionary<string, object?> battle, Dictionary<string, object?>? player)
     {
         string allReady = battle.TryGetValue("all_players_ready", out var ar) ? $" | All Ready: {ar}" : "";
-        sb.AppendLine($"**Round {battle["round"]}** | Turn: {battle["turn"]} | Play Phase: {battle["is_play_phase"]}{allReady}");
+        sb.AppendLine($"**Round {battle["round"]}** | Turn: {battle["turn"]} | Play Phase: {battle["is_play_phase"]}{allReady}{FormatAllowlistedState(battle, "battle")}");
         sb.AppendLine();
 
         if (player != null)
         {
             sb.AppendLine("## Player (You)");
             string stars = player.TryGetValue("stars", out var s) && s != null ? $" | Stars: {s}" : "";
-            sb.AppendLine($"**{player["character"]}** - HP: {player["hp"]}/{player["max_hp"]} | Block: {player["block"]} | Energy: {player["energy"]}/{player["max_energy"]}{stars} | Gold: {player["gold"]}");
+            sb.AppendLine($"**{player["character"]}** - HP: {player["hp"]}/{player["max_hp"]} | Block: {player["block"]} | Energy: {player["energy"]}/{player["max_energy"]}{stars} | Gold: {player["gold"]}{FormatAllowlistedState(player, "player")}");
             sb.AppendLine();
 
-            FormatListSection(sb, "Status", player, "status", p => $"- **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}: {p["description"]}");
+            FormatListSection(sb, "Status", player, "status", p => $"- **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}{FormatAllowlistedState(p, "power")}: {p["description"]}");
             FormatListSection(sb, "Relics", player, "relics", r =>
             {
                 string counter = r.TryGetValue("counter", out var c) && c != null ? $" [{c}]" : "";
                 string used = r.GetValueOrDefault("used_up") is true ? " (used)" : "";
                 string melted = r.GetValueOrDefault("melted") is true ? " (melted)" : "";
-                return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}: {r["description"]}";
+                return $"- **{r["name"]}**{counter}{used}{melted}{FormatRelicCombatState(r)}{FormatAllowlistedState(r, "relic")}: {r["description"]}";
             });
             FormatPotionsSection(sb, player);
             AppendCombatHistoryMarkdown(sb, player);
@@ -528,7 +528,7 @@ public static partial class McpMod
                     })));
                 }
 
-                FormatListSection(sb, "Status", enemy, "status", p => $"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}: {p["description"]}");
+                FormatListSection(sb, "Status", enemy, "status", p => $"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}{FormatAllowlistedState(p, "power")}: {p["description"]}");
                 sb.AppendLine();
             }
         }
@@ -646,7 +646,7 @@ public static partial class McpMod
             {
                 sb.AppendLine("  **Status**");
                 foreach (var p in statusList)
-                    sb.AppendLine($"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}: {p["description"]}");
+                    sb.AppendLine($"  - **{p["name"]}** ({FormatStatusAmountWithDisplay(p)}){FormatPowerInternalState(p)}{FormatAllowlistedState(p, "power")}: {p["description"]}");
             }
         }
         sb.AppendLine();

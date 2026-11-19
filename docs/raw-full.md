@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.1.0",        // Contract version (semver) — see below
+  "schema": "1.2.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.1.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.2.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,10 +121,13 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.1.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.2.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
+- **1.2.0** — rows carry `internal_state`, the internal state the state inventory classified as public, read through an
+  allowlist generated from `docs/state-inventory-classification.json` (card, power, relic, player and battle rows). See
+  [棚卸しから生成した内部状態](#棚卸しから生成した内部状態internal_stateschema-120).
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -1717,6 +1720,77 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 ```json
 { "id": "DAMPEN_POWER", "amount": 1, "caster_combat_ids": [3],
   "downgraded_cards": [ { "uid": "BASH#1", "uid_known": true, "card_id": "BASH", "original_upgrade_level": 1 } ] }
+```
+
+### 棚卸しから生成した内部状態（`internal_state`、schema 1.2.0）
+
+ゲームのモデルが持つ内部状態の棚卸し（[`state-inventory.md`](state-inventory.md)）で `public`（人間に見える、または見たものから確定できる）と分類し、
+分類表（`docs/state-inventory-classification.json`）で `section` を付けた項目を、行ごとの `internal_state` に出す。
+項目の一覧は分類表から `tools/state_inventory.py --write-allowlist` が生成する `McpMod.StateAllowlist.Generated.cs` で、項目ごとに分類の根拠（分類表の備考）を持つ。
+生成物が分類表と一致するかは `--check-allowlist` で確かめる。読む処理は `McpMod.StateAllowlist.cs`。
+
+付く行:
+
+| section | 行 | 読むモデル |
+| --- | --- | --- |
+| `card` | `hand[]`・`draw_pile[]`・`discard_pile[]`・`exhaust_pile[]`・`play_pile[]` の行と、戦闘外の `player.deck[]` の行 | `CardModel`（派生の項目は派生の行だけ） |
+| `power` | 全員の `status[]` の全行（`hidden_in_ui` の行・説明を読めない最小行を含む） | `PowerModel`（`InterceptPower` は private `Data`） |
+| `relic` | `player.relics[]` | `RelicModel` |
+| `player` | `player` 本体 | `Player.ExtraFields`（`ExtraPlayerFields`） |
+| `battle` | `battle` 本体 | `CombatState` |
+
+形と読み方:
+
+- `internal_state` は `{キー: 値}`。行のモデルに当てはまる項目が無ければ `internal_state` を省く。
+- 読むのは、宣言した型の宣言フィールド（`DeclaredOnly`）と、自動実装プロパティの getter だけ。フック・遅延初期化の getter・乱数は呼ばない。
+  パワーの `Data` は private `PowerModel._internalData` をそのまま読み、型が入れ子の `Data` と違えば読まない。
+- 宣言の型が値の変換の前提と違う（版が上がって型が変わった）とき、メンバーが無いときは、その項目を `null` にし、`internal_state.unavailable_reasons` に理由、`warnings` に `<行>.internal_state.<キー>` を出す。ほかの項目は残す。
+  `null` で理由が無いのは、参照が無い・未設定という実値。型そのものが見つからない版では、`warnings` に出してその項目を付けない。
+- 参照型は既存の id にする。カードは戦闘の uid（この読み取りで採番済みのもの。まだなら、持ち主の戦闘の山〔手札・山札・捨て札・廃棄・プレイ中〕にあって同じ読み取りの山の行に出るカードに限って採番する。山に無いカードには新たに振らず、`null` と理由）。
+  クリーチャーは `combat_id`、カードのモデルは id（`Id.Entry`）、`CardPlay` はそのカードの uid、パワーは `{id, owner_combat_id}`。
+- 人間に見えない情報は載せない。山の順番・これから出るレリックの袋（`RelicGrabBag`）・報酬の出現率のオフセット（`PlayerOdds`）・エンシェントが提示する前に決めた中身は、許可リストに入れない（契約試験が名前で検査する）。
+  リストは並びに意味を持たせない順にそろえる（`combat_id` の昇順、id の順、キーワードは列挙の値の順）。
+
+| section | キー | 型 | 読取元 | 意味 |
+| --- | --- | --- | --- | --- |
+| `card` | `clone_of_uid` | string \| null | `CardModel._cloneOf` | 複製元のカード（`CreateClone` が入れる。`IsClone`・`DupeOf` の判定） |
+| `card` | `current_play_index` | int | `CardModel._currentPlayIndex` | 解決中の繰り返しプレイの何回目か（`OnPlayWrapper` が入れる。`LethalityPower` が読む） |
+| `card` | `current_target_combat_id` | uint \| null | `CardModel._currentTarget` | 解決中の対象（`OnPlayWrapper`） |
+| `card` | `floor_added_to_deck` | int \| null | `CardModel._floorAddedToDeck` | デッキに入った階（`CardPileCmd`・`CardCmd` が `TotalFloor` を入れる。効果に読む箇所は無く、保存と履歴に使う） |
+| `card` | `is_dupe` | bool | `CardModel._isDupe` | 複製（Dupe）の印（`CreateDupe`）。結果の山（`GetResultLocationForCardPlay`）と `ChainsOfBindingPower`・`FeralPower` が読む |
+| `card` | `keywords_added` / `keywords_removed` | string[] | `CardModel._keywordsAddedFromOutside` / `_keywordsRemovedFromOutside` | 効果が後から付けた・外したキーワード（`AddKeyword`・`RemoveKeyword`）。強化の取り消し（`DowngradeInternal`）で残すかを決める |
+| `card` | `transform_into_after_play_id` | string \| null | `CardModel._transformIntoAfterPlay` | プレイの後に変化する先のモデル id（`MourningBlow` が `SADNESS` を入れる） |
+| `card` | `extra_damage` | decimal | `Rampage._extraDamageFromPlays`・`Thrash._extraDamage`・`TheBall._extraDamageFromPlays`・`Maul._extraDamageFromMaulPlays` | プレイ・効果で `DynamicVars.Damage` に足した累計。`AfterDowngraded`（弱化などの強化の取り消し）で基礎値に足し戻す |
+| `card` | `spoils_act_index` | int | `SpoilsMap._spoilsActIndex` | 宝の地図が印を付ける幕（`AfterCreated` で入れる。未設定は -1） |
+| `power` | `amount_on_turn_start` | int | `PowerModel._amountOnTurnStart` | ターンの開始の前（`Creature.BeforeTurnStart`）に `Amount` を写した値。その後に付いたパワーは 0 のまま。`DrawCardsNextTurnPower.ModifyHandDraw` は 0 なら引く枚数を増やさない |
+| `power` | `covered_creature_ids` | uint[] | `InterceptPower.Data.coveredCreatures` | かばっている味方の `combat_id`（マルチプレイ） |
+| `relic` | `status` | string | `RelicModel._status` | `Normal` / `Active` / `Disabled`（画面ではレリックの光り方）。`PaelsFlesh` が条件に使う |
+| `relic` | `is_wax` | bool | `RelicModel._isWax` | 蝋のレリック（`ToyBox` が作る。溶けたかは既存の `melted`） |
+| `relic` | `floor_added_to_deck` | int | `RelicModel._floorAddedToDeck` | 取得した階（`RelicCmd`。保存と履歴に使う） |
+| `relic` | `golden_path_act` | int | `GoldenCompass._goldenPathAct` | 黄金の道を引いた幕（`AfterObtained`）。その幕の地図と不明マスの部屋の種類（`ModifyUnknownMapPointRoomTypes`）を変える |
+| `relic` | `card_being_played_uid` | string \| null | `MusicBox._cardBeingPlayed` | 解決中のカード |
+| `relic` | `affected_card_uid` | string \| null | `PaelsLegion._affectedCardPlay`（の `Card`） | ブロックを 2 倍にする解決中のカード |
+| `relic` | `stored_cards` | `[{id, upgrade_level, enchantment_id}]` | `PaelsTooth._serializableCards` | 預けたカード（人間が選んだもの）。戦闘の終わりに乱数で 1 枚を返すので、並びは id・強化段階の順 |
+| `relic` | `attack_to_double_uid` | string \| null | `PenNib._attackToDouble` | 2 倍にする解決中のアタック |
+| `relic` | `triggering_card_uid` | string \| null | `UnsettlingLamp._triggeringCard`・`Vambrace._triggeringCard` | 効果を 2 倍にする解決中のカード |
+| `relic` | `doubled_power_ids` | `[{id, owner_combat_id}]` | `UnsettlingLamp._doubledPowers` | 2 倍にしたパワー（一時パワーの内側を二重に倍にしないため）。リストが未作成なら空 |
+| `player` | `card_shop_removals_used` | int | `ExtraPlayerFields.CardShopRemovalsUsed` | ショップでカードを除去した回数（除去の値段が上がる） |
+| `player` | `wongo_points` | int | `ExtraPlayerFields.WongoPoints` | ウォンゴのポイント（イベント `WelcomeToWongos` が読む） |
+| `battle` | `ally_combat_ids` | uint[] | `CombatState._allies` | 味方側のクリーチャー（プレイヤー・ペット・マルチプレイの味方） |
+| `battle` | `escaped_creature_ids` | uint[] | `CombatState._escapedCreatures` | 逃げた敵（`CreatureEscaped`） |
+
+解決中の印（`current_play_index`・`current_target_combat_id`・`transform_into_after_play_id`・`card_being_played_uid`・`affected_card_uid`・`attack_to_double_uid`・`triggering_card_uid`・`doubled_power_ids`）は、
+カードのプレイ・攻撃の解決の途中で選択画面が開いたときに値を持つ。安定した state では既定値（null・0・空）が多い。
+
+Markdown は既定値（false・0・空・理由の無い null・`Normal`）を省き、`(internal: is dupe yes, extra damage 5)` の形で行に足す。
+カードは詳細の行（`  - internal: …`）、レリック・パワーは行の末尾、player はステータスの行、battle は `Round` の行。
+`floor_added_to_deck` は出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。読めなかった値は `null (理由)`。
+デッキの markdown は同じ札を束ねて表示するので、デッキの行の `internal_state` は JSON だけ。
+
+```json
+{ "uid": "RAMPAGE#4", "internal_state": { "clone_of_uid": null, "current_play_index": 0, "current_target_combat_id": null,
+  "floor_added_to_deck": 6, "is_dupe": false, "keywords_added": [], "keywords_removed": [],
+  "transform_into_after_play_id": null, "extra_damage": 5 } }
 ```
 
 ### Keyword Object

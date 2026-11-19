@@ -59,6 +59,10 @@ public static partial class McpMod
             sb.AppendLine($"  - replays: base {card.GetValueOrDefault("base_replay_count")}, extra this turn {card.GetValueOrDefault("extra_replay_this_turn")}, with enchantment {card.GetValueOrDefault("enchanted_replay_count")}");
         if (card.TryGetValue("tinker_time_rider", out var rider))
             sb.AppendLine($"  - tinker time rider {Value(rider, "tinker_time_rider")}");
+        // 生成した許可リストの項目（McpMod.StateAllowlist.cs）。既定値は省き、値は JSON の internal_state にある。
+        string internalState = FormatAllowlistedParts(card, "card");
+        if (internalState.Length > 0)
+            sb.AppendLine("  - internal: " + internalState);
 
         // Shape, upgrade (title "+") and playability show elsewhere. Keep their failure reasons visible.
         if (reasons != null)
