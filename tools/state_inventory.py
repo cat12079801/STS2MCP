@@ -32,7 +32,10 @@
 外側のブロックの見出しを字下げでたどり、型の判定を集める（case の型パターン〔A or B・プロパティパターン・when〕・
 is / is not / !(x is T)・as・typeof・GetType() != typeof(T)・switch 式の腕・複数行の条件の継続行・else〔前の if の否定〕・
 同じ深さの前の文の見張り〔if (…) return; と { … return; }〕・default が抜ける switch の後ろ）。見出しがメソッドなら
-呼び出し元ごとにたどる（呼び出しとメソッドグループだけ。x.Name() の別の型のメンバーは数えない）。循環の経路は捨て、
+呼び出し元ごとにたどる。McpMod のメソッドは修飾なし・McpMod. の呼び出しとメソッドグループの参照だけを数え
+（x.Name() は別の型のメンバー。拡張メソッドは数える）、入れ子の型のメソッドは型の中の呼び出しと x.Name(…) を数える。
+数えられる呼び出し元が無く x.Name(…) の参照だけがあるメソッドは、入口にせず「判定できない」とする
+（[ModInitializer("…")] が指す入口は除く）。循環の経路は捨て、
 入口に着かない経路（循環だけ・深さ SCOPE_DEPTH を超える）は「判定できない」として警告し partial に数える。
 どの経路でも派生の型の判定に当たる読み取りは partial（派生の分岐の中だけ）として報告する。partial は、分類表の section（許可リストで全派生に出す）か、partial_reason（ほかの派生が要らない理由。
 class は exposed）で解消する。解消していない partial、または当てはまらない partial_reason があれば、棚卸しの実行と
@@ -889,6 +892,7 @@ class ScopeIndex:
     prop_types: dict[tuple[str, str], str] = field(default_factory=dict)
     undecidable: set[str] = field(default_factory=set)
     method_memo: dict[tuple[str, int], frozenset] = field(default_factory=dict)
+    entry_names: set[str] = field(default_factory=set)  # [ModInitializer("…")] が名前で指す入口
 
 
 def build_scope_index(mod: ModSource) -> ScopeIndex:
@@ -898,7 +902,9 @@ def build_scope_index(mod: ModSource) -> ScopeIndex:
         for idx, s in enumerate(lines):
             for tok in set(re.findall(r"\b([A-Za-z_]\w*)\b", s)):
                 occ[tok].append((f, idx))
-    return ScopeIndex(mod, code, occurrences=occ)
+    entries = {m for lines in mod.files.values() for line in lines
+               for m in re.findall(r"\[\s*ModInitializer\s*\(\s*\"(\w+)\"\s*\)\s*\]", line)}
+    return ScopeIndex(mod, code, occurrences=occ, entry_names=entries)
 
 
 def _is_member_decl(s: str) -> str | None:
@@ -911,6 +917,8 @@ def _is_member_decl(s: str) -> str | None:
         return None
     if head[0] in NOT_HEADER_WORDS or head[-1] in NOT_HEADER_WORDS:
         return None
+    if {"class", "struct", "record", "interface"} & set(head):
+        return None  # 主コンストラクタ付きの型の宣言（class X(Func<int> f)）はメソッドではない
     return head[-1]
 
 
@@ -1027,6 +1035,26 @@ def scope_paths(sx: ScopeIndex, fname: str, idx: int, depth: int = 0, visiting: 
     return result
 
 
+def _container(code: list[str], header: int) -> tuple:
+    """メソッドの見出しの外側: ("local", lo, hi)（ローカル関数）か ("type", 名前, lo, hi)（型のメンバー）。"""
+    ind = mod_indent(code[header])
+    for j in range(header - 1, -1, -1):
+        t = code[j]
+        if not t.strip() or mod_indent(t) >= ind or t.strip() == "{":
+            continue
+        tm = re.search(r"\b(?:class|struct|record|interface)\s+(\w+)", t)
+        if tm:
+            tind = mod_indent(t)
+            body = next((k for k in range(j + 1, len(code)) if code[k].strip() == "{" and mod_indent(code[k]) == tind), j)
+            close = next((k for k in range(body + 1, len(code)) if code[k].strip() == "}" and mod_indent(code[k]) == tind),
+                         len(code))
+            return ("type", tm.group(1), j, close)
+        if _is_member_decl(t):
+            lo, hi = _local_scope(code, header)
+            return ("local", lo, hi)
+    return ("type", "McpMod", 0, len(code))
+
+
 def _caller_paths(sx: ScopeIndex, fname: str, method: tuple[str, int], depth: int, visiting: set) -> frozenset:
     """メソッドの呼び出し元ごとの経路（メソッド単位でまとめて覚える）。循環は空、深さの上限は UNDECIDABLE。
 
@@ -1041,16 +1069,34 @@ def _caller_paths(sx: ScopeIndex, fname: str, method: tuple[str, int], depth: in
     if depth >= SCOPE_DEPTH:
         return frozenset({frozenset({UNDECIDABLE})})
     code = sx.code[fname]
-    if mod_indent(code[header]) > 4:
-        lo, hi = _local_scope(code, header)
+    container = _container(code, header)
+    esc = re.escape(name)
+    member_ref = re.compile(rf"\.{esc}\b")
+    if container[0] == "local":
+        lo, hi = container[1], container[2]
+        call = re.compile(rf"(?<![\w.]){esc}\b")
         sites = [(fname, k) for f, k in sx.occurrences.get(name, ()) if f == fname and lo <= k < hi]
+    elif container[0] == "type" and container[1] != "McpMod":
+        # 入れ子の型のメソッド: 型の中の修飾なしの呼び出しと、どこからでもの x.Name(…)・Type.Name(…)
+        lo, hi = container[2], container[3]
+        call = re.compile(rf"(?<![\w.]){esc}\b|\.{esc}\b")
+        sites = [(f, k) for f, k in sx.occurrences.get(name, ())
+                 if member_ref.search(sx.code[f][k]) or (f == fname and lo <= k < hi)]
     else:
+        # McpMod のメソッド: 修飾なし・McpMod. の呼び出しとメソッドグループの参照（拡張メソッドは x.Name() も）
+        extension = "(this " in code[header].replace("( this ", "(this ")
+        call = re.compile(rf"(?:(?<![\w.])|\bMcpMod\.){esc}\b" + (rf"|\.{esc}\b" if extension else ""))
         sites = list(sx.occurrences.get(name, ()))
-    # 呼び出し・メソッドグループの参照だけ。別の型のメンバー（x.Initialize()）は数えない（McpMod. は数える）
-    call = re.compile(rf"(?:(?<![\w.])|\bMcpMod\.){re.escape(name)}\b")
-    sites = [(f, k) for f, k in sites
-             if (f, k) != (fname, header) and call.search(sx.code[f][k])
-             and not re.search(rf"nameof\(\s*{re.escape(name)}\s*\)", sx.code[f][k])]
+    nameof = re.compile(rf"nameof\(\s*{esc}\s*\)")
+    refs = [(f, k) for f, k in sites if (f, k) != (fname, header) and not nameof.search(sx.code[f][k])]
+    sites = [(f, k) for f, k in refs if call.search(sx.code[f][k])]
+    is_entry = name in sx.entry_names and container[0] == "type" and container[1] == "McpMod"
+    if not sites and not is_entry and any(
+            member_ref.search(sx.code[f][k]) for f, k in sx.occurrences.get(name, ()) if (f, k) != (fname, header)):
+        # 数えられる呼び出し元は無いが x.Name(…) の参照がある: 別の型のメンバーか、たどれない呼び出し。
+        # 入口（制限なし）にせず、判定できないとする（安全側）
+        sx.method_memo[key] = frozenset({frozenset({UNDECIDABLE})})
+        return sx.method_memo[key]
     if not sites:
         result = frozenset({frozenset()})  # 入口（呼び出し元が無い）: 制限なし
     else:

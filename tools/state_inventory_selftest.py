@@ -264,6 +264,51 @@ CASES = [
         state["u"] = affliction?.Applier;
     }
 """),
+    ("入れ子の型のメソッドを case の中から x.Get(…) で呼ぶなら partial（PR #109 の再レビューの P3）", "partial", """
+    private sealed class Helper(int seed)
+    {
+        public object? Get(PowerModel power)
+        {
+            return power.Applier;
+        }
+    }
+
+    private static void Attach(Dictionary<string, object?> state, PowerModel power)
+    {
+        switch (power)
+        {
+            case HexPower:
+                state["a"] = new Helper(0).Get(power);
+                break;
+        }
+    }
+"""),
+    ("入れ子の型のメソッドを分岐の外から呼べば exposed", "full", """
+    private sealed class Helper
+    {
+        public object? Get(PowerModel power)
+        {
+            return power.Applier;
+        }
+    }
+
+    private static void Attach(Dictionary<string, object?> state, PowerModel power)
+    {
+        state["a"] = new Helper().Get(power);
+    }
+"""),
+    ("数えられる呼び出し元が無く x.Name(…) の参照だけあるメソッドは入口にしない（判定できない）", "undecidable", """
+    private static object? Read(PowerModel power)
+    {
+        return power.Applier;
+    }
+
+    private static void Attach(Dictionary<string, object?> state, Reader reader, PowerModel power)
+    {
+        if (power is HexPower)
+            state["a"] = reader.Read(power);
+    }
+"""),
     ("型の判定の無い読み取りは exposed", "full", """
     private static void Attach(Dictionary<string, object?> state, PowerModel power)
     {
