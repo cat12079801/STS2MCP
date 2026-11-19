@@ -29,12 +29,18 @@
 分類が無い候補は unclassified として数え、--list-unclassified で書き込み・読み取りのメソッド付きで出す。
 
 基底クラスのメンバーの被覆（exposed）は、MOD の読み取りがすべての派生の行に届くときだけ数える。MOD の行から
-外側のブロックの見出し（case・is・as・typeof・switch 式の腕・「if (x is not T) return;」の見張り）を字下げでたどり、
-見出しがメソッドなら呼び出し元ごとにたどる。どの経路でも派生の型の判定に当たる読み取りは partial（派生の分岐の中だけ）
-として報告する。partial は、分類表の section（許可リストで全派生に出す）か、partial_reason（ほかの派生が要らない理由。
+外側のブロックの見出しを字下げでたどり、型の判定を集める（case の型パターン〔A or B・プロパティパターン・when〕・
+is / is not / !(x is T)・as・typeof・GetType() != typeof(T)・switch 式の腕・複数行の条件の継続行・else〔前の if の否定〕・
+同じ深さの前の文の見張り〔if (…) return; と { … return; }〕・default が抜ける switch の後ろ）。見出しがメソッドなら
+呼び出し元ごとにたどる（呼び出しとメソッドグループだけ。x.Name() の別の型のメンバーは数えない）。循環の経路は捨て、
+入口に着かない経路（循環だけ・深さ SCOPE_DEPTH を超える）は「判定できない」として警告し partial に数える。
+どの経路でも派生の型の判定に当たる読み取りは partial（派生の分岐の中だけ）として報告する。partial は、分類表の section（許可リストで全派生に出す）か、partial_reason（ほかの派生が要らない理由。
 class は exposed）で解消する。解消していない partial、または当てはまらない partial_reason があれば、棚卸しの実行と
 --check-docs は終了コード 4 で終わる（文書は書く）。プロパティの読み取り（.Name）は、受け手の変数の宣言の型が
-基底と無関係（別の型の同名のプロパティ）なら数えない。
+基底と無関係（別の型の同名のプロパティ）なら数えない。var の受け手は右辺（new T・キャスト・as T・別の変数と
+そのプロパティ〔デコンパイルの宣言の型〕）から型を引く。using・namespace の行は読み取りに数えない。
+型でない条件（id の文字列・可視性など）での出し分け、同じ名前の多重定義の取り違え、state に出さない読み取り
+（操作の検査など）は見分けない。
 分類表にあるが今の版に無い候補は stale として報告する（版が上がって消えた・名前が変わった印）。
 分類表の pool は、参照元から機械的に決めた範囲を上書きする（基底クラスの欄でも他キャラ専用の仕組みなど）。
 
@@ -166,6 +172,7 @@ class ClassInfo:
     spans: list[tuple[int, int, str]] = field(default_factory=list)  # (start, end, member name)
     prop_backing: dict[str, str] = field(default_factory=dict)  # field -> property
     prop_info: dict[str, dict] = field(default_factory=dict)
+    prop_types: dict[str, str] = field(default_factory=dict)  # プロパティ名 -> 宣言の型（MOD の受け手の型を引く）
 
 
 @dataclass
@@ -362,6 +369,7 @@ def parse_class_body(ci: ClassInfo, lines: list[str], start: int, end: int, mind
                 ci.prop_backing[backing] = name
             elif backing:
                 ci.prop_backing.setdefault(backing, name)
+            ci.prop_types[name] = hm.group("type").strip()
             ci.prop_info[name] = {
                 "access": next((w for w in hm.group("mods").split() if w in ("public", "private", "protected", "internal")), "private"),
                 "setter": setter_access, "saved": "SavedProperty" in cur_attrs, "static": is_static}
@@ -373,6 +381,9 @@ def parse_class_body(ci: ClassInfo, lines: list[str], start: int, end: int, mind
         em = EXPR_MEMBER_RE.match(s)
         if em and "(" not in em.group("head"):
             name = em.group("name")
+            head = re.sub(r"<[^<>]*(?:<[^<>]*>[^<>]*)*>", "", em.group("head")).split()
+            if len(head) >= 2 and head[-2] not in MODIFIER_WORDS:
+                ci.prop_types[name] = head[-2]
         else:
             mm = METHOD_HEAD_RE.match(re.sub(r"^(?:(?:%s)\s+)+" % "|".join(MODIFIER_WORDS), "", s))
             if mm:
@@ -635,6 +646,9 @@ class ModSource:
     index: dict[str, list[tuple[str, int, str]]]  # 名前 → (file, line idx, "lit"|"acc")
 
 
+USING_RE = re.compile(r"^\s*(?:global\s+)?(?:using\s+(?:static\s+)?(?:\w+\s*=\s*)?[\w.<>, ]+|namespace\s+[\w.]+)\s*;")
+
+
 def load_mod(mod_dir: Path) -> ModSource:
     files = {}
     index: dict[str, list[tuple[str, int, str]]] = defaultdict(list)
@@ -647,7 +661,8 @@ def load_mod(mod_dir: Path) -> ModSource:
         files[p.name] = lines
         for idx, raw in enumerate(lines):
             st = raw.lstrip()
-            if st.startswith("//"):
+            if st.startswith("//") or USING_RE.match(raw):
+                # using の行（using MegaCrit.Sts2.Core.Localization.DynamicVars; の .DynamicVars）は読み取りではない
                 continue
             for lit in set(re.findall(r'"(\w+)"', raw)):
                 index[lit].append((p.name, idx, "lit"))
@@ -689,32 +704,180 @@ def block_classes(lines: list[str], idx: int) -> set[str]:
 # MOD の行から外側へ（字下げで）ブロックの見出しをたどり、型の判定を集める。見出しがメソッドなら、
 # その呼び出し元ごとに同じことをする。どの呼び出しの経路でも派生の判定に当たるなら partial。
 
-TYPE_TEST_RE = re.compile(r"\bis\s+(not\s+)?([A-Z]\w*)|\bas\s+([A-Z]\w*)|\btypeof\(([A-Z]\w*)\)")
-SWITCH_ARM_RE = re.compile(r"^\s*([A-Z]\w*)(?:\s+[a-z_]\w*)?\s*(?:when\b.*)?=>")
-CASE_LABEL_RE = re.compile(r"^\s*case\s+([A-Z]\w*)(?:\s+[a-z_]\w*)?\s*(?::|when\b)")
-GUARD_RE = re.compile(r"^\s*if\s*\(.*\bis\s+not\s+([A-Z]\w*)")
+TYPE_TEST_RE = re.compile(r"\bis\s+((?:not\s+)?[A-Z]\w*(?:\s*\{[^{}]*\})?(?:\s+(?:or|and)\s+(?:not\s+)?[A-Z]\w*(?:\s*\{[^{}]*\})?)*)"
+                          r"|\bas\s+([A-Z]\w*)|\btypeof\(([A-Z]\w*)\)")
+# 否定の判定: !(x is T)・x.GetType() != typeof(T)・typeof(T) != x.GetType()
+NEG_TEST_RE = re.compile(r"!\s*\(\s*[\w.?\[\]]+\s+is\s+([A-Z]\w*)[^()]*\)"
+                         r"|GetType\(\)\s*!=\s*typeof\(([A-Z]\w*)\)|typeof\(([A-Z]\w*)\)\s*!=\s*[\w.?]+\.GetType\(\)")
+SWITCH_ARM_RE = re.compile(r"^\s*((?:not\s+)?[A-Z]\w*(?:\s*\{[^{}]*\})?(?:\s+[a-z_]\w*)?"
+                           r"(?:\s+(?:or|and)\s+(?:not\s+)?[A-Z]\w*(?:\s*\{[^{}]*\})?)*)\s*(?:\bwhen\b.*)?=>")
+CASE_LINE_RE = re.compile(r"^\s*case\s+(?P<pat>.+?)\s*(?:\bwhen\b.*)?:\s*$")
+DEFAULT_RE = re.compile(r"^\s*default\s*:")
+EXIT_RE = re.compile(r"^\s*(?:return\b|throw\b|continue\s*;|yield\s+break\b)")
 NOT_HEADER_WORDS = {"return", "new", "await", "throw", "yield", "else", "case", "using", "lock", "foreach", "for",
                     "while", "if", "switch", "catch", "typeof", "nameof", "default", "var", "in", "is", "as", "when"}
 TYPE_DECL_RE = re.compile(r"\b(?:class|struct|record|interface|enum)\s+\w+")
-SCOPE_DEPTH = 8
+SCOPE_DEPTH = 40
+UNDECIDABLE = "?"  # 呼び出し元を深さの上限までたどっても決まらない（判定できない）
 
 
 def mod_indent(s: str) -> int:
     return len(s) - len(s.lstrip(" \t"))
 
 
-def type_tests(code: str) -> set[str]:
-    """1 行の型の判定（is / is not / as / typeof / switch 式の腕）。否定は '!T'。"""
+def pattern_types(pattern: str) -> set[str]:
+    """型パターン（`A or B`・`not A`・`A { X: 1 }`・`A a`）の型。否定は '!T'。"""
     out = set()
-    for neg, a, b, c in TYPE_TEST_RE.findall(code):
-        if a:
-            out.add(("!" if neg else "") + a)
+    pattern = re.sub(r"\{[^{}]*\}", " ", pattern)
+    for piece in re.split(r"\b(?:or|and)\b", pattern):
+        mt = re.match(r"\s*\(?\s*(not\s+)?([A-Z]\w*)", piece)
+        if mt:
+            out.add(("!" if mt.group(1) else "") + mt.group(2))
+    return out
+
+
+def type_tests(code: str) -> set[str]:
+    """型の判定（is / is not / is A or B / as / typeof / !(x is T) / GetType() != typeof(T) / switch 式の腕）。否定は '!T'。"""
+    out = set()
+    for a, b, c in NEG_TEST_RE.findall(code):
+        out.add("!" + (a or b or c))
+    code = NEG_TEST_RE.sub(" ", code)
+    for pat, b, c in TYPE_TEST_RE.findall(code):
+        if pat:
+            out.update(pattern_types(pat))
         elif b or c:
             out.add(b or c)
     am = SWITCH_ARM_RE.match(code)
     if am:
-        out.add(am.group(1))
+        out.update(pattern_types(am.group(1)))
     return out
+
+
+def negate(labels: set[str]) -> set[str]:
+    return {x[1:] if x.startswith("!") else "!" + x for x in labels}
+
+
+def case_labels(line: str) -> set[str] | None:
+    """case の行の型（when 句の型の判定も含む）。case の行でなければ None。"""
+    cm = CASE_LINE_RE.match(line)
+    if not cm:
+        return None
+    return pattern_types(cm.group("pat")) | type_tests(line[cm.end("pat"):])
+
+
+def header_span(code: list[str], j: int, limit: int) -> tuple[str, int]:
+    """j 行から始まる見出し（if / while / switch / case … when など）を、括弧が閉じるか && / || の継続が終わるまで
+    続けた文字列と、その最後の行。limit 行（読み取りの行）は含めない。"""
+    text, depth, m = "", 0, j
+    if not re.match(r"^\s*(?:if|else\s+if|while|switch|case|foreach|for)\b", code[j]):
+        return code[j], j  # ラムダを渡す呼び出しなどは 1 行だけ（括弧の中の本体は見出しではない）
+    for k in range(j, min(limit, j + 12)):
+        t = code[k]
+        if k > j and (not t.strip() or t.strip().startswith("{")):
+            break
+        text += " " + t.strip()
+        depth += t.count("(") - t.count(")")
+        m = k
+        nxt = next((code[n].strip() for n in range(k + 1, min(limit, k + 3)) if code[n].strip()), "")
+        if depth <= 0 and not re.search(r"(?:&&|\|\||\bor|\band)\s*$", t.rstrip()) \
+                and not nxt.startswith(("&&", "||", "or ", "and ")):
+            break
+    return text, m
+
+
+def _exits(code: list[str], m: int, limit: int, tail: str) -> bool:
+    """見出しの後ろ（同じ行の残り・次の 1 文・{ … } の最後の文）が return / throw / continue で終わるか。"""
+    if re.search(r"\b(?:return|throw|continue)\b", tail):
+        return True
+    n = next((k for k in range(m + 1, limit) if code[k].strip()), None)
+    if n is None:
+        return False
+    if code[n].strip() != "{":
+        return bool(EXIT_RE.match(code[n])) and mod_indent(code[n]) > mod_indent(code[m])
+    ind = mod_indent(code[n])
+    close = next((k for k in range(n + 1, limit) if code[k].strip() == "}" and mod_indent(code[k]) == ind), None)
+    if close is None:
+        return False
+    last = next((code[k] for k in range(close - 1, n, -1) if code[k].strip()), "")
+    return bool(EXIT_RE.match(last))
+
+
+def _guard(code: list[str], j: int, limit: int) -> set[str]:
+    """同じ深さの前の文が「if (…) return;」の見張りなら、後ろの行に効く判定（見出しの判定の否定）。"""
+    if not re.match(r"^\s*if\s*\(", code[j]):
+        return set()
+    text, m = header_span(code, j, limit)
+    tests = type_tests(text)
+    if not tests:
+        return set()
+    # 見出しの括弧の後ろ（同じ行の本体）
+    depth, tail = 0, ""
+    for i, ch in enumerate(text):
+        depth += ch == "("
+        depth -= ch == ")"
+        if depth == 0 and ch == ")":
+            tail = text[i + 1:]
+            break
+    return negate(tests) if _exits(code, m, limit, tail) else set()
+
+
+def _switch_after(code: list[str], j: int, limit: int) -> set[str]:
+    """同じ深さの前の文が switch なら、その後ろに届く節の判定（default が抜けるなら残りの case の型、
+    抜ける case があればその否定）。"""
+    if not re.match(r"^\s*switch\s*\(", code[j]):
+        return set()
+    _, m = header_span(code, j, limit)
+    ind = mod_indent(code[j])
+    open_ = next((k for k in range(m + 1, limit) if code[k].strip()), None)
+    if open_ is None or code[open_].strip() != "{":
+        return set()
+    close = next((k for k in range(open_ + 1, limit) if code[k].strip() == "}" and mod_indent(code[k]) == ind), None)
+    if close is None:
+        return set()
+    sections: list[tuple[set[str], bool, bool]] = []  # (型, default を含むか, 抜けるか)
+    labels: set[str] = set()
+    has_default, body = False, []
+    lab_ind = None
+
+    def flush():
+        if labels or has_default:
+            last = next((x for x in reversed(body) if x.strip()), "")
+            sections.append((set(labels), has_default, bool(EXIT_RE.match(last))))
+
+    for k in range(open_ + 1, close):
+        t = code[k]
+        if not t.strip():
+            continue
+        cl = case_labels(t)
+        is_label = cl is not None or bool(DEFAULT_RE.match(t))
+        if is_label and (lab_ind is None or mod_indent(t) == lab_ind):
+            lab_ind = mod_indent(t)
+            if body:
+                flush()
+                labels, has_default, body = set(), False, []
+            if cl is not None:
+                labels |= cl
+            else:
+                has_default = True
+                rest = t.split(":", 1)[1]
+                if rest.strip():
+                    body.append(rest)
+            continue
+        body.append(t)
+    flush()
+    out: set[str] = set()
+    for labs, dflt, exits in sections:
+        if dflt and not exits:
+            # default が抜けない: 後ろに届くのは抜けない節すべて（型の制限にならない）。抜ける case の否定だけ
+            return {"!" + x for s_labs, s_dflt, s_exits in sections if s_exits and not s_dflt for x in s_labs
+                    if not x.startswith("!")}
+    if any(d for _, d, _ in sections):
+        # default が抜ける: 後ろに届くのは抜けない case の型だけ
+        for labs, dflt, exits in sections:
+            if not exits and not dflt:
+                out |= labs
+        return out
+    return {"!" + x for labs, _, exits in sections if exits for x in labs if not x.startswith("!")}
 
 
 @dataclass
@@ -723,6 +886,9 @@ class ScopeIndex:
     code: dict[str, list[str]]
     memo: dict[tuple[str, int], frozenset] = field(default_factory=dict)
     occurrences: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
+    prop_types: dict[tuple[str, str], str] = field(default_factory=dict)
+    undecidable: set[str] = field(default_factory=set)
+    method_memo: dict[tuple[str, int], frozenset] = field(default_factory=dict)
 
 
 def build_scope_index(mod: ModSource) -> ScopeIndex:
@@ -766,16 +932,10 @@ def _local_scope(code: list[str], header: int) -> tuple[int, int]:
     return 0, len(code)
 
 
-def scope_paths(sx: ScopeIndex, fname: str, idx: int, depth: int = 0,
-                stack: tuple = ()) -> frozenset:
-    """MOD の行 idx に届く経路ごとの型の判定の集合（frozenset of frozenset）。空の集合の経路は制限なし。"""
-    key = (fname, idx)
-    if key in sx.memo:
-        return sx.memo[key]
-    code = sx.code[fname]
+def _local_tests(code: list[str], idx: int) -> tuple[set[str], tuple[str, int] | None]:
+    """行 idx から外側へ字下げでたどった型の判定と、たどり着いたメソッド（名前, 見出しの行）。"""
     local = set(type_tests(code[idx]))
     cur = mod_indent(code[idx]) if code[idx].strip() else 10 ** 6
-    method: tuple[str, int] | None = None
     j = idx - 1
     while j >= 0:
         s = code[j]
@@ -785,49 +945,47 @@ def scope_paths(sx: ScopeIndex, fname: str, idx: int, depth: int = 0,
             continue
         ind = mod_indent(s)
         if ind == cur:
-            # 同じ深さの前の文: 「if (x is not T) return;」の見張りは、後ろの行を T に絞る
-            gm = GUARD_RE.match(s)
-            if gm:
-                nxt = next((code[k].strip() for k in range(j + 1, idx) if code[k].strip()), "")
-                tail = st + " " + nxt
-                if re.search(r"\b(?:return|throw|continue|break)\b", tail):
-                    local.add(gm.group(1))
+            # 同じ深さの前の文: 見張り（if (…) return;）と、default・case が抜ける switch
+            local |= _guard(code, j, idx)
+            local |= _switch_after(code, j, idx)
         elif ind < cur:
             if st == "{":
                 cur = ind + 1
                 j -= 1
                 continue
             if TYPE_DECL_RE.search(st) and not st.startswith(("if", "else", "case", "return", "var")):
-                break
+                return local, None
             name = _is_member_decl(s)
             if name:
-                method = (name, j)
-                break
-            cm = CASE_LABEL_RE.match(s)
-            if cm or st.startswith("default:") or st == "default":
+                return local, (name, j)
+            if case_labels(s) is not None or DEFAULT_RE.match(s):
                 # 同じ switch の節の見出し（連なる case）を集める。default は兄弟の case を否定で持つ
-                labels = []
+                labels: set[str] = set()
+                is_default = False
                 k = j
                 while k >= 0 and code[k].strip() and mod_indent(code[k]) == ind and (
-                        CASE_LABEL_RE.match(code[k]) or code[k].strip().startswith("default")):
-                    lm = CASE_LABEL_RE.match(code[k])
-                    labels.append(lm.group(1) if lm else None)
+                        case_labels(code[k]) is not None or DEFAULT_RE.match(code[k])):
+                    cl = case_labels(code[k])
+                    if cl is None:
+                        is_default = True
+                    else:
+                        labels |= cl
                     k -= 1
-                if None in labels:
+                if is_default:
                     for k2 in range(j - 1, -1, -1):
                         t = code[k2]
                         if t.strip() and mod_indent(t) < ind:
                             break
-                        lm = CASE_LABEL_RE.match(t)
-                        if lm and mod_indent(t) == ind:
-                            local.add("!" + lm.group(1))
+                        cl = case_labels(t)
+                        if cl and mod_indent(t) == ind:
+                            local |= {"!" + x for x in cl if not x.startswith("!")}
                 else:
-                    local.update(labels)
+                    local |= labels
                 j = k
                 cur = ind
                 continue
             if st.startswith("else"):
-                # else / else if: 前の if の判定の否定
+                # else / else if: 前の if・else if の判定の否定（複数行の条件も含める）
                 for k in range(j - 1, -1, -1):
                     t = code[k]
                     if not t.strip():
@@ -835,34 +993,74 @@ def scope_paths(sx: ScopeIndex, fname: str, idx: int, depth: int = 0,
                     if mod_indent(t) < ind:
                         break
                     if mod_indent(t) == ind and re.match(r"^\s*(?:else\s+)?if\b", t):
-                        local.update(("!" + x) if not x.startswith("!") else x[1:] for x in type_tests(t))
+                        local |= negate(type_tests(header_span(code, k, j)[0]))
                         if not t.strip().startswith("else"):
                             break
-            local.update(type_tests(s))
+            local |= type_tests(header_span(code, j, idx)[0])
             cur = ind
         j -= 1
+    return local, None
+
+
+def scope_paths(sx: ScopeIndex, fname: str, idx: int, depth: int = 0, visiting: set | None = None) -> frozenset:
+    """MOD の行 idx に届く経路ごとの型の判定の集合（frozenset of frozenset）。空の集合の経路は制限なし。
+
+    呼び出し元が自分に戻る循環の経路は捨てる（制限なしにしない）。呼び出し元を SCOPE_DEPTH までたどっても
+    入口（呼び出し元の無いメソッド）に着かない経路は UNDECIDABLE を持つ。"""
+    top = visiting is None
+    key = (fname, idx)
+    if top and key in sx.memo:
+        return sx.memo[key]
+    code = sx.code[fname]
+    local, method = _local_tests(code, idx)
     own = frozenset(local)
-    if method is None or depth >= SCOPE_DEPTH or (fname, method[1]) in stack:
+    if method is None:
         result = frozenset({own})
     else:
-        name, header = method
-        if mod_indent(code[header]) > 4:
-            lo, hi = _local_scope(code, header)
-            sites = [(fname, k) for f, k in sx.occurrences.get(name, ()) if f == fname and lo <= k < hi]
-        else:
-            sites = list(sx.occurrences.get(name, ()))
-        sites = [(f, k) for f, k in sites
-                 if (f, k) != (fname, header) and not re.search(rf"nameof\(\s*{re.escape(name)}\s*\)", sx.code[f][k])]
-        if not sites:
-            result = frozenset({own})
-        else:
-            paths = set()
-            for f, k in sites:
-                for p in scope_paths(sx, f, k, depth + 1, stack + ((fname, header),)):
-                    paths.add(own | p)
-            result = frozenset(paths) or frozenset({own})
-    if not stack:
+        callers = _caller_paths(sx, fname, method, depth, set() if visiting is None else visiting)
+        result = frozenset(own | p for p in callers)
+    if top:
+        if not result:
+            # 呼び出し元が循環だけ（外から呼ばれない）: 決められない
+            result = frozenset({own | {UNDECIDABLE}})
         sx.memo[key] = result
+    return result
+
+
+def _caller_paths(sx: ScopeIndex, fname: str, method: tuple[str, int], depth: int, visiting: set) -> frozenset:
+    """メソッドの呼び出し元ごとの経路（メソッド単位でまとめて覚える）。循環は空、深さの上限は UNDECIDABLE。
+
+    循環を切った結果も覚えるので、循環の中のメソッドの経路は欠けうる。欠けるのは経路だけなので、
+    全派生に届く経路を見落として partial にする側（安全側）にしか倒れない。"""
+    name, header = method
+    key = (fname, header)
+    if key in sx.method_memo:
+        return sx.method_memo[key]
+    if key in visiting:
+        return frozenset()
+    if depth >= SCOPE_DEPTH:
+        return frozenset({frozenset({UNDECIDABLE})})
+    code = sx.code[fname]
+    if mod_indent(code[header]) > 4:
+        lo, hi = _local_scope(code, header)
+        sites = [(fname, k) for f, k in sx.occurrences.get(name, ()) if f == fname and lo <= k < hi]
+    else:
+        sites = list(sx.occurrences.get(name, ()))
+    # 呼び出し・メソッドグループの参照だけ。別の型のメンバー（x.Initialize()）は数えない（McpMod. は数える）
+    call = re.compile(rf"(?:(?<![\w.])|\bMcpMod\.){re.escape(name)}\b")
+    sites = [(f, k) for f, k in sites
+             if (f, k) != (fname, header) and call.search(sx.code[f][k])
+             and not re.search(rf"nameof\(\s*{re.escape(name)}\s*\)", sx.code[f][k])]
+    if not sites:
+        result = frozenset({frozenset()})  # 入口（呼び出し元が無い）: 制限なし
+    else:
+        visiting.add(key)
+        paths = set()
+        for f, k in sites:
+            paths |= scope_paths(sx, f, k, depth + 1, visiting)
+        visiting.discard(key)
+        result = frozenset(paths)
+    sx.method_memo[key] = result
     return result
 
 
@@ -886,26 +1084,79 @@ def descendant_names(classes: dict[str, ClassInfo]) -> dict[str, set[str]]:
 
 def restricting(labels: frozenset, owner: str, desc: dict[str, set[str]]) -> set[str]:
     sub = desc.get(owner, set())
-    return {x for x in labels if x.lstrip("!") in sub}
+    return {x for x in labels if x == UNDECIDABLE or x.lstrip("!") in sub}
 
 
-def _declared_type(code: list[str], idx: int, var: str) -> str | None:
-    """MOD の行 idx から上へ、変数 var の宣言の型（単純名）を探す。メソッドの見出しで止まる。分からなければ None。"""
+def _bare_type(t: str) -> str:
+    t = re.sub(r"<.*>", "", t.strip()).rstrip("?!").strip()
+    return t.split(".")[-1]
+
+
+def _prop_type(sx: ScopeIndex, classes: dict[str, ClassInfo], typ: str, prop: str) -> str | None:
+    """デコンパイルの宣言から、型 typ（とその基底）のプロパティ・フィールド prop の型。"""
+    if not sx.prop_types:
+        for ci in classes.values():
+            for name, t in ci.prop_types.items():
+                sx.prop_types.setdefault((simple_name(ci.name), name), t)
+            for m in ci.members:
+                if m.owner == ci.name:
+                    sx.prop_types.setdefault((simple_name(ci.name), m.name), m.ctype)
+        sx.prop_types.setdefault(("", ""), "")
+    for c in [typ] + [simple_name(a) for a in ancestors(typ, classes)]:
+        t = sx.prop_types.get((c, prop))
+        if t:
+            return _bare_type(t)
+    return None
+
+
+def _declared_type(code: list[str], idx: int, var: str, sx: ScopeIndex | None = None,
+                   classes: dict[str, ClassInfo] | None = None, depth: int = 0) -> str | None:
+    """MOD の行 idx から上へ、変数 var の宣言の型（単純名）を探す。メソッドの見出しで止まる。分からなければ None。
+
+    `var x = <式>;` は、右辺が new T・(T) のキャスト・as T・別の変数・その変数のプロパティ（デコンパイルの宣言の型）
+    なら、その型にする。"""
     v = re.escape(var)
+    var_pat = re.compile(rf"\bvar\s+{v}\s*=\s*(?P<rhs>[^;]+);")
     pats = [re.compile(rf"\b(?:is|case)\s+([A-Z]\w*)\s+{v}\b"),
             re.compile(rf"\bforeach\s*\(\s*([A-Z][\w.]*)(?:<[^>]*>)?\??\s+{v}\s+in\b"),
-            re.compile(rf"(?:^|[(,]\s*|^\s*)(?:out\s+|ref\s+|in\s+)?([A-Za-z_][\w.]*)(?:<[^()]*?>)?\??\s+{v}\s*(?:[=,);]|$)")]
+            re.compile(rf"(?:^|[(,]\s*|^\s*)(?:out\s+|ref\s+|in\s+)?([A-Za-z_][\w.]*)(?:<[^()]*?>)?\??\s+{v}\s*(?:=(?!=)|[,);]|$)")]
     for j in range(idx, max(-1, idx - 400), -1):
         s = code[j]
         if var in s:
+            vm = var_pat.search(s)
+            if vm:
+                return _rhs_type(code, j, vm.group("rhs").strip(), sx, classes, depth)
             for p in pats:
                 mt = p.search(s)
                 if mt:
                     t = mt.group(1).split(".")[-1]
-                    return None if t in ("var", "object", "dynamic", "return", "await", "new", "T") else t
+                    if t in NOT_HEADER_WORDS or t in ("await", "new", "throw"):
+                        continue  # return x; などは宣言ではない
+                    return None if t in ("object", "dynamic", "T") else t
         if j != idx and _is_member_decl(s) and mod_indent(s) <= 4:
             break
     return None
+
+
+def _rhs_type(code: list[str], j: int, rhs: str, sx: ScopeIndex | None, classes: dict[str, ClassInfo] | None,
+              depth: int) -> str | None:
+    if depth >= 3:
+        return None
+    rhs = re.sub(r"\s*\?\?.*$", "", rhs).rstrip("!").strip()
+    mt = re.match(r"^new\s+([A-Z][\w.]*)", rhs) or re.match(r"^\(\s*([A-Z][\w.]*)\??\s*\)", rhs) \
+        or re.search(r"\bas\s+([A-Z][\w.]*)\s*$", rhs)
+    if mt:
+        return mt.group(1).split(".")[-1]
+    mt = re.fullmatch(r"([a-z_]\w*)((?:\??\.[A-Z]\w*)*)", rhs)
+    if not mt:
+        return None
+    t = _declared_type(code, j - 1, mt.group(1), sx, classes, depth + 1) \
+        if mt.group(1) not in ("this", "base") else None
+    for prop in re.findall(r"\.([A-Z]\w*)", mt.group(2)):
+        if t is None or sx is None or classes is None:
+            return None
+        t = _prop_type(sx, classes, t, prop)
+    return t
 
 
 def receiver_unrelated(sx: ScopeIndex, fname: str, idx: int, name: str, owner: str,
@@ -924,7 +1175,7 @@ def receiver_unrelated(sx: ScopeIndex, fname: str, idx: int, name: str, owner: s
         var = mt.group(1)
         if not var or var in ("this", "base"):
             return False
-        t = _declared_type(code, idx, var)
+        t = _declared_type(code, idx, var, sx, classes)
         if t is None or t in related:
             return False
     return True
@@ -962,6 +1213,9 @@ def mod_coverage(mod: ModSource, m: Member, classes: dict[str, ClassInfo], sx: S
                 full.append(where)
             else:
                 only = sorted(set().union(*limits))
+                if UNDECIDABLE in only:
+                    sx.undecidable.add(f"{m.key}: {where}")
+                    only = [x for x in only if x != UNDECIDABLE] + ["判定できない"]
                 partial.append(f"{where}[only {','.join(only)}]")
     return sorted(set(full)), sorted(set(partial))
 
@@ -1151,6 +1405,9 @@ def main() -> int:
         })
     rows.sort(key=lambda r: (r["family"], r["owner"], r["member"]))
     stale = sorted(set(manual) - {r["key"] for r in rows})
+    for where in sorted(sx.undecidable):
+        print(f"warning: 呼び出し元をたどっても入口に着かない（循環だけ、または深さ {SCOPE_DEPTH} を超える）。全派生に届くか判定できず partial として扱う: {where}",
+              file=sys.stderr)
     partial_errors += [f"{r['key']}: 基底のメンバーを派生の分岐の中だけで読んでいる（{', '.join(r['coverage'])}）。"
                        "許可リスト（section）で全派生に出すか、partial_reason にほかの派生が要らない理由を書く"
                        for r in rows if r["class"] == "partial"]

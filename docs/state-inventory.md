@@ -226,7 +226,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 
 | クラス.メンバー | 範囲 | MOD の箇所 | 判定 |
 |---|---|---|---|
-| `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
+| `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:104 … | mod-scan |
 | `AbstractModel.Id` | base | McpMod.Actions.cs:1014, McpMod.Actions.cs:1729, McpMod.Actions.cs:2607 … | mod-scan |
 | `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:168, McpMod.CombatHistory.cs:100 | mod-scan |
 | `CardModel.Enchantment` | base | McpMod.CardDetails.cs:117, McpMod.CardDetails.cs:65, McpMod.ChoiceContinuationState.cs:169 | mod-scan |
@@ -236,7 +236,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CardModel._currentPlayIndex` | base | McpMod.StateAllowlist.Generated.cs:16 | allowlist |
 | `CardModel._currentTarget` | base | McpMod.StateAllowlist.Generated.cs:19 | allowlist |
 | `CardModel._currentUpgradeLevel` | base | McpMod.CombatUpgradePreview.cs:165, McpMod.CombatUpgradePreview.cs:52, McpMod.CombatUpgradePreview.cs:99 … | mod-scan |
-| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.CardDetails.cs:72, McpMod.PowerInternalState.cs:6 … | mod-scan |
+| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1946, McpMod.StateBuilder.cs:1973 … | mod-scan |
 | `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.StateBuilder.cs:1810 | mod-scan |
 | `CardModel._exhaustOnNextPlay` | base | McpMod.CardSelection.cs:143, McpMod.ChooseCardSelection.cs:43, McpMod.SelectionCandidate.cs:92 … | mod-scan |
 | `CardModel._extraReplayThisTurn` | base | McpMod.CardDetails.cs:111 | mod-scan |
@@ -273,8 +273,8 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Thrash.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Thrash._extraDamage` | ironclad | McpMod.StateAllowlist.Generated.cs:97 | allowlist |
 | `Adroit.DynamicVars.Block` | enchantment | McpMod.CardDetails.cs:130（DynamicVars を丸ごと出す） | mod-scan |
-| `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
-| `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130, McpMod.CardDetails.cs:5, McpMod.PowerInternalState.cs:6 … | mod-scan |
+| `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:104 … | mod-scan |
+| `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130 | mod-scan |
 | `EnchantmentModel._status` | base | McpMod.CardDetails.cs:140 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
 | `CardEnergyCost.Canonical` | entity | McpMod.CardEnergyCost.cs:47 | mod-scan |
@@ -306,7 +306,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Player.DiscoveredCards` | entity | McpMod.Compendium.cs:85, McpMod.Profile.cs:345, McpMod.Wiki.cs:74 | mod-scan |
 | `Player.DiscoveredPotions` | entity | McpMod.Compendium.cs:87, McpMod.Profile.cs:347 | mod-scan |
 | `Player.DiscoveredRelics` | entity | McpMod.Compendium.cs:86, McpMod.Profile.cs:346, McpMod.Wiki.cs:78 | mod-scan |
-| `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1157, McpMod.StateBuilder.cs:1637 | mod-scan |
+| `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1157 | mod-scan |
 | `Player.NetId` | entity | McpMod.CardIdentity.cs:110, McpMod.ChoiceContinuationState.cs:132, McpMod.ChoiceContinuationState.cs:221 … | mod-scan |
 | `Player.UnlockState` | entity | McpMod.GenerationPool.cs:36, McpMod.GenerationPool.cs:43, McpMod.UnlockedPools.cs:35 … | mod-scan |
 | `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsabilityLive.cs:115 | mod-scan |
@@ -386,10 +386,10 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `PlatingPower.DynamicVars.Decrement` | ironclad | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `PossessSpeedPower.Data.stolenDexterity` | monster | McpMod.PowerInternalState.cs:227 | mod-scan |
 | `PossessStrengthPower.Data.stolenStrength` | monster | McpMod.PowerInternalState.cs:224 | mod-scan |
-| `PowerModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114 … | mod-scan |
+| `PowerModel._amount` | base | McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:104, McpMod.CardPreview.cs:83 … | mod-scan |
 | `PowerModel._amountOnTurnStart` | base | McpMod.StateAllowlist.Generated.cs:67 | allowlist |
 | `PowerModel._applier` | base | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
-| `PowerModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.PowerInternalState.cs:290, McpMod.PowerInternalState.cs:6 … | mod-scan |
+| `PowerModel._dynamicVars` | base | McpMod.PowerInternalState.cs:290 | mod-scan |
 | `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:393[only AdaptablePower,AutomationPower,CalamityPower,ChainsOfBindingPower,CurlUpPower,DampenPower,DarkEmbracePower,GigantificationPower,HardenedShellPower,HellraiserPower,IllusionPower,JugglingPower,PanachePower,PossessSpeedPower,PossessStrengthPower,ReattachPower,RupturePower,SkittishPower,StranglePower,VigorPower] | partial-resolved |
 | `PowerModel._skipNextDurationTick` | base | McpMod.PowerInternalState.cs:214 | mod-scan |
 | `PowerModel._target` | base | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
@@ -474,7 +474,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `RainbowRing._skillsPlayedThisTurn` | shared | McpMod.RelicCombatState.cs:27 | mod-scan |
 | `RedSkull._strengthApplied` | ironclad | McpMod.RelicCombatState.cs:54 | mod-scan |
 | `Regalite._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:82 | mod-scan |
-| `RelicModel._dynamicVars` | base | McpMod.CardDetails.cs:5, McpMod.PowerInternalState.cs:6, McpMod.RelicCombatState.cs:271 … | mod-scan |
+| `RelicModel._dynamicVars` | base | McpMod.RelicCombatState.cs:271 | mod-scan |
 | `RelicModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:82 | allowlist |
 | `RelicModel._isMelted` | base | McpMod.StateBuilder.cs:1732 | mod-scan |
 | `RelicModel._isWax` | base | McpMod.StateAllowlist.Generated.cs:85 | allowlist |

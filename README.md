@@ -240,7 +240,8 @@ md・tsv は MOD のファイルの行番号（被覆の出典）を持つので
 `case HexPower:` などの派生の分岐の中（とその分岐からしか呼ばれない補助）だけで読んでいると `partial` と報告し、
 棚卸しの実行と `--check-docs` は終了コード 4 で終わる。全派生に出すなら分類表に `section` を付けて許可リストに載せ、
 ほかの派生が要らないなら `class: exposed` と `partial_reason`（その理由）を書く。
-判定の自己試験は `python3 -B tools/state_inventory_selftest.py`（デコンパイル不要。合成した MOD のソースで case・is・else・見張り・ローカル関数・別の型の同名のプロパティを確かめる）。
+判定の自己試験は `python3 -B tools/state_inventory_selftest.py`（デコンパイル不要。合成した MOD のソースで case〔or・プロパティパターン〕・is・複数行の条件・else・見張り・default が抜ける switch・ローカル関数・再帰・深さの上限・別の型の同名のプロパティ・var の受け手・using の行を確かめる）。
+この判定が見るのは型による分岐だけで、型でない条件（id の文字列・`hidden_in_ui` などの可視性）による出し分け、同じ名前の多重定義の取り違え、state に出さない読み取り（操作の検査など）を「出ている」と数えることは見分けない。読み取りがあることは、全行に出ていることの保証にならない。
 
 ## License
 
