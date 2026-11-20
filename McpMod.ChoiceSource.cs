@@ -78,6 +78,9 @@ public static partial class McpMod
             _choiceSourceTrackingError = $"{ex.GetType().Name}: {ex.Message}";
             GD.PrintErr($"[STS2 MCP] Choice source tracking unavailable: {ex}");
         }
+        // The listener lists of AfterPlayerTurnStart / AfterShuffle for await_chain (patched on their own:
+        // failing costs only the listener part of the chain).
+        InstallHookListSnapshotTracking();
     }
 
     // Read-only prefix: records the arguments, never skips or changes the call.
@@ -110,6 +113,7 @@ public static partial class McpMod
     private static void CloseChoiceSelectionWhenDone(Task? task, OpenCardSelection? record)
     {
         if (record == null) return;
+        record.SelectionTask = task;
         if (task == null || task.IsCompleted) { OpenCardSelections.Remove(record); return; }
         task.ContinueWith(_ => OpenCardSelections.Remove(record), CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
@@ -151,6 +155,7 @@ public static partial class McpMod
             var contexts = new List<Dictionary<string, object?>>();
             var models = new List<Dictionary<string, object?>>();
             var modelObjects = new List<AbstractModel>();
+            var contextObjects = new List<PlayerChoiceContext>();
             PlayerChoiceContext? context = (PlayerChoiceContext)record.Context;
             for (int index = 0; context != null; index++)
             {
@@ -195,6 +200,7 @@ public static partial class McpMod
                     modelObjects.Add(model);
                 }
                 contexts.Add(row);
+                contextObjects.Add(context);
                 context = next;
             }
             result["contexts"] = contexts;
@@ -204,6 +210,8 @@ public static partial class McpMod
             result["card_play"] = cardPlay;
             result["hook"] = modelObjects.Count == 0 ? null
                 : BuildChoiceSourceHook(modelObjects[0], cardPlay?.GetValueOrDefault("model_index") is 0, runState, combat, reasons);
+            // Its own known / unavailable_reasons: the fields above stay as they are when the chain cannot be read.
+            result["await_chain"] = BuildChoiceAwaitChain(record, contextObjects, modelObjects);
             result["known"] = reasons.Count == 0;
         }
         catch (Exception ex)

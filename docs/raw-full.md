@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.8.0",        // Contract version (semver) — see below
+  "schema": "1.9.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.8.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.9.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.8.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.9.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -154,6 +154,11 @@ and changing the meaning or shape of an existing field is MAJOR.
   `auto_play_reserved`（確保の順の添字と uid）、`CardCmd.AutoPlay` に渡した札ごとの `auto_play_dispatch` の行と、play の行の
   `reservation`。単独の POST の応答には、その操作の間に終わった戦闘の最後の列を `ended_combat` で付ける（`cat12079801/sts2#1113`）。
   [自動プレイの予約](#自動プレイの予約card_resolution_events-の予約の行schema-180) と [戦闘を終えた操作の応答](#戦闘を終えた操作の応答ended_combatschema-180)。
+- **1.9.0** — `choice_source.await_chain`: 開いている選択を待っている async の呼出しを、いま止まっている Task から内側から外へ
+  読んだ鎖（`cat12079801/sts2#1115`）。`models[0]` を走らせている `Hook.AfterPlayerTurnStart` / `AfterShuffle` の段・その段が
+  始まったときの列での位置と後ろに残る listener、シャッフルとそれを起こしたドロー（残りの枚数・手番の初めのドローか）または
+  自動プレイの予約（`card_resolution_events` の `call_id`）、手番の初め（`SetupPlayerTurn`・`RunAutoPrePlayPhase`）と、
+  それぞれの後に続く段（エントロピー・計略）。[選択を待つ処理の鎖](#選択を待つ処理の鎖choice_sourceawait_chainschema-190)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -3250,6 +3255,8 @@ choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の
   無い、`ModHelper` に hook の subscriber がいるときは `null`（`name` が `null` 以外の 3 つは `unavailable_reasons` も）。
 - 公開の情報だけ: 選択を開いた model は画面で光る・プレイ中の札として見えるもの、listener は場に出ているパワー・
   レリック・ポーション・札で、山札の順は出さない。抽選の結果・乱数・山札の順には触らない。
+- `await_chain`（schema 1.9.0）: 選択を待っている async の呼出しの鎖。下の「選択を待つ処理の鎖」。`hook.remaining_listeners`
+  がいま読み直した列なのに対し、こちらは本体がその段で実際に回している列から読む。
 - 分からないとき（記録が無い、patch を当てられなかった、知らない種類の context・listener）は `known: false` と
   `unavailable_reasons`（文字列の配列）。warning は `choice_source`。
 - Markdown は `Choice source: FromHand; models ENTROPY_POWER; hook AfterPlayerTurnStart (2 listeners left)` の 1 行
@@ -3260,6 +3267,110 @@ choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の
 `PlayCardAction`、`Hook.AfterShuffle` / `AfterPlayerTurnStart` ほか、`CardModel.OnPlayWrapper`、`CombatManager.SetupPlayerTurn`、
 `CardPileCmd.Shuffle`、`StratagemPower.AfterShuffle`、`EntropyPower.AfterPlayerTurnStart`、`Splash.OnPlay`。
 契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
+
+#### 選択を待つ処理の鎖（`choice_source.await_chain`、schema 1.9.0）
+
+`choice_source` には、開いている選択の後に続く処理を、いま止まっている async の呼出しから読んだ `await_chain` が付く
+（`cat12079801/sts2#1115`）。エントロピー（手番の初めの `AfterPlayerTurnStart` の通常の段）と計略（シャッフルの後の
+`AfterShuffle`）の選択で、どの段のどの位置で止まっているか、その段の後に残る listener、シャッフルを起こしたドローの残り枚数・
+手番の初めのドローか・自動プレイの予約か、手番の初めの後に続く段を、推測なしで決めるための入力。
+
+MOD は `CardSelectCmd` の postfix で、入口が返した Task を記録に残す。state を作るときは、その Task から外へ、それを
+`await` している async メソッドを 1 段ずつたどる（.NET 9 の `Task.m_continuationObject` が await している状態機械の box
+〔SynchronizationContext を捕まえた await では `AwaitTaskContinuation.m_action` の先〕を指す）。各段では、その状態機械の
+awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを確かめる。読むのはフィールドだけで、何も呼ばず、列挙子も
+進めない。
+
+```jsonc
+"await_chain": {
+  "version": 1,
+  "known": true,
+  "frames": [                                   // 内側から外へ。0 が選択を await しているメソッド
+    { "index": 0, "type": "StratagemPower", "method": "AfterShuffle", "kind": null },
+    { "index": 1, "type": "Hook", "method": "AfterShuffle", "kind": "hook",
+      "awaiting": "AfterShuffle", "following": [], "player_id": "1", "context_index": 0, "model_index": 0,
+      "listener": { "position": 0, "count": 41,
+                    "remaining_listeners": [ { "order": 3, "kind": "relic", "model_type": "TheAbacus", "model_id": "THE_ABACUS", "owner_player_id": "1", "declared_by": "TheAbacus" } ] } },
+    { "index": 2, "type": "CardPileCmd", "method": "Shuffle", "kind": "shuffle",
+      "awaiting": "AfterShuffle", "following": [], "player_id": "1" },
+    { "index": 3, "type": "CardPileCmd", "method": "ShuffleIfNecessary", "kind": "shuffle_if_necessary",
+      "awaiting": "Shuffle", "following": [], "player_id": "1" },
+    { "index": 4, "type": "CardPileCmd", "method": "DrawInternal", "kind": "draw",
+      "awaiting": "ShuffleIfNecessary", "following": ["AddToHand", "AfterCardDrawn"], "player_id": "1",
+      "from_hand_draw": true, "draws_requested": 5, "draw_index": 3, "remaining_draws": 2 },
+    { "index": 5, "type": "CombatManager", "method": "SetupPlayerTurn", "kind": "setup_player_turn",
+      "awaiting": "HandDraw", "following": ["AfterPlayerTurnStart"], "player_id": "1" },
+    { "index": 6, "type": "CombatManager", "method": "RunAutoPrePlayPhase", "kind": "auto_pre_play_phase",
+      "awaiting": "SetupPlayerTurn", "following": ["CheckForEmptyHand", "AfterAutoPrePlayPhaseEntered"], "player_id": "1" }
+  ],
+  "end": "no async method awaits CombatManager.RunAutoPrePlayPhase (other continuations: …)",
+  "shuffle_origin": "draw"
+}
+```
+
+- `frames`: 選択を待っている async メソッドを内側から外へ（最大 16 段）。どの段にも `index`・`type`（宣言した型の名前）・
+  `method`（`<DrawInternal>d__21` なら `DrawInternal`）・`kind`。次の 8 つは `kind` と、止まっている await（`awaiting`）、
+  その後にこのメソッドが続けて走らせる段（`following`、順に）と、`player_id`（そのメソッドの player 引数。
+  `Hook.AfterShuffle` は `shuffler`）を持つ。`awaiting` / `following` はこの DLL の各 `MoveNext` の IL で
+  `<>1__state` と await の対応を確かめた表による（表と内側の段が合わなければ理由を出す）。その他のメソッド（listener の本体、
+  札の `OnPlay` など）は `kind: null` で型と名前だけ。
+
+  | `kind` | メソッド | `awaiting` の値（`<>1__state` の順） |
+  |---|---|---|
+  | `hook` | `Hook.AfterPlayerTurnStart` | `AfterPlayerTurnStartEarly` / `AfterPlayerTurnStart` / `AfterPlayerTurnStartLate`（走っている段） |
+  | `hook` | `Hook.AfterShuffle` | `AfterShuffle` |
+  | `draw` | `CardPileCmd.DrawInternal` | `AfterPreventingDraw` / `ShuffleIfNecessary` / `AddToHand` / `AfterCardDrawn` |
+  | `auto_play_from_draw_pile` | `CardPileCmd.AutoPlayFromDrawPile`（6 引数） | `ShuffleIfNecessary` / `AddToPlay` / `AutoPlay` |
+  | `shuffle` | `CardPileCmd.Shuffle` | `AddToDrawPile` / `Wait` / `Tween` / `CustomScaledWait` / `AfterShuffle` |
+  | `shuffle_if_necessary` | `CardPileCmd.ShuffleIfNecessary` | `ShuffleFtueCheck` / `Shuffle` |
+  | `setup_player_turn` | `CombatManager.SetupPlayerTurn` | `AfterEnergyReset` / `BeforeHandDraw` / `AfterModifyingHandDraw` / `HandDraw` / `AfterPlayerTurnStart` |
+  | `auto_pre_play_phase` | `CombatManager.RunAutoPrePlayPhase` | `SetupPlayerTurn`（手番の初めの処理の完了待ち）/ `CheckForEmptyHand` / `AfterAutoPrePlayPhaseEntered`（Early・通常・Late の 3 段） |
+
+- `hook`: `context_index` はその呼出しの `choiceContext` が `contexts` の何番目か、`model_index` は走らせている
+  listener（`<model>5__N`）が `models` の何番目か（無ければ `null`）。`listener` はその段が始まったときに本体が作った列
+  （`CombatState.IterateHookListeners` の `List<AbstractModel>`。いま読み直した列ではない）から:
+  `position` = 走っている listener の位置（0 始まり）、`count` = 列の長さ、`remaining_listeners` = その後ろで同じ段を
+  override し、いま本体が走らせる（本体が順番に来たときに確かめる `CombatState.Contains` が真の）listener。行の形は
+  `choice_source.hook.remaining_listeners` と同じで、`order` は次を 0 とする列の位置。段が始まったときに山札にあった札
+  （とその付着物・エンチャント）は `order: null`・`order_group: "draw_pile_at_stage_start"`・`order_group_start`
+  （その連続した塊の始まり）で、塊の中は山札の表示順（いまも山札にある札）、続いて uid の順に並べ直す（山札の順を出さない）。
+  段の後に足された model はその段では走らないので含まない。後の段（Late など）の列は、その段が始まるときに作られるので
+  出さない（変化で入った札も後の段の listener になりうる）。走っている listener 自身が段の初めに山札にあった、段の初めの山札を
+  記録できなかった、`ModHelper` に hook の subscriber がいるときは `position`・`count`・`remaining_listeners` が `null` で、
+  理由を出す。
+- `draw`: `from_hand_draw`（手番の初めのドローか）、`draws_requested`（`ceil(count)`）、`draw_index`（いま引いている
+  ループの添字）、`remaining_draws`（まだ山札から取っていないドローの数。`ShuffleIfNecessary` の待ちでは今回の 1 枚を含む
+  `draws_requested - draw_index`、`AddToHand` / `AfterCardDrawn` の待ちではそれより 1 少ない。`AfterPreventingDraw` の待ちは
+  ドローが止められたので 0 で、`draws_requested`・`draw_index` は `null`）。手札が満杯・山札が空になれば本体は残りを
+  打ち切る。
+- `auto_play_from_draw_pile`: `count`・`position`（`top` / `bottom` / `random`）・`force_exhaust`、`reserve_index`
+  （予約のループの添字。`AutoPlay` の待ちでは `null`）、`remaining_reservations`（まだ Play に移していない予約の数。
+  `ShuffleIfNecessary` の待ちでは今回の 1 枚を含む）、`reservation_call_id`（`card_resolution_events` の
+  `auto_play_reservation` の行の `call_id`。同じ context・所有者・引数で開いている記録がちょうど 1 つのとき）。
+  予約した札そのもの・抽選の結果は出さない。
+- `shuffle_origin`: 鎖に `shuffle` があるとき、そのシャッフルを起こした呼出し。`draw`（ドローの途中）、
+  `auto_play_from_draw_pile`（山札からの自動プレイの予約の途中）、`if_necessary`（それ以外から `ShuffleIfNecessary`。
+  `KiChant`・`ForegoneConclusionPower`）、`explicit`（`CardPileCmd.Shuffle` を直接。`Reboot`・`KiChant`・`BottledPotential`）。
+  鎖が途中で切れて決められなければ `null`。`shuffle` が無ければ `null`。
+- `end`: 鎖が止まった理由（どの async メソッドも await していない〔WhenAny などの別の継続は型の名前〕、複数が await
+  している、`completed`、`depth limit 16`）。
+- 公開の情報だけ: 段の名前・ループの添字・残りの枚数・引数は、札の本文と画面で見えたドロー・予約から決まる。山札の順・
+  予約した札・乱数・抽選の結果には触らない。
+- 分からないとき（入口の Task を記録できなかった、知らない状態、表と内側の段の食い違い、予約の記録が合わない）は
+  `known: false` と `unavailable_reasons`（`frames` は読めた分。全体が読めなければ `null`）。`choice_source` の他の
+  項目と `known` には影響しない。warning は `choice_source.await_chain`。
+- Markdown は `Choice source:` の行の末尾に `awaited by hook AfterShuffle (1 listeners left) < shuffle <
+  shuffle_if_necessary < draw (2 left, hand draw) < setup_player_turn < auto_pre_play_phase`（`kind` のある段だけ。
+  無ければ足さない。未知なら理由）。
+
+出典（v0.113.1、`sts2-a671e9ef`）: `Hook.AfterPlayerTurnStart` / `AfterShuffle`（`<AfterPlayerTurnStart>d__59` /
+`<AfterShuffle>d__76` の `<>7__wrap1`・`<model>5__3`）、`Hook.IterateCombatHookListeners`（`<>7__wrap1`）、
+`CombatState.IterateHookListeners`（`<IterateHookListeners>d__74` の `<>7__wrap1` = `List<AbstractModel>.Enumerator`、
+`Contains`）、`CardPileCmd.DrawInternal`（`<drawsRequested>5__6`・`<i>5__7`・`fromHandDraw`）・`AutoPlayFromDrawPile`
+（`count`・`<i>5__4`・`position`・`forceExhaust`）・`Shuffle`・`ShuffleIfNecessary`、`CombatManager.SetupPlayerTurn` /
+`RunAutoPrePlayPhase` / `StartTurn`、`EntropyPower.AfterPlayerTurnStart`、`StratagemPower.AfterShuffle`。段の初めの山札は、
+`Hook.AfterPlayerTurnStart` / `AfterShuffle` の間だけ、`<IterateHookListeners>d__74.MoveNext` の最初の呼出しの前に読むだけの
+Harmony の prefix で記録する（列を作るのはその呼出し）。契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
 
 #### 選択候補の個体（`combat_instance`、schema 7）
 

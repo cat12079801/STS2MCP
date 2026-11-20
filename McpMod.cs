@@ -63,8 +63,12 @@ public static partial class McpMod
     /// 1.8.0: card_resolution_events carries CardPileCmd.AutoPlayFromDrawPile's reservations (auto_play_reservation /
     /// auto_play_reserved / auto_play_dispatch rows; Cascade, Havoc, Mayhem) and each play row's reservation; a POST
     /// whose fight ended while it ran answers ended_combat with the stream as the fight ended (sts2#1113).
+    /// 1.9.0: choice_source.await_chain, the async calls waiting on the open selection read from the live tasks: the Hook
+    /// stage running models[0] (AfterPlayerTurnStart / AfterShuffle) with the list it took and the listeners after it,
+    /// the shuffle and the draw (remaining draws, fromHandDraw) or auto-play reservation that shuffled, the turn start
+    /// (SetupPlayerTurn, RunAutoPrePlayPhase) and their following steps (EntropyPower, StratagemPower; sts2#1115).
     /// </summary>
-    public const string StateSchema = "1.8.0";
+    public const string StateSchema = "1.9.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

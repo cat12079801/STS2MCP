@@ -7,9 +7,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.ChoiceSourceTracker.cs" Link="ChoiceSourceTracker.cs" />
+    <Compile Include="../../McpMod.AsyncChain.cs" Link="AsyncChain.cs" />
     <Compile Include="../../McpMod.TransformationOptionsTable.cs" Link="TransformationOptionsTable.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
-    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.MultiplayerState.cs;../../McpMod.Formatting.cs;../../McpMod.ChoiceSource.cs;../../McpMod.TransformationOptions.cs;../../McpMod.CombatHistory.cs"
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.MultiplayerState.cs;../../McpMod.Formatting.cs;../../McpMod.ChoiceSource.cs;../../McpMod.TransformationOptions.cs;../../McpMod.CombatHistory.cs;../../McpMod.ChoiceAwaitChain.cs;../../McpMod.AsyncChain.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

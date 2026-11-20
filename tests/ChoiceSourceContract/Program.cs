@@ -35,6 +35,7 @@ namespace STS2_MCP
             CheckTracker();
             CheckTransformationOptions();
             CheckMarkdown();
+            CheckAwaitChain();
             CheckSources();
             Console.WriteLine($"ChoiceSourceContract: {Checks} checks passed");
         }
@@ -282,6 +283,8 @@ namespace STS2_MCP
                 "金の斧の件数は GoldAxe.CanonicalVars と同じ式");
             Check(Read("McpMod.Formatting.cs").Contains("AppendTransformationOptionsMarkdown(sb, transform)"), "変化の候補の Markdown を配線する");
             Check(mod.Contains("/// 1.5.0: the inputs of four colorless cards"), "追加は MINOR（1.5.0。版の値そのものは V0113CompatContract）");
+            Check(mod.Contains("/// 1.9.0: choice_source.await_chain"), "await の鎖の追加は MINOR（1.9.0）");
+            CheckAwaitChainSources(Read);
         }
     }
 }

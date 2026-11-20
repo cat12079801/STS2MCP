@@ -223,6 +223,10 @@ async def get_game_state(format: str = "markdown") -> str:
     parent_play_started_index・requested_count・position・force_exhaust〕、Play に移して表で見せた札の
     auto_play_reserved〔reserve_index・uid〕、CardCmd.AutoPlay に渡した札の auto_play_dispatch）と、
     play の行の reservation（{call_id, reserve_index} か null）を足した。まだ移していない山札の札は出さない。
+    schema 1.9.0 で、choice_source.await_chain（選択を待っている async の呼出しを内側から外へ並べた frames。
+    Hook.AfterPlayerTurnStart / AfterShuffle の走っている段〔awaiting〕と後の段〔following〕、その段が始まったときの
+    列での位置と後ろでいま走る listener〔山札にあった札は order: null〕、シャッフル・ドローの残り〔remaining_draws・
+    from_hand_draw〕・山札からの自動プレイの予約〔reservation_call_id〕、手番の初めの残りの段、shuffle_origin）を足した。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
@@ -276,7 +280,7 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
-    契約の版は schema（semver の文字列。現在 "1.8.0"）で返す。規則の正本は docs/raw-full.md の
+    契約の版は schema（semver の文字列。現在 "1.9.0"）で返す。規則の正本は docs/raw-full.md の
     「Common Top-Level Fields」。MAJOR は後方互換の無い変更（既存の項目の意味・型・形の変更、
     項目・アクション・列挙の値・state_type の削除・改名、構造の変更）、MINOR は後方互換の追加
     （項目・アクション・任意の引数・state_type・既存の列挙の新しい値。版でなく項目の有無と

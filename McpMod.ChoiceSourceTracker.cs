@@ -25,8 +25,37 @@ public static partial class McpMod
             parts.Add($"card play {play.GetValueOrDefault("uid")} ({(play.GetValueOrDefault("play_index") is int i ? i + 1 : 0)}/{play.GetValueOrDefault("play_count")})");
         if (source.GetValueOrDefault("hook") is Dictionary<string, object?> hook && hook.GetValueOrDefault("name") is string name)
             parts.Add($"hook {name}" + (hook.GetValueOrDefault("remaining_listeners") is System.Collections.ICollection rest ? $" ({rest.Count} listeners left)" : ""));
+        if (source.GetValueOrDefault("await_chain") is Dictionary<string, object?> chain && FormatAwaitChain(chain) is { } awaited)
+            parts.Add(awaited);
         sb.AppendLine("Choice source: " + string.Join("; ", parts));
         sb.AppendLine();
+    }
+
+    // "awaited by hook AfterShuffle (1 listeners left) < shuffle < shuffle_if_necessary < draw (1 left)": the frames the
+    // chain describes, inside out; the others are skipped (null when none is described). Unknown: the reasons.
+    private static string? FormatAwaitChain(Dictionary<string, object?> chain)
+    {
+        if (chain.GetValueOrDefault("known") is not true)
+        {
+            var reasons = chain.GetValueOrDefault("unavailable_reasons") as List<string> ?? new List<string>();
+            return $"await chain unknown ({string.Join("; ", reasons)})";
+        }
+        var named = new List<string>();
+        foreach (var frame in chain.GetValueOrDefault("frames") as List<Dictionary<string, object?>> ?? new List<Dictionary<string, object?>>())
+        {
+            if (frame.GetValueOrDefault("kind") is not string kind) continue;
+            string text = kind switch
+            {
+                "hook" => $"hook {frame.GetValueOrDefault("awaiting")}"
+                    + ((frame.GetValueOrDefault("listener") as Dictionary<string, object?>)?.GetValueOrDefault("remaining_listeners") is System.Collections.ICollection rest
+                        ? $" ({rest.Count} listeners left)" : ""),
+                "draw" => $"draw ({frame.GetValueOrDefault("remaining_draws")} left{(frame.GetValueOrDefault("from_hand_draw") is true ? ", hand draw" : "")})",
+                "auto_play_from_draw_pile" => $"auto-play reservation ({frame.GetValueOrDefault("remaining_reservations")} left)",
+                _ => kind
+            };
+            named.Add(text);
+        }
+        return named.Count == 0 ? null : "awaited by " + string.Join(" < ", named);
     }
 }
 
@@ -47,6 +76,8 @@ internal sealed class OpenCardSelection
     public IReadOnlyList<object?>? Candidates { get; init; }
     public object? Pile { get; init; }
     public long Sequence { get; init; }
+    /// <summary>The Task the CardSelectCmd method returned (set by its postfix): the start of choice_source.await_chain.</summary>
+    public object? SelectionTask { get; set; }
 }
 
 internal static class OpenCardSelections

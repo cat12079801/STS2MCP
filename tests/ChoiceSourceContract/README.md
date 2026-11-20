@@ -7,6 +7,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 ```
 
 本番の `McpMod.ChoiceSourceTracker.cs`（開いている選択の記録・画面と入口の対応・Markdown の 1 行）、
+`McpMod.AsyncChain.cs`（await の鎖の読み取り・段の初めの山札の記録・残りの listener の並べ方）、
 `McpMod.TransformationOptionsTable.cs`（変化の候補のまとめ方・Markdown の 1 行）、`McpMod.Warnings.cs` をリンクする。ゲームの型は使わない。
 
 - 記録: 開いた順の番号、最も新しい開いている記録、player・戦闘・画面の種類での絞り込み（別の戦闘の古い記録を使わない）、
@@ -22,7 +23,17 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
   hand_select・choose・grid への配線と戦闘中の条件、変化の候補の配線・エントロピーの戦闘だけで出すこと・
   本体の `GetDefaultTransformationOptions` に `CardTransformation` と同じ `isInCombat` を渡すこと、金の斧の件数の式、版の履歴の 1.5.0
 
-Harmony の patch の当たり方・`PlayerChoiceContext` の連鎖・通知の列の読み直しはゲームが無いと動かせない。実機の確認（調整役が行う）:
+- await の鎖（`AwaitChainChecks.cs`、schema 1.9.0）: ゲームと同じ形の本物の async メソッド（選択を await する listener、
+  2 段の iterator で列を回す Hook 風の段、シャッフル、2 枚目の前にシャッフルするドローのループ）を止めて、選択の Task から
+  外へたどる順・宣言した型・各段の awaiter が内側の Task を指すこと・hoisted のループの添字と引数・段が取った列と走っている
+  listener の位置（`List<T>.Enumerator._index - 1`）・読むだけで何も進めないこと・選択を終えれば最後まで進むこと、
+  SynchronizationContext を捕まえた await、ContinueWith の継続を box と数えないこと、複数が待つときと深さの上限で止めること、
+  無いフィールドで例外になること。段の初めの山札の記録（開いた Hook の間・その戦闘だけ・終わった戦闘を捨てる・上限）、
+  残りの listener の並べ方（山札にあった札の塊は公開の順に並べ替えて `order: null`、他は列の位置、いま走らない・override
+  しない listener は出さない）、Markdown、ソースの文字列（乱数に触らない・列挙子を進めない・patch が本体を飛ばさない・
+  await の順の表・配線）。Release で回す（Debug では iterator の一時変数の名前が違う）。
+
+Harmony の patch の当たり方・`PlayerChoiceContext` の連鎖・通知の列の読み直し・本体の状態機械のフィールドはゲームが無いと動かせない。実機の確認（調整役が行う）:
 
 1. 計略（`STRATAGEM_POWER`）を持ち、手番の初めのドローの途中で山札が尽きてシャッフルした選択（`NCombatPileCardSelectScreen`）の
    `card_select.choice_source` が `known: true`・`selector: "FromCombatPile"`・`models[0].model_id: "STRATAGEM_POWER"`・
@@ -35,3 +46,15 @@ Harmony の patch の当たり方・`PlayerChoiceContext` の連鎖・通知の�
 3. スプラッシュの choose で `selector: "FromChooseACardScreen"`・`models[0]` がスプラッシュの札（uid）・`card_play.uid` が同じ uid・
    `card_play.model_index: 0`・`hook.name: null`、複製で 2 回目なら `play_index: 1` であること。
 4. 戦闘外の選択画面（休憩所の強化など）に `choice_source` が付かないこと。
+5. 計略を持ち、手番の初めのドロー（`from_hand_draw: true`）の途中でシャッフルした選択の `choice_source.await_chain` が
+   `known: true` で、`frames` が `StratagemPower.AfterShuffle` < `Hook.AfterShuffle`（`kind: "hook"`・`awaiting: "AfterShuffle"`・
+   `model_index: 0`・`listener.position` が計略のパワーの位置）< `CardPileCmd.Shuffle` < `ShuffleIfNecessary` <
+   `DrawInternal`（`remaining_draws` が引き残りの枚数〔今回の 1 枚を含む〕）< `CombatManager.SetupPlayerTurn`
+   （`awaiting: "HandDraw"`）の順で、`shuffle_origin: "draw"` であること。選択を確定した後の手札の枚数が `remaining_draws` と
+   合うこと。ポメルストライクなどのドロー札の途中では `from_hand_draw: false`、カスケードなど山札からの自動プレイの途中では
+   `auto_play_from_draw_pile` の `reservation_call_id` が `card_resolution_events` の `auto_play_reservation` の `call_id` と同じで
+   `shuffle_origin: "auto_play_from_draw_pile"`、リブートでは `shuffle_origin: "explicit"` であること。
+6. エントロピーの手番の初めの選択の `await_chain` が `EntropyPower.AfterPlayerTurnStart` < `Hook.AfterPlayerTurnStart`
+   （`awaiting: "AfterPlayerTurnStart"`・`following: ["AfterPlayerTurnStartLate"]`）< `SetupPlayerTurn`（`awaiting: "AfterPlayerTurnStart"`・
+   `following: []`）< `RunAutoPrePlayPhase`（`awaiting: "SetupPlayerTurn"`・`following: ["CheckForEmptyHand", "AfterAutoPrePlayPhaseEntered"]`）
+   であること。

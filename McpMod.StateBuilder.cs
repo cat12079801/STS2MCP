@@ -643,6 +643,8 @@ public static partial class McpMod
         // and leaves battle out; the selection screen itself is still reported.
         // Selections recorded in a fight that is no longer live can never complete (choice_source).
         OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());
+        // Hook calls (await_chain listener lists) of a fight that is gone never complete either.
+        HookListSnapshots.DropOtherCombats(GetLiveCombatStateForSelection());
         bool inCombatRoom = currentRoom is CombatRoom;
         if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),

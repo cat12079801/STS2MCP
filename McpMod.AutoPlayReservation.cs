@@ -237,6 +237,18 @@ internal static class AutoPlayReservations
         }
     }
 
+    /// <summary>
+    /// The ids of the calls still running for this choice context and owner with these arguments (choice_source.await_chain
+    /// ties a suspended AutoPlayFromDrawPile frame to its auto_play_reservation row with them).
+    /// </summary>
+    internal static List<int> OpenCallIds(object? context, Player owner, int requestedCount, string position, bool forceExhaust)
+    {
+        lock (Gate)
+            return Calls.Where(c => !c.Completed && ReferenceEquals(c.Context, context) && ReferenceEquals(c.Owner, owner)
+                    && c.RequestedCount == requestedCount && c.Position == position && c.ForceExhaust == forceExhaust)
+                .Select(c => c.CallId).ToList();
+    }
+
     /// <summary>The rows of <paramref name="owner"/>'s calls, in record order.</summary>
     internal static List<AutoPlayReservationRow> RowsOf(Player owner)
     {

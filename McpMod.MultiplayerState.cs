@@ -242,6 +242,8 @@ public static partial class McpMod
         // and a failure to build it is a warning that leaves battle out.
         // Selections recorded in a fight that is no longer live can never complete (choice_source).
         OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());
+        // Hook calls (await_chain listener lists) of a fight that is gone never complete either.
+        HookListSnapshots.DropOtherCombats(GetLiveCombatStateForSelection());
         bool inCombatRoom = currentRoom is CombatRoom;
         if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
