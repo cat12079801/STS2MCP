@@ -1,0 +1,2252 @@
+{
+ "version": 1,
+ "game_version": "v0.113.1",
+ "decompile": "sts2-a671e9ef",
+ "preamble": "## これは何か\n\n`docs/state-inventory.md` はモデルの **項目** を数える。ここは項目ではない情報、つまり戦闘中に **何がどの順で起きたか**\n（通知・履歴・山の移動・手番の段階）と、**選択画面がどの文脈で開いたか**（開いたもの・段階・残り回数・候補）を数える。\nMOD に 1 件ずつ足す PR（#110〜#114、進行中の #1115）を止め、phase 2 で一度に出すための台帳。\n\n分類:\n\n| 分類 | 意味 |\n|---|---|\n| exposed | MOD が出している（`exposed_by` の MOD の行を引用。文字列が消えると `--check` が落ちる） |\n| public-missing | プレイヤーに見える（または公開のモデルだけから決まる）が MOD が出していない。提案キーと置き場所を持つ |\n| hidden | プレイヤーに見えない（山札の順・乱数・抽選の重み） |\n| cosmetic | 表示・演出だけ |\n| internal | 判定・下請けなど、それ自体は情報でないもの（入力はモデルの項目、結果は別の行に出る） |\n| out_of_scope | アイアンクラッドの範囲外（他キャラ・マルチプレイ） |\n| unknown | 確かめられていない |\n\n提案キーの `battle.combat_log` は phase 2 で新設する戦闘ごとの通し列、`decision_context` は各選択画面に付ける文脈\n（いまの `choice_source` を内包する）。`card_resolution_events` は互換のために今の形のまま残す想定。\n「進行中」は sts2#1115（MOD のブランチ `entropy-stratagem-stages`）が扱う予定のもの。棚卸しの時点（2026-11-20）で\nこのブランチは main（828239c）から commit が無く、扱う範囲は sts2#1115 の本文から取った。\n「Issue」は open の sts2 の Issue のうち、その情報が揃うと進められるもの（本文と engine の「未観測」の箇所から対応を取った）。",
+ "issue_titles": {
+  "242": "engine 改良の第 2 弾（G01 捨て札からの移動）",
+  "327": "山札・捨て札の見立てずれ（再現不能 25 件）",
+  "377": "しっぽの使用の推定を消す",
+  "531": "脈打つ亡骸",
+  "535": "不気味なランプ",
+  "543": "悪魔の舌",
+  "771": "開始時の自動プレイの観測・郷愁",
+  "783": "彼方からの遠吠え（ExhaustOnNextPlay）",
+  "786": "無色 5 種を生成札として解決",
+  "790": "ギャンブラーの醸造酒",
+  "792": "未来視の雫",
+  "841": "ワッピー",
+  "848": "X コストの多段の回数",
+  "949": "吸血（SUCK_POWER）",
+  "991": "エントロピー醸造",
+  "994": "エンシェントカードの評価（追跡）",
+  "996": "ネオーの怒りの回収の選択",
+  "997": "エンシェントカード 11 枚の fixture",
+  "1088": "複合ドローの区間の strict 照合",
+  "1113": "カスケードの予約順の照合",
+  "1115": "エントロピー・計略・スプラッシュ（進行中）",
+  "1118": "オブスキュラの咆哮",
+  "1120": "滝の巨人・知識の悪魔の照合"
+ },
+ "rules": [
+  {
+   "id": "cosmetic-cmd",
+   "match": "^cmd:(SfxCmd|VfxCmd|TalkCmd|ThinkCmd)\\.",
+   "class": "cosmetic",
+   "reason": "音・演出・吹き出し"
+  },
+  {
+   "id": "wait-cmd",
+   "match": "^cmd:Cmd\\.",
+   "class": "cosmetic",
+   "reason": "演出の待ち"
+  },
+  {
+   "id": "other-char-cmd",
+   "match": "^cmd:(ArrowCmd|ForgeCmd|OstyCmd|MelodyCmd|OrbCmd)\\.",
+   "class": "out_of_scope",
+   "reason": "他キャラの仕組み（矢・鍛造・オスティ・旋律・オーブ）"
+  },
+  {
+   "id": "other-char-hook",
+   "match": "^(hook|computed):Hook\\.(After(Arrow|Orb|Stars|Forge|Summon|Osty|DiedToDoom|EnergySpent|Flush|CardDiscarded|ModifyingEnergyGain|ModifyingOrb|ModifyingPowerAmountGiven)|Modify(EnergyGain|OrbPassiveTriggerCount|OrbValue|SummonAmount)|Should(GainStars|PayExcessEnergyCostWithStars))",
+   "class": "out_of_scope",
+   "reason": "アイアンクラッドの範囲に上書きが無い（他キャラの札・パワーだけ）。共通の仕組み（combat_log の hook の行）を入れれば自動で出る"
+  },
+  {
+   "id": "rng",
+   "match": "^rng:",
+   "class": "hidden",
+   "reason": "乱数の状態。結果は出たときに公開される"
+  },
+  {
+   "id": "history-recorder",
+   "match": "^history:CombatHistory\\.",
+   "class": "internal",
+   "reason": "履歴を記録するメソッド。分類は対応する *Entry の行で扱う"
+  }
+ ],
+ "manual_items": {
+  "manual:RelicModel.Flash": {
+   "file": "MegaCrit.Sts2.Core.Models/RelicModel.cs",
+   "grep": "public void Flash()",
+   "scope": "ironclad"
+  },
+  "manual:PowerModel.Flash": {
+   "file": "MegaCrit.Sts2.Core.Models/PowerModel.cs",
+   "grep": "protected void Flash()",
+   "scope": "ironclad"
+  },
+  "manual:CombatState.IterateHookListeners": {
+   "file": "MegaCrit.Sts2.Core.Combat/CombatState.cs",
+   "grep": "public IEnumerable<AbstractModel> IterateHookListeners()",
+   "scope": "ironclad"
+  },
+  "manual:CardPileCmd.DrawInternal": {
+   "file": "MegaCrit.Sts2.Core.Commands/CardPileCmd.cs",
+   "grep": "private static async Task<IEnumerable<CardModel>> DrawInternal(",
+   "scope": "ironclad"
+  },
+  "manual:EntropyPower.selection_stage": {
+   "file": "MegaCrit.Sts2.Core.Models.Powers/EntropyPower.cs",
+   "grep": "CardSelectCmd.",
+   "scope": "ironclad"
+  },
+  "manual:StratagemPower.selection_stage": {
+   "file": "MegaCrit.Sts2.Core.Models.Powers/StratagemPower.cs",
+   "grep": "CardSelectCmd.",
+   "scope": "ironclad"
+  },
+  "manual:CardSelectCmd.skip_and_result": {
+   "file": "MegaCrit.Sts2.Core.Commands/CardSelectCmd.cs",
+   "grep": "bool canSkip = false",
+   "scope": "ironclad"
+  },
+  "manual:PotionModel.OnUseWrapper": {
+   "file": "MegaCrit.Sts2.Core.Models/PotionModel.cs",
+   "grep": "public async Task OnUseWrapper(",
+   "scope": "ironclad"
+  },
+  "manual:CardModel.OnPlayWrapper": {
+   "file": "MegaCrit.Sts2.Core.Models/CardModel.cs",
+   "grep": "public async Task OnPlayWrapper(",
+   "scope": "ironclad"
+  },
+  "manual:EventModel.CurrentOptions": {
+   "file": "MegaCrit.Sts2.Core.Models/EventModel.cs",
+   "grep": "public IReadOnlyList<EventOption> CurrentOptions",
+   "scope": "ironclad"
+  },
+  "manual:CardReward": {
+   "file": "MegaCrit.Sts2.Core.Rewards/CardReward.cs",
+   "grep": "public class CardReward : Reward",
+   "scope": "ironclad"
+  }
+ },
+ "items": {
+  "cmd:ArrowCmd.DislodgeArrow": {
+   "class": "out_of_scope",
+   "reason": "矢（FoolArrows の名前空間）。参照は ImpaledPower だけ"
+  },
+  "cmd:CardCmd.Afflict": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardDetails.cs: ReadCardDetailValue(state, reasons, \"affliction\""
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.AfflictAndPreview": {
+   "class": "cosmetic",
+   "reason": "札を画面に見せる演出（効果は別のコマンド）"
+  },
+  "cmd:CardCmd.ApplyKeyword": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"keywords\"] = BuildHoverTips(card.HoverTips)"
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.ApplySingleTurnRetain": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"keywords\"] = BuildHoverTips(card.HoverTips)"
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.ApplySingleTurnSly": {
+   "class": "out_of_scope",
+   "reason": "呼ぶのは HandTrick（他キャラの札）だけ"
+  },
+  "cmd:CardCmd.AutoPlay": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"is_auto_play\"] = play.IsAutoPlay"
+   ],
+   "proposed_key": "card_resolution_events[kind=play].is_auto_play"
+  },
+  "cmd:CardCmd.ClearAffliction": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardDetails.cs: ReadCardDetailValue(state, reasons, \"affliction\""
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.ClearEnchantment": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardDetails.cs: ReadCardDetailValue(state, reasons, \"enchantment\""
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.Discard": {
+   "class": "out_of_scope",
+   "reason": "直接呼ぶのは他キャラの札。アイアンクラッドの範囲は CardCmd.DiscardAndDraw の行（Discard もそこへ委ねる）"
+  },
+  "cmd:CardCmd.DiscardAndDraw": {
+   "class": "public-missing",
+   "visible": "捨てて引く（GamblingChip・GamblersBrew）",
+   "proposed_key": "battle.combat_log[kind=discard] と card_resolution_events[kind=draw] の対応",
+   "where": "combat_log（新設）",
+   "issues": [
+    790
+   ]
+  },
+  "cmd:CardCmd.Downgrade": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"is_upgraded\"] = card.IsUpgraded,"
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.Enchant": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardDetails.cs: ReadCardDetailValue(state, reasons, \"enchantment\""
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.Exhaust": {
+   "class": "public-missing",
+   "visible": "廃棄（札・原因。手番終了のエセリアルを含む）。今は手番内の件数だけ",
+   "proposed_key": "battle.combat_log[kind=exhaust]{uid, caused_by_ethereal, source}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "cmd:CardCmd.Preview": {
+   "class": "cosmetic",
+   "reason": "札を画面に見せる演出（効果は別のコマンド）"
+  },
+  "cmd:CardCmd.PreviewCardPileAdd": {
+   "class": "cosmetic",
+   "reason": "札を画面に見せる演出（効果は別のコマンド）"
+  },
+  "cmd:CardCmd.RemoveKeyword": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"keywords\"] = BuildHoverTips(card.HoverTips)"
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardCmd.Transform": {
+   "class": "public-missing",
+   "visible": "変化（元の札 → 新しい札）。新しい札は見えるが元の uid との対応が出ていない",
+   "proposed_key": "battle.combat_log[kind=card_change,change=transform]{from_uid, to_uid, to_id}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CardCmd.TransformTo": {
+   "class": "public-missing",
+   "visible": "変化（元の札 → 新しい札）。新しい札は見えるが元の uid との対応が出ていない",
+   "proposed_key": "battle.combat_log[kind=card_change,change=transform]{from_uid, to_uid, to_id}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CardCmd.TransformToRandom": {
+   "class": "public-missing",
+   "visible": "変化（元の札 → 新しい札）。新しい札は見えるが元の uid との対応が出ていない",
+   "proposed_key": "battle.combat_log[kind=card_change,change=transform]{from_uid, to_uid, to_id}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1115
+   ],
+   "in_progress": "#1115（エントロピーの段階）"
+  },
+  "cmd:CardCmd.Upgrade": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"is_upgraded\"] = card.IsUpgraded,"
+   ],
+   "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
+   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+  },
+  "cmd:CardPileCmd.Add": {
+   "class": "public-missing",
+   "visible": "ドローでない札の移動（選択で回収・山札の上へ戻す・NostalgiaPower の往復・Bolas の返却）。どの札がどこへ行くかが見える（Random の位置だけ非公開）",
+   "proposed_key": "battle.combat_log[kind=pile_move]{uid, from, to, position(top/bottom/random), cloned_by, source}",
+   "where": "combat_log（新設）",
+   "issues": [
+    327,
+    771,
+    792,
+    242,
+    996,
+    997
+   ]
+  },
+  "cmd:CardPileCmd.AddCurseToDeck": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"deck\"] = deck;"
+   ],
+   "proposed_key": "player.deck"
+  },
+  "cmd:CardPileCmd.AddCursesToDeck": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"deck\"] = deck;"
+   ],
+   "proposed_key": "player.deck"
+  },
+  "cmd:CardPileCmd.AddDuringManualCardPlay": {
+   "class": "out_of_scope",
+   "reason": "他キャラの札だけが呼ぶ"
+  },
+  "cmd:CardPileCmd.AddGeneratedCardToCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"generated\""
+   ],
+   "proposed_key": "card_resolution_events[kind=generated]",
+   "reason": "行き先の山・位置は pile_move の行で扱う（cmd:CardPileCmd.Add）"
+  },
+  "cmd:CardPileCmd.AddGeneratedCardsToCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"generated\""
+   ],
+   "proposed_key": "card_resolution_events[kind=generated]",
+   "reason": "行き先の山・位置は pile_move の行で扱う（cmd:CardPileCmd.Add）"
+  },
+  "cmd:CardPileCmd.AddToCombatAndPreview": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"generated\""
+   ],
+   "proposed_key": "card_resolution_events[kind=generated]",
+   "reason": "行き先の山・位置は pile_move の行で扱う（cmd:CardPileCmd.Add）"
+  },
+  "cmd:CardPileCmd.AutoPlayFromDrawPile": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"reserve_index\"] = row.ReserveIndex"
+   ],
+   "proposed_key": "card_resolution_events[kind=auto_play_reservation]"
+  },
+  "cmd:CardPileCmd.Draw": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"draw\"",
+    "McpMod.CombatHistory.cs: [\"from_hand_draw\"] = drawn.FromHandDraw"
+   ],
+   "proposed_key": "card_resolution_events[kind=draw]",
+   "reason": "残り枚数（drawsRequested - i）は manual:CardPileCmd.DrawInternal の行"
+  },
+  "cmd:CardPileCmd.DrawWithoutBlockingOnOtherPlayers": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"draw\""
+   ],
+   "proposed_key": "card_resolution_events[kind=draw]"
+  },
+  "cmd:CardPileCmd.GetTweenForCardsChangingPiles": {
+   "class": "cosmetic",
+   "reason": "札の移動の演出"
+  },
+  "cmd:CardPileCmd.GiveToAnotherPlayer": {
+   "class": "out_of_scope",
+   "reason": "マルチプレイ"
+  },
+  "cmd:CardPileCmd.RemoveFromCombat": {
+   "class": "public-missing",
+   "visible": "札が戦闘から取り除かれる（ThievingHopper）",
+   "proposed_key": "battle.combat_log[kind=pile_move]{to=removed}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CardPileCmd.RemoveFromDeck": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"deck\"] = deck;"
+   ],
+   "proposed_key": "player.deck"
+  },
+  "cmd:CardPileCmd.Shuffle": {
+   "class": "public-missing",
+   "visible": "明示のシャッフル。枚数と起きた時点が見える（並びは非公開）",
+   "proposed_key": "battle.combat_log[kind=shuffle]{reason=explicit, count, source}",
+   "where": "combat_log（新設）",
+   "issues": [
+    327,
+    1115
+   ],
+   "in_progress": "#1115（明示のシャッフルと予約の区別）"
+  },
+  "cmd:CardPileCmd.ShuffleIfNecessary": {
+   "class": "public-missing",
+   "visible": "山札が尽きたときのシャッフル（ドローの途中）",
+   "proposed_key": "battle.combat_log[kind=shuffle]{reason=draw_pile_empty, count}",
+   "where": "combat_log（新設）",
+   "issues": [
+    327,
+    1115
+   ],
+   "scope": "ironclad",
+   "in_progress": "#1115（ドローの途中のシャッフル）"
+  },
+  "cmd:CreatureCmd.Add": {
+   "class": "public-missing",
+   "visible": "敵・召喚が加わる（時点と順）。今の一覧は enemies に出る",
+   "proposed_key": "battle.combat_log[kind=creature,action=added]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.Damage": {
+   "class": "public-missing",
+   "visible": "ダメージ（受け手・量・ブロック・HP 損失）",
+   "proposed_key": "battle.combat_log[kind=damage]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.Escape": {
+   "class": "public-missing",
+   "visible": "逃走",
+   "proposed_key": "battle.combat_log[kind=creature,action=escaped]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.GainBlock": {
+   "class": "public-missing",
+   "visible": "ブロック獲得",
+   "proposed_key": "battle.combat_log[kind=block]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.GainMaxHp": {
+   "class": "public-missing",
+   "visible": "HP・最大 HP の変化（量と原因）。結果の値は state に出る",
+   "proposed_key": "battle.combat_log[kind=hp]{target, change, amount, source}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.Heal": {
+   "class": "public-missing",
+   "visible": "HP・最大 HP の変化（量と原因）。結果の値は state に出る",
+   "proposed_key": "battle.combat_log[kind=hp]{target, change, amount, source}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.Kill": {
+   "class": "public-missing",
+   "visible": "撃破・即死",
+   "proposed_key": "battle.combat_log[kind=creature,action=killed]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.LoseBlock": {
+   "class": "public-missing",
+   "visible": "ブロックの減少",
+   "proposed_key": "battle.combat_log[kind=block,change=lost]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.LoseMaxHp": {
+   "class": "public-missing",
+   "visible": "HP・最大 HP の変化（量と原因）。結果の値は state に出る",
+   "proposed_key": "battle.combat_log[kind=hp]{target, change, amount, source}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.SetCurrentHp": {
+   "class": "public-missing",
+   "visible": "HP・最大 HP の変化（量と原因）。結果の値は state に出る",
+   "proposed_key": "battle.combat_log[kind=hp]{target, change, amount, source}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.SetMaxAndCurrentHp": {
+   "class": "public-missing",
+   "visible": "HP・最大 HP の変化（量と原因）。結果の値は state に出る",
+   "proposed_key": "battle.combat_log[kind=hp]{target, change, amount, source}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.SetMaxHp": {
+   "class": "public-missing",
+   "visible": "HP・最大 HP の変化（量と原因）。結果の値は state に出る",
+   "proposed_key": "battle.combat_log[kind=hp]{target, change, amount, source}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:CreatureCmd.Stun": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.EnemyStunHandler.cs: state[\"is_stun\"] = wrapper;"
+   ],
+   "proposed_key": "enemies[].is_stun",
+   "reason": "スタン中かは出る。スタンの出自は出さない方針（engine の stunstate.py）"
+  },
+  "cmd:CreatureCmd.TriggerAnim": {
+   "class": "cosmetic",
+   "reason": "アニメーション"
+  },
+  "cmd:DamageCmd.Attack": {
+   "class": "public-missing",
+   "visible": "攻撃（攻撃者・対象・各ヒット）",
+   "proposed_key": "battle.combat_log[kind=attack]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:MapCmd.SetBossEncounter": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"boss\"] = primaryBoss;"
+   ],
+   "proposed_key": "map.boss"
+  },
+  "cmd:OrbCmd.Channel": {
+   "class": "out_of_scope",
+   "reason": "オーブ（他キャラの仕組み）。InfusedCore から呼ばれるが、オーブ自体は他キャラの仕組み"
+  },
+  "cmd:OstyCmd.Summon": {
+   "class": "out_of_scope",
+   "reason": "オスティ（他キャラの仕組み）"
+  },
+  "cmd:PlayerCmd.AddPet": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"pets\"] = pets;"
+   ],
+   "proposed_key": "player.pets"
+  },
+  "cmd:PlayerCmd.CompleteQuest": {
+   "class": "unknown",
+   "reason": "クエストの完了（Dowsing・SpoilsMap）。完了が state のどこに出るか未確認"
+  },
+  "cmd:PlayerCmd.EndTurn": {
+   "class": "out_of_scope",
+   "reason": "他キャラの札だけが呼ぶ"
+  },
+  "cmd:PlayerCmd.GainEnergy": {
+   "class": "public-missing",
+   "visible": "エナジーの増減（量と原因）。結果は player.energy に出る",
+   "proposed_key": "battle.combat_log[kind=energy]",
+   "where": "combat_log（新設）",
+   "issues": [],
+   "scope": "ironclad"
+  },
+  "cmd:PlayerCmd.GainGold": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"gold\"] = player.Gold;"
+   ],
+   "proposed_key": "player.gold"
+  },
+  "cmd:PlayerCmd.GainMaxPotionCount": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"max_potion_slots\"] = player.MaxPotionCount;"
+   ],
+   "proposed_key": "player.max_potion_slots"
+  },
+  "cmd:PlayerCmd.GainStars": {
+   "class": "out_of_scope",
+   "reason": "星（他キャラの資源）"
+  },
+  "cmd:PlayerCmd.LoseEnergy": {
+   "class": "public-missing",
+   "visible": "エナジーの増減（量と原因）。結果は player.energy に出る",
+   "proposed_key": "battle.combat_log[kind=energy]",
+   "where": "combat_log（新設）",
+   "issues": [],
+   "scope": "ironclad"
+  },
+  "cmd:PlayerCmd.LoseGold": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"gold\"] = player.Gold;"
+   ],
+   "proposed_key": "player.gold"
+  },
+  "cmd:PlayerCmd.LoseMaxPotionCount": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"max_potion_slots\"] = player.MaxPotionCount;"
+   ],
+   "proposed_key": "player.max_potion_slots"
+  },
+  "cmd:PlayerCmd.LoseStars": {
+   "class": "out_of_scope",
+   "reason": "星（他キャラの資源）"
+  },
+  "cmd:PlayerCmd.MimicRestSiteHeal": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "cmd:PlayerCmd.SetEnergy": {
+   "class": "public-missing",
+   "visible": "エナジーの増減（量と原因）。結果は player.energy に出る",
+   "proposed_key": "battle.combat_log[kind=energy]",
+   "where": "combat_log（新設）",
+   "issues": [],
+   "scope": "ironclad"
+  },
+  "cmd:PlayerCmd.SetGold": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"gold\"] = player.Gold;"
+   ],
+   "proposed_key": "player.gold"
+  },
+  "cmd:PlayerCmd.SetStars": {
+   "class": "out_of_scope",
+   "reason": "星（他キャラの資源）"
+  },
+  "cmd:PotionCmd.Discard": {
+   "class": "public-missing",
+   "visible": "ポーションを捨てる",
+   "proposed_key": "battle.combat_log[kind=potion,action=discarded]",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ],
+   "scope": "ironclad"
+  },
+  "cmd:PotionCmd.TryToProcure": {
+   "class": "public-missing",
+   "visible": "ポーションの取得（戦闘中の生成を含む）",
+   "proposed_key": "battle.combat_log[kind=potion,action=procured]",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "cmd:PowerCmd.Apply": {
+   "class": "public-missing",
+   "visible": "パワーの付与・増減・消滅（対象・量・付与元）。結果は status に出る",
+   "proposed_key": "battle.combat_log[kind=power]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:PowerCmd.Decrement": {
+   "class": "public-missing",
+   "visible": "パワーの付与・増減・消滅（対象・量・付与元）。結果は status に出る",
+   "proposed_key": "battle.combat_log[kind=power]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:PowerCmd.FindExistingInstanceForStacking": {
+   "class": "internal",
+   "reason": "重ねる先を探す下請け"
+  },
+  "cmd:PowerCmd.ModifyAmount": {
+   "class": "public-missing",
+   "visible": "パワーの付与・増減・消滅（対象・量・付与元）。結果は status に出る",
+   "proposed_key": "battle.combat_log[kind=power]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:PowerCmd.Remove": {
+   "class": "public-missing",
+   "visible": "パワーの付与・増減・消滅（対象・量・付与元）。結果は status に出る",
+   "proposed_key": "battle.combat_log[kind=power]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:PowerCmd.TickDownDuration": {
+   "class": "public-missing",
+   "visible": "パワーの付与・増減・消滅（対象・量・付与元）。結果は status に出る",
+   "proposed_key": "battle.combat_log[kind=power]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "cmd:RelicCmd.Melt": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"melted\"] = relic.IsMelted,"
+   ],
+   "proposed_key": "player.relics[].melted"
+  },
+  "cmd:RelicCmd.Obtain": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"relics\"] = relics;"
+   ],
+   "proposed_key": "player.relics"
+  },
+  "cmd:RelicCmd.Remove": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"relics\"] = relics;"
+   ],
+   "proposed_key": "player.relics"
+  },
+  "cmd:RelicCmd.Replace": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"relics\"] = relics;"
+   ],
+   "proposed_key": "player.relics"
+  },
+  "cmd:RewardsCmd.GenerateCustom": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "cmd:RewardsCmd.GenerateForRoomEnd": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "cmd:RewardsCmd.OfferCustom": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "cmd:RewardsCmd.OfferForRoomEnd": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "computed:CardFactory.CreateForMerchant": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"shop\"] = BuildShopState("
+   ],
+   "proposed_key": "shop"
+  },
+  "computed:CardFactory.CreateForReward": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"card_reward\"] = BuildCardRewardState("
+   ],
+   "proposed_key": "card_reward"
+  },
+  "computed:CardFactory.CreateRandomCardForTransform": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"transformation_options\"] = transformationOptions;"
+   ],
+   "proposed_key": "player.transformation_options",
+   "reason": "候補は exposed。結果は乱数"
+  },
+  "computed:CardFactory.FilterForCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"generation_pool\"] = BuildGenerationPool(player);"
+   ],
+   "proposed_key": "player.generation_pool",
+   "reason": "候補の集合（公開の pool）。どれが出るかは乱数で、出たときに公開"
+  },
+  "computed:CardFactory.GetDefaultTransformationOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"transformation_options\"] = transformationOptions;"
+   ],
+   "proposed_key": "player.transformation_options"
+  },
+  "computed:CardFactory.GetDistinctForCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"generation_pool\"] = BuildGenerationPool(player);"
+   ],
+   "proposed_key": "player.generation_pool",
+   "reason": "候補の集合（公開の pool）。どれが出るかは乱数で、出たときに公開"
+  },
+  "computed:CardFactory.GetForCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"generation_pool\"] = BuildGenerationPool(player);"
+   ],
+   "proposed_key": "player.generation_pool",
+   "reason": "候補の集合（公開の pool）。どれが出るかは乱数で、出たときに公開"
+  },
+  "computed:Hook.ModifyAttackHitCount": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardPreview.cs: preview[\"hits\"] = hits;"
+   ],
+   "proposed_key": "hand[].preview.hits",
+   "reason": "Thumbscrew などの回数は preview に入る"
+  },
+  "computed:Hook.ModifyBlock": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardPreview.cs: preview[\"block\"] = block;"
+   ],
+   "proposed_key": "hand[].preview.block"
+  },
+  "computed:Hook.ModifyCardBeingAddedToDeck": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"deck\"] = deck;"
+   ],
+   "proposed_key": "player.deck",
+   "reason": "FrozenEgg などの強化。結果が deck に出る"
+  },
+  "computed:Hook.ModifyCardPlayCount": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"play_count\"] = play.PlayCount"
+   ],
+   "proposed_key": "card_resolution_events[kind=play].play_count",
+   "reason": "撃った後に出る。撃つ前の回数は修正元のパワー・レリック（state inventory）から決まる"
+  },
+  "computed:Hook.ModifyCardPlayResultLocation": {
+   "class": "public-missing",
+   "visible": "撃った札の行き先（CorruptionPower・NostalgiaPower・ReboundPower）。札が飛ぶのが見える",
+   "proposed_key": "battle.combat_log[kind=pile_move]{uid, from, to, position, reason=play_result, modifier}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771,
+    327
+   ]
+  },
+  "computed:Hook.ModifyCardRewardAlternatives": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"card_reward\"] = BuildCardRewardState("
+   ],
+   "proposed_key": "card_reward"
+  },
+  "computed:Hook.ModifyCardRewardCreationOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"card_reward\"] = BuildCardRewardState("
+   ],
+   "proposed_key": "card_reward"
+  },
+  "computed:Hook.ModifyCardRewardUpgradeOdds": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ModifyDamage": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"vs_targets\"] = vsTargets;",
+    "McpMod.StateBuilder.cs: state[\"intents\"] = intents;"
+   ],
+   "proposed_key": "hand[].vs_targets / enemies[].intents"
+  },
+  "computed:Hook.ModifyEnergyCostInCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"energy_cost\"] = BuildCardEnergyCostState(card);"
+   ],
+   "proposed_key": "hand[].energy_cost"
+  },
+  "computed:Hook.ModifyExtraRestSiteHealText": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "computed:Hook.ModifyExtraRestSiteMendText": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "computed:Hook.ModifyGeneratedMap": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map"
+  },
+  "computed:Hook.ModifyGeneratedMapLate": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map"
+  },
+  "computed:Hook.ModifyGoldGained": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"gold\"] = player.Gold;"
+   ],
+   "proposed_key": "player.gold"
+  },
+  "computed:Hook.ModifyHandDraw": {
+   "class": "public-missing",
+   "visible": "手番開始の通常ドローの枚数と、それを変えた効果（AfterModifyingHandDraw の通知が出る）",
+   "proposed_key": "battle.combat_log[kind=turn_phase,phase=hand_draw]{amount, modifiers[]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771,
+    1088
+   ]
+  },
+  "computed:Hook.ModifyHpLost": {
+   "class": "public-missing",
+   "visible": "HP の損失量と、それを変えた効果",
+   "proposed_key": "battle.combat_log[kind=damage]{blocked, hp_lost, modifiers[]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "computed:Hook.ModifyKeywordsInCombat": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"keywords\"] = BuildHoverTips(card.HoverTips)"
+   ],
+   "proposed_key": "hand[].keywords",
+   "reason": "HexPower など。結果の keyword が札に出る"
+  },
+  "computed:Hook.ModifyMaxEnergy": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"max_energy\"] = combatState.MaxEnergy;"
+   ],
+   "proposed_key": "player.max_energy"
+  },
+  "computed:Hook.ModifyMerchantCardCreationResults": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"shop\"] = BuildShopState("
+   ],
+   "proposed_key": "shop"
+  },
+  "computed:Hook.ModifyMerchantCardPool": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ModifyMerchantCardRarity": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ModifyMerchantPrice": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: [\"price\"] = entry.Cost,"
+   ],
+   "proposed_key": "shop.*.price"
+  },
+  "computed:Hook.ModifyNextEvent": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ModifyOddsIncreaseForUnrolledRoomType": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ModifyPowerAmountGiven": {
+   "class": "public-missing",
+   "visible": "与える側の付与量の修正（UnsettlingLamp）",
+   "proposed_key": "battle.combat_log[kind=power]{amount_requested, amount_applied, modifiers[]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "computed:Hook.ModifyPowerAmountReceived": {
+   "class": "public-missing",
+   "visible": "付与量の修正（ArtifactPower・RuinedHelmet）",
+   "proposed_key": "battle.combat_log[kind=power]{amount_requested, amount_applied, modifiers[]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "computed:Hook.ModifyPreBlockDamageTarget": {
+   "class": "public-missing",
+   "visible": "攻撃の受け手の差し替え。誰が受けたかは見える",
+   "proposed_key": "battle.combat_log[kind=damage]{receiver, original_target}",
+   "where": "combat_log（新設）",
+   "issues": [],
+   "scope": "ironclad"
+  },
+  "computed:Hook.ModifyRestSiteHealAmount": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "computed:Hook.ModifyRestSiteHealRewards": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "computed:Hook.ModifyRestSiteOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "computed:Hook.ModifyRewards": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "computed:Hook.ModifyShuffleOrder": {
+   "class": "hidden",
+   "reason": "山札の並び（シャッフルの結果）。PerfectFit の並べ替えも山札の順なので非公開"
+  },
+  "computed:Hook.ModifyStarCost": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"star_cost_state\"] = BuildCardStarCostState(card);"
+   ],
+   "proposed_key": "hand[].star_cost_state"
+  },
+  "computed:Hook.ModifyUnblockedDamageTarget": {
+   "class": "public-missing",
+   "visible": "ブロック後のダメージの受け手の差し替え",
+   "proposed_key": "battle.combat_log[kind=damage]{receiver, original_target}",
+   "where": "combat_log（新設）",
+   "issues": [],
+   "scope": "ironclad"
+  },
+  "computed:Hook.ModifyUnknownMapPointRoomTypes": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ModifyXValue": {
+   "class": "public-missing",
+   "visible": "撃つ前の X の値（ChemicalX の修正込み）と、X 多段の札の回数",
+   "proposed_key": "hand[].preview.x_value と X 多段の hits",
+   "where": "手札の札の preview（McpMod.CardPreview.cs）。撃った後の captured_x_value は exposed",
+   "issues": [
+    848
+   ]
+  },
+  "computed:Hook.ShouldAddToDeck": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"deck\"] = deck;"
+   ],
+   "proposed_key": "player.deck"
+  },
+  "computed:Hook.ShouldAfflict": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldAllowAncient": {
+   "class": "hidden",
+   "reason": "確率・抽選の重み（結果は出たときに公開）"
+  },
+  "computed:Hook.ShouldAllowFreeTravel": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map"
+  },
+  "computed:Hook.ShouldAllowHitting": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.EnemyHittable.cs: try { state[\"hittable\"] = creature.IsHittable; }"
+   ],
+   "proposed_key": "enemies[].hittable"
+  },
+  "computed:Hook.ShouldAllowMerchantCardRemoval": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"shop\"] = BuildShopState("
+   ],
+   "proposed_key": "shop"
+  },
+  "computed:Hook.ShouldAllowSelectingMoreCardRewards": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "computed:Hook.ShouldAllowTargeting": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.PotionUsabilityLive.cs: && Hook.ShouldAllowTargeting(creature.CombatState!, creature, out _)"
+   ],
+   "proposed_key": "potions[].valid_target_entity_ids",
+   "reason": "ポーションの対象で使う。札の対象（vs_targets）がこの判定で絞られるかは未確認"
+  },
+  "computed:Hook.ShouldClearBlock": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldCreatureBeRemovedFromCombatAfterDeath": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldDie": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldDisableRemainingRestSiteOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site"
+  },
+  "computed:Hook.ShouldDraw": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldEtherealTrigger": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldFlush": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldForcePotionReward": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "computed:Hook.ShouldGenerateTreasure": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "computed:Hook.ShouldPlay": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CardDetails.cs: ReadCardDetailValue(state, reasons, \"can_play\""
+   ],
+   "proposed_key": "hand[].can_play"
+  },
+  "computed:Hook.ShouldPlayerResetEnergy": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldPowerBeRemovedOnDeath": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldProceedToNextMapPoint": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map"
+  },
+  "computed:Hook.ShouldProcurePotion": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldRefillMerchantEntry": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"shop\"] = BuildShopState("
+   ],
+   "proposed_key": "shop"
+  },
+  "computed:Hook.ShouldStopCombatFromEnding": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.ShouldTakeExtraTurn": {
+   "class": "internal",
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+  },
+  "computed:Hook.TryModifyCardRewardOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"card_reward\"] = BuildCardRewardState("
+   ],
+   "proposed_key": "card_reward"
+  },
+  "computed:Hook.TryReplaceDefaultRoomRewards": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards"
+  },
+  "computed:PotionFactory.CreateRandomPotionInCombat": {
+   "class": "hidden",
+   "reason": "乱数の結果（出たときに公開）。候補は GetPotionOptions の行"
+  },
+  "computed:PotionFactory.CreateRandomPotionOutOfCombat": {
+   "class": "hidden",
+   "reason": "乱数の結果（出たときに公開）。候補は GetPotionOptions の行"
+  },
+  "computed:PotionFactory.CreateRandomPotionsOutOfCombat": {
+   "class": "hidden",
+   "reason": "乱数の結果（出たときに公開）。候補は GetPotionOptions の行"
+  },
+  "computed:PotionFactory.GetPotionOptions": {
+   "class": "public-missing",
+   "visible": "ランダム生成のポーションの候補（公開のプール）。Alchemize・EntropicBrew の評価に要る",
+   "proposed_key": "player.potion_generation_pool",
+   "where": "player（generation_pool の隣。McpMod.GenerationPool.cs と同じ形）",
+   "issues": [
+    991
+   ]
+  },
+  "computed:RelicFactory.PullNextRelicForRewardFromFront": {
+   "class": "hidden",
+   "reason": "レリックの袋の順・レア度の抽選（出たときに公開）"
+  },
+  "computed:RelicFactory.PullNextRelicFromBack": {
+   "class": "hidden",
+   "reason": "レリックの袋の順・レア度の抽選（出たときに公開）"
+  },
+  "computed:RelicFactory.PullNextRelicFromFront": {
+   "class": "hidden",
+   "reason": "レリックの袋の順・レア度の抽選（出たときに公開）"
+  },
+  "computed:RelicFactory.RollRarity": {
+   "class": "hidden",
+   "reason": "レリックの袋の順・レア度の抽選（出たときに公開）"
+  },
+  "computed:RelicFactory.RollRarityForReward": {
+   "class": "hidden",
+   "reason": "レリックの袋の順・レア度の抽選（出たときに公開）"
+  },
+  "history:ArrowShotEntry": {
+   "class": "out_of_scope",
+   "reason": "他キャラの仕組み（オーブ・矢・星・召喚）"
+  },
+  "history:BlockGainedEntry": {
+   "class": "public-missing",
+   "visible": "ブロック獲得（受け手・量・札）。今は件数だけ",
+   "proposed_key": "battle.combat_log[kind=block]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:CardAfflictedEntry": {
+   "class": "public-missing",
+   "visible": "苦悩が付いた札（個体と種類）。今は拘束の件数だけ",
+   "proposed_key": "battle.combat_log[kind=card_change,change=afflict]{uid, affliction}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:CardDiscardedEntry": {
+   "class": "public-missing",
+   "visible": "カードの効果で捨てた札（個体と順。CardCmd.DiscardAndDraw が記録。手番終了の手札処理は CardPileCmd.Add なので記録されない）",
+   "proposed_key": "battle.combat_log[kind=discard]{uid, reason}",
+   "where": "combat_log（新設）",
+   "issues": [
+    790
+   ]
+  },
+  "history:CardDrawnEntry": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"draw\""
+   ],
+   "proposed_key": "card_resolution_events[kind=draw]"
+  },
+  "history:CardExhaustedEntry": {
+   "class": "public-missing",
+   "visible": "廃棄された札（個体と順。CardCmd.Exhaust が記録）。今は手番内の件数だけ",
+   "proposed_key": "battle.combat_log[kind=exhaust]{uid, caused_by_ethereal, source}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "history:CardGeneratedEntry": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"kind\"] = \"generated\""
+   ],
+   "proposed_key": "card_resolution_events[kind=generated]",
+   "reason": "行き先の山と位置は出ていない（pile_move の行で扱う）"
+  },
+  "history:CardPlayFinishedEntry": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"is_auto_play\"] = play.IsAutoPlay"
+   ],
+   "proposed_key": "card_resolution_events[kind=play,phase=finished]"
+  },
+  "history:CardPlayStartedEntry": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"is_auto_play\"] = play.IsAutoPlay"
+   ],
+   "proposed_key": "card_resolution_events[kind=play,phase=started]"
+  },
+  "history:CreatureAttackedEntry": {
+   "class": "public-missing",
+   "visible": "攻撃（攻撃者・各ヒットの結果）",
+   "proposed_key": "battle.combat_log[kind=attack]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:DamageReceivedEntry": {
+   "class": "public-missing",
+   "visible": "被ダメージ（受け手・与え手・札・ブロック・HP 損失・撃破）。今は件数だけ",
+   "proposed_key": "battle.combat_log[kind=damage]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:EnergySpentEntry": {
+   "class": "public-missing",
+   "visible": "エナジーの消費（量・札）",
+   "proposed_key": "battle.combat_log[kind=energy,change=spent]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:MonsterPerformedMoveEntry": {
+   "class": "public-missing",
+   "visible": "敵が行った行動（move id・対象）。今は move_state の直前の行動だけ",
+   "proposed_key": "battle.combat_log[kind=monster_move]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:OrbChanneledEntry": {
+   "class": "out_of_scope",
+   "reason": "他キャラの仕組み（オーブ・矢・星・召喚）"
+  },
+  "history:PotionUsedEntry": {
+   "class": "public-missing",
+   "visible": "ポーションの使用（種類・対象）",
+   "proposed_key": "battle.combat_log[kind=potion,action=used]",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "history:PowerReceivedEntry": {
+   "class": "public-missing",
+   "visible": "パワーの付与（対象・量・付与元）",
+   "proposed_key": "battle.combat_log[kind=power]",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "history:StarsModifiedEntry": {
+   "class": "out_of_scope",
+   "reason": "他キャラの仕組み（オーブ・矢・星・召喚）"
+  },
+  "history:SummonedEntry": {
+   "class": "out_of_scope",
+   "reason": "他キャラの仕組み（オーブ・矢・星・召喚）"
+  },
+  "hook:Hook.AfterActEntered": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterAttack": {
+   "class": "public-missing",
+   "visible": "攻撃の後に働く効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterAutoPostPlayPhaseEntered": {
+   "class": "public-missing",
+   "visible": "手番終了の自動プレイ段階の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    783,
+    1088
+   ]
+  },
+  "hook:Hook.AfterAutoPrePlayPhaseEntered": {
+   "class": "public-missing",
+   "visible": "手番開始の自動プレイ段階の効果（Early・通常・Late）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771
+   ]
+  },
+  "hook:Hook.AfterBlockBroken": {
+   "class": "public-missing",
+   "visible": "ブロックが割れたときの効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterBlockCleared": {
+   "class": "public-missing",
+   "visible": "手番開始でブロックが消えた後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterBlockGained": {
+   "class": "public-missing",
+   "visible": "ブロック獲得後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCardChangedPiles": {
+   "class": "public-missing",
+   "visible": "札が山を移った後の効果。札の移動そのものも見える。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    327,
+    771,
+    792,
+    242,
+    996,
+    997
+   ]
+  },
+  "hook:Hook.AfterCardDrawn": {
+   "class": "public-missing",
+   "visible": "引いた札に反応する効果の順（Early と通常の 2 巡）。ドロー自体は exposed。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCardEnteredCombat": {
+   "class": "public-missing",
+   "visible": "札が戦闘に入ったときの効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCardExhausted": {
+   "class": "public-missing",
+   "visible": "廃棄に反応する効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "hook:Hook.AfterCardGeneratedForCombat": {
+   "class": "public-missing",
+   "visible": "生成札に反応する効果。生成自体は exposed。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCardPlayed": {
+   "class": "public-missing",
+   "visible": "プレイ後に働く効果の順（通常と Late の 2 巡）。play の行自体は exposed。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCombatEnd": {
+   "class": "public-missing",
+   "visible": "戦闘終了時の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCombatVictory": {
+   "class": "public-missing",
+   "visible": "勝利時の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCreatureAddedToCombat": {
+   "class": "public-missing",
+   "visible": "敵・召喚が戦闘に加わったときの効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterCurrentHpChanged": {
+   "class": "public-missing",
+   "visible": "HP の変化に反応する効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterDamageGiven": {
+   "class": "public-missing",
+   "visible": "与ダメージ後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterDamageReceived": {
+   "class": "public-missing",
+   "visible": "被ダメージ後の効果の順（通常と Late）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterDeath": {
+   "class": "public-missing",
+   "visible": "死亡後の効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterEnergyReset": {
+   "class": "public-missing",
+   "visible": "エナジーの再設定後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterGoldGained": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"gold\"] = player.Gold;"
+   ],
+   "proposed_key": "player.gold",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterHandEmptied": {
+   "class": "public-missing",
+   "visible": "手札が空になったときの効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterItemPurchased": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"shop\"] = BuildShopState("
+   ],
+   "proposed_key": "shop",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterMapGenerated": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map.nodes",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterModifyingBlockAmount": {
+   "class": "public-missing",
+   "visible": "ブロック量を修正した効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterModifyingCardPlayCount": {
+   "class": "public-missing",
+   "visible": "プレイ回数を増やした効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterModifyingCardRewardOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"card_reward\"] = BuildCardRewardState("
+   ],
+   "proposed_key": "card_reward",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterModifyingDamageAmount": {
+   "class": "public-missing",
+   "visible": "ダメージを修正した効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterModifyingGoldGained": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"gold\"] = player.Gold;"
+   ],
+   "proposed_key": "player.gold",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterModifyingHandDraw": {
+   "class": "public-missing",
+   "visible": "手番開始の手札の枚数を修正した効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771,
+    1088
+   ]
+  },
+  "hook:Hook.AfterModifyingHpLostAfterOsty": {
+   "class": "public-missing",
+   "visible": "HP 損失を修正した効果が働いた通知（後段）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterModifyingHpLostBeforeOsty": {
+   "class": "public-missing",
+   "visible": "HP 損失を修正した効果が働いた通知（前段）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterModifyingPowerAmountReceived": {
+   "class": "public-missing",
+   "visible": "付与量を修正した効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterModifyingRewards": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterPlayerTurnStart": {
+   "class": "public-missing",
+   "visible": "手番開始後の効果の順（Early・通常・Late）。ChoicesParadox・EntropyPower・GamblingChip などの上書きで選択が開く。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771,
+    1115,
+    1088
+   ],
+   "in_progress": "#1115（段階・残り枚数の部分）"
+  },
+  "hook:Hook.AfterPotionDiscarded": {
+   "class": "public-missing",
+   "visible": "ポーションを捨てた後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "hook:Hook.AfterPotionProcured": {
+   "class": "public-missing",
+   "visible": "ポーション取得後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "hook:Hook.AfterPotionUsed": {
+   "class": "public-missing",
+   "visible": "ポーション使用後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "hook:Hook.AfterPowerAmountChanged": {
+   "class": "public-missing",
+   "visible": "パワーの量が変わった後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterPreventingBlockClear": {
+   "class": "public-missing",
+   "visible": "ブロックの消失を止めた効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterPreventingDeath": {
+   "class": "public-missing",
+   "visible": "死亡を防いだ効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterPreventingDraw": {
+   "class": "public-missing",
+   "visible": "ドローを止めた効果が働いた通知。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.AfterRestSiteHeal": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterRestSiteSmith": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rest_site\"] = BuildRestSiteState("
+   ],
+   "proposed_key": "rest_site / player.deck",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterRewardTaken": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterRoomEntered": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"relics\"] = relics;"
+   ],
+   "proposed_key": "player.relics / hp / gold",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.AfterShuffle": {
+   "class": "public-missing",
+   "visible": "シャッフル後の効果。StratagemPower の上書きで選択が開く。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    327,
+    1115
+   ],
+   "in_progress": "#1115（段階・残り枚数の部分）"
+  },
+  "hook:Hook.AfterSideTurnEnd": {
+   "class": "public-missing",
+   "visible": "陣営の手番終了後の効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "hook:Hook.AfterSideTurnStart": {
+   "class": "public-missing",
+   "visible": "陣営の手番開始後の効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771
+   ]
+  },
+  "hook:Hook.AfterTakingExtraTurn": {
+   "class": "public-missing",
+   "visible": "追加の手番の後の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeAttack": {
+   "class": "public-missing",
+   "visible": "攻撃の直前に働く効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeBlockGained": {
+   "class": "public-missing",
+   "visible": "ブロック獲得の直前の通知（アイアンクラッドの範囲に上書きは無い。CreatureCmd.GainBlock の中）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeCardAutoPlayed": {
+   "class": "public-missing",
+   "visible": "自動プレイの直前の通知（上書きは無い。CardCmd.AutoPlay の中）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeCardPlayed": {
+   "class": "public-missing",
+   "visible": "プレイ直前に働く効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeCardRemoved": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"deck\"] = deck;"
+   ],
+   "proposed_key": "player.deck",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.BeforeCombatRewardOffered": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"rewards\"] = BuildRewardsState("
+   ],
+   "proposed_key": "rewards",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.BeforeCombatStart": {
+   "class": "public-missing",
+   "visible": "戦闘開始時の効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeDamageReceived": {
+   "class": "public-missing",
+   "visible": "被ダメージ直前の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeDeath": {
+   "class": "public-missing",
+   "visible": "死亡直前の効果（盗んだ札の返却など）。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeFlush": {
+   "class": "public-missing",
+   "visible": "手番終了の手札処理の直前の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "hook:Hook.BeforeHandDraw": {
+   "class": "public-missing",
+   "visible": "手番開始の通常ドローの直前の効果（通常と Late）。Toolbox の上書きで選択が開く。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771,
+    1115,
+    1088
+   ],
+   "in_progress": "#1115（段階・残り枚数の部分）"
+  },
+  "hook:Hook.BeforePotionUsed": {
+   "class": "public-missing",
+   "visible": "ポーション使用直前の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "hook:Hook.BeforePowerAmountChanged": {
+   "class": "public-missing",
+   "visible": "パワーの量が変わる直前の効果。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "hook:Hook.BeforeRoomEntered": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"nodes\"] = nodes;"
+   ],
+   "proposed_key": "map / state_type",
+   "reason": "戦闘外（または結果だけが残る）。結果は state に出る。通知の順は戦闘外の判断に関わらない"
+  },
+  "hook:Hook.BeforeSideTurnEnd": {
+   "class": "public-missing",
+   "visible": "陣営の手番終了直前の効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "hook:Hook.BeforeSideTurnStart": {
+   "class": "public-missing",
+   "visible": "陣営の手番開始直前の効果の順。光る効果の順と、その間に開く選択の段階",
+   "proposed_key": "battle.combat_log[kind=hook]{hook, phase(early/normal/late), listeners[{kind,id,owner,uid|hidden_reason}]}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771
+   ]
+  },
+  "manual:CardModel.OnPlayWrapper": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: [\"is_auto_play\"] = play.IsAutoPlay"
+   ],
+   "proposed_key": "card_resolution_events[kind=play]",
+   "reason": "開始・自動プレイの子・完了の順"
+  },
+  "manual:CardPileCmd.DrawInternal": {
+   "class": "public-missing",
+   "visible": "1 回のドロー命令の残り枚数（drawsRequested - i）。from_hand_draw は exposed",
+   "proposed_key": "card_resolution_events[kind=draw]{request_id, remaining}",
+   "where": "card_resolution_events の draw の行に足す",
+   "issues": [
+    1115,
+    1088
+   ],
+   "in_progress": "#1115"
+  },
+  "manual:CardReward": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"card_reward\"] = BuildCardRewardState("
+   ],
+   "proposed_key": "card_reward"
+  },
+  "manual:CardSelectCmd.skip_and_result": {
+   "class": "public-missing",
+   "visible": "選択の結果（選んだ札・skip した提示・何回目の解決か）。画面が閉じた後には残らない",
+   "proposed_key": "battle.combat_log[kind=selection]{opener, source, offered_uids|ids, chosen, skipped, stage}",
+   "where": "combat_log（新設）",
+   "issues": [
+    997,
+    994,
+    1115
+   ]
+  },
+  "manual:CombatState.IterateHookListeners": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: row[\"remaining_listeners\"] = BuildHookListenerRows"
+   ],
+   "proposed_key": "<screen>.choice_source.hook.remaining_listeners",
+   "reason": "listener の順（陣営→生物のパワー→レリック→ポーション→オーブ→山の札）。選択画面の中だけ出る。山札の札の位置は非公開"
+  },
+  "manual:EntropyPower.selection_stage": {
+   "class": "public-missing",
+   "visible": "エントロピーの選択の段階（何枚目・後続の段階）",
+   "proposed_key": "<screen>.decision_context{stage, stages_total, parent}",
+   "where": "decision_context（新設）",
+   "issues": [
+    1115
+   ],
+   "in_progress": "#1115"
+  },
+  "manual:EventModel.CurrentOptions": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"event\"] = BuildEventState("
+   ],
+   "proposed_key": "event.options"
+  },
+  "manual:PotionModel.OnUseWrapper": {
+   "class": "public-missing",
+   "visible": "ポーションの使用の順（BeforePotionUsed → 効果 → AfterPotionUsed → 空の手札の確認）",
+   "proposed_key": "battle.combat_log[kind=potion,action=used] と hook の行",
+   "where": "combat_log（新設）",
+   "issues": [
+    991
+   ]
+  },
+  "manual:PowerModel.Flash": {
+   "class": "public-missing",
+   "visible": "パワーが光る（効果が働いた合図）",
+   "proposed_key": "battle.combat_log[kind=hook].listeners[].flashed（または kind=flash の行）",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "manual:RelicModel.Flash": {
+   "class": "public-missing",
+   "visible": "レリックが光る（効果が働いた合図）。hook の行の listener のうち実際に働いたものの印",
+   "proposed_key": "battle.combat_log[kind=hook].listeners[].flashed（または kind=flash の行）",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "manual:StratagemPower.selection_stage": {
+   "class": "public-missing",
+   "visible": "計略の選択の段階（シャッフル後の選択・続きの解決）",
+   "proposed_key": "<screen>.decision_context{stage, stages_total, parent}",
+   "where": "decision_context（新設）",
+   "issues": [
+    1115
+   ],
+   "in_progress": "#1115"
+  },
+  "phase:CombatManager.AddTurnEndCardToPlayPileWithDelay": {
+   "class": "cosmetic",
+   "reason": "終了時の札の演出（待ち）"
+  },
+  "phase:CombatManager.AwaitTurnEndCardTween": {
+   "class": "cosmetic",
+   "reason": "終了時の札の演出（待ち）"
+  },
+  "phase:CombatManager.CheckForEmptyHand": {
+   "class": "internal",
+   "reason": "手札が空かの確認。結果は hook:Hook.AfterHandEmptied の行"
+  },
+  "phase:CombatManager.DoTurnEnd": {
+   "class": "public-missing",
+   "visible": "手番終了の札の処理（エセリアルの判定と廃棄、終了時の効果を持つ札）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "phase:CombatManager.EndCombatInternal": {
+   "class": "public-missing",
+   "visible": "戦闘の終了。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "phase:CombatManager.EndEnemyTurnInternal": {
+   "class": "public-missing",
+   "visible": "敵の手番の終了。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "phase:CombatManager.EndPlayerTurnPhaseOneInternal": {
+   "class": "public-missing",
+   "visible": "手番終了の第 1 段（AfterAutoPostPlayPhaseEntered・BeforeSideTurnEnd・BeforeFlush）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "phase:CombatManager.EndPlayerTurnPhaseTwoInternal": {
+   "class": "public-missing",
+   "visible": "手番終了の第 2 段（AfterSideTurnEnd）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "phase:CombatManager.FlushPlayerHand": {
+   "class": "public-missing",
+   "visible": "手札の処理（保留と捨て札。CardPileCmd.Add で移すので CardDiscardedEntry は残らない）。どの札が残りどの札が流れたかが見える。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "phase:CombatManager.HandlePlayerDeath": {
+   "class": "out_of_scope",
+   "reason": "マルチプレイ（味方の死亡）"
+  },
+  "phase:CombatManager.IsCombatEnding": {
+   "class": "internal",
+   "reason": "終戦中かの判定（ended_combat で終戦は出る）"
+  },
+  "phase:CombatManager.RemoveDeadPlayerCardsFromCombat": {
+   "class": "out_of_scope",
+   "reason": "マルチプレイ（味方の死亡）"
+  },
+  "phase:CombatManager.ResolveTurnEndCardEffects": {
+   "class": "public-missing",
+   "visible": "終了時の効果を持つ札 1 枚ずつの解決（CardPileCmd.Add・CardCmd.Exhaust）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    1088
+   ]
+  },
+  "phase:CombatManager.RunAutoPrePlayPhase": {
+   "class": "public-missing",
+   "visible": "手番開始の自動プレイ段階。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771
+   ]
+  },
+  "phase:CombatManager.SetupPlayerTurn": {
+   "class": "public-missing",
+   "visible": "プレイヤーの手番の準備（エナジー・BeforeHandDraw・通常ドロー・AfterPlayerTurnStart）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771,
+    1115,
+    1088
+   ],
+   "in_progress": "#1115（手番開始の段階の一部）"
+  },
+  "phase:CombatManager.StartCombatInternal": {
+   "class": "public-missing",
+   "visible": "戦闘開始（BeforeCombatStart）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "phase:CombatManager.StartTurn": {
+   "class": "public-missing",
+   "visible": "陣営の手番の開始（ブロックの消失・BeforeSideTurnStart/AfterSideTurnStart）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": [
+    771
+   ]
+  },
+  "phase:CombatManager.SwitchFromPlayerToEnemySide": {
+   "class": "public-missing",
+   "visible": "敵の手番へ（追加の手番の判定・AfterTakingExtraTurn）。今は round・is_play_phase だけ",
+   "proposed_key": "battle.combat_log[kind=turn_phase]{phase, side, round, player}",
+   "where": "combat_log（新設）",
+   "issues": []
+  },
+  "select:CardSelectCmd.FromChooseABundleScreen": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"bundle_select\"] = BuildBundleSelectState("
+   ],
+   "proposed_key": "bundle_select"
+  },
+  "select:CardSelectCmd.FromChooseACardScreen": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromChooseACardScreen\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectCmd.FromCombatPile": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromCombatPile\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectCmd.FromDeckForEnchantment": {
+   "class": "public-missing",
+   "visible": "戦闘外のデッキ選択。候補・prompt・枚数は exposed（card_select）。開いたもの（レリック・イベント・休憩所）は見えるが出ていない",
+   "proposed_key": "card_select.decision_context{opener, source{kind,id}}",
+   "where": "decision_context（新設）",
+   "issues": []
+  },
+  "select:CardSelectCmd.FromDeckForRemoval": {
+   "class": "public-missing",
+   "visible": "戦闘外のデッキ選択。候補・prompt・枚数は exposed（card_select）。開いたもの（レリック・イベント・休憩所）は見えるが出ていない",
+   "proposed_key": "card_select.decision_context{opener, source{kind,id}}",
+   "where": "decision_context（新設）",
+   "issues": []
+  },
+  "select:CardSelectCmd.FromDeckForTransformation": {
+   "class": "public-missing",
+   "visible": "戦闘外のデッキ選択。候補・prompt・枚数は exposed（card_select）。開いたもの（レリック・イベント・休憩所）は見えるが出ていない",
+   "proposed_key": "card_select.decision_context{opener, source{kind,id}}",
+   "where": "decision_context（新設）",
+   "issues": []
+  },
+  "select:CardSelectCmd.FromDeckForUpgrade": {
+   "class": "public-missing",
+   "visible": "戦闘外のデッキ選択。候補・prompt・枚数は exposed（card_select）。開いたもの（レリック・イベント・休憩所）は見えるが出ていない",
+   "proposed_key": "card_select.decision_context{opener, source{kind,id}}",
+   "where": "decision_context（新設）",
+   "issues": []
+  },
+  "select:CardSelectCmd.FromDeckGeneric": {
+   "class": "public-missing",
+   "visible": "戦闘外のデッキ選択。候補・prompt・枚数は exposed（card_select）。開いたもの（レリック・イベント・休憩所）は見えるが出ていない",
+   "proposed_key": "card_select.decision_context{opener, source{kind,id}}",
+   "where": "decision_context（新設）",
+   "issues": []
+  },
+  "select:CardSelectCmd.FromHand": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromHand\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectCmd.FromHandForDiscard": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromHandForDiscard\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectCmd.FromHandForUpgrade": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromHandForUpgrade\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectCmd.FromSimpleGrid": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromSimpleGrid\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectCmd.FromSimpleGridForRewards": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromSimpleGridForRewards\", new[]"
+   ],
+   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
+   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+  },
+  "select:CardSelectorPrefs.Cancelable": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"can_cancel\"] = canCancel;"
+   ],
+   "proposed_key": "<screen>.can_cancel"
+  },
+  "select:CardSelectorPrefs.Comparison": {
+   "class": "cosmetic",
+   "reason": "選択画面の並び・見た目（候補と選べる数は変わらない）"
+  },
+  "select:CardSelectorPrefs.MaxSelect": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"min_select\"] = min;"
+   ],
+   "proposed_key": "<screen>.max_select"
+  },
+  "select:CardSelectorPrefs.MinSelect": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"min_select\"] = min;"
+   ],
+   "proposed_key": "<screen>.min_select"
+  },
+  "select:CardSelectorPrefs.PretendCardsCanBePlayed": {
+   "class": "cosmetic",
+   "reason": "選択画面の並び・見た目（候補と選べる数は変わらない）"
+  },
+  "select:CardSelectorPrefs.Prompt": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"prompt\"] = prompt;"
+   ],
+   "proposed_key": "<screen>.prompt"
+  },
+  "select:CardSelectorPrefs.RequireManualConfirmation": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: state[\"can_confirm\"] = canConfirm;"
+   ],
+   "proposed_key": "<screen>.can_confirm"
+  },
+  "select:CardSelectorPrefs.ShouldGlowGold": {
+   "class": "cosmetic",
+   "reason": "選択画面の並び・見た目（候補と選べる数は変わらない）"
+  },
+  "select:CardSelectorPrefs.UnpoweredPreviews": {
+   "class": "cosmetic",
+   "reason": "選択画面の並び・見た目（候補と選べる数は変わらない）"
+  },
+  "select:RelicSelectCmd.FromChooseARelicScreen": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"relic_select\"] = BuildRelicSelectState("
+   ],
+   "proposed_key": "relic_select"
+  }
+ },
+ "phase2": "## phase 2 の形（提案）\n\npublic-missing を 1 本の MOD PR で出すなら、行ごとに Harmony の patch を足すのでなく、次の 3 つの共通の仕組みにまとめる。\n上の表の提案キーはすべてこのどれかに入る。\n\n1. **`battle.combat_log`（戦闘ごとの通し列）**。行は確定したら変えない（今の `card_resolution_events` と同じ「前の snapshot が後の\n   snapshot の先頭になる」性質）。行の出どころは 4 つ:\n   - `CombatHistory.Add`（private。全 *Entry がここを通る）の postfix 1 つで、履歴の全種（damage・block・attack・power・\n     potion・monster_move・exhaust・discard・energy）を種別ごとの写像で出す\n   - Hook の通知（表の hook:* の行）は、Hook の static メソッドの表（今の `ChoiceSourceHooks` と同じ形）に prefix/postfix を付けて\n     `kind=hook` の括りを作り、各 listener の終わりは `AbstractModel.InvokeExecutionFinished`（Hook が listener ごとに呼ぶ）で拾う。\n     上書きしていない listener は落とす（今の `HookOverrideDeclarer` を使う）。山札の札の listener は `hidden_reason: draw_pile`。\n     `RelicModel.Flash` / `PowerModel.Flash` は直前の listener の行に `flashed` を付ける\n   - 履歴に残らない命令（`CardPileCmd.Add` の pile_move・`Shuffle` / `ShuffleIfNecessary` の shuffle・`CardCmd.Transform*` の\n     card_change・`PotionCmd.TryToProcure` / `Discard`・`CreatureCmd.Add` / `Kill` / `Escape` / HP 系・`PlayerCmd` のエナジー）は\n     命令ごとの prefix/postfix で行を作る。`DrawInternal` の残り枚数は draw の行に足す\n   - 手番の段階（phase:* の行）は `CombatManager` の private メソッドの prefix で `kind=turn_phase` の境界を入れる\n2. **`decision_context`（全選択画面）**。今の `choice_source` を内包し、`CardSelectCmd` の全入口（戦闘外の `FromDeckFor*` と\n   `RelicSelectCmd` を含む）に同じ patch を当てて、開いたもの・入口・段階・残り回数・親プレイを出す。画面が閉じたら\n   `combat_log` に `kind=selection`（選んだ札・skip）を残す\n3. **計算値の残り**: `player.potion_generation_pool`（`PotionFactory.GetPotionOptions`）と、撃つ前の X（`Hook.ModifyXValue`）。\n\n見込みの大きさ（今の MOD の同種の実装から）: C# は新しいファイル 3〜4 本で 1,500 行前後（combat_log の本体と写像 600〜800、\npatch の表と導入 300、decision_context 300、markdown の整形 150）、文書（`docs/raw-full.md`・`docs/fork-differences.md`）300 行前後、\n契約の試験。schema は MINOR を 1 つ上げる。sts2#1115 の段階・残り枚数は 2 の decision_context と 1 の draw の行に入るので、\n進行中のブランチと重ねるなら先に合流させる。"
+}
