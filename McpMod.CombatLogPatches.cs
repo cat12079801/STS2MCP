@@ -606,15 +606,18 @@ public static partial class McpMod
         AbstractModel? clonedBy, out PileAddState? __state)
     {
         __state = null;
+        var previousScope = _pileAddScope.Value;
+        var previousSuppressed = _combatLogSuppressed.Value;
+        SuppressedRows? suppressed = null;
         try
         {
-            var suppressed = _shuffleAddPending.Value?.TryUse() == true && _combatLogSuppressed.Value == null ? new SuppressedRows() : null;
-            __state = new PileAddState
+            // Fail closed: once the shuffle's one-shot mark is used, its rows are hidden before anything else can throw.
+            if (_shuffleAddPending.Value?.TryUse() == true && previousSuppressed == null)
             {
-                PreviousScope = _pileAddScope.Value,
-                PreviousSuppressed = _combatLogSuppressed.Value,
-                Suppressed = suppressed
-            };
+                suppressed = new SuppressedRows();
+                _combatLogSuppressed.Value = suppressed;
+            }
+            __state = new PileAddState { PreviousScope = previousScope, PreviousSuppressed = previousSuppressed, Suppressed = suppressed };
             _pileAddScope.Value = new PileAddScope
             {
                 Position = position.ToString().ToLowerInvariant(),
@@ -623,9 +626,13 @@ public static partial class McpMod
                 Cards = cards is IReadOnlyCollection<CardModel> collection
                     ? new HashSet<CardModel>(collection, ReferenceEqualityComparer.Instance) : null
             };
-            if (suppressed != null) _combatLogSuppressed.Value = suppressed;
         }
-        catch (Exception ex) { GD.PrintErr($"[STS2 MCP] combat_log pile scope failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            // The postfix still puts the caller's scopes back; the suppression set above stays for this Add.
+            __state ??= new PileAddState { PreviousScope = previousScope, PreviousSuppressed = previousSuppressed, Suppressed = suppressed };
+            GD.PrintErr($"[STS2 MCP] combat_log pile scope failed: {ex.Message}");
+        }
     }
 
     // The sync part of CardPileCmd.Add has returned: the caller's scopes come back (its continuations keep the ones set

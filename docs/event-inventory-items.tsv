@@ -54,7 +54,7 @@ cmd:CreatureCmd.GainBlock	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/Crea
 cmd:CreatureCmd.GainMaxHp	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:918	14	0			McpMod.CombatLogPatches.cs:277
 cmd:CreatureCmd.Heal	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:815	25	4			McpMod.CombatLogPatches.cs:275
 cmd:CreatureCmd.Kill	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:496	4	3			McpMod.CombatLogPatches.cs:270
-cmd:CreatureCmd.LoseBlock	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:790	2	1	1		McpMod.CombatLogPatches.cs:281,McpMod.CombatLogPatches.cs:819,McpMod.CombatLogPatches.cs:821
+cmd:CreatureCmd.LoseBlock	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:790	2	1	1		McpMod.CombatLogPatches.cs:281,McpMod.CombatLogPatches.cs:826,McpMod.CombatLogPatches.cs:828
 cmd:CreatureCmd.LoseMaxHp	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:942	4	0	1		McpMod.CombatLogPatches.cs:278
 cmd:CreatureCmd.SetCurrentHp	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:894	2	1			McpMod.CombatLogPatches.cs:276
 cmd:CreatureCmd.SetMaxAndCurrentHp	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:987	3	0			McpMod.CombatLogPatches.cs:280

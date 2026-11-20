@@ -94,16 +94,16 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:CardCmd.AutoPlay` | card_resolution_events[kind=play].is_auto_play | McpMod.CombatHistory.cs:282 |
 | `cmd:CardCmd.ClearAffliction` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.CardDetails.cs:45 |
 | `cmd:CardCmd.ClearEnchantment` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.CardDetails.cs:63 |
-| `cmd:CardCmd.DiscardAndDraw` | battle.combat_log[kind=discard_and_draw]{cards, draw_count} と後続の card_discarded・draw の行 | McpMod.CombatLogPatches.cs:753 |
+| `cmd:CardCmd.DiscardAndDraw` | battle.combat_log[kind=discard_and_draw]{cards, draw_count} と後続の card_discarded・draw の行 | McpMod.CombatLogPatches.cs:760 |
 | `cmd:CardCmd.Downgrade` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.StateBuilder.cs:1860 |
 | `cmd:CardCmd.Enchant` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.CardDetails.cs:63 |
-| `cmd:CardCmd.Exhaust` | battle.combat_log[kind=exhaust]{card, caused_by_ethereal} と card_exhausted の行 | McpMod.CombatLogPatches.cs:741, McpMod.CombatLogPatches.cs:347 |
+| `cmd:CardCmd.Exhaust` | battle.combat_log[kind=exhaust]{card, caused_by_ethereal} と card_exhausted の行 | McpMod.CombatLogPatches.cs:748, McpMod.CombatLogPatches.cs:347 |
 | `cmd:CardCmd.RemoveKeyword` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.StateBuilder.cs:1864 |
-| `cmd:CardCmd.Transform` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:768 |
-| `cmd:CardCmd.TransformTo` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:768 |
-| `cmd:CardCmd.TransformToRandom` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:768 |
+| `cmd:CardCmd.Transform` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:775 |
+| `cmd:CardCmd.TransformTo` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:775 |
+| `cmd:CardCmd.TransformToRandom` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:775 |
 | `cmd:CardCmd.Upgrade` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.StateBuilder.cs:1860 |
-| `cmd:CardPileCmd.Add` | battle.combat_log[kind=pile_move]{card\|hidden_reason, from, to, requested_to, position, cloned_by} | McpMod.CombatLogPatches.cs:673 |
+| `cmd:CardPileCmd.Add` | battle.combat_log[kind=pile_move]{card\|hidden_reason, from, to, requested_to, position, cloned_by} | McpMod.CombatLogPatches.cs:680 |
 | `cmd:CardPileCmd.AddCurseToDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
 | `cmd:CardPileCmd.AddCursesToDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
 | `cmd:CardPileCmd.AddGeneratedCardToCombat` | card_resolution_events[kind=generated] | McpMod.CombatHistory.cs:235 |
@@ -112,17 +112,17 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:CardPileCmd.AutoPlayFromDrawPile` | card_resolution_events[kind=auto_play_reservation] | McpMod.CombatHistory.cs:183 |
 | `cmd:CardPileCmd.Draw` | card_resolution_events[kind=draw] | McpMod.CombatHistory.cs:228, McpMod.CombatHistory.cs:230 |
 | `cmd:CardPileCmd.DrawWithoutBlockingOnOtherPlayers` | card_resolution_events[kind=draw] | McpMod.CombatHistory.cs:228 |
-| `cmd:CardPileCmd.RemoveFromCombat` | battle.combat_log[kind=removed_from_combat]{cards} | McpMod.CombatLogPatches.cs:695 |
+| `cmd:CardPileCmd.RemoveFromCombat` | battle.combat_log[kind=removed_from_combat]{cards} | McpMod.CombatLogPatches.cs:702 |
 | `cmd:CardPileCmd.RemoveFromDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
-| `cmd:CardPileCmd.Shuffle` | battle.combat_log[kind=shuffle]{reason, discard_count, draw_count} と choice_source.await_chain の shuffle | McpMod.CombatLogPatches.cs:713, McpMod.ChoiceAwaitChain.cs:61 |
-| `cmd:CardPileCmd.ShuffleIfNecessary` | battle.combat_log[kind=shuffle,reason=draw_pile_empty] と choice_source.await_chain の shuffle_if_necessary | McpMod.CombatLogPatches.cs:706, McpMod.ChoiceAwaitChain.cs:62 |
-| `cmd:CreatureCmd.Add` | battle.combat_log[kind=creature,action=added] | McpMod.CombatLogPatches.cs:782 |
+| `cmd:CardPileCmd.Shuffle` | battle.combat_log[kind=shuffle]{reason, discard_count, draw_count} と choice_source.await_chain の shuffle | McpMod.CombatLogPatches.cs:720, McpMod.ChoiceAwaitChain.cs:61 |
+| `cmd:CardPileCmd.ShuffleIfNecessary` | battle.combat_log[kind=shuffle,reason=draw_pile_empty] と choice_source.await_chain の shuffle_if_necessary | McpMod.CombatLogPatches.cs:713, McpMod.ChoiceAwaitChain.cs:62 |
+| `cmd:CreatureCmd.Add` | battle.combat_log[kind=creature,action=added] | McpMod.CombatLogPatches.cs:789 |
 | `cmd:CreatureCmd.Damage` | battle.combat_log[kind=damage_received]{dealer, card_source, result} | McpMod.CombatLogPatches.cs:350 |
-| `cmd:CreatureCmd.Escape` | battle.combat_log[kind=creature,action=escape] | McpMod.CombatLogPatches.cs:806 |
+| `cmd:CreatureCmd.Escape` | battle.combat_log[kind=creature,action=escape] | McpMod.CombatLogPatches.cs:813 |
 | `cmd:CreatureCmd.GainBlock` | battle.combat_log[kind=block_gained]{amount, props, card_play_uid} | McpMod.CombatLogPatches.cs:349 |
 | `cmd:CreatureCmd.GainMaxHp` | battle.combat_log[kind=hp,action=gain_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:277 |
 | `cmd:CreatureCmd.Heal` | battle.combat_log[kind=hp,action=heal]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:275 |
-| `cmd:CreatureCmd.Kill` | battle.combat_log[kind=creature,action=kill]{creatures, card_source, force} | McpMod.CombatLogPatches.cs:795 |
+| `cmd:CreatureCmd.Kill` | battle.combat_log[kind=creature,action=kill]{creatures, card_source, force} | McpMod.CombatLogPatches.cs:802 |
 | `cmd:CreatureCmd.LoseBlock` | battle.combat_log[kind=block,action=lose_block]{target, amount, block_before, remover} | McpMod.CombatLogPatches.cs:281 |
 | `cmd:CreatureCmd.LoseMaxHp` | battle.combat_log[kind=hp,action=lose_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:278 |
 | `cmd:CreatureCmd.SetCurrentHp` | battle.combat_log[kind=hp,action=set_current_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:276 |
@@ -132,22 +132,22 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:DamageCmd.Attack` | battle.combat_log[kind=attacked]{actor, hits[]} | McpMod.CombatLogPatches.cs:351 |
 | `cmd:MapCmd.SetBossEncounter` | map.boss | McpMod.StateBuilder.cs:2814 |
 | `cmd:PlayerCmd.AddPet` | player.pets | McpMod.StateBuilder.cs:1731 |
-| `cmd:PlayerCmd.GainEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:841 |
+| `cmd:PlayerCmd.GainEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:848 |
 | `cmd:PlayerCmd.GainGold` | player.gold | McpMod.StateBuilder.cs:1735 |
 | `cmd:PlayerCmd.GainMaxPotionCount` | player.max_potion_slots | McpMod.StateBuilder.cs:1793 |
-| `cmd:PlayerCmd.LoseEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:841 |
+| `cmd:PlayerCmd.LoseEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:848 |
 | `cmd:PlayerCmd.LoseGold` | player.gold | McpMod.StateBuilder.cs:1735 |
 | `cmd:PlayerCmd.LoseMaxPotionCount` | player.max_potion_slots | McpMod.StateBuilder.cs:1793 |
 | `cmd:PlayerCmd.MimicRestSiteHeal` | rest_site | McpMod.StateBuilder.cs:603 |
-| `cmd:PlayerCmd.SetEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:841 |
+| `cmd:PlayerCmd.SetEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:848 |
 | `cmd:PlayerCmd.SetGold` | player.gold | McpMod.StateBuilder.cs:1735 |
-| `cmd:PotionCmd.Discard` | battle.combat_log[kind=potion,action=discard] | McpMod.CombatLogPatches.cs:879 |
-| `cmd:PotionCmd.TryToProcure` | battle.combat_log[kind=potion,action=procure] と action=added{success, failure_reason} | McpMod.CombatLogPatches.cs:855, McpMod.CombatLogPatches.cs:871 |
-| `cmd:PowerCmd.Apply` | battle.combat_log[kind=power,action=apply]{power_id, target, amount, applier, card_source} と power_received の行 | McpMod.CombatLogPatches.cs:890 |
-| `cmd:PowerCmd.Decrement` | battle.combat_log[kind=power,action=decrement] | McpMod.CombatLogPatches.cs:915 |
-| `cmd:PowerCmd.ModifyAmount` | battle.combat_log[kind=power,action=modify_amount]{power, offset, applier, card_source} | McpMod.CombatLogPatches.cs:903 |
-| `cmd:PowerCmd.Remove` | battle.combat_log[kind=power,action=remove] | McpMod.CombatLogPatches.cs:936 |
-| `cmd:PowerCmd.TickDownDuration` | battle.combat_log[kind=power,action=tick_down]{power, skipped} | McpMod.CombatLogPatches.cs:925 |
+| `cmd:PotionCmd.Discard` | battle.combat_log[kind=potion,action=discard] | McpMod.CombatLogPatches.cs:886 |
+| `cmd:PotionCmd.TryToProcure` | battle.combat_log[kind=potion,action=procure] と action=added{success, failure_reason} | McpMod.CombatLogPatches.cs:862, McpMod.CombatLogPatches.cs:878 |
+| `cmd:PowerCmd.Apply` | battle.combat_log[kind=power,action=apply]{power_id, target, amount, applier, card_source} と power_received の行 | McpMod.CombatLogPatches.cs:897 |
+| `cmd:PowerCmd.Decrement` | battle.combat_log[kind=power,action=decrement] | McpMod.CombatLogPatches.cs:922 |
+| `cmd:PowerCmd.ModifyAmount` | battle.combat_log[kind=power,action=modify_amount]{power, offset, applier, card_source} | McpMod.CombatLogPatches.cs:910 |
+| `cmd:PowerCmd.Remove` | battle.combat_log[kind=power,action=remove] | McpMod.CombatLogPatches.cs:943 |
+| `cmd:PowerCmd.TickDownDuration` | battle.combat_log[kind=power,action=tick_down]{power, skipped} | McpMod.CombatLogPatches.cs:932 |
 | `cmd:RelicCmd.Melt` | player.relics[].melted | McpMod.StateBuilder.cs:1758 |
 | `cmd:RelicCmd.Obtain` | player.relics | McpMod.StateBuilder.cs:1780 |
 | `cmd:RelicCmd.Remove` | player.relics | McpMod.StateBuilder.cs:1780 |

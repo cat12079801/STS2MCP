@@ -289,11 +289,11 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
 | `Creature.CombatId` | entity | McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299, McpMod.CombatHistory.cs:269 … | mod-scan |
 | `Creature.HpDisplay` | entity | McpMod.EnemyHpDisplay.cs:22 | manual |
-| `Creature.Side` | entity | McpMod.CombatLogPatches.cs:785, McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
+| `Creature.Side` | entity | McpMod.CombatLogPatches.cs:792, McpMod.PotionUsabilityLive.cs:126, McpMod.PotionUsabilityLive.cs:244 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
-| `Creature._block` | entity | McpMod.CombatLogPatches.cs:828, McpMod.MultiplayerState.cs:449, McpMod.PowerInternalState.cs:218 … | mod-scan |
-| `Creature._currentHp` | entity | McpMod.CombatLogPatches.cs:826, McpMod.MultiplayerState.cs:442, McpMod.StateBuilder.cs:1512 … | mod-scan |
-| `Creature._maxHp` | entity | McpMod.CombatLogPatches.cs:827, McpMod.MultiplayerState.cs:443, McpMod.StateBuilder.cs:1513 … | mod-scan |
+| `Creature._block` | entity | McpMod.CombatLogPatches.cs:835, McpMod.MultiplayerState.cs:449, McpMod.PowerInternalState.cs:218 … | mod-scan |
+| `Creature._currentHp` | entity | McpMod.CombatLogPatches.cs:833, McpMod.MultiplayerState.cs:442, McpMod.StateBuilder.cs:1512 … | mod-scan |
+| `Creature._maxHp` | entity | McpMod.CombatLogPatches.cs:834, McpMod.MultiplayerState.cs:443, McpMod.StateBuilder.cs:1513 … | mod-scan |
 | `Creature._powers` | entity | status（McpMod.StateBuilder.cs:1710・2129） | manual |
 | `ExtraPlayerFields.CardShopRemovalsUsed` | entity | McpMod.StateAllowlist.Generated.cs:43 | allowlist |
 | `MonsterMoveStateMachine.StateLog` | entity | McpMod.EnemyMoveState.cs:103, McpMod.EnemyMoveState.cs:45 | mod-scan |
@@ -321,7 +321,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1696 | mod-scan |
 | `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1683, McpMod.StateBuilder.cs:1689 | mod-scan |
 | `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:29 | mod-scan |
-| `PlayerCombatState._energy` | entity | McpMod.CombatLogPatches.cs:290, McpMod.CombatLogPatches.cs:835, McpMod.CombatLogPatches.cs:839 … | mod-scan |
+| `PlayerCombatState._energy` | entity | McpMod.CombatLogPatches.cs:290, McpMod.CombatLogPatches.cs:842, McpMod.CombatLogPatches.cs:846 … | mod-scan |
 | `PlayerCombatState._pets` | entity | player.pets（McpMod.StateBuilder.cs:1700） | manual |
 | `PlayerCombatState._phase` | entity | McpMod.Helpers.cs:26, McpMod.Helpers.cs:36, McpMod.StateBuilder.cs:761 | mod-scan |
 | `PlayerCombatState._piles` | entity | McpMod.TransformationOptions.cs:29, McpMod.TransformationOptions.cs:44 | manual |
@@ -391,7 +391,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `PowerModel._applier` | base | McpMod.StateAllowlist.Generated.cs:70 | allowlist |
 | `PowerModel._dynamicVars` | base | McpMod.PowerInternalState.cs:290 | mod-scan |
 | `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:393[only AdaptablePower,AutomationPower,CalamityPower,ChainsOfBindingPower,CurlUpPower,DampenPower,DarkEmbracePower,GigantificationPower,HardenedShellPower,HellraiserPower,IllusionPower,JugglingPower,PanachePower,PossessSpeedPower,PossessStrengthPower,ReattachPower,RupturePower,SkittishPower,StranglePower,VigorPower] | partial-resolved |
-| `PowerModel._skipNextDurationTick` | base | McpMod.CombatLogPatches.cs:927, McpMod.PowerInternalState.cs:214 | mod-scan |
+| `PowerModel._skipNextDurationTick` | base | McpMod.CombatLogPatches.cs:934, McpMod.PowerInternalState.cs:214 | mod-scan |
 | `PowerModel._target` | base | McpMod.StateAllowlist.Generated.cs:73 | allowlist |
 | `ReattachPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:159 | mod-scan |
 | `RitualPower._wasJustAppliedByEnemy` | shared | McpMod.PowerInternalState.cs:67 | mod-scan |

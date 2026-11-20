@@ -157,8 +157,16 @@ namespace STS2_MCP
             Check(!Regex.IsMatch(all, "\\.Next(Int|Float|Item|Bool)\\(|StableShuffle|\\.Rng\\."), "乱数に触らない");
             Check(!Regex.IsMatch(patches, "ref (CardPile|CardModel|Creature|PowerModel|PotionModel|decimal|int) [a-z]"), "ゲームの引数を書き換えない（ref は out 引数の読み取りと struct の __instance だけ）");
             Check(log.Contains("if (_combatLogSuppressed.Value is { } suppressed) { suppressed.Count++; return; }"), "シャッフルの Add の中の行は数えるだけ");
-            Check(patches.Contains("_shuffleAddPending.Value?.TryUse() == true && _combatLogSuppressed.Value == null ? new SuppressedRows()") && patches.Contains("row[\"reason\"] = \"shuffle_order\";"),
+            Check(patches.Contains("if (_shuffleAddPending.Value?.TryUse() == true && previousSuppressed == null)") && patches.Contains("row[\"reason\"] = \"shuffle_order\";"),
                 "シャッフル自身の Add の間だけを伏せ、件数を hidden_rows で出す");
+            {
+                // Fail closed: the suppression is set right after the mark is used, before anything that can throw.
+                int use = patches.IndexOf("_shuffleAddPending.Value?.TryUse() == true && previousSuppressed == null", StringComparison.Ordinal);
+                int set = patches.IndexOf("_combatLogSuppressed.Value = suppressed;", use, StringComparison.Ordinal);
+                int scope = patches.IndexOf("_pileAddScope.Value = new PileAddScope", use, StringComparison.Ordinal);
+                Check(use > 0 && set > use && set < scope && patches.Contains("__state ??= new PileAddState"),
+                    "印を使ったらすぐ伏せる（後の処理が例外でも新しい山札の順の行を書かない）・例外でも呼出し元の範囲を戻す");
+            }
             Check(patches.Contains("_shuffleAddPending.Value = new OneShot();") && !patches.Contains("_shuffleScope"),
                 "伏せる印は一度しか使えない（AfterShuffle の listener の移動は伏せない）");
             Check(patches.Contains("_shuffleIfNecessaryPending.Value?.TryUse() == true ? \"draw_pile_empty\" : \"explicit\""),
