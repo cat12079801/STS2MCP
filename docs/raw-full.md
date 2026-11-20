@@ -1378,8 +1378,8 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 
 - `type` / `target_type` は `CardModel.Type` / `TargetType` の enum 名。
 - `rarity` は `CardModel.Rarity`（`CardRarity`）の enum 名（`Basic` / `Common` / `Uncommon` / `Rare` / `Ancient` / `Event` /
-  `Curse` / `Status` / `Quest` など、ゲームの `ToString()` のまま）。手札の行は以前から共通の表示項目（`BuildCardInfo`）で
-  同じ値を出しており、4 パイルの行にも同じ値を出す（schema 1.12.0）。札の表に描かれている（帯の色）公開の値。
+  `Curse` / `Status` / `Quest` など、ゲームの `ToString()` のまま）。手札の行は共通の表示項目（`BuildCardInfo`）で
+  同じ値を出し、4 パイルの行も同じ値を出す（schema 1.12.0）。札の表に描かれている（帯の色）公開の値。
   泥棒バッタの窃盗（`ThievingHopper.ThieveryMove`）は山札と捨て札の札から `Rarity != Quest` と `_stealPriorities`
   （アンコモン → コモン・レア・イベント → ベーシック → エンシェントかインビュード）で盗む札を絞る。
   4 パイルの行では読取失敗を null と `unavailable_reasons.rarity`・`warnings` にする。山札の行の並びは変えない（表示順のまま）。
