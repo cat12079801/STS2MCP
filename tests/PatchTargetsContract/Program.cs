@@ -24,15 +24,24 @@ foreach (var method in typeof(Godot.GD).GetMethods(BindingFlags.Public | Binding
     console.Patch(method, prefix: new HarmonyMethod(typeof(GdConsole), nameof(GdConsole.Write)));
 
 // Initialize's order. After each step, note how many patches each method carries: the step that last changed a method
-// is when Harmony compiled its replacement.
+// is when Harmony compiled its replacement. The last step is the combat recorder's patches
+// (Recorder.CombatRecorder.StartIfConfigured → Install("startup") → RecorderPatches.Apply, after LoadPort): applied here
+// directly, since StartIfConfigured reads the config file and opens the record directory.
+var recorderApply = mod.Assembly.GetType("STS2_MCP.Recorder.RecorderPatches")?.GetMethod("Apply", Static)
+    ?? throw new MissingMethodException("RecorderPatches", "Apply");
 var steps = new[] { "TryApplyHarmonyPatches", "InstallRewardTracking", "InstallChoiceSourceTracking",
-    "InstallAutoPlayReservationTracking", "InstallCombatLogTracking", "InstallDecisionContextTracking" };
+    "InstallAutoPlayReservationTracking", "InstallCombatLogTracking", "InstallDecisionContextTracking", "RecorderPatches.Apply" };
+void Step(string name)
+{
+    if (name == "RecorderPatches.Apply") recorderApply.Invoke(null, null);
+    else Install(name);
+}
 var lastChanged = new Dictionary<MethodBase, int>();
 var firstPatched = new Dictionary<MethodBase, int>();
 var patchCount = new Dictionary<MethodBase, int>();
 for (int step = 0; step < steps.Length; step++)
 {
-    Install(steps[step]);
+    Step(steps[step]);
     foreach (var m in Harmony.GetAllPatchedMethods())
     {
         var info = Harmony.GetPatchInfo(m);
@@ -54,9 +63,17 @@ Check(!installErrors.Any(), "combat_log: " + string.Join("; ", installErrors));
 
 // The inlining hazard: a method Harmony compiled (patched) before one of its callees got a patch may have that callee
 // inlined into its replacement, so the callee's patch never runs from there (CardPlayStarted / the private Add, live
-// check of b692360). Walk each patched method's IL, through unpatched game methods up to 3 calls deep.
+// check of b692360). Walk each patched method's IL, through unpatched game methods up to 3 calls deep. Only direct calls
+// (call / callvirt / newobj) can be inlined: a method only referenced (ldftn for a delegate) is not. The game runs on
+// .NET 9.0.7 (sts2.runtimeconfig.json), whose JIT never inlines a method with exception handling: a callee with try /
+// catch / finally is compiled on its own (after every patch is on), so neither it nor anything it calls is a hazard.
 var gameAssembly = typeof(MegaCrit.Sts2.Core.Combat.History.CombatHistory).Assembly;
 var hazards = new List<string>();
+static bool HasExceptionHandling(MethodBase m)
+{
+    try { return m.GetMethodBody()?.ExceptionHandlingClauses.Count > 0; }
+    catch { return false; }
+}
 foreach (var (method, compiledAt) in lastChanged)
 {
     var seen = new HashSet<MethodBase>();
@@ -66,14 +83,18 @@ foreach (var (method, compiledAt) in lastChanged)
         List<CodeInstruction> body;
         try { body = PatchProcessor.GetOriginalInstructions(current); }
         catch { return; }
-        foreach (var callee in body.Select(i => i.operand).OfType<MethodBase>())
+        foreach (var callee in body.Where(i => i.opcode == System.Reflection.Emit.OpCodes.Call || i.opcode == System.Reflection.Emit.OpCodes.Callvirt
+                     || i.opcode == System.Reflection.Emit.OpCodes.Newobj).Select(i => i.operand).OfType<MethodBase>())
         {
-            if (callee.DeclaringType?.Assembly != gameAssembly) continue;
+            if (callee.DeclaringType?.Assembly != gameAssembly || HasExceptionHandling(callee)) continue;
             if (firstPatched.TryGetValue(callee, out int patchedAt))
             {
                 if (patchedAt > compiledAt) hazards.Add($"{path} -> {callee.DeclaringType!.Name}.{callee.Name} (patched at {steps[patchedAt]}, caller compiled at {steps[compiledAt]})");
                 continue;
             }
+            // Virtual and abstract callees are not followed: the JIT inlines them only after devirtualizing the call
+            // (a sealed type or exact receiver type), or by guarded devirtualization, which needs profile data that a
+            // Harmony replacement (a DynamicMethod, never tiered up) does not collect. Theoretical, so not walked.
             if (callee.IsAbstract || callee.IsVirtual) continue;
             Walk(callee, depth + 1, $"{path} -> {callee.DeclaringType!.Name}.{callee.Name}");
         }
