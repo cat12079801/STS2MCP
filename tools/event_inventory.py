@@ -558,7 +558,7 @@ def render_md(items: list[dict], manual: dict, version: str, decompile: Path, st
     pm_ic = [it for it in pm if it["scope_final"] == "ironclad"]
     prog = [it for it in pm_ic if it.get("in_progress")]
     w(f"public-missing は {len(pm)} 件、うちアイアンクラッドの範囲は {len(pm_ic)} 件"
-      f"（進行中のブランチ `entropy-stratagem-stages` が扱うもの {len(prog)} 件を含む）。")
+      + (f"（進行中のブランチが扱うもの {len(prog)} 件を含む）。" if prog else "。"))
     w("")
     w("スコープ（自動）の内訳: " + ", ".join(f"{k} {v}" for k, v in sorted(Counter(it['scope_auto'] for it in items).items())))
     w("")
@@ -573,11 +573,15 @@ def render_md(items: list[dict], manual: dict, version: str, decompile: Path, st
     # public-missing の表
     w("## public-missing（プレイヤーに見えるが MOD が出していないもの）")
     w("")
-    w("「出す先」は phase 2 の MOD PR での置き場所の提案。「Issue」はそれが揃うと進められる sts2 の open Issue。")
-    w("「IC の参照」はアイアンクラッドの範囲で上書き・呼び出しをするモデルの数（例を最大 4 つ）。")
-    w("")
-    w("| キー | 見えるもの | 提案キー | 出す先 | Issue | IC の参照 | 選択が開くモデル | 出典 |")
-    w("|---|---|---|---|---|---|---|---|")
+    if not pm:
+        w("無い（phase 2 ですべて exposed にした。下の exposed の表の「JSON キー」が出した先）。")
+        w("")
+    else:
+        w("「出す先」は MOD の PR での置き場所の提案。「Issue」はそれが揃うと進められる sts2 の open Issue。")
+        w("「IC の参照」はアイアンクラッドの範囲で上書き・呼び出しをするモデルの数（例を最大 4 つ）。")
+        w("")
+        w("| キー | 見えるもの | 提案キー | 出す先 | Issue | IC の参照 | 選択が開くモデル | 出典 |")
+        w("|---|---|---|---|---|---|---|---|")
     def sort_key(it):
         return (-len(it.get("issues", [])), CATEGORIES.index(it["category"]), it["key"])
     for it in sorted(pm, key=sort_key):
@@ -587,22 +591,26 @@ def render_md(items: list[dict], manual: dict, version: str, decompile: Path, st
         w(f"| `{it['key']}`{oos} | {md_escape(it.get('visible', it.get('reason', '')))}{tag} | `{md_escape(it['proposed_key'])}` "
           f"| {md_escape(it['where'])} | {issue_links(it.get('issues', []))} "
           f"| {len(refs)}{(' ' + short(refs, 4)) if refs else ''} | {short(it.get('ironclad_selects', []), 4)} | {it['source']} |")
-    w("")
-
-    # Issue ごとの集計
-    by_issue = defaultdict(list)
-    for it in pm:
-        for n in it.get("issues", []):
-            by_issue[n].append(it["key"])
-    if by_issue:
-        w("### Issue ごとの public-missing")
+    if pm:
         w("")
-        w("| Issue | 件数 | キー |")
-        w("|---|---:|---|")
+
+    # Issue ごとの集計（phase 1 で public-missing として Issue と対応を取った行。いまの分類も出す）
+    by_issue = defaultdict(list)
+    for it in items:
+        for n in it.get("issues", []):
+            by_issue[n].append(it)
+    if by_issue:
+        w("### Issue ごとの行")
+        w("")
+        w("その情報が揃うと進められる sts2 の open Issue（phase 1 で対応を取った）と、いまの分類。")
+        w("")
+        w("| Issue | 件数 | うち exposed | キー |")
+        w("|---|---:|---:|---|")
         titles = manual.get("issue_titles", {})
-        for n, ks in sorted(by_issue.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        for n, its in sorted(by_issue.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             t = titles.get(str(n), "")
-            w(f"| sts2#{n} {md_escape(t)} | {len(ks)} | " + ", ".join(f"`{k}`" for k in ks) + " |")
+            exp = sum(1 for it in its if it["class"] == "exposed")
+            w(f"| sts2#{n} {md_escape(t)} | {len(its)} | {exp} | " + ", ".join(f"`{it['key']}`" for it in its) + " |")
         w("")
 
     if manual.get("phase2"):

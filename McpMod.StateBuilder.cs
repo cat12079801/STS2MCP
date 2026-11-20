@@ -1620,6 +1620,9 @@ public static partial class McpMod
         battle["enemy_move_context"] = BuildEnemyMoveContext(combatState);
         // 生成した許可リストの CombatState の項目（味方・逃げた敵の combat_id。McpMod.StateAllowlist.cs）。
         AttachAllowlistedState(battle, "battle", combatState, "battle");
+        // What happened in this fight, in order (McpMod.CombatLog.cs).
+        try { battle["combat_log"] = BuildCombatLogState(combatState); }
+        catch (Exception ex) { battle["combat_log"] = null; Warn("battle.combat_log", ex); }
 
         return battle;
     }
@@ -1634,6 +1637,8 @@ public static partial class McpMod
         state["character_id"] = player.Character.Id.Entry;
         state["player_id"] = player.NetId.ToString();
         state["generation_pool"] = BuildGenerationPool(player);
+        // The potions a random potion is drawn from (PotionFactory.GetPotionOptions; McpMod.PotionGenerationPool.cs).
+        state["potion_generation_pool"] = BuildPotionGenerationPool(player);
         state["hp"] = creature.CurrentHp;
         state["max_hp"] = creature.MaxHp;
         state["block"] = creature.Block;
@@ -1907,6 +1912,8 @@ public static partial class McpMod
         // Combat-only state: keep it out of BuildCardInfo, which also builds deck/preview rows.
         state["exhaust_on_next_play"] = SafeGetBool(() => card.ExhaustOnNextPlay);
         state["energy_cost"] = BuildCardEnergyCostState(card);
+        // The X an X-cost card in the hand would read if played now (Hook.ModifyXValue; McpMod.CardXValue.cs).
+        AttachXValueIfPlayed((Dictionary<string, object?>)state["energy_cost"]!, card);
         state["star_cost_state"] = BuildCardStarCostState(card);
         state["description"] = SafeGetCardDescription(card); // hand cards use default pile
         AttachCardPlayability(state, card);
@@ -3320,6 +3327,14 @@ public static partial class McpMod
         };
         if (choiceScreen != null && GetLiveCombatStateForSelection() != null)
             state["choice_source"] = BuildChoiceSource(choiceScreen, null, runState);
+        // Every grid screen: which entry point opened it and who called it (McpMod.DecisionContext.cs).
+        string decisionScreen = choiceScreen ?? screen switch
+        {
+            NDeckCardSelectScreen or NDeckUpgradeSelectScreen or NDeckTransformSelectScreen or NDeckEnchantSelectScreen => "deck",
+            _ => "unknown"
+        };
+        state["decision_context"] = BuildDecisionContext(decisionScreen, null, runState,
+            state.GetValueOrDefault("choice_source") as Dictionary<string, object?>);
 
         return state;
     }
@@ -3346,6 +3361,8 @@ public static partial class McpMod
             // Who opened this screen (Splash.OnPlay, a potion, ...) and the card play it belongs to.
             state["choice_source"] = BuildChoiceSource("choose", holderCards, runState);
         }
+        state["decision_context"] = BuildDecisionContext("choose", holderCards.Cast<object?>().ToList(), runState,
+            state.GetValueOrDefault("choice_source") as Dictionary<string, object?>);
         state["cards"] = cards;
 
         var skipButton = screen.GetNodeOrNull<NClickableControl>("SkipButton");
@@ -3414,6 +3431,7 @@ public static partial class McpMod
         var confirmButton = screen.GetNodeOrNull<NConfirmButton>("%Confirm");
         state["can_cancel"] = cancelButton?.IsEnabled == true;
         state["can_confirm"] = confirmButton?.IsEnabled == true;
+        state["decision_context"] = BuildDecisionContext("bundle", null, runState, null);
 
         return state;
     }
@@ -3518,6 +3536,8 @@ public static partial class McpMod
 
         // Who opened the hand selection (EntropyPower.AfterPlayerTurnStart, a card's OnPlay, ...) and what follows.
         if (combatState != null) state["choice_source"] = BuildChoiceSource("hand", null, runState);
+        state["decision_context"] = BuildDecisionContext("hand", null, runState,
+            state.GetValueOrDefault("choice_source") as Dictionary<string, object?>);
 
         return state;
     }
@@ -3551,6 +3571,7 @@ public static partial class McpMod
 
         var skipButton = screen.GetNodeOrNull<NClickableControl>("SkipButton");
         state["can_skip"] = skipButton?.IsEnabled == true && skipButton.Visible;
+        state["decision_context"] = BuildDecisionContext("relic", null, runState, null);
 
         return state;
     }

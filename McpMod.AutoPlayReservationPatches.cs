@@ -241,6 +241,13 @@ public static partial class McpMod
             capture["card_resolution_events"] = null;
             reasons["card_resolution_events"] = $"{ex.GetType().Name}: {ex.Message}";
         }
+        // Every row the fight's combat_log still holds (from seq 0; since_truncated when the oldest were dropped).
+        try { capture["combat_log"] = BuildCombatLogState(combat, 0); }
+        catch (Exception ex)
+        {
+            capture["combat_log"] = null;
+            reasons["combat_log"] = $"{ex.GetType().Name}: {ex.Message}";
+        }
         capture["unavailable_reasons"] = reasons;
         EndedCombatCaptures.Record(capture);
     }

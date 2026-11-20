@@ -227,6 +227,12 @@ async def get_game_state(format: str = "markdown") -> str:
     Hook.AfterPlayerTurnStart / AfterShuffle の走っている段〔awaiting〕と後の段〔following〕、その段が始まったときの
     列での位置と後ろでいま走る listener〔山札にあった札は order: null〕、シャッフル・ドローの残り〔remaining_draws・
     from_hand_draw〕・山札からの自動プレイの予約〔reservation_call_id〕、手番の初めの残りの段、shuffle_origin）を足した。
+    schema 1.10.0 で、battle.combat_log（戦闘の出来事の通し列。行は seq の順で、通知〔上書きする listener〕・履歴〔ドロー・
+    プレイ・被ダメージ・ブロック・パワー・敵の行動など〕・山の移動・シャッフル・札／敵／HP／ブロック／エナジー／ポーション／
+    パワーの命令・Modify* の結果と修正したモデル・光った効果・手番の段階・選択の結果。既定は最後の 400 行、
+    ?combat_log_since=<seq> でその seq から。山札の順は出さない）、全選択画面の decision_context（入口・開いた元・
+    開いた時点の seq・choice_source）、player.potion_generation_pool、手札の energy_cost.x_value_if_played、
+    ended_combat.combat_log を足した。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
@@ -280,7 +286,7 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
-    契約の版は schema（semver の文字列。現在 "1.9.0"）で返す。規則の正本は docs/raw-full.md の
+    契約の版は schema（semver の文字列。現在 "1.10.0"）で返す。規則の正本は docs/raw-full.md の
     「Common Top-Level Fields」。MAJOR は後方互換の無い変更（既存の項目の意味・型・形の変更、
     項目・アクション・列挙の値・state_type の削除・改名、構造の変更）、MINOR は後方互換の追加
     （項目・アクション・任意の引数・state_type・既存の列挙の新しい値。版でなく項目の有無と

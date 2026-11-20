@@ -228,22 +228,26 @@ public static partial class McpMod
         {
             FormatHandSelectMarkdown(sb, handSelect);
             AppendChoiceSourceMarkdown(sb, handSelect);
+            AppendDecisionContextMarkdown(sb, handSelect);
         }
 
         if (state.TryGetValue("card_select", out var cardSelectObj) && cardSelectObj is Dictionary<string, object?> cardSelect)
         {
             FormatCardSelectMarkdown(sb, cardSelect);
             AppendChoiceSourceMarkdown(sb, cardSelect);
+            AppendDecisionContextMarkdown(sb, cardSelect);
         }
 
         if (state.TryGetValue("bundle_select", out var bundleSelectObj) && bundleSelectObj is Dictionary<string, object?> bundleSelect)
         {
             FormatBundleSelectMarkdown(sb, bundleSelect);
+            AppendDecisionContextMarkdown(sb, bundleSelect);
         }
 
         if (state.TryGetValue("relic_select", out var relicSelectObj) && relicSelectObj is Dictionary<string, object?> relicSelect)
         {
             FormatRelicSelectMarkdown(sb, relicSelect);
+            AppendDecisionContextMarkdown(sb, relicSelect);
         }
 
         if (state.TryGetValue("crystal_sphere", out var crystalSphereObj) && crystalSphereObj is Dictionary<string, object?> crystalSphere)
@@ -549,6 +553,8 @@ public static partial class McpMod
                 sb.AppendLine();
             }
         }
+
+        AppendCombatLogMarkdown(sb, battle);
     }
 
     /// <summary>

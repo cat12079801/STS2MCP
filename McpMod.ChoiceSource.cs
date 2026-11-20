@@ -100,6 +100,8 @@ public static partial class McpMod
             };
             __state = OpenCardSelections.Add(__originalMethod.Name, context, player, player.Creature?.CombatState,
                 handSource: Arg("source"), candidates: candidates, pile: Arg("pile"));
+            // decision_context.opener and the combat_log seq it opened at (McpMod.DecisionContext.cs).
+            AttachSelectionOpener(__state);
         }
         catch (Exception ex) { GD.PrintErr($"[STS2 MCP] Choice source record failed: {ex.GetType().Name}: {ex.Message}"); }
     }
@@ -114,9 +116,17 @@ public static partial class McpMod
     {
         if (record == null) return;
         record.SelectionTask = task;
-        if (task == null || task.IsCompleted) { OpenCardSelections.Remove(record); return; }
-        task.ContinueWith(_ => OpenCardSelections.Remove(record), CancellationToken.None,
+        if (task == null || task.IsCompleted) { Closed(); return; }
+        task.ContinueWith(_ => Closed(), CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+        void Closed()
+        {
+            OpenCardSelections.Remove(record);
+            // The combat_log selection row (what was chosen); never lets a failure reach the game's continuation.
+            try { if (task != null) LogSelectionResult(record, task); }
+            catch (Exception ex) { GD.PrintErr($"[STS2 MCP] combat_log selection row failed: {ex.GetType().Name}: {ex.Message}"); }
+        }
     }
 
     /// <summary>

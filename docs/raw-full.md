@@ -68,6 +68,7 @@ httpx はこれらのブラウザ用ヘッダーを送らず、POST に JSON の
 | `pretty`  | `1`, `true`, `yes` (or present with no value) | off     | Indent the JSON. Off by default — compact output is ~32% smaller |
 | `passive` | `1`, `true`, `yes`                            | off     | Read without UI side effects (no auto-opened merchant inventory, no fake-merchant / chest press; `shop.sellable_potions` is answered without closing the inventory — schema 11) |
 | `scenario_setup_guard` | `1`, `true`, `yes`               | off     | With `passive` only: add [`scenario_setup_guard`](#戦闘外の準備の判定scenario_setup_guardschema-10) (verification runs) |
+| `combat_log_since` | a `seq` (non-negative integer)               | —       | `battle.combat_log` carries every kept row from that `seq` on instead of the last `default_window` rows ([戦闘の出来事の通し列](#戦闘の出来事の通し列battlecombat_logschema-1100), schema 1.10.0) |
 
 JSON responses are compact by default; `pretty` opts into indentation for that one request. It works on
 every JSON-returning endpoint, on POST as well as GET (e.g. `POST /api/v1/singleplayer?pretty=1`), and on
@@ -87,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.9.0",        // Contract version (semver) — see below
+  "schema": "1.10.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.9.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.10.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.9.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.10.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -159,6 +160,12 @@ and changing the meaning or shape of an existing field is MAJOR.
   始まったときの列での位置と後ろに残る listener、シャッフルとそれを起こしたドロー（残りの枚数・手番の初めのドローか）または
   自動プレイの予約（`card_resolution_events` の `call_id`）、手番の初め（`SetupPlayerTurn`・`RunAutoPrePlayPhase`）と、
   それぞれの後に続く段（エントロピー・計略）。[選択を待つ処理の鎖](#選択を待つ処理の鎖choice_sourceawait_chainschema-190)。
+- **1.10.0** — 出来事の棚卸し（[`docs/event-inventory.md`](event-inventory.md)）で public-missing だった 128 件を出す。`battle.combat_log`
+  （戦闘の出来事の通し列: 通知と上書きしている listener・履歴の全種・山の移動・シャッフル・札／敵／HP／ブロック／エナジー／ポーション／
+  パワーの命令・`Modify*` の結果と修正したモデル・光った効果・手番の段階・選択の結果。`?combat_log_since=`）、全選択画面の
+  `decision_context`（入口・開いた元・開いた時点の seq・`choice_source`）、`player.potion_generation_pool`、手札の
+  `energy_cost.x_value_if_played`、`ended_combat.combat_log`。[戦闘の出来事の通し列](#戦闘の出来事の通し列battlecombat_logschema-1100)・
+  [選択の文脈](#選択の文脈decision_contextschema-1100)・[ポーションの生成候補](#ポーションの生成候補playerpotion_generation_poolschema-1100)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -490,6 +497,31 @@ Markdown は `Other-character attack pool: N cards` または unknown と理由�
 出典は `sts2-a671e9ef` の `EntropyPower.AfterPlayerTurnStart`、`CardCmd.TransformToRandom` / `Transform`、
 `CardTransformation`、`CardFactory.CreateRandomCardForTransform` / `GetDefaultTransformationOptions` /
 `GetFilteredTransformationOptions`、`PlayerCombatState.AllPiles`。契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
+
+#### ポーションの生成候補（`player.potion_generation_pool`、schema 1.10.0）
+
+単独・マルチのローカル `player` に、ランダムなポーションを作るときの候補を出す（戦闘の内外とも）。
+`PotionFactory.GetPotionOptions(player)`（キャラのポーションの pool と共有の pool の解放済み）を本体の public static
+メソッドでそのまま呼び、条件を MOD に写さない。`CreateRandomPotionsOutOfCombat` はこの一覧から、`CreateRandomPotionInCombat` は
+さらに `CanBeGeneratedInCombat` のものから、レアリティの抽選（`PotionFactory` の確率）で選ぶ（錬金術・エントロピーの醸造など）。
+
+```jsonc
+"potion_generation_pool": {
+  "known": true,
+  "source": "PotionFactory.GetPotionOptions(Player)=Character.PotionPool.GetUnlockedPotions(UnlockState)+SharedPotionPool.GetUnlockedPotions(UnlockState)",
+  "character_id": "IRONCLAD",
+  "player_id": "1",
+  "potions": [
+    { "id": "ATTACK_POTION", "rarity": "Common", "can_be_generated_in_combat": true },
+    { "id": "BLOOD_POTION", "rarity": "Common", "can_be_generated_in_combat": false }
+  ]
+}
+```
+
+- `potions` は ID の序数順。抽選の結果・乱数・重みの値は出さない。読めなければ `known: false` と `reason`（warning は
+  `player.potion_generation_pool`）。
+- 出典は `sts2-a671e9ef` の `PotionFactory.GetPotionOptions` / `CreateRandomPotionsOutOfCombat` / `CreateRandomPotionInCombat`、
+  `PotionModel.CanBeGeneratedInCombat`。
 
 ### 戦闘中の解放済み pool（追加、schema 3）
 
@@ -1024,6 +1056,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   "ended_combat": {
     "outcome": "victory",
     "card_resolution_events": [ /* 戦闘が終わった時点の列。行は上と同じ */ ],
+    "combat_log": { /* 戦闘が終わった時点の battle.combat_log（seq 0 から保持している全行。schema 1.10.0） */ },
     "unavailable_reasons": {}
   }
 }
@@ -1042,9 +1075,99 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   `EndCombatInternal` の `History.Clear` より前に応答が返ることがあり、そのときの取得は応答に付かず、戦闘の終わりと期間が重なっただけの
   次の POST に付くことがある（その POST の操作の結果ではない）。
 - 列が読めなければ `card_resolution_events: null` と `unavailable_reasons.card_resolution_events`。
+- `combat_log`（schema 1.10.0）は同じ時点の [戦闘の出来事の通し列](#戦闘の出来事の通し列battlecombat_logschema-1100) を `combat_log_since=0` で
+  読んだもの（保持している全行。捨てた行があれば `since_truncated: true`）。勝利では `AfterCombatEnd` の通知までの行が入り、
+  その後の `AfterCombatVictory` の行は入らない。読めなければ `null` と `unavailable_reasons.combat_log`。
 
 出典は v0.113.1 `sts2-a671e9ef` の `CombatManager.EndCombatInternal` / `ProcessPendingLoss` / `CancelCombat` / `DebugOnlyGetState` / `IsAboutToLose`、
 `CombatHistory.Clear`、`LocalContext.GetMe`。試験は [`tests/DevConsoleContract`](../tests/DevConsoleContract/README.md)（応答への付け方）。
+
+### 戦闘の出来事の通し列（`battle.combat_log`、schema 1.10.0）
+
+戦闘中の `battle`（戦闘の画面と、戦闘中の選択画面の `battle`）に、その戦闘で起きたことを起きた順に並べた列を出す。
+棚卸し（[`docs/event-inventory.md`](event-inventory.md)）で public-missing だった、通知の順・履歴の各種・山の移動・
+手番の段階・選択の結果などを 1 本にしたもの。`card_resolution_events` はそのまま残す（同じドロー・プレイの行がこちらにも入る）。
+
+```jsonc
+"combat_log": {
+  "version": 1,
+  "known": true,
+  "combat_id": "3",            // CombatManager.CurrentCombatId
+  "capacity": 2000,            // 1 戦闘で保持する行数（超えたら古い行から捨てる）
+  "default_window": 400,       // combat_log_since が無いときに返す行数（最後の N 行）
+  "first_seq": 0,              // 保持している最も古い行の seq
+  "next_seq": 182,             // 次の行の seq（= この戦闘で書いた行数）
+  "window_first_seq": 0,       // rows[0] の seq
+  "since_truncated": false,    // combat_log_since が first_seq より古かった（間の行は捨てた）
+  "rows": [
+    { "seq": 40, "kind": "turn_phase", "round": 2, "side": "player", "phase": "setup_player_turn", "player_id": "1" },
+    { "seq": 41, "kind": "energy", "round": 2, "side": "player", "player_id": "1", "before": 0, "after": 3 },
+    { "seq": 42, "kind": "modify", "round": 2, "side": "player", "hook": "ModifyHandDraw", "player_id": "1",
+      "original": 5, "result": 5, "modifiers": [] },
+    { "seq": 43, "kind": "draw", "round": 2, "side": "player", "source": "history", "entry": "CardDrawnEntry",
+      "actor": { "combat_id": 1, "player_id": "1" },
+      "card": { "card_id": "BASH", "uid": "BASH#9", "pile": "Hand" }, "from_hand_draw": true },
+    { "seq": 44, "kind": "pile_move", "round": 2, "side": "player",
+      "card": { "card_id": "BASH", "uid": "BASH#9" }, "owner_player_id": "1",
+      "from": "Draw", "to": "Hand", "requested_to": "Hand", "position": "bottom", "via": "card_pile_cmd_add", "cloned_by": null },
+    { "seq": 45, "kind": "hook", "round": 2, "side": "player", "hook": "AfterCardDrawn", "scope": "combat",
+      "args": { "card": { "card_id": "BASH", "uid": "BASH#9", "pile": "Hand" }, "from_hand_draw": true },
+      "passes": [
+        { "method": "AfterCardDrawnEarly", "listeners": [] },
+        { "method": "AfterCardDrawn", "listeners": [
+          { "model_type": "ChainsOfBindingPower", "model_id": "CHAINS_OF_BINDING_POWER", "kind": "power",
+            "owner_combat_id": 1, "owner_player_id": "1", "declared_by": "ChainsOfBindingPower", "order": 3 } ] } ] },
+    { "seq": 46, "kind": "flash", "round": 2, "side": "player", "model": { "model_id": "CHAINS_OF_BINDING_POWER", "kind": "power", "...": "..." } },
+    { "seq": 47, "kind": "hidden_rows", "round": 2, "side": "player", "reason": "shuffle_order", "count": 31 }
+  ]
+}
+```
+
+- 行は記録したら変わらない（`seq` の順。同じ戦闘の後の読みは、前の読みの行を同じ `seq` で含む）。新しい戦闘（`CombatState` が
+  替わる）で空になり `seq` は 0 から。戦闘の外・戦闘の始まる前には行を書かない。
+- `?combat_log_since=<seq>`（GET の state だけ）: その `seq` から、保持している全行を返す。無ければ最後の `default_window` 行。
+  捨てた行より前を求めたら `since_truncated: true` で、保持している先頭から返す。読み取りのたびに戻す（次の要求に持ち越さない）。
+- 共通の項目: `seq`・`kind`・`round`（`CombatState.RoundNumber`）・`side`（`CurrentSide`）。札は `{card_id, uid, pile}`
+  （uid は state の他の行と同じ登録簿）、生き物は `{combat_id, entity_id | player_id | monster_id}`、モデル（listener・修正した
+  モデル・光ったもの・`cloned_by`）は `choice_source` の listener の行と同じ形（`BuildHookListenerRow`）。
+- `known: false` と `unavailable_reasons`: patch の群を当てられなかった（`install: <群>: …`。その群の行は出ない）、または行を
+  作れなかった（`<kind>: …`。その戦闘の列に穴がある）。穴のある列を完全な列として読まない。
+
+`kind` の一覧（出典は v0.113.1 `sts2-a671e9ef`）:
+
+| kind | いつ（patch） | 主な項目 |
+|---|---|---|
+| `draw` `generated` `play` `card_discarded` `card_exhausted` `card_afflicted` `block_gained` `damage_received` `attacked` `energy_spent` `monster_move` `potion_used` `power_received` `history` | 履歴に記録したとき（`CombatHistory.Add`〔private〕の postfix。`IsLiveCombat` で捨てられた記録は出さない） | `source: "history"`・`entry`（*Entry の型）・`actor`。`play` は `phase`（started / finished）と `card_play_events_this_turn` と同じ項目、`damage_received.result` と `attacked.hits[]` は `receiver`・`original_target`（`Hook.ModifyPreBlockDamageTarget` / `ModifyUnblockedDamageTarget` の差し替えの前）・`blocked`・`unblocked`・`overkill`・`block_broken`・`fully_blocked`・`killed`・`props`、`monster_move` は `move_id`（`MoveState.StateId`）・`targets`、`power_received` は `power`・`amount`・`applier` |
+| `hook` | 通知 53 件（`Hook.After*` / `Before*` のうち棚卸しで public-missing だったもの）の始まり（static メソッドの prefix） | `hook`・`scope`（`combat` = `IterateCombatHookListeners`〔`ShouldSkipCombatEffect` の間は空〕、`combat_all`、`run`）・`args`（引数。札・生き物・パワー・ポーション・プレイ・ダメージの結果・修正したモデルの列・数値・列挙）・`passes`（巡ごと〔Early・通常・Late〕の、その巡のメソッドを上書きしている listener） |
+| `modify` | `Hook.ModifyHandDraw`（毎回）、`ModifyHpLost` / `ModifyPowerAmountGiven` / `ModifyPowerAmountReceived` / `ModifyCardPlayResultLocation`（修正したモデルがあるときだけ）の postfix | `hook`・`original`・`result`・`modifiers`。パワーの量は `PowerCmd` が渡す可変のパワーのときだけ（カードの説明の `PowerVar` のプレビューは正準のモデルを渡すので出来事にしない） |
+| `pile_move` | 札が山に入ったとき（`CardPile.AddInternal` の prefix。`CardPileCmd.Add` の中と、手動のプレイの Hand → Play） | `card`・`from`（直前の `RemoveInternal`）・`to`（手札が満杯なら捨て札）・`requested_to`・`position`（`top` / `bottom` / `random`）・`via`・`cloned_by` |
+| `shuffle` `hidden_rows` | `CardPileCmd.Shuffle` の prefix | `reason`（`explicit` / `draw_pile_empty`〔`ShuffleIfNecessary` の中〕）・`discard_count`・`draw_count`。シャッフルの `CardPileCmd.Add` の間の行（山の移動・`AfterCardChangedPiles`・その listener の行）は新しい山札の順に並ぶので書かず、Add が終わったときに件数を `hidden_rows`（`reason: "shuffle_order"`・`count`）で出す |
+| `removed_from_combat` `exhaust` `discard_and_draw` `card_change` | `CardPileCmd.RemoveFromCombat`・`CardCmd.Exhaust`（`caused_by_ethereal`）・`CardCmd.DiscardAndDraw`（`cards`・`draw_count`）の prefix、`CardTransformation.GetReplacement` の postfix（`change: "transform"`・`pile`・`from`・`to`） | |
+| `creature` `hp` `block` | `CreatureCmd.Add`（`added`）/ `Kill`（`kill`・`force`）/ `Escape`、`Heal` / `SetCurrentHp` / `GainMaxHp` / `LoseMaxHp` / `SetMaxHp` / `SetMaxAndCurrentHp` / `LoseBlock` の prefix | `action`・`target`・`amount`・`hp_before`・`max_hp_before`・`block_before`（変わった後の値は次の行・state） |
+| `energy` | `PlayerCombatState.Energy` の setter（変わったときだけ。どの命令でも） | `player_id`・`before`・`after` |
+| `potion` | `PotionCmd.TryToProcure`（`procure`）・`Player.AddPotionInternal`（`added`・`success`・`failure_reason`）・`PotionCmd.Discard` | |
+| `power` | `PowerCmd.Apply`（`apply`・要求した `amount`）/ `ModifyAmount` / `Decrement` / `TickDownDuration`（`skipped` = `SkipNextDurationTick`）/ `Remove` の prefix | 与えた後の量は `power_received` の行 |
+| `flash` | `RelicModel.Flash` / `PowerModel.Flash`（効果が働いた合図） | `model` |
+| `turn_phase` | `CombatManager` の手番の段階 12 件（`StartCombatInternal`・`StartTurn`・`RunAutoPrePlayPhase`・`SetupPlayerTurn`・`EndPlayerTurnPhaseOneInternal`・`DoTurnEnd`・`ResolveTurnEndCardEffects`・`FlushPlayerHand`・`EndPlayerTurnPhaseTwoInternal`・`SwitchFromPlayerToEnemySide`・`EndEnemyTurnInternal`・`EndCombatInternal`）の始まり | `phase`（snake_case）・`player_id`・`card` |
+| `selection` | `CardSelectCmd` / `RelicSelectCmd` の入口の Task が終わったとき（内側の入口だけ） | `selector`・`outer_selectors`・`opener`・`opened_at_seq`（開いたときの `next_seq`）・`offered`・`chosen`・`skipped` |
+
+隠すもの（山札の順・乱数・敵の非公開の情報には触らない）:
+
+- 山札の中の移動（Draw → Draw）の `pile_move` は `card: null`・`hidden_reason: "draw_pile"`。`removed_from_combat` の山札の札も同じ。
+- 置いた位置の添字は出さない（`CardPilePosition.Random` の添字は乱数から決まる）。`position` は呼出しの引数だけ。
+- シャッフルの間の行は上のとおり件数だけ。
+- 山札から選ぶ選択（`FromCombatPile` の Draw）の `offered` は `null`・`offered_hidden_reason: "draw_pile"`（渡された順が山札の順）。
+- 通知の listener のうち山札の札は `order: null` で、山札の表示順に並べる（`BuildHookListenerRows`、`choice_source` と同じ）。
+- どの patch も読むだけ（呼出しを飛ばさない・引数と戻り値を変えない・乱数を引かない）。
+
+`listeners` は通知が始まった時点の列で、巡（Early・通常・Late）ごとに、その巡のメソッドを上書きしているもの（上書きの無い
+listener は AbstractModel の何もしない既定を走る）。ゲームは巡ごとに列を作り直すので、前の巡で増えた・減った listener は
+違うことがある。上書きしていても何もしないことがある（働いたかは `flash` と後の行で見る）。上書きしている listener が 1 つも無い
+通知は行にしない。
+
+Markdown は `battle` の末尾に `### Combat Log (last 15 of seq A-B)` と 1 行ずつの要約（詳細は JSON）。
+
+契約試験は [`tests/CombatLogContract`](../tests/CombatLogContract/README.md)。行が実機の順で出るか・patch が当たるかは実機で確かめる。
 
 ### レリックの数値変数（追加、schema 3）
 
@@ -1591,6 +1714,11 @@ grid は `uid` と同じ条件（`CombatManager.IsInProgress` と取得可能な
   X の効果量への補正を含めるときはゲームが別途 `ResolveEnergyXValue` を使う。
   非 X では `null` と理由 `not_x_cost`、X 種別が読めない場合は `null` と
   `costs_x_unavailable`。いずれも CapturedXValue getter を呼ばず、警告を追加しない。
+- `x_value_if_played`（schema 1.10.0。`player.hand[]` の X の札だけ）: いま手札から撃ったときに効果が読む X。手動のプレイは
+  `CardEnergyCost.GetAmountToSpend()`（X は現在のエナジー全部）を `CardModel.SpendEnergy` で `CapturedXValue` にし、効果は
+  `CardModel.ResolveEnergyXValue()` = `Hook.ModifyXValue(CombatState, card, CapturedXValue)`（ケミカルX が `Increase` を足す）を読む。
+  同じ純粋な計算を現在のエナジーで行う（何も記録・支払いしない）。手札に無い・戦闘中でないときは `null` と
+  `unavailable_reasons.x_value_if_played`。非 X の札・手札以外の行には付けない。
 - `base` は固定コスト用の現在の基礎コスト。通常は `base_raw` と同じ値を使う。
   X・負コストでは既存契約どおり理由付き `null`。
 - `with_local_modifiers`: `GetWithModifiers(Local)`。local のみ適用した値。
@@ -3379,6 +3507,51 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
 `RunAutoPrePlayPhase` / `StartTurn`、`EntropyPower.AfterPlayerTurnStart`、`StratagemPower.AfterShuffle`。段の初めの山札は、
 `Hook.AfterPlayerTurnStart` / `AfterShuffle` の間だけ、`<IterateHookListeners>d__74.MoveNext` の最初の呼出しの前に読むだけの
 Harmony の prefix で記録する（列を作るのはその呼出し）。契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
+
+#### 選択の文脈（`decision_context`、schema 1.10.0）
+
+すべての選択画面（`hand_select`、`card_select`〔choose・grid・デッキの画面〕、`bundle_select`、`relic_select`）に、
+その画面を開いた入口と、誰が開いたかを出す。戦闘外の画面にも付ける。
+
+```jsonc
+"decision_context": {
+  "version": 1,
+  "known": true,
+  "screen": "deck",                      // hand / choose / combat_pile / simple_grid / deck / bundle / relic（他の grid は unknown）
+  "in_combat": false,
+  "selector": "FromDeckForUpgrade",      // 画面を出した入口（CardSelectCmd / RelicSelectCmd のメソッド）
+  "outer_selectors": [],                 // 同じ選択の外側の入口（FromDeckForRemoval → FromDeckGeneric など）
+  "chooser_player_id": "1",
+  "opener": {
+    "kind": "rest_site_option",          // relic / card / potion / power / event / enchantment / affliction / monster / model / rest_site_option / other
+    "model_type": "SmithRestSiteOption",
+    "model_id": null,                    // モデルの型なら ModelDb.GetEntry(型)（= Id.Entry）
+    "method": "OnSelect",
+    "call_stack": ["SmithRestSiteOption.OnSelect", "RestSiteRoom.…"]
+  },
+  "opened_at_combat_log_seq": null,      // 戦闘中なら、開いたときの combat_log.next_seq
+  "choice_source": null                  // 戦闘中は画面の choice_source と同じもの（await_chain で段階・ドローの残り）
+}
+```
+
+- 入口の記録: 戦闘中の 8 つの入口は `choice_source` と同じ prefix（`McpMod.ChoiceSource.cs`）、`PlayerChoiceContext` を取らない
+  入口（`FromDeckForUpgrade` / `FromDeckForTransformation` / `FromDeckForEnchantment`〔3 つの多重定義〕/ `FromDeckForRemoval` /
+  `FromDeckGeneric` / `FromChooseABundleScreen` / `RelicSelectCmd.FromChooseARelicScreen`）は別の読むだけの prefix・postfix
+  （Harmony ID `com.sts2mcp.decisioncontext`。player を context の代わりにする）。state を作るときは、ローカル player・
+  同じ戦闘（戦闘外なら戦闘の無い記録）・その画面を出す入口のうち、開いている最も新しい記録を使う。
+- `opener`: 入口が呼ばれたときの呼出し履歴（`System.Diagnostics.StackTrace`）でいちばん近いゲームのフレーム。async メソッドの
+  同期の部分は呼んだ側のスタックで走るので、レリックの `AfterObtained`・イベントの選択肢・休憩所の `OnSelect`・札の `OnPlay`・
+  パワーの通知がそこにある。コンパイラが作る状態機械・ラムダのフレームは元のメソッドの名前にする。MOD・Harmony・ランタイム・
+  選択の命令自身のフレームは飛ばす（Harmony が patch したゲームのメソッドも動的メソッドになるので出ない）。JIT が
+  インライン化したフレームはスタックに無いので、そのときは次に近いフレームになる。`call_stack` は内側から最大 6 つ。
+  ゲームのフレームが無ければ `kind: null` と理由（`known: false`）。
+- 記録が無い・合わない（`choice_source` と同じ条件）ときは `known: false` と `unavailable_reasons`。warning は `decision_context`。
+- 戦闘中の選択が終わると、`combat_log` に `kind: "selection"` の行（選んだもの・skip）を書く（上の表）。
+- Markdown は `Decision context: FromDeckForUpgrade; opener rest_site_option SmithRestSiteOption.OnSelect` の 1 行。
+
+出典は v0.113.1 `sts2-a671e9ef` の `CardSelectCmd.FromDeck*` / `FromChooseABundleScreen` / `FromChooseACardScreen` / `FromSimpleGrid*` /
+`FromCombatPile` / `FromHand*`、`RelicSelectCmd.FromChooseARelicScreen`、`NDeckCardSelectScreen` / `NDeckUpgradeSelectScreen` /
+`NDeckTransformSelectScreen` / `NDeckEnchantSelectScreen`、`ModelDb.GetEntry`。契約試験は [`tests/CombatLogContract`](../tests/CombatLogContract/README.md)。
 
 #### 選択候補の個体（`combat_instance`、schema 7）
 

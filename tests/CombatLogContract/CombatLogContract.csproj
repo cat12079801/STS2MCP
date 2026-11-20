@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../McpMod.CombatLogStore.cs" Link="CombatLogStore.cs" />
+    <Compile Include="../../McpMod.CombatLogFormatting.cs" Link="CombatLogFormatting.cs" />
+    <Compile Include="../../McpMod.ChoiceSourceTracker.cs" Link="ChoiceSourceTracker.cs" />
+    <Content Include="../../McpMod.CombatLog.cs;../../McpMod.CombatLogPatches.cs;../../McpMod.DecisionContext.cs;../../McpMod.ChoiceSource.cs;../../McpMod.StateBuilder.cs;../../McpMod.cs;../../McpMod.PotionGenerationPool.cs;../../McpMod.CardXValue.cs;../../McpMod.AutoPlayReservationPatches.cs;../../McpMod.Formatting.cs"
+             Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

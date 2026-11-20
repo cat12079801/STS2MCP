@@ -78,6 +78,13 @@ internal sealed class OpenCardSelection
     public long Sequence { get; init; }
     /// <summary>The Task the CardSelectCmd method returned (set by its postfix): the start of choice_source.await_chain.</summary>
     public object? SelectionTask { get; set; }
+    /// <summary>decision_context.opener: the nearest game frame that called the entry point (McpMod.DecisionContext.cs).</summary>
+    public object? Opener { get; set; }
+    /// <summary>combat_log.next_seq when the selection opened: the selection row says where in the fight it began.</summary>
+    public long? OpenedAtLogSeq { get; set; }
+    /// <summary>Another entry point opened the same selection inside this one (FromHandForDiscard → FromHand): only the
+    /// innermost record writes the combat_log selection row.</summary>
+    public bool HasInner { get; set; }
 }
 
 internal static class OpenCardSelections
@@ -108,6 +115,8 @@ internal static class OpenCardSelections
             };
             // A selection opened in another fight means the old fight's selections can no longer complete.
             if (combatState != null) Open.RemoveAll(r => r.CombatState != null && !ReferenceEquals(r.CombatState, combatState));
+            foreach (var outer in Open)
+                if (ReferenceEquals(outer.Context, context) && ReferenceEquals(outer.Player, player)) outer.HasInner = true;
             Open.Add(record);
             while (Open.Count > Capacity) Open.RemoveAt(0);
             return record;
@@ -175,6 +184,11 @@ internal static class OpenCardSelections
         "choose" => selector == "FromChooseACardScreen",
         "combat_pile" => selector == "FromCombatPile",
         "simple_grid" => selector is "FromSimpleGrid" or "FromSimpleGridForRewards",
+        // The deck screens (NDeckCardSelectScreen / NDeckUpgradeSelectScreen / NDeckTransformSelectScreen /
+        // NDeckEnchantSelectScreen) of CardSelectCmd.FromDeck*, NChooseABundleSelectionScreen and NChooseARelicSelection.
+        "deck" => selector.StartsWith("FromDeck", StringComparison.Ordinal),
+        "bundle" => selector == "FromChooseABundleScreen",
+        "relic" => selector == "FromChooseARelicScreen",
         _ => false
     };
 

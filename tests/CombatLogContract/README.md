@@ -1,0 +1,23 @@
+# 戦闘の出来事の通し列（`battle.combat_log`）・選択の文脈（`decision_context`）の契約試験
+
+追加パッケージ不要。fish では次で実行する。
+
+```fish
+env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/libexec/dotnet run --project tests/CombatLogContract -c Release -p:BuildInParallel=false -p:UseSharedCompilation=false
+```
+
+本番の `McpMod.CombatLogStore.cs`（行の保持・seq・窓・上限・戦闘ごとの初期化・欠けの印）、`McpMod.CombatLogFormatting.cs`
+（Markdown）、`McpMod.ChoiceSourceTracker.cs`（内側の入口の印・デッキ／束／レリックの画面）をリンクする。ゲームの型は使わない。
+
+- 行の保持: seq を 0 から振る、既定の窓は最後の N 行、`combat_log_since` はその seq から、上限を超えた古い行を捨てて
+  `first_seq` を進める、捨てた行より前を求めたら `since_truncated`、新しい戦闘で初めから、別の戦闘の行を返さない、
+  行を作れなかった・patch を当てられなかったら理由を出す（`known: false`）、記録した行は後から変わらない
+- 選択の記録: 同じ context の内側の入口が開いたら外側に印（`combat_log` の selection の行は内側だけ）、`FromDeck*`・束・レリックの画面
+- Markdown: `### Combat Log` の見出しと最後の 15 行、listener のいる巡だけ、山札の中の移動は札を出さない、unknown の理由、`Decision context:` の 1 行
+- ソースの文字列: 通知の表 53 件・手番の段階 12 件、prefix が bool を返さない（呼出しを飛ばさない）、乱数に触らない、
+  ゲームの引数を書き換えない、シャッフルの Add の間の行を伏せて `hidden_rows` で件数を出す、山札の中の移動と山札からの選択の候補の順を出さない、
+  置いた位置の添字を出さない、PowerVar のプレビューを出来事にしない、listener を `BuildHookListenerRows` で出す、
+  行を作れなければ `known: false`、初期化・`battle`・5 つの選択画面・`player`・手札の `energy_cost`・`ended_combat`・Markdown への配線、
+  `?combat_log_since=` を読むたびに戻すこと、schema 1.10.0
+
+ゲームに接続しない。patch が実際に当たるか・行が実機の順で出るかは調整役が実機（開発コンソールを使った検証用のラン）で確かめる。

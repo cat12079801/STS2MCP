@@ -67,8 +67,14 @@ public static partial class McpMod
     /// stage running models[0] (AfterPlayerTurnStart / AfterShuffle) with the list it took and the listeners after it,
     /// the shuffle and the draw (remaining draws, fromHandDraw) or auto-play reservation that shuffled, the turn start
     /// (SetupPlayerTurn, RunAutoPrePlayPhase) and their following steps (EntropyPower, StratagemPower; sts2#1115).
+    /// 1.10.0: the public-missing rows of the event inventory (docs/event-inventory.md): battle.combat_log (the fight's
+    /// notifications with their overriding listeners, history entries, pile moves, shuffles, card / creature / HP / block /
+    /// energy / potion / power commands, Modify* results with their modifiers, flashes, turn phases and selection results,
+    /// in order; ?combat_log_since=), decision_context on every selection screen (the entry point, who opened it, where in
+    /// the combat_log, and choice_source), player.potion_generation_pool, energy_cost.x_value_if_played on hand cards and
+    /// ended_combat.combat_log.
     /// </summary>
-    public const string StateSchema = "1.9.0";
+    public const string StateSchema = "1.10.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to
@@ -341,6 +347,10 @@ public static partial class McpMod
             InstallChoiceSourceTracking();
             // AutoPlayFromDrawPile's reservations in card_resolution_events, and the stream at the end of a fight.
             InstallAutoPlayReservationTracking();
+            // battle.combat_log: the fight's events in order (hooks, history, pile moves, turn phases, selections).
+            InstallCombatLogTracking();
+            // decision_context on every selection screen: the CardSelectCmd / RelicSelectCmd entry and who opened it.
+            InstallDecisionContextTracking();
 
             // Connect to main thread process frame for action execution
             var tree = (SceneTree)Engine.GetMainLoop();
@@ -790,9 +800,13 @@ public static partial class McpMod
             // same frame as the state (sts2#1037). Verification only; never on a non-passive read.
             bool setupGuard = passive
                 && ReadFlagParam(new Dictionary<string, JsonElement>(), request, ScenarioSetupGuardKey, false);
+            // ?combat_log_since=<seq>: battle.combat_log carries the rows from that seq on (default: the last window).
+            long? combatLogSince = long.TryParse(request.QueryString["combat_log_since"], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out long since) ? since : null;
             var state = RunOnMainThreadBlocking(() =>
             {
                 _passiveRead = passive;
+                _combatLogSince = combatLogSince;
                 try
                 {
                     var built = BuildStateMeasured(BuildGameState, perf);
@@ -809,7 +823,7 @@ public static partial class McpMod
                     }
                     return built;
                 }
-                finally { _passiveRead = false; }
+                finally { _passiveRead = false; _combatLogSince = null; }
             });
 
             if (format == "markdown")
