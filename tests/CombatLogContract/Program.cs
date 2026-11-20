@@ -116,6 +116,7 @@ namespace STS2_MCP
             AppendCombatLogMarkdown(sb, battle);
             string text = sb.ToString();
             Check(text.Contains("### Combat Log (last 15 of seq 0-22)"), "見出しは表示した行数と seq の範囲");
+            Check(CombatLogStore.DefaultWindow == 100, "既定の窓は 100 行");
             Check(!text.Contains("STRIKE#7\n") && text.Contains("STRIKE#8") && text.Contains("- 22 9 rows hidden (shuffle_order)"), "最後の 15 行だけ");
             Check(text.Contains("hook AfterCardPlayed: AfterCardPlayed [RAGE_POWER]") && !text.Contains("AfterCardPlayedLate ["), "hook の行は listener のいる巡だけ");
             Check(text.Contains("move hidden Draw → Draw (top)"), "山札の中の移動は札を出さない");
@@ -156,8 +157,20 @@ namespace STS2_MCP
             Check(!Regex.IsMatch(all, "\\.Next(Int|Float|Item|Bool)\\(|StableShuffle|\\.Rng\\."), "乱数に触らない");
             Check(!Regex.IsMatch(patches, "ref (CardPile|CardModel|Creature|PowerModel|PotionModel|decimal|int) [a-z]"), "ゲームの引数を書き換えない（ref は out 引数の読み取りと struct の __instance だけ）");
             Check(log.Contains("if (_combatLogSuppressed.Value is { } suppressed) { suppressed.Count++; return; }"), "シャッフルの Add の中の行は数えるだけ");
-            Check(patches.Contains("_shuffleScope.Value != null && _combatLogSuppressed.Value == null ? new SuppressedRows()") && patches.Contains("row[\"reason\"] = \"shuffle_order\";"),
-                "シャッフルの Add の間を伏せ、件数を hidden_rows で出す");
+            Check(patches.Contains("_shuffleAddPending.Value?.TryUse() == true && _combatLogSuppressed.Value == null ? new SuppressedRows()") && patches.Contains("row[\"reason\"] = \"shuffle_order\";"),
+                "シャッフル自身の Add の間だけを伏せ、件数を hidden_rows で出す");
+            Check(patches.Contains("_shuffleAddPending.Value = new OneShot();") && !patches.Contains("_shuffleScope"),
+                "伏せる印は一度しか使えない（AfterShuffle の listener の移動は伏せない）");
+            Check(patches.Contains("_shuffleIfNecessaryPending.Value?.TryUse() == true ? \"draw_pile_empty\" : \"explicit\""),
+                "draw_pile_empty は ShuffleIfNecessary が呼んだシャッフルだけ");
+            Check(patches.Contains("if (scope?.Cards != null && !scope.Cards.Contains(card)) scope = null;"),
+                "Add の listener の中で別の命令が置いた札に Add の位置を付けない");
+            Check(patches.Contains("ResolveCombatLogPhase(p.Method, p.Parameters)") && !patches.Contains("AccessTools.DeclaredMethod(typeof(CombatManager), phase)"),
+                "手番の段階は引数の型で 1 つに決めてから当てる（多重定義で AmbiguousMatchException にしない）");
+            Check(decision.Contains("player, player, GetLiveCombatStateForSelection(), candidates: candidates)")
+                && Read("McpMod.ChoiceSource.cs").Contains("OpenCardSelections.Add(__originalMethod.Name, context, player, GetLiveCombatStateForSelection(),"),
+                "選択の記録の戦闘は進行中の戦闘（戦闘後の報酬の画面では戦闘外として扱う）");
+            Check(decision.Contains("(fromDraw ? OrderPileCardsForDisplay(cards, PileType.Draw) : cards)"), "山札から自動で選ばれた札は表示順");
             Check(patches.Contains("bool hidden = from == PileType.Draw && to == PileType.Draw;"), "山札の中の移動は札を出さない");
             Check(!patches.Contains("row[\"index\"]") && patches.Contains("The index is never published"), "置いた位置の添字を出さない");
             Check(decision.Contains("row[\"offered_hidden_reason\"] = \"draw_pile\";"), "山札からの選択の候補は順を出さない");

@@ -73,7 +73,7 @@ public-missing は 0 件、うちアイアンクラッドの範囲は 0 件。
 
 public-missing を行ごとの Harmony の patch にせず、次の 3 つの共通の仕組みにまとめた（契約は `docs/raw-full.md`「戦闘の出来事の通し列」「選択の文脈」）。
 
-1. **`battle.combat_log`（戦闘ごとの通し列）**。行は確定したら変えない（`seq` の順。前の読みが後の読みの先頭になる）。保持は 1 戦闘 2000 行（古い行から捨てる）、state は既定で最後の 400 行、`?combat_log_since=<seq>` でその seq から。新しい戦闘で初めから。行の出どころ:
+1. **`battle.combat_log`（戦闘ごとの通し列）**。行は確定したら変えない（`seq` の順。前の読みが後の読みの先頭になる）。保持は 1 戦闘 2000 行（古い行から捨てる）、state は既定で最後の 100 行、`?combat_log_since=<seq>` でその seq から。新しい戦闘で初めから。行の出どころ:
    - `CombatHistory.Add`（private。全 *Entry が通る）の postfix で、履歴の全種（draw・play・generated・damage_received・attacked・block_gained・power_received・energy_spent・potion_used・monster_move・card_exhausted・card_discarded・card_afflicted）
    - Hook の通知 53 件は static メソッドの prefix で `kind=hook` の行（通知が始まった時点の列で、巡ごとに上書きしている listener。上書きの無い通知は行にしない。山札の listener の位置は `BuildHookListenerRows` で隠す）。`RelicModel.Flash` / `PowerModel.Flash` は `kind=flash` の行
    - 履歴に残らない命令（`CardPile.AddInternal` での山の移動〔`CardPileCmd.Add` の位置・cloned_by〕・`Shuffle`・`RemoveFromCombat`・`CardCmd.Exhaust` / `DiscardAndDraw` / 変化・`CreatureCmd` の Add / Kill / Escape / HP / ブロック・エナジーの setter・`PotionCmd`・`PowerCmd`）は命令ごとの prefix の行
@@ -81,6 +81,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
    - 手番の段階 12 件は `CombatManager` の private メソッドの prefix で `kind=turn_phase` の行、選択の結果は `kind=selection` の行
    - シャッフルの `CardPileCmd.Add` の間の行は、新しい山札の順に並ぶので出さず、件数だけを `kind=hidden_rows` で出す
 2. **`decision_context`（全選択画面）**。入口（`selector`・`outer_selectors`）、開いた元（呼出し履歴でいちばん近いゲームのフレーム）、開いた時点の `combat_log` の seq、戦闘中は `choice_source`（await_chain で段階・ドローの残り）
+`--check` は `exposed_by` の文字列が MOD にあるかしか見ない。patch が実際に当たるかは `tests/PatchTargetsContract`（本物の `sts2.dll` に対して install のメソッドを呼ぶ）と、実機の state の `combat_log.unavailable_reasons`（群ごとに `install: <群>: …`）で見る。
 3. **計算値**: `player.potion_generation_pool`（`PotionFactory.GetPotionOptions`）と、手札の X の札の `energy_cost.x_value_if_played`（`Hook.ModifyXValue`）。
 
 ## exposed（MOD が出しているもの）
@@ -93,16 +94,16 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:CardCmd.AutoPlay` | card_resolution_events[kind=play].is_auto_play | McpMod.CombatHistory.cs:282 |
 | `cmd:CardCmd.ClearAffliction` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.CardDetails.cs:45 |
 | `cmd:CardCmd.ClearEnchantment` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.CardDetails.cs:63 |
-| `cmd:CardCmd.DiscardAndDraw` | battle.combat_log[kind=discard_and_draw]{cards, draw_count} と後続の card_discarded・draw の行 | McpMod.CombatLogPatches.cs:709 |
+| `cmd:CardCmd.DiscardAndDraw` | battle.combat_log[kind=discard_and_draw]{cards, draw_count} と後続の card_discarded・draw の行 | McpMod.CombatLogPatches.cs:753 |
 | `cmd:CardCmd.Downgrade` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.StateBuilder.cs:1860 |
 | `cmd:CardCmd.Enchant` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.CardDetails.cs:63 |
-| `cmd:CardCmd.Exhaust` | battle.combat_log[kind=exhaust]{card, caused_by_ethereal} と card_exhausted の行 | McpMod.CombatLogPatches.cs:697, McpMod.CombatLogPatches.cs:307 |
+| `cmd:CardCmd.Exhaust` | battle.combat_log[kind=exhaust]{card, caused_by_ethereal} と card_exhausted の行 | McpMod.CombatLogPatches.cs:741, McpMod.CombatLogPatches.cs:347 |
 | `cmd:CardCmd.RemoveKeyword` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.StateBuilder.cs:1864 |
-| `cmd:CardCmd.Transform` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:724 |
-| `cmd:CardCmd.TransformTo` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:724 |
-| `cmd:CardCmd.TransformToRandom` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:724 |
+| `cmd:CardCmd.Transform` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:768 |
+| `cmd:CardCmd.TransformTo` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:768 |
+| `cmd:CardCmd.TransformToRandom` | battle.combat_log[kind=card_change,change=transform]{pile, from, to} | McpMod.CombatLogPatches.cs:768 |
 | `cmd:CardCmd.Upgrade` | カードの項目（is_upgraded・enchantment・affliction・keywords） | McpMod.StateBuilder.cs:1860 |
-| `cmd:CardPileCmd.Add` | battle.combat_log[kind=pile_move]{card\|hidden_reason, from, to, requested_to, position, cloned_by} | McpMod.CombatLogPatches.cs:629 |
+| `cmd:CardPileCmd.Add` | battle.combat_log[kind=pile_move]{card\|hidden_reason, from, to, requested_to, position, cloned_by} | McpMod.CombatLogPatches.cs:673 |
 | `cmd:CardPileCmd.AddCurseToDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
 | `cmd:CardPileCmd.AddCursesToDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
 | `cmd:CardPileCmd.AddGeneratedCardToCombat` | card_resolution_events[kind=generated] | McpMod.CombatHistory.cs:235 |
@@ -111,42 +112,42 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:CardPileCmd.AutoPlayFromDrawPile` | card_resolution_events[kind=auto_play_reservation] | McpMod.CombatHistory.cs:183 |
 | `cmd:CardPileCmd.Draw` | card_resolution_events[kind=draw] | McpMod.CombatHistory.cs:228, McpMod.CombatHistory.cs:230 |
 | `cmd:CardPileCmd.DrawWithoutBlockingOnOtherPlayers` | card_resolution_events[kind=draw] | McpMod.CombatHistory.cs:228 |
-| `cmd:CardPileCmd.RemoveFromCombat` | battle.combat_log[kind=removed_from_combat]{cards} | McpMod.CombatLogPatches.cs:651 |
+| `cmd:CardPileCmd.RemoveFromCombat` | battle.combat_log[kind=removed_from_combat]{cards} | McpMod.CombatLogPatches.cs:695 |
 | `cmd:CardPileCmd.RemoveFromDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
-| `cmd:CardPileCmd.Shuffle` | battle.combat_log[kind=shuffle]{reason, discard_count, draw_count} と choice_source.await_chain の shuffle | McpMod.CombatLogPatches.cs:669, McpMod.ChoiceAwaitChain.cs:61 |
-| `cmd:CardPileCmd.ShuffleIfNecessary` | battle.combat_log[kind=shuffle,reason=draw_pile_empty] と choice_source.await_chain の shuffle_if_necessary | McpMod.CombatLogPatches.cs:662, McpMod.ChoiceAwaitChain.cs:62 |
-| `cmd:CreatureCmd.Add` | battle.combat_log[kind=creature,action=added] | McpMod.CombatLogPatches.cs:738 |
-| `cmd:CreatureCmd.Damage` | battle.combat_log[kind=damage_received]{dealer, card_source, result} | McpMod.CombatLogPatches.cs:310 |
-| `cmd:CreatureCmd.Escape` | battle.combat_log[kind=creature,action=escape] | McpMod.CombatLogPatches.cs:762 |
-| `cmd:CreatureCmd.GainBlock` | battle.combat_log[kind=block_gained]{amount, props, card_play_uid} | McpMod.CombatLogPatches.cs:309 |
-| `cmd:CreatureCmd.GainMaxHp` | battle.combat_log[kind=hp,action=gain_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:238 |
-| `cmd:CreatureCmd.Heal` | battle.combat_log[kind=hp,action=heal]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:236 |
-| `cmd:CreatureCmd.Kill` | battle.combat_log[kind=creature,action=kill]{creatures, card_source, force} | McpMod.CombatLogPatches.cs:751 |
-| `cmd:CreatureCmd.LoseBlock` | battle.combat_log[kind=block,action=lose_block]{target, amount, block_before, remover} | McpMod.CombatLogPatches.cs:242 |
-| `cmd:CreatureCmd.LoseMaxHp` | battle.combat_log[kind=hp,action=lose_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:239 |
-| `cmd:CreatureCmd.SetCurrentHp` | battle.combat_log[kind=hp,action=set_current_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:237 |
-| `cmd:CreatureCmd.SetMaxAndCurrentHp` | battle.combat_log[kind=hp,action=set_max_and_current_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:241 |
-| `cmd:CreatureCmd.SetMaxHp` | battle.combat_log[kind=hp,action=set_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:240 |
+| `cmd:CardPileCmd.Shuffle` | battle.combat_log[kind=shuffle]{reason, discard_count, draw_count} と choice_source.await_chain の shuffle | McpMod.CombatLogPatches.cs:713, McpMod.ChoiceAwaitChain.cs:61 |
+| `cmd:CardPileCmd.ShuffleIfNecessary` | battle.combat_log[kind=shuffle,reason=draw_pile_empty] と choice_source.await_chain の shuffle_if_necessary | McpMod.CombatLogPatches.cs:706, McpMod.ChoiceAwaitChain.cs:62 |
+| `cmd:CreatureCmd.Add` | battle.combat_log[kind=creature,action=added] | McpMod.CombatLogPatches.cs:782 |
+| `cmd:CreatureCmd.Damage` | battle.combat_log[kind=damage_received]{dealer, card_source, result} | McpMod.CombatLogPatches.cs:350 |
+| `cmd:CreatureCmd.Escape` | battle.combat_log[kind=creature,action=escape] | McpMod.CombatLogPatches.cs:806 |
+| `cmd:CreatureCmd.GainBlock` | battle.combat_log[kind=block_gained]{amount, props, card_play_uid} | McpMod.CombatLogPatches.cs:349 |
+| `cmd:CreatureCmd.GainMaxHp` | battle.combat_log[kind=hp,action=gain_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:277 |
+| `cmd:CreatureCmd.Heal` | battle.combat_log[kind=hp,action=heal]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:275 |
+| `cmd:CreatureCmd.Kill` | battle.combat_log[kind=creature,action=kill]{creatures, card_source, force} | McpMod.CombatLogPatches.cs:795 |
+| `cmd:CreatureCmd.LoseBlock` | battle.combat_log[kind=block,action=lose_block]{target, amount, block_before, remover} | McpMod.CombatLogPatches.cs:281 |
+| `cmd:CreatureCmd.LoseMaxHp` | battle.combat_log[kind=hp,action=lose_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:278 |
+| `cmd:CreatureCmd.SetCurrentHp` | battle.combat_log[kind=hp,action=set_current_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:276 |
+| `cmd:CreatureCmd.SetMaxAndCurrentHp` | battle.combat_log[kind=hp,action=set_max_and_current_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:280 |
+| `cmd:CreatureCmd.SetMaxHp` | battle.combat_log[kind=hp,action=set_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:279 |
 | `cmd:CreatureCmd.Stun` | enemies[].is_stun | McpMod.EnemyStunHandler.cs:61 |
-| `cmd:DamageCmd.Attack` | battle.combat_log[kind=attacked]{actor, hits[]} | McpMod.CombatLogPatches.cs:311 |
+| `cmd:DamageCmd.Attack` | battle.combat_log[kind=attacked]{actor, hits[]} | McpMod.CombatLogPatches.cs:351 |
 | `cmd:MapCmd.SetBossEncounter` | map.boss | McpMod.StateBuilder.cs:2814 |
 | `cmd:PlayerCmd.AddPet` | player.pets | McpMod.StateBuilder.cs:1731 |
-| `cmd:PlayerCmd.GainEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:797 |
+| `cmd:PlayerCmd.GainEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:841 |
 | `cmd:PlayerCmd.GainGold` | player.gold | McpMod.StateBuilder.cs:1735 |
 | `cmd:PlayerCmd.GainMaxPotionCount` | player.max_potion_slots | McpMod.StateBuilder.cs:1793 |
-| `cmd:PlayerCmd.LoseEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:797 |
+| `cmd:PlayerCmd.LoseEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:841 |
 | `cmd:PlayerCmd.LoseGold` | player.gold | McpMod.StateBuilder.cs:1735 |
 | `cmd:PlayerCmd.LoseMaxPotionCount` | player.max_potion_slots | McpMod.StateBuilder.cs:1793 |
 | `cmd:PlayerCmd.MimicRestSiteHeal` | rest_site | McpMod.StateBuilder.cs:603 |
-| `cmd:PlayerCmd.SetEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:797 |
+| `cmd:PlayerCmd.SetEnergy` | battle.combat_log[kind=energy]{player_id, before, after}（PlayerCombatState.Energy の setter。どの命令でも） | McpMod.CombatLogPatches.cs:841 |
 | `cmd:PlayerCmd.SetGold` | player.gold | McpMod.StateBuilder.cs:1735 |
-| `cmd:PotionCmd.Discard` | battle.combat_log[kind=potion,action=discard] | McpMod.CombatLogPatches.cs:835 |
-| `cmd:PotionCmd.TryToProcure` | battle.combat_log[kind=potion,action=procure] と action=added{success, failure_reason} | McpMod.CombatLogPatches.cs:811, McpMod.CombatLogPatches.cs:827 |
-| `cmd:PowerCmd.Apply` | battle.combat_log[kind=power,action=apply]{power_id, target, amount, applier, card_source} と power_received の行 | McpMod.CombatLogPatches.cs:846 |
-| `cmd:PowerCmd.Decrement` | battle.combat_log[kind=power,action=decrement] | McpMod.CombatLogPatches.cs:871 |
-| `cmd:PowerCmd.ModifyAmount` | battle.combat_log[kind=power,action=modify_amount]{power, offset, applier, card_source} | McpMod.CombatLogPatches.cs:859 |
-| `cmd:PowerCmd.Remove` | battle.combat_log[kind=power,action=remove] | McpMod.CombatLogPatches.cs:892 |
-| `cmd:PowerCmd.TickDownDuration` | battle.combat_log[kind=power,action=tick_down]{power, skipped} | McpMod.CombatLogPatches.cs:881 |
+| `cmd:PotionCmd.Discard` | battle.combat_log[kind=potion,action=discard] | McpMod.CombatLogPatches.cs:879 |
+| `cmd:PotionCmd.TryToProcure` | battle.combat_log[kind=potion,action=procure] と action=added{success, failure_reason} | McpMod.CombatLogPatches.cs:855, McpMod.CombatLogPatches.cs:871 |
+| `cmd:PowerCmd.Apply` | battle.combat_log[kind=power,action=apply]{power_id, target, amount, applier, card_source} と power_received の行 | McpMod.CombatLogPatches.cs:890 |
+| `cmd:PowerCmd.Decrement` | battle.combat_log[kind=power,action=decrement] | McpMod.CombatLogPatches.cs:915 |
+| `cmd:PowerCmd.ModifyAmount` | battle.combat_log[kind=power,action=modify_amount]{power, offset, applier, card_source} | McpMod.CombatLogPatches.cs:903 |
+| `cmd:PowerCmd.Remove` | battle.combat_log[kind=power,action=remove] | McpMod.CombatLogPatches.cs:936 |
+| `cmd:PowerCmd.TickDownDuration` | battle.combat_log[kind=power,action=tick_down]{power, skipped} | McpMod.CombatLogPatches.cs:925 |
 | `cmd:RelicCmd.Melt` | player.relics[].melted | McpMod.StateBuilder.cs:1758 |
 | `cmd:RelicCmd.Obtain` | player.relics | McpMod.StateBuilder.cs:1780 |
 | `cmd:RelicCmd.Remove` | player.relics | McpMod.StateBuilder.cs:1780 |
@@ -166,7 +167,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `computed:Hook.ModifyBlock` | hand[].preview.block | McpMod.CardPreview.cs:27 |
 | `computed:Hook.ModifyCardBeingAddedToDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
 | `computed:Hook.ModifyCardPlayCount` | card_resolution_events[kind=play].play_count | McpMod.CombatHistory.cs:285 |
-| `computed:Hook.ModifyCardPlayResultLocation` | battle.combat_log[kind=modify,hook=ModifyCardPlayResultLocation]{card, original, result, modifiers} | McpMod.CombatLogPatches.cs:553 |
+| `computed:Hook.ModifyCardPlayResultLocation` | battle.combat_log[kind=modify,hook=ModifyCardPlayResultLocation]{card, original, result, modifiers} | McpMod.CombatLogPatches.cs:593 |
 | `computed:Hook.ModifyCardRewardAlternatives` | card_reward | McpMod.StateBuilder.cs:474 |
 | `computed:Hook.ModifyCardRewardCreationOptions` | card_reward | McpMod.StateBuilder.cs:474 |
 | `computed:Hook.ModifyDamage` | hand[].vs_targets / enemies[].intents | McpMod.StateBuilder.cs:1924, McpMod.StateBuilder.cs:2219 |
@@ -176,21 +177,21 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `computed:Hook.ModifyGeneratedMap` | map | McpMod.StateBuilder.cs:2808 |
 | `computed:Hook.ModifyGeneratedMapLate` | map | McpMod.StateBuilder.cs:2808 |
 | `computed:Hook.ModifyGoldGained` | player.gold | McpMod.StateBuilder.cs:1735 |
-| `computed:Hook.ModifyHandDraw` | battle.combat_log[kind=modify,hook=ModifyHandDraw]{original, result, modifiers} | McpMod.CombatLogPatches.cs:478 |
-| `computed:Hook.ModifyHpLost` | battle.combat_log[kind=modify,hook=ModifyHpLost]{phase, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:496 |
+| `computed:Hook.ModifyHandDraw` | battle.combat_log[kind=modify,hook=ModifyHandDraw]{original, result, modifiers} | McpMod.CombatLogPatches.cs:518 |
+| `computed:Hook.ModifyHpLost` | battle.combat_log[kind=modify,hook=ModifyHpLost]{phase, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:536 |
 | `computed:Hook.ModifyKeywordsInCombat` | hand[].keywords | McpMod.StateBuilder.cs:1864 |
 | `computed:Hook.ModifyMaxEnergy` | player.max_energy | McpMod.StateBuilder.cs:1660 |
 | `computed:Hook.ModifyMerchantCardCreationResults` | shop | McpMod.StateBuilder.cs:590 |
 | `computed:Hook.ModifyMerchantPrice` | shop.*.price | McpMod.StateBuilder.cs:2492 |
-| `computed:Hook.ModifyPowerAmountGiven` | battle.combat_log[kind=modify,hook=ModifyPowerAmountGiven]{power_id, giver, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:516 |
-| `computed:Hook.ModifyPowerAmountReceived` | battle.combat_log[kind=modify,hook=ModifyPowerAmountReceived]{power_id, giver, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:524 |
-| `computed:Hook.ModifyPreBlockDamageTarget` | battle.combat_log[kind=damage_received].result{receiver, original_target}・attacked.hits[] | McpMod.CombatLogPatches.cs:387 |
+| `computed:Hook.ModifyPowerAmountGiven` | battle.combat_log[kind=modify,hook=ModifyPowerAmountGiven]{power_id, giver, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:556 |
+| `computed:Hook.ModifyPowerAmountReceived` | battle.combat_log[kind=modify,hook=ModifyPowerAmountReceived]{power_id, giver, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:564 |
+| `computed:Hook.ModifyPreBlockDamageTarget` | battle.combat_log[kind=damage_received].result{receiver, original_target}・attacked.hits[] | McpMod.CombatLogPatches.cs:427 |
 | `computed:Hook.ModifyRestSiteHealAmount` | rest_site | McpMod.StateBuilder.cs:603 |
 | `computed:Hook.ModifyRestSiteHealRewards` | rest_site | McpMod.StateBuilder.cs:603 |
 | `computed:Hook.ModifyRestSiteOptions` | rest_site | McpMod.StateBuilder.cs:603 |
 | `computed:Hook.ModifyRewards` | rewards | McpMod.StateBuilder.cs:479 |
 | `computed:Hook.ModifyStarCost` | hand[].star_cost_state | McpMod.StateBuilder.cs:1917 |
-| `computed:Hook.ModifyUnblockedDamageTarget` | battle.combat_log[kind=damage_received].result{receiver, original_target}・attacked.hits[] | McpMod.CombatLogPatches.cs:387 |
+| `computed:Hook.ModifyUnblockedDamageTarget` | battle.combat_log[kind=damage_received].result{receiver, original_target}・attacked.hits[] | McpMod.CombatLogPatches.cs:427 |
 | `computed:Hook.ModifyXValue` | player.hand[].energy_cost.x_value_if_played | McpMod.CardXValue.cs:29 |
 | `computed:Hook.ShouldAddToDeck` | player.deck | McpMod.StateBuilder.cs:1832 |
 | `computed:Hook.ShouldAllowFreeTravel` | map | McpMod.StateBuilder.cs:2808 |
@@ -207,20 +208,20 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `computed:Hook.TryModifyCardRewardOptions` | card_reward | McpMod.StateBuilder.cs:474 |
 | `computed:Hook.TryReplaceDefaultRoomRewards` | rewards | McpMod.StateBuilder.cs:479 |
 | `computed:PotionFactory.GetPotionOptions` | player.potion_generation_pool{potions[{id, rarity, can_be_generated_in_combat}]} | McpMod.PotionGenerationPool.cs:33 |
-| `history:BlockGainedEntry` | battle.combat_log[kind=block_gained,source=history] | McpMod.CombatLogPatches.cs:309 |
-| `history:CardAfflictedEntry` | battle.combat_log[kind=card_afflicted,source=history] | McpMod.CombatLogPatches.cs:308 |
-| `history:CardDiscardedEntry` | battle.combat_log[kind=card_discarded,source=history] | McpMod.CombatLogPatches.cs:306 |
+| `history:BlockGainedEntry` | battle.combat_log[kind=block_gained,source=history] | McpMod.CombatLogPatches.cs:349 |
+| `history:CardAfflictedEntry` | battle.combat_log[kind=card_afflicted,source=history] | McpMod.CombatLogPatches.cs:348 |
+| `history:CardDiscardedEntry` | battle.combat_log[kind=card_discarded,source=history] | McpMod.CombatLogPatches.cs:346 |
 | `history:CardDrawnEntry` | card_resolution_events[kind=draw] | McpMod.CombatHistory.cs:228 |
-| `history:CardExhaustedEntry` | battle.combat_log[kind=card_exhausted,source=history] | McpMod.CombatLogPatches.cs:307 |
+| `history:CardExhaustedEntry` | battle.combat_log[kind=card_exhausted,source=history] | McpMod.CombatLogPatches.cs:347 |
 | `history:CardGeneratedEntry` | card_resolution_events[kind=generated] | McpMod.CombatHistory.cs:235 |
 | `history:CardPlayFinishedEntry` | card_resolution_events[kind=play,phase=finished] | McpMod.CombatHistory.cs:282 |
 | `history:CardPlayStartedEntry` | card_resolution_events[kind=play,phase=started] | McpMod.CombatHistory.cs:282 |
-| `history:CreatureAttackedEntry` | battle.combat_log[kind=attacked,source=history] | McpMod.CombatLogPatches.cs:311 |
-| `history:DamageReceivedEntry` | battle.combat_log[kind=damage_received,source=history] | McpMod.CombatLogPatches.cs:310 |
-| `history:EnergySpentEntry` | battle.combat_log[kind=energy_spent,source=history] | McpMod.CombatLogPatches.cs:312 |
-| `history:MonsterPerformedMoveEntry` | battle.combat_log[kind=monster_move,source=history] | McpMod.CombatLogPatches.cs:313 |
-| `history:PotionUsedEntry` | battle.combat_log[kind=potion_used,source=history] | McpMod.CombatLogPatches.cs:314 |
-| `history:PowerReceivedEntry` | battle.combat_log[kind=power_received,source=history] | McpMod.CombatLogPatches.cs:315 |
+| `history:CreatureAttackedEntry` | battle.combat_log[kind=attacked,source=history] | McpMod.CombatLogPatches.cs:351 |
+| `history:DamageReceivedEntry` | battle.combat_log[kind=damage_received,source=history] | McpMod.CombatLogPatches.cs:350 |
+| `history:EnergySpentEntry` | battle.combat_log[kind=energy_spent,source=history] | McpMod.CombatLogPatches.cs:352 |
+| `history:MonsterPerformedMoveEntry` | battle.combat_log[kind=monster_move,source=history] | McpMod.CombatLogPatches.cs:353 |
+| `history:PotionUsedEntry` | battle.combat_log[kind=potion_used,source=history] | McpMod.CombatLogPatches.cs:354 |
+| `history:PowerReceivedEntry` | battle.combat_log[kind=power_received,source=history] | McpMod.CombatLogPatches.cs:355 |
 | `hook:Hook.AfterActEntered` | map | McpMod.StateBuilder.cs:2808 |
 | `hook:Hook.AfterAttack` | battle.combat_log[kind=hook,hook=AfterAttack]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:36 |
 | `hook:Hook.AfterAutoPostPlayPhaseEntered` | battle.combat_log[kind=hook,hook=AfterAutoPostPlayPhaseEntered]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:37 |
@@ -291,26 +292,26 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `manual:CardModel.OnPlayWrapper` | card_resolution_events[kind=play] | McpMod.CombatHistory.cs:282 |
 | `manual:CardPileCmd.DrawInternal` | choice_source.await_chain の draw{draws_requested, draw_index, remaining_draws, from_hand_draw}（選択の間） | McpMod.ChoiceAwaitChain.cs:59 |
 | `manual:CardReward` | card_reward | McpMod.StateBuilder.cs:474 |
-| `manual:CardSelectCmd.skip_and_result` | battle.combat_log[kind=selection]{selector, opener, opened_at_seq, offered\|offered_hidden_reason, chosen, skipped} | McpMod.DecisionContext.cs:246 |
-| `manual:CombatState.IterateHookListeners` | <screen>.choice_source.hook.remaining_listeners | McpMod.ChoiceSource.cs:333 |
-| `manual:EntropyPower.selection_stage` | <screen>.decision_context.choice_source.await_chain の hook{awaiting, following, listener} | McpMod.ChoiceAwaitChain.cs:57, McpMod.DecisionContext.cs:194 |
+| `manual:CardSelectCmd.skip_and_result` | battle.combat_log[kind=selection]{selector, opener, opened_at_seq, offered\|offered_hidden_reason, chosen, skipped} | McpMod.DecisionContext.cs:252 |
+| `manual:CombatState.IterateHookListeners` | <screen>.choice_source.hook.remaining_listeners | McpMod.ChoiceSource.cs:334 |
+| `manual:EntropyPower.selection_stage` | <screen>.decision_context.choice_source.await_chain の hook{awaiting, following, listener} | McpMod.ChoiceAwaitChain.cs:57, McpMod.DecisionContext.cs:196 |
 | `manual:EventModel.CurrentOptions` | event.options | McpMod.StateBuilder.cs:564 |
-| `manual:PotionModel.OnUseWrapper` | battle.combat_log[kind=potion_used] と hook BeforePotionUsed・AfterPotionUsed の行 | McpMod.CombatLogPatches.cs:314, McpMod.CombatLogPatches.cs:85, McpMod.CombatLogPatches.cs:67 |
-| `manual:PowerModel.Flash` | battle.combat_log[kind=flash]{model} | McpMod.CombatLogPatches.cs:281 |
-| `manual:RelicModel.Flash` | battle.combat_log[kind=flash]{model} | McpMod.CombatLogPatches.cs:280 |
-| `manual:StratagemPower.selection_stage` | <screen>.decision_context.choice_source.await_chain の hook・shuffle・draw | McpMod.ChoiceAwaitChain.cs:58, McpMod.DecisionContext.cs:194 |
-| `phase:CombatManager.DoTurnEnd` | battle.combat_log[kind=turn_phase,phase=do_turn_end] | McpMod.CombatLogPatches.cs:96 |
-| `phase:CombatManager.EndCombatInternal` | battle.combat_log[kind=turn_phase,phase=end_combat_internal] | McpMod.CombatLogPatches.cs:97 |
-| `phase:CombatManager.EndEnemyTurnInternal` | battle.combat_log[kind=turn_phase,phase=end_enemy_turn_internal] | McpMod.CombatLogPatches.cs:97 |
-| `phase:CombatManager.EndPlayerTurnPhaseOneInternal` | battle.combat_log[kind=turn_phase,phase=end_player_turn_phase_one_internal] | McpMod.CombatLogPatches.cs:95 |
-| `phase:CombatManager.EndPlayerTurnPhaseTwoInternal` | battle.combat_log[kind=turn_phase,phase=end_player_turn_phase_two_internal] | McpMod.CombatLogPatches.cs:96 |
-| `phase:CombatManager.FlushPlayerHand` | battle.combat_log[kind=turn_phase,phase=flush_player_hand] | McpMod.CombatLogPatches.cs:96 |
-| `phase:CombatManager.ResolveTurnEndCardEffects` | battle.combat_log[kind=turn_phase,phase=resolve_turn_end_card_effects] | McpMod.CombatLogPatches.cs:96 |
-| `phase:CombatManager.RunAutoPrePlayPhase` | battle.combat_log[kind=turn_phase,phase=run_auto_pre_play_phase] | McpMod.CombatLogPatches.cs:95 |
-| `phase:CombatManager.SetupPlayerTurn` | battle.combat_log[kind=turn_phase,phase=setup_player_turn] | McpMod.CombatLogPatches.cs:95, McpMod.ChoiceAwaitChain.cs:38 |
-| `phase:CombatManager.StartCombatInternal` | battle.combat_log[kind=turn_phase,phase=start_combat_internal] | McpMod.CombatLogPatches.cs:95 |
-| `phase:CombatManager.StartTurn` | battle.combat_log[kind=turn_phase,phase=start_turn] | McpMod.CombatLogPatches.cs:95 |
-| `phase:CombatManager.SwitchFromPlayerToEnemySide` | battle.combat_log[kind=turn_phase,phase=switch_from_player_to_enemy_side] | McpMod.CombatLogPatches.cs:97 |
+| `manual:PotionModel.OnUseWrapper` | battle.combat_log[kind=potion_used] と hook BeforePotionUsed・AfterPotionUsed の行 | McpMod.CombatLogPatches.cs:354, McpMod.CombatLogPatches.cs:85, McpMod.CombatLogPatches.cs:67 |
+| `manual:PowerModel.Flash` | battle.combat_log[kind=flash]{model} | McpMod.CombatLogPatches.cs:320 |
+| `manual:RelicModel.Flash` | battle.combat_log[kind=flash]{model} | McpMod.CombatLogPatches.cs:319 |
+| `manual:StratagemPower.selection_stage` | <screen>.decision_context.choice_source.await_chain の hook・shuffle・draw | McpMod.ChoiceAwaitChain.cs:58, McpMod.DecisionContext.cs:196 |
+| `phase:CombatManager.DoTurnEnd` | battle.combat_log[kind=turn_phase,phase=do_turn_end] | McpMod.CombatLogPatches.cs:102 |
+| `phase:CombatManager.EndCombatInternal` | battle.combat_log[kind=turn_phase,phase=end_combat_internal] | McpMod.CombatLogPatches.cs:108 |
+| `phase:CombatManager.EndEnemyTurnInternal` | battle.combat_log[kind=turn_phase,phase=end_enemy_turn_internal] | McpMod.CombatLogPatches.cs:107 |
+| `phase:CombatManager.EndPlayerTurnPhaseOneInternal` | battle.combat_log[kind=turn_phase,phase=end_player_turn_phase_one_internal] | McpMod.CombatLogPatches.cs:101 |
+| `phase:CombatManager.EndPlayerTurnPhaseTwoInternal` | battle.combat_log[kind=turn_phase,phase=end_player_turn_phase_two_internal] | McpMod.CombatLogPatches.cs:105 |
+| `phase:CombatManager.FlushPlayerHand` | battle.combat_log[kind=turn_phase,phase=flush_player_hand] | McpMod.CombatLogPatches.cs:104 |
+| `phase:CombatManager.ResolveTurnEndCardEffects` | battle.combat_log[kind=turn_phase,phase=resolve_turn_end_card_effects] | McpMod.CombatLogPatches.cs:103 |
+| `phase:CombatManager.RunAutoPrePlayPhase` | battle.combat_log[kind=turn_phase,phase=run_auto_pre_play_phase] | McpMod.CombatLogPatches.cs:99 |
+| `phase:CombatManager.SetupPlayerTurn` | battle.combat_log[kind=turn_phase,phase=setup_player_turn] | McpMod.CombatLogPatches.cs:100, McpMod.ChoiceAwaitChain.cs:38 |
+| `phase:CombatManager.StartCombatInternal` | battle.combat_log[kind=turn_phase,phase=start_combat_internal] | McpMod.CombatLogPatches.cs:97 |
+| `phase:CombatManager.StartTurn` | battle.combat_log[kind=turn_phase,phase=start_turn] | McpMod.CombatLogPatches.cs:98 |
+| `phase:CombatManager.SwitchFromPlayerToEnemySide` | battle.combat_log[kind=turn_phase,phase=switch_from_player_to_enemy_side] | McpMod.CombatLogPatches.cs:106 |
 | `select:CardSelectCmd.FromChooseABundleScreen` | bundle_select | McpMod.StateBuilder.cs:454 |
 | `select:CardSelectCmd.FromChooseACardScreen` | <screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ） | McpMod.ChoiceSource.cs:32 |
 | `select:CardSelectCmd.FromCombatPile` | <screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ） | McpMod.ChoiceSource.cs:35 |

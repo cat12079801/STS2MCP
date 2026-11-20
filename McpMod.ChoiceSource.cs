@@ -98,7 +98,8 @@ public static partial class McpMod
                 IEnumerable<CardModel> cards => cards.Cast<object?>().ToList(),
                 _ => null
             };
-            __state = OpenCardSelections.Add(__originalMethod.Name, context, player, player.Creature?.CombatState,
+            // The fight in progress (null on the reward screen after a fight, where the creature still points at it).
+            __state = OpenCardSelections.Add(__originalMethod.Name, context, player, GetLiveCombatStateForSelection(),
                 handSource: Arg("source"), candidates: candidates, pile: Arg("pile"));
             // decision_context.opener and the combat_log seq it opened at (McpMod.DecisionContext.cs).
             AttachSelectionOpener(__state);

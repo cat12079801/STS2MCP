@@ -81,7 +81,9 @@ public static partial class McpMod
             if (player == null) return;
             IReadOnlyList<object?>? candidates = Arg("relics") is IReadOnlyList<RelicModel> relics ? relics.Cast<object?>().ToList()
                 : cards?.Cast<object?>().ToList();
-            var record = OpenCardSelections.Add(__originalMethod.Name, player, player, player.Creature?.CombatState, candidates: candidates);
+            // The fight in progress, not player.Creature.CombatState: on the reward screen after a fight the creature still
+            // points at the finished fight (CombatManager.DetachCreatures runs at CombatRoom.Exit) while no fight is live.
+            var record = OpenCardSelections.Add(__originalMethod.Name, player, player, GetLiveCombatStateForSelection(), candidates: candidates);
             AttachSelectionOpener(record);
             __state = record;
         }
@@ -235,10 +237,14 @@ public static partial class McpMod
                     RelicModel relic => new Dictionary<string, object?> { ["relic_id"] = relic.Id.Entry },
                     _ => null
                 }).ToList();
+            bool fromDraw = record.Pile is CardPile { Type: PileType.Draw };
             var picked = chosen switch
             {
                 CardModel card => new List<object?> { LogCardRef(card) },
-                List<CardModel> cards => cards.Select(c => (object?)LogCardRef(c)).ToList(),
+                // A draw-pile selection the game decides itself (FromCombatPile with no more cards than MinSelect) returns
+                // them in the pile's order: list them in the draw pile's display order instead.
+                List<CardModel> cards => (fromDraw ? OrderPileCardsForDisplay(cards, PileType.Draw) : cards)
+                    .Select(c => (object?)LogCardRef(c)).ToList(),
                 RelicModel relic => new List<object?> { new Dictionary<string, object?> { ["relic_id"] = relic.Id.Entry } },
                 _ => new List<object?>()
             };

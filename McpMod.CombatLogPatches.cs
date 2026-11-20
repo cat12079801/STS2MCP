@@ -89,13 +89,35 @@ public static partial class McpMod
     };
 
     // The CombatManager turn steps combat_log marks with a turn_phase row when each begins (private async methods,
-    // CombatManager.cs v0.113.1): the phase:* rows of the inventory.
-    private static readonly string[] CombatLogPhases =
+    // CombatManager.cs v0.113.1): the phase:* rows of the inventory, with the parameter type names of the overload that
+    // does the work. EndCombatInternal / EndPlayerTurnPhaseOneInternal / EndPlayerTurnPhaseTwoInternal also have an
+    // internal parameterless overload that only forwards the current CombatTurnState (an internal type, hence names).
+    private static readonly (string Method, string[] Parameters)[] CombatLogPhases =
     {
-        "StartCombatInternal", "StartTurn", "RunAutoPrePlayPhase", "SetupPlayerTurn", "EndPlayerTurnPhaseOneInternal",
-        "DoTurnEnd", "ResolveTurnEndCardEffects", "FlushPlayerHand", "EndPlayerTurnPhaseTwoInternal",
-        "SwitchFromPlayerToEnemySide", "EndEnemyTurnInternal", "EndCombatInternal",
+        ("StartCombatInternal", new[] { "CombatTurnState" }),
+        ("StartTurn", new[] { "CombatTurnState", "Func`1" }),
+        ("RunAutoPrePlayPhase", new[] { "CombatTurnState", "HookPlayerChoiceContext", "Task", "Player" }),
+        ("SetupPlayerTurn", new[] { "CombatTurnState", "Player", "HookPlayerChoiceContext" }),
+        ("EndPlayerTurnPhaseOneInternal", new[] { "CombatTurnState" }),
+        ("DoTurnEnd", new[] { "CombatTurnState", "Player", "PlayerChoiceContext" }),
+        ("ResolveTurnEndCardEffects", new[] { "CardModel", "PlayerChoiceContext", "Task" }),
+        ("FlushPlayerHand", new[] { "CombatTurnState", "Player", "HookPlayerChoiceContext" }),
+        ("EndPlayerTurnPhaseTwoInternal", new[] { "CombatTurnState" }),
+        ("SwitchFromPlayerToEnemySide", new[] { "CombatTurnState" }),
+        ("EndEnemyTurnInternal", new[] { "CombatTurnState" }),
+        ("EndCombatInternal", new[] { "CombatTurnState" }),
     };
+
+    // The one declared CombatManager method with this name and exactly these parameter type names (else it throws).
+    internal static MethodInfo ResolveCombatLogPhase(string method, string[] parameters)
+    {
+        var matches = typeof(CombatManager).GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public
+                | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            .Where(m => m.Name == method && m.GetParameters().Select(p => p.ParameterType.Name).SequenceEqual(parameters))
+            .ToList();
+        return matches.Count == 1 ? matches[0]
+            : throw new MissingMethodException(nameof(CombatManager), $"{method}({string.Join(", ", parameters)}) ({matches.Count} found)");
+    }
 
     private static readonly Dictionary<string, (string Scope, (string Method, Type[] Parameters)[] Passes)> _combatLogHookTable = new();
     private static FieldInfo? _playerCombatStatePlayer;
@@ -108,6 +130,10 @@ public static partial class McpMod
         public required string Position { get; init; }
         public required PileType Requested { get; init; }
         public AbstractModel? ClonedBy { get; init; }
+        // The cards of the call when they come as a collection (List, array, the single-card overloads' list): a card
+        // another command lands in a listener of this Add (CardCmd.Transform calls CardPile.AddInternal itself) is not
+        // one of them. Null for a lazy sequence, which is not enumerated a second time.
+        public HashSet<CardModel>? Cards { get; init; }
     }
 
     private static readonly AsyncLocal<PileAddScope?> _pileAddScope = new();
@@ -127,11 +153,24 @@ public static partial class McpMod
         public SuppressedRows? PreviousSuppressed { get; init; }
         public SuppressedRows? Suppressed { get; init; }
     }
-    // Set while CardPileCmd.Shuffle runs: its CardPileCmd.Add puts every card back in the shuffled order, so the
-    // per-card pile_move rows would publish the new draw order. The shuffle row carries the counts instead.
-    private static readonly AsyncLocal<string?> _shuffleScope = new();
-    // Set while CardPileCmd.ShuffleIfNecessary runs: a shuffle inside it is the draw pile running out.
-    private static readonly AsyncLocal<bool> _shuffleIfNecessaryScope = new();
+    // One-shot marks. CardPileCmd.Shuffle's prefix leaves one for its own CardPileCmd.Add (the only Add before it awaits
+    // anything; Hook.ModifyShuffleOrder runs no Add): that Add puts every card back in the shuffled order, so its rows
+    // are counted, not written. The AfterShuffle listeners after it (Stratagem's Draw → Hand, Soot) find the mark used
+    // and write their rows. CardPileCmd.ShuffleIfNecessary's prefix leaves one for the Shuffle it calls (reason
+    // draw_pile_empty); a Shuffle in a listener after that one is explicit.
+    private sealed class OneShot
+    {
+        public bool Used;
+        public bool TryUse()
+        {
+            if (Used) return false;
+            Used = true;
+            return true;
+        }
+    }
+
+    private static readonly AsyncLocal<OneShot?> _shuffleAddPending = new();
+    private static readonly AsyncLocal<OneShot?> _shuffleIfNecessaryPending = new();
     [ThreadStatic] private static CardModel? _lastRemovedCard;
     [ThreadStatic] private static PileType _lastRemovedPile;
 
@@ -283,9 +322,10 @@ public static partial class McpMod
 
         Group("phases", () =>
         {
-            foreach (var phase in CombatLogPhases)
-                harmony.Patch(AccessTools.DeclaredMethod(typeof(CombatManager), phase) ?? throw new MissingMethodException(nameof(CombatManager), phase),
-                    prefix: M(nameof(CombatLogPhaseStarting)));
+            // Resolve all first: a stale entry patches nothing rather than half of the phases.
+            var originals = CombatLogPhases.Select(p => ResolveCombatLogPhase(p.Method, p.Parameters)).ToList();
+            foreach (var original in originals)
+                harmony.Patch(original, prefix: M(nameof(CombatLogPhaseStarting)));
         });
     }
 
@@ -562,12 +602,13 @@ public static partial class McpMod
 
     // ---- Pile moves ----
 
-    private static void CombatLogPileAddStarting(CardPile newPile, CardPilePosition position, AbstractModel? clonedBy, out PileAddState? __state)
+    private static void CombatLogPileAddStarting(IEnumerable<CardModel> cards, CardPile newPile, CardPilePosition position,
+        AbstractModel? clonedBy, out PileAddState? __state)
     {
         __state = null;
         try
         {
-            var suppressed = _shuffleScope.Value != null && _combatLogSuppressed.Value == null ? new SuppressedRows() : null;
+            var suppressed = _shuffleAddPending.Value?.TryUse() == true && _combatLogSuppressed.Value == null ? new SuppressedRows() : null;
             __state = new PileAddState
             {
                 PreviousScope = _pileAddScope.Value,
@@ -578,7 +619,9 @@ public static partial class McpMod
             {
                 Position = position.ToString().ToLowerInvariant(),
                 Requested = newPile.Type,
-                ClonedBy = clonedBy
+                ClonedBy = clonedBy,
+                Cards = cards is IReadOnlyCollection<CardModel> collection
+                    ? new HashSet<CardModel>(collection, ReferenceEqualityComparer.Instance) : null
             };
             if (suppressed != null) _combatLogSuppressed.Value = suppressed;
         }
@@ -621,8 +664,9 @@ public static partial class McpMod
     {
         PileType? from = ReferenceEquals(_lastRemovedCard, card) ? _lastRemovedPile : null;
         _lastRemovedCard = null;
-        if (_shuffleScope.Value != null) return;
         var scope = _pileAddScope.Value;
+        // A card that is not one of the enclosing Add's cards is landed by another command in one of its listeners.
+        if (scope?.Cards != null && !scope.Cards.Contains(card)) scope = null;
         if (scope == null && __instance.Type != PileType.Play) return;
         if (!__instance.IsCombatPile || !CombatManager.Instance.IsInProgress) return;
         var to = __instance.Type;
@@ -656,10 +700,10 @@ public static partial class McpMod
         });
     }
 
-    private static void CombatLogShuffleStarting(Player player, out string? __state)
+    private static void CombatLogShuffleStarting(Player player, out OneShot? __state)
     {
-        __state = _shuffleScope.Value;
-        string reason = _shuffleIfNecessaryScope.Value ? "draw_pile_empty" : "explicit";
+        __state = _shuffleAddPending.Value;
+        string reason = _shuffleIfNecessaryPending.Value?.TryUse() == true ? "draw_pile_empty" : "explicit";
         try
         {
             if (!CombatManager.Instance.IsOverOrEnding)
@@ -674,20 +718,20 @@ public static partial class McpMod
                     row["draw_count"] = draw;
                 });
             }
-            _shuffleScope.Value = reason;
+            _shuffleAddPending.Value = new OneShot();
         }
         catch (Exception ex) { GD.PrintErr($"[STS2 MCP] combat_log shuffle failed: {ex.Message}"); }
     }
 
-    private static void CombatLogShuffleReturned(string? __state) => _shuffleScope.Value = __state;
+    private static void CombatLogShuffleReturned(OneShot? __state) => _shuffleAddPending.Value = __state;
 
-    private static void CombatLogShuffleIfNecessaryStarting(out bool __state)
+    private static void CombatLogShuffleIfNecessaryStarting(out OneShot? __state)
     {
-        __state = _shuffleIfNecessaryScope.Value;
-        _shuffleIfNecessaryScope.Value = true;
+        __state = _shuffleIfNecessaryPending.Value;
+        _shuffleIfNecessaryPending.Value = new OneShot();
     }
 
-    private static void CombatLogShuffleIfNecessaryReturned(bool __state) => _shuffleIfNecessaryScope.Value = __state;
+    private static void CombatLogShuffleIfNecessaryReturned(OneShot? __state) => _shuffleIfNecessaryPending.Value = __state;
 
     // ---- Card commands ----
 

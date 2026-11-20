@@ -229,7 +229,7 @@ async def get_game_state(format: str = "markdown") -> str:
     from_hand_draw〕・山札からの自動プレイの予約〔reservation_call_id〕、手番の初めの残りの段、shuffle_origin）を足した。
     schema 1.10.0 で、battle.combat_log（戦闘の出来事の通し列。行は seq の順で、通知〔上書きする listener〕・履歴〔ドロー・
     プレイ・被ダメージ・ブロック・パワー・敵の行動など〕・山の移動・シャッフル・札／敵／HP／ブロック／エナジー／ポーション／
-    パワーの命令・Modify* の結果と修正したモデル・光った効果・手番の段階・選択の結果。既定は最後の 400 行、
+    パワーの命令・Modify* の結果と修正したモデル・光った効果・手番の段階・選択の結果。既定は最後の 100 行、
     ?combat_log_since=<seq> でその seq から。山札の順は出さない）、全選択画面の decision_context（入口・開いた元・
     開いた時点の seq・choice_source）、player.potion_generation_pool、手札の energy_cost.x_value_if_played、
     ended_combat.combat_log を足した。

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Resolves and applies every Harmony patch the MOD installs against the real game DLLs (no game process, no
+       Godot engine): a patch target that no longer binds (renamed, removed, overloaded) fails here instead of in the
+       game. Needs the game installed: pass -p:STS2GameDir=... like the MOD build. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <STS2GameDir Condition="'$(STS2GameDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2</STS2GameDir>
+    <STS2GameDataDir Condition="'$(STS2GameDataDir)' == ''">$(STS2GameDir)/SlayTheSpire2.app/Contents/Resources/data_sts2_macos_arm64</STS2GameDataDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="sts2"><HintPath>$(STS2GameDataDir)/sts2.dll</HintPath></Reference>
+    <Reference Include="0Harmony"><HintPath>$(STS2GameDataDir)/0Harmony.dll</HintPath></Reference>
+    <Reference Include="GodotSharp"><HintPath>$(STS2GameDataDir)/GodotSharp.dll</HintPath></Reference>
+    <ProjectReference Include="../../STS2_MCP.csproj" AdditionalProperties="STS2GameDir=$(STS2GameDir)" />
+  </ItemGroup>
+</Project>

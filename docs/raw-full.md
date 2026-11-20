@@ -1094,44 +1094,52 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   "known": true,
   "combat_id": "3",            // CombatManager.CurrentCombatId
   "capacity": 2000,            // 1 戦闘で保持する行数（超えたら古い行から捨てる）
-  "default_window": 400,       // combat_log_since が無いときに返す行数（最後の N 行）
+  "default_window": 100,       // combat_log_since が無いときに返す行数（最後の N 行）
   "first_seq": 0,              // 保持している最も古い行の seq
   "next_seq": 182,             // 次の行の seq（= この戦闘で書いた行数）
-  "window_first_seq": 0,       // rows[0] の seq
+  "window_first_seq": 82,      // rows[0] の seq
   "since_truncated": false,    // combat_log_since が first_seq より古かった（間の行は捨てた）
   "rows": [
-    { "seq": 40, "kind": "turn_phase", "round": 2, "side": "player", "phase": "setup_player_turn", "player_id": "1" },
-    { "seq": 41, "kind": "energy", "round": 2, "side": "player", "player_id": "1", "before": 0, "after": 3 },
-    { "seq": 42, "kind": "modify", "round": 2, "side": "player", "hook": "ModifyHandDraw", "player_id": "1",
+    { "seq": 140, "kind": "turn_phase", "round": 2, "side": "player", "phase": "setup_player_turn", "player_id": "1" },
+    { "seq": 141, "kind": "energy", "round": 2, "side": "player", "player_id": "1", "before": 0, "after": 3 },
+    { "seq": 142, "kind": "modify", "round": 2, "side": "player", "hook": "ModifyHandDraw", "player_id": "1",
       "original": 5, "result": 5, "modifiers": [] },
-    { "seq": 43, "kind": "draw", "round": 2, "side": "player", "source": "history", "entry": "CardDrawnEntry",
-      "actor": { "combat_id": 1, "player_id": "1" },
-      "card": { "card_id": "BASH", "uid": "BASH#9", "pile": "Hand" }, "from_hand_draw": true },
-    { "seq": 44, "kind": "pile_move", "round": 2, "side": "player",
+    // CardPileCmd.DrawInternal は札を手札へ移して（pile_move と AfterCardChangedPiles）から履歴に書く（draw）
+    { "seq": 143, "kind": "pile_move", "round": 2, "side": "player",
       "card": { "card_id": "BASH", "uid": "BASH#9" }, "owner_player_id": "1",
       "from": "Draw", "to": "Hand", "requested_to": "Hand", "position": "bottom", "via": "card_pile_cmd_add", "cloned_by": null },
-    { "seq": 45, "kind": "hook", "round": 2, "side": "player", "hook": "AfterCardDrawn", "scope": "combat",
+    { "seq": 144, "kind": "draw", "round": 2, "side": "player", "source": "history", "entry": "CardDrawnEntry",
+      "actor": { "combat_id": 1, "player_id": "1" },
+      "card": { "card_id": "BASH", "uid": "BASH#9", "pile": "Hand" }, "from_hand_draw": true },
+    { "seq": 145, "kind": "hook", "round": 2, "side": "player", "hook": "AfterCardDrawn", "scope": "combat",
       "args": { "card": { "card_id": "BASH", "uid": "BASH#9", "pile": "Hand" }, "from_hand_draw": true },
       "passes": [
         { "method": "AfterCardDrawnEarly", "listeners": [] },
         { "method": "AfterCardDrawn", "listeners": [
           { "model_type": "ChainsOfBindingPower", "model_id": "CHAINS_OF_BINDING_POWER", "kind": "power",
             "owner_combat_id": 1, "owner_player_id": "1", "declared_by": "ChainsOfBindingPower", "order": 3 } ] } ] },
-    { "seq": 46, "kind": "flash", "round": 2, "side": "player", "model": { "model_id": "CHAINS_OF_BINDING_POWER", "kind": "power", "...": "..." } },
-    { "seq": 47, "kind": "hidden_rows", "round": 2, "side": "player", "reason": "shuffle_order", "count": 31 }
+    { "seq": 146, "kind": "flash", "round": 2, "side": "player", "model": { "model_id": "CHAINS_OF_BINDING_POWER", "kind": "power", "...": "..." } },
+    { "seq": 160, "kind": "shuffle", "round": 2, "side": "player", "player_id": "1", "reason": "draw_pile_empty", "discard_count": 31, "draw_count": 0 },
+    { "seq": 161, "kind": "hidden_rows", "round": 2, "side": "player", "reason": "shuffle_order", "count": 31 }
   ]
 }
 ```
 
-- 行は記録したら変わらない（`seq` の順。同じ戦闘の後の読みは、前の読みの行を同じ `seq` で含む）。新しい戦闘（`CombatState` が
+- 行は記録したら変わらない（`seq` の順。同じ戦闘の後の読みは、前の読みの行を同じ `seq` で含む）。行の順はゲームが
+  その処理を行った順で、対になる行が隣り合うとは限らない（例: ドローは `pile_move` → `AfterCardChangedPiles` の `hook` →
+  `draw` → `AfterCardDrawn` の `hook`）。対は `seq` の隣でなく札の `uid` で結ぶ。新しい戦闘（`CombatState` が
   替わる）で空になり `seq` は 0 から。戦闘の外・戦闘の始まる前には行を書かない。
-- `?combat_log_since=<seq>`（GET の state だけ）: その `seq` から、保持している全行を返す。無ければ最後の `default_window` 行。
+- `?combat_log_since=<seq>`（GET の state だけ）: その `seq` から、保持している全行を返す。無ければ最後の `default_window` 行
+  （100 行。state と dump を重くしないため。全行は `combat_log_since=0` と `ended_combat.combat_log` で取る）。
   捨てた行より前を求めたら `since_truncated: true` で、保持している先頭から返す。読み取りのたびに戻す（次の要求に持ち越さない）。
 - 共通の項目: `seq`・`kind`・`round`（`CombatState.RoundNumber`）・`side`（`CurrentSide`）。札は `{card_id, uid, pile}`
   （uid は state の他の行と同じ登録簿）、生き物は `{combat_id, entity_id | player_id | monster_id}`、モデル（listener・修正した
   モデル・光ったもの・`cloned_by`）は `choice_source` の listener の行と同じ形（`BuildHookListenerRow`）。
 - `known: false` と `unavailable_reasons`: patch の群を当てられなかった（`install: <群>: …`。その群の行は出ない）、または行を
-  作れなかった（`<kind>: …`。その戦闘の列に穴がある）。穴のある列を完全な列として読まない。
+  作れなかった（`<kind>: …`。その戦闘の列に穴がある）。穴のある列を完全な列として読まない。群は history・hooks・modify・
+  piles・cards・creatures・energy・potions・powers・flash・phases で、それぞれ独立に当てる。どの群が当たったかは
+  この `unavailable_reasons` だけで分かる（棚卸しの `--check` は文字列があるかしか見ない）。当て先が本物の `sts2.dll` で
+  解決するかは [`tests/PatchTargetsContract`](../tests/PatchTargetsContract/README.md) が確かめる。
 
 `kind` の一覧（出典は v0.113.1 `sts2-a671e9ef`）:
 
@@ -1140,9 +1148,9 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 | `draw` `generated` `play` `card_discarded` `card_exhausted` `card_afflicted` `block_gained` `damage_received` `attacked` `energy_spent` `monster_move` `potion_used` `power_received` `history` | 履歴に記録したとき（`CombatHistory.Add`〔private〕の postfix。`IsLiveCombat` で捨てられた記録は出さない） | `source: "history"`・`entry`（*Entry の型）・`actor`。`play` は `phase`（started / finished）と `card_play_events_this_turn` と同じ項目、`damage_received.result` と `attacked.hits[]` は `receiver`・`original_target`（`Hook.ModifyPreBlockDamageTarget` / `ModifyUnblockedDamageTarget` の差し替えの前）・`blocked`・`unblocked`・`overkill`・`block_broken`・`fully_blocked`・`killed`・`props`、`monster_move` は `move_id`（`MoveState.StateId`）・`targets`、`power_received` は `power`・`amount`・`applier` |
 | `hook` | 通知 53 件（`Hook.After*` / `Before*` のうち棚卸しで public-missing だったもの）の始まり（static メソッドの prefix） | `hook`・`scope`（`combat` = `IterateCombatHookListeners`〔`ShouldSkipCombatEffect` の間は空〕、`combat_all`、`run`）・`args`（引数。札・生き物・パワー・ポーション・プレイ・ダメージの結果・修正したモデルの列・数値・列挙）・`passes`（巡ごと〔Early・通常・Late〕の、その巡のメソッドを上書きしている listener） |
 | `modify` | `Hook.ModifyHandDraw`（毎回）、`ModifyHpLost` / `ModifyPowerAmountGiven` / `ModifyPowerAmountReceived` / `ModifyCardPlayResultLocation`（修正したモデルがあるときだけ）の postfix | `hook`・`original`・`result`・`modifiers`。パワーの量は `PowerCmd` が渡す可変のパワーのときだけ（カードの説明の `PowerVar` のプレビューは正準のモデルを渡すので出来事にしない） |
-| `pile_move` | 札が山に入ったとき（`CardPile.AddInternal` の prefix。`CardPileCmd.Add` の中と、手動のプレイの Hand → Play） | `card`・`from`（直前の `RemoveInternal`）・`to`（手札が満杯なら捨て札）・`requested_to`・`position`（`top` / `bottom` / `random`）・`via`・`cloned_by` |
-| `shuffle` `hidden_rows` | `CardPileCmd.Shuffle` の prefix | `reason`（`explicit` / `draw_pile_empty`〔`ShuffleIfNecessary` の中〕）・`discard_count`・`draw_count`。シャッフルの `CardPileCmd.Add` の間の行（山の移動・`AfterCardChangedPiles`・その listener の行）は新しい山札の順に並ぶので書かず、Add が終わったときに件数を `hidden_rows`（`reason: "shuffle_order"`・`count`）で出す |
-| `removed_from_combat` `exhaust` `discard_and_draw` `card_change` | `CardPileCmd.RemoveFromCombat`・`CardCmd.Exhaust`（`caused_by_ethereal`）・`CardCmd.DiscardAndDraw`（`cards`・`draw_count`）の prefix、`CardTransformation.GetReplacement` の postfix（`change: "transform"`・`pile`・`from`・`to`） | |
+| `pile_move` | 札が山に入ったとき（`CardPile.AddInternal` の prefix。`CardPileCmd.Add` が渡された札を置くときと、手動のプレイの Hand → Play。Add の listener の中で別の命令〔`CardCmd.Transform` など〕が置いた札は Add の行にしない） | `card`・`from`（直前の `RemoveInternal`）・`to`（手札が満杯なら捨て札）・`requested_to`・`position`（`top` / `bottom` / `random`）・`via`・`cloned_by` |
+| `shuffle` `hidden_rows` | `CardPileCmd.Shuffle` の prefix | `reason`（`draw_pile_empty` = `ShuffleIfNecessary` が呼んだシャッフル、`explicit` = それ以外〔`AfterShuffle` の listener の中のシャッフルも〕）・`discard_count`・`draw_count`。シャッフル自身の `CardPileCmd.Add` の間の行（山の移動・`AfterCardChangedPiles`・その listener の行）は新しい山札の順に並ぶので書かず、Add が終わったときに件数を `hidden_rows`（`reason: "shuffle_order"`・`count`）で出す。その後の `AfterShuffle` の listener がする移動（計略の Draw → Hand など）は通常どおり行になる |
+| `removed_from_combat` `exhaust` `discard_and_draw` `card_change` | `CardPileCmd.RemoveFromCombat`・`CardCmd.Exhaust`（`caused_by_ethereal`）・`CardCmd.DiscardAndDraw`（`cards`・`draw_count`）の prefix、`CardTransformation.GetReplacement` の postfix（`change: "transform"`・`pile`・`from`・`to`） | `CardCmd.Discard` は `DiscardAndDraw(…, 0)` に渡すので、ただの捨て札も `discard_and_draw`（`draw_count: 0`）の行になる |
 | `creature` `hp` `block` | `CreatureCmd.Add`（`added`）/ `Kill`（`kill`・`force`）/ `Escape`、`Heal` / `SetCurrentHp` / `GainMaxHp` / `LoseMaxHp` / `SetMaxHp` / `SetMaxAndCurrentHp` / `LoseBlock` の prefix | `action`・`target`・`amount`・`hp_before`・`max_hp_before`・`block_before`（変わった後の値は次の行・state） |
 | `energy` | `PlayerCombatState.Energy` の setter（変わったときだけ。どの命令でも） | `player_id`・`before`・`after` |
 | `potion` | `PotionCmd.TryToProcure`（`procure`）・`Player.AddPotionInternal`（`added`・`success`・`failure_reason`）・`PotionCmd.Discard` | |
@@ -1157,6 +1165,8 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 - 置いた位置の添字は出さない（`CardPilePosition.Random` の添字は乱数から決まる）。`position` は呼出しの引数だけ。
 - シャッフルの間の行は上のとおり件数だけ。
 - 山札から選ぶ選択（`FromCombatPile` の Draw）の `offered` は `null`・`offered_hidden_reason: "draw_pile"`（渡された順が山札の順）。
+  ゲームが自分で決めた選択（候補が `MinSelect` 以下）の `chosen` も山札の順で返るので、山札の表示順に並べ替える。
+- `modify` の `modifiers` と通知の引数のモデルの列は listener の順なので、山札の札が 2 つ以上あればその枠の中を山札の表示順に並べ替える。
 - 通知の listener のうち山札の札は `order: null` で、山札の表示順に並べる（`BuildHookListenerRows`、`choice_source` と同じ）。
 - どの patch も読むだけ（呼出しを飛ばさない・引数と戻り値を変えない・乱数を引かない）。
 
@@ -3545,6 +3555,9 @@ Harmony の prefix で記録する（列を作るのはその呼出し）。契�
   選択の命令自身のフレームは飛ばす（Harmony が patch したゲームのメソッドも動的メソッドになるので出ない）。JIT が
   インライン化したフレームはスタックに無いので、そのときは次に近いフレームになる。`call_stack` は内側から最大 6 つ。
   ゲームのフレームが無ければ `kind: null` と理由（`known: false`）。
+- 記録の戦闘は進行中の戦闘（`CombatManager.IsInProgress` のときの combat state）。戦闘後の報酬の画面（まだ `CombatRoom` で、
+  プレイヤーの creature は終わった戦闘を指したまま）でレリックの取得が開くデッキの選択（Astrolabe・EmptyCage・PaelsTooth など）は
+  戦闘外の選択として扱う。
 - 記録が無い・合わない（`choice_source` と同じ条件）ときは `known: false` と `unavailable_reasons`。warning は `decision_context`。
 - 戦闘中の選択が終わると、`combat_log` に `kind: "selection"` の行（選んだもの・skip）を書く（上の表）。
 - Markdown は `Decision context: FromDeckForUpgrade; opener rest_site_option SmithRestSiteOption.OnSelect` の 1 行。

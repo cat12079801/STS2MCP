@@ -17,7 +17,7 @@ internal static class CombatLogStore
     internal const int Capacity = 2000;
 
     /// <summary>Rows a state carries when the request does not ask from a seq (<c>?combat_log_since=</c>).</summary>
-    internal const int DefaultWindow = 400;
+    internal const int DefaultWindow = 100;
 
     private static readonly object Gate = new();
     private static readonly List<Dictionary<string, object?>> Rows = new();

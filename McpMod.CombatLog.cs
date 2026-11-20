@@ -138,9 +138,25 @@ public static partial class McpMod
     private static Dictionary<string, object?>? LogModelRef(AbstractModel? model, List<string> reasons)
         => model == null ? null : BuildHookListenerRow(model, reasons);
 
+    // The game lists modifiers in hook listener order, where draw-pile cards stand in the hidden draw order: their slots
+    // keep their places but the draw-pile models in them are put in the draw pile's display order.
     private static List<Dictionary<string, object?>> LogModelRefs(IEnumerable<AbstractModel>? models, List<string> reasons)
-        => models == null ? new List<Dictionary<string, object?>>()
-            : models.Where(m => m != null).Select(m => BuildHookListenerRow(m, reasons)).ToList();
+    {
+        if (models == null) return new List<Dictionary<string, object?>>();
+        var list = models.Where(m => m != null).ToList();
+        var slots = Enumerable.Range(0, list.Count).Where(i => DrawPileOf(list[i]) != null).ToList();
+        if (slots.Count > 1)
+        {
+            var byCard = slots.Select(i => list[i]).ToList();
+            var rank = new Dictionary<CardModel, int>(ReferenceEqualityComparer.Instance);
+            foreach (var card in OrderPileCardsForDisplay(byCard.Select(m => ListenerCard(m)!).Distinct(ReferenceEqualityComparer.Instance)
+                         .Cast<CardModel>().ToList(), PileType.Draw))
+                rank.TryAdd(card, rank.Count);
+            var sorted = byCard.OrderBy(m => rank[ListenerCard(m)!]).ThenBy(m => m is CardModel ? 0 : m is AfflictionModel ? 1 : 2).ToList();
+            for (int k = 0; k < slots.Count; k++) list[slots[k]] = sorted[k];
+        }
+        return list.Select(m => BuildHookListenerRow(m, reasons)).ToList();
+    }
 
     private static string LogSnake(string name)
     {
