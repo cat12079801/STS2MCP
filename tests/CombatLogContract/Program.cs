@@ -179,6 +179,12 @@ namespace STS2_MCP
                 && Read("McpMod.ChoiceSource.cs").Contains("OpenCardSelections.Add(__originalMethod.Name, context, player, GetLiveCombatStateForSelection(),"),
                 "選択の記録の戦闘は進行中の戦闘（戦闘後の報酬の画面では戦闘外として扱う）");
             Check(decision.Contains("(fromDraw ? OrderPileCardsForDisplay(cards, PileType.Draw) : cards)"), "山札から自動で選ばれた札は表示順");
+            Check(patches.Contains("harmony.Patch(original, prefix: M(nameof(CombatLogHistoryRecording)), postfix: M(nameof(CombatLogHistoryRecorded)));")
+                && !patches.Contains("\"Add\", typeof(ICombatState), typeof(CombatHistoryEntry)"),
+                "履歴は公開の記録メソッドに当てる（private の Add はインライン化されうる）");
+            Check(Read("McpMod.ChoiceSource.cs").Contains("if (offeredPile.Type != PileType.Draw) __state.Offered = offeredPile.Cards.Cast<object?>().ToList();")
+                && decision.Contains("var offered = record.Candidates ?? record.Offered;") && decision.Contains("row[\"offered_unavailable_reason\"]"),
+                "手札・山以外の戦闘の山の選択は開いたときの札を offered に、山札は伏せる");
             Check(patches.Contains("bool hidden = from == PileType.Draw && to == PileType.Draw;"), "山札の中の移動は札を出さない");
             Check(!patches.Contains("row[\"index\"]") && patches.Contains("The index is never published"), "置いた位置の添字を出さない");
             Check(decision.Contains("row[\"offered_hidden_reason\"] = \"draw_pile\";"), "山札からの選択の候補は順を出さない");

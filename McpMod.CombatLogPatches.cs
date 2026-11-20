@@ -195,9 +195,15 @@ public static partial class McpMod
         MethodInfo Declared(Type type, string name, params Type[] parameters)
             => AccessTools.DeclaredMethod(type, name, parameters) ?? throw new MissingMethodException(type.Name, name);
 
-        Group("history", () => harmony.Patch(
-            Declared(typeof(CombatHistory), "Add", typeof(ICombatState), typeof(CombatHistoryEntry)),
-            postfix: M(nameof(CombatLogHistoryAdded))));
+        Group("history", () =>
+        {
+            // Every public recording method of CombatHistory (each wraps one *Entry in the private Add), not the private
+            // Add itself: a method another group patched earlier (CardPlayStarted, by the auto-play reservation tracking)
+            // was compiled into its Harmony replacement with Add inlined, so a later patch on Add never saw its entries.
+            var recorders = CombatLogHistoryRecorders();
+            foreach (var original in recorders)
+                harmony.Patch(original, prefix: M(nameof(CombatLogHistoryRecording)), postfix: M(nameof(CombatLogHistoryRecorded)));
+        });
 
         Group("hooks", () =>
         {
@@ -329,12 +335,41 @@ public static partial class McpMod
         });
     }
 
-    // ---- History (CombatHistory.Add, private: every *Entry goes through it) ----
+    // ---- History (the public recording methods of CombatHistory) ----
 
-    private static void CombatLogHistoryAdded(CombatHistory __instance, CombatHistoryEntry entry)
+    // CombatHistory's public void instance methods other than Clear (v0.113.1: CardPlayStarted … Summoned, 18 methods):
+    // each builds one *Entry and passes it to the private Add. A new recording method is picked up by name.
+    internal static List<MethodInfo> CombatLogHistoryRecorders() =>
+        typeof(CombatHistory).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(m => m.ReturnType == typeof(void) && !m.IsSpecialName && m.Name != nameof(CombatHistory.Clear))
+            .OrderBy(m => m.Name, StringComparer.Ordinal)
+            .ToList();
+
+    private static void CombatLogHistoryRecording(CombatHistory __instance, out int __state)
     {
-        // CombatHistory.Add keeps the entry only while combatState.IsLiveCombat().
-        if (!ReferenceEquals(__instance.Entries.LastOrDefault(), entry)) return;
+        __state = -1;
+        try { __state = __instance.Entries.Count(); }
+        catch (Exception ex) { GD.PrintErr($"[STS2 MCP] combat_log history count failed: {ex.Message}"); }
+    }
+
+    // CombatHistory.Add keeps the entry only while combatState.IsLiveCombat(): exactly one new entry means it was kept.
+    private static void CombatLogHistoryRecorded(MethodBase __originalMethod, CombatHistory __instance, int __state)
+    {
+        CombatHistoryEntry? entry = null;
+        try
+        {
+            if (__state < 0) throw new InvalidOperationException("entry count before the call was not read");
+            int count = __instance.Entries.Count();
+            if (count == __state) return;
+            if (count != __state + 1) throw new InvalidOperationException($"{count - __state} entries added by one call");
+            entry = __instance.Entries.Last();
+        }
+        catch (Exception ex)
+        {
+            if (CombatManager.Instance?.DebugOnlyGetState() is { } combat)
+                CombatLogStore.MarkBroken(combat, CombatLogCombatId(), $"history {__originalMethod.Name}: {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
         LogCombatRow(HistoryLogKind(entry), (row, _) => FillHistoryRow(row, entry));
     }
 

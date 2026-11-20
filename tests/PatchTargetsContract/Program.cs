@@ -23,10 +23,26 @@ foreach (var method in typeof(Godot.GD).GetMethods(BindingFlags.Public | Binding
              .Where(m => m.Name is "Print" or "PrintErr" or "PushError" or "PushWarning"))
     console.Patch(method, prefix: new HarmonyMethod(typeof(GdConsole), nameof(GdConsole.Write)));
 
-Install("InstallChoiceSourceTracking");
-Install("InstallAutoPlayReservationTracking");
-Install("InstallCombatLogTracking");
-Install("InstallDecisionContextTracking");
+// Initialize's order. After each step, note how many patches each method carries: the step that last changed a method
+// is when Harmony compiled its replacement.
+var steps = new[] { "TryApplyHarmonyPatches", "InstallRewardTracking", "InstallChoiceSourceTracking",
+    "InstallAutoPlayReservationTracking", "InstallCombatLogTracking", "InstallDecisionContextTracking" };
+var lastChanged = new Dictionary<MethodBase, int>();
+var firstPatched = new Dictionary<MethodBase, int>();
+var patchCount = new Dictionary<MethodBase, int>();
+for (int step = 0; step < steps.Length; step++)
+{
+    Install(steps[step]);
+    foreach (var m in Harmony.GetAllPatchedMethods())
+    {
+        var info = Harmony.GetPatchInfo(m);
+        if (info == null || info.Owners.All(o => o.StartsWith("test.", StringComparison.Ordinal))) continue;
+        int n = info.Prefixes.Count + info.Postfixes.Count + info.Transpilers.Count + info.Finalizers.Count;
+        if (!patchCount.TryGetValue(m, out int before) || before != n) lastChanged[m] = step;
+        firstPatched.TryAdd(m, step);
+        patchCount[m] = n;
+    }
+}
 
 Check(Field(mod, "_choiceSourceTrackingError") == null, $"choice source: {Field(mod, "_choiceSourceTrackingError")}");
 Check(Field(mod, "_hookListSnapshotError") == null, $"hook list snapshot: {Field(mod, "_hookListSnapshotError")}");
@@ -36,6 +52,36 @@ Check(Field(mod, "_decisionContextTrackingError") == null, $"decision context: {
 var installErrors = (IEnumerable<string>)Field(Internal("CombatLogStore"), "InstallErrors")!;
 Check(!installErrors.Any(), "combat_log: " + string.Join("; ", installErrors));
 
+// The inlining hazard: a method Harmony compiled (patched) before one of its callees got a patch may have that callee
+// inlined into its replacement, so the callee's patch never runs from there (CardPlayStarted / the private Add, live
+// check of b692360). Walk each patched method's IL, through unpatched game methods up to 3 calls deep.
+var gameAssembly = typeof(MegaCrit.Sts2.Core.Combat.History.CombatHistory).Assembly;
+var hazards = new List<string>();
+foreach (var (method, compiledAt) in lastChanged)
+{
+    var seen = new HashSet<MethodBase>();
+    void Walk(MethodBase current, int depth, string path)
+    {
+        if (depth > 3 || !seen.Add(current)) return;
+        List<CodeInstruction> body;
+        try { body = PatchProcessor.GetOriginalInstructions(current); }
+        catch { return; }
+        foreach (var callee in body.Select(i => i.operand).OfType<MethodBase>())
+        {
+            if (callee.DeclaringType?.Assembly != gameAssembly) continue;
+            if (firstPatched.TryGetValue(callee, out int patchedAt))
+            {
+                if (patchedAt > compiledAt) hazards.Add($"{path} -> {callee.DeclaringType!.Name}.{callee.Name} (patched at {steps[patchedAt]}, caller compiled at {steps[compiledAt]})");
+                continue;
+            }
+            if (callee.IsAbstract || callee.IsVirtual) continue;
+            Walk(callee, depth + 1, $"{path} -> {callee.DeclaringType!.Name}.{callee.Name}");
+        }
+    }
+    Walk(method, 0, $"{method.DeclaringType?.Name}.{method.Name}");
+}
+Check(hazards.Count == 0, "patched callee may be inlined into an earlier-compiled replacement: " + string.Join("; ", hazards));
+
 int Patched(string owner) => Harmony.GetAllPatchedMethods().Count(m =>
 {
     var info = Harmony.GetPatchInfo(m);
@@ -44,9 +90,30 @@ int Patched(string owner) => Harmony.GetAllPatchedMethods().Count(m =>
 int combatLog = Patched("com.sts2mcp.combatlog");
 int decision = Patched("com.sts2mcp.decisioncontext");
 int choice = Patched("com.sts2mcp.choicesource");
-// combat_log: history 1, hooks 53 (one overload each in v0.113.1), modify 5, piles 6, cards 3, creatures 10, energy 1,
-// potions 3, powers 5, flash 2, phases 12.
-Check(combatLog == 101, $"combat_log patched {combatLog} methods, expected 101");
+// combat_log: history 18 (CombatHistory's public recording methods), hooks 53 (one overload each in v0.113.1), modify 5,
+// piles 6, cards 3, creatures 10, energy 1, potions 3, powers 5, flash 2, phases 12.
+Check(combatLog == 118, $"combat_log patched {combatLog} methods, expected 118");
+
+// Every history entry has an emitting path that cannot be inlined away: each public recording method of CombatHistory
+// (each makes one *Entry) carries the combat_log prefix and postfix itself.
+var historyType = typeof(MegaCrit.Sts2.Core.Combat.History.CombatHistory);
+var recorders = historyType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+    .Where(m => m.ReturnType == typeof(void) && !m.IsSpecialName && m.Name != "Clear").ToList();
+var entryTypes = historyType.Assembly.GetTypes()
+    .Where(t => !t.IsAbstract && t.IsSubclassOf(typeof(MegaCrit.Sts2.Core.Combat.History.CombatHistoryEntry))).ToList();
+Check(recorders.Count == 18 && entryTypes.Count == recorders.Count, $"{recorders.Count} recording methods for {entryTypes.Count} entry types");
+foreach (var recorder in recorders)
+{
+    var info = Harmony.GetPatchInfo(recorder);
+    Check(info != null && info.Postfixes.Any(p => p.owner == "com.sts2mcp.combatlog") && info.Prefixes.Any(p => p.owner == "com.sts2mcp.combatlog"),
+        $"CombatHistory.{recorder.Name} carries the combat_log history patches");
+    var built = PatchProcessor.GetOriginalInstructions(recorder).Select(i => i.operand).OfType<ConstructorInfo>()
+        .Where(c => entryTypes.Contains(c.DeclaringType!)).Select(c => c.DeclaringType!).ToList();
+    Check(built.Count == 1, $"CombatHistory.{recorder.Name} builds exactly one entry ({built.Count})");
+    entryTypes.Remove(built[0]);
+}
+Check(entryTypes.Count == 0, "every *Entry type is built by a patched recording method: " + string.Join(", ", entryTypes.Select(t => t.Name)));
+
 Check(decision == 9, $"decision_context patched {decision} methods, expected 9");
 Check(choice == 8, $"choice_source patched {choice} methods, expected 8");
 
@@ -57,7 +124,7 @@ foreach (var name in new[] { "EndCombatInternal", "EndPlayerTurnPhaseOneInternal
     Check(patched.Count == 1 && patched[0].GetParameters().Length == 1 && ((MethodInfo)patched[0]).IsPrivate,
         $"{name}: patch only the private overload that takes CombatTurnState");
 }
-Console.WriteLine($"PatchTargetsContract: {checks} checks passed (combat_log {combatLog}, decision_context {decision}, choice_source {choice})");
+Console.WriteLine($"PatchTargetsContract: {checks} checks passed (combat_log {combatLog}, decision_context {decision}, choice_source {choice}, {lastChanged.Count} patched methods scanned for inlining)");
 
 static class GdConsole
 {

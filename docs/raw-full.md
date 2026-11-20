@@ -1145,7 +1145,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 
 | kind | いつ（patch） | 主な項目 |
 |---|---|---|
-| `draw` `generated` `play` `card_discarded` `card_exhausted` `card_afflicted` `block_gained` `damage_received` `attacked` `energy_spent` `monster_move` `potion_used` `power_received` `history` | 履歴に記録したとき（`CombatHistory.Add`〔private〕の postfix。`IsLiveCombat` で捨てられた記録は出さない） | `source: "history"`・`entry`（*Entry の型）・`actor`。`play` は `phase`（started / finished）と `card_play_events_this_turn` と同じ項目、`damage_received.result` と `attacked.hits[]` は `receiver`・`original_target`（`Hook.ModifyPreBlockDamageTarget` / `ModifyUnblockedDamageTarget` の差し替えの前）・`blocked`・`unblocked`・`overkill`・`block_broken`・`fully_blocked`・`killed`・`props`、`monster_move` は `move_id`（`MoveState.StateId`）・`targets`、`power_received` は `power`・`amount`・`applier` |
+| `draw` `generated` `play` `card_discarded` `card_exhausted` `card_afflicted` `block_gained` `damage_received` `attacked` `energy_spent` `monster_move` `potion_used` `power_received` `history` | 履歴に記録したとき（`CombatHistory` の公開の記録メソッド 18 件〔`CardPlayStarted` … `Summoned`。それぞれ *Entry を 1 つ作って private の `Add` に渡す〕の prefix・postfix。呼出しで記録が 1 件増えたときだけ行にする。`IsLiveCombat` で捨てられた記録は出さない。private の `Add` には当てない: 先に別の patch で作られた `CardPlayStarted` の置き換えには `Add` がインライン化されていて、`Add` の patch を通らなかった） | `source: "history"`・`entry`（*Entry の型）・`actor`。`play` は `phase`（started / finished）と `card_play_events_this_turn` と同じ項目、`damage_received.result` と `attacked.hits[]` は `receiver`・`original_target`（`Hook.ModifyPreBlockDamageTarget` / `ModifyUnblockedDamageTarget` の差し替えの前）・`blocked`・`unblocked`・`overkill`・`block_broken`・`fully_blocked`・`killed`・`props`、`monster_move` は `move_id`（`MoveState.StateId`）・`targets`、`power_received` は `power`・`amount`・`applier` |
 | `hook` | 通知 53 件（`Hook.After*` / `Before*` のうち棚卸しで public-missing だったもの）の始まり（static メソッドの prefix） | `hook`・`scope`（`combat` = `IterateCombatHookListeners`〔`ShouldSkipCombatEffect` の間は空〕、`combat_all`、`run`）・`args`（引数。札・生き物・パワー・ポーション・プレイ・ダメージの結果・修正したモデルの列・数値・列挙）・`passes`（巡ごと〔Early・通常・Late〕の、その巡のメソッドを上書きしている listener） |
 | `modify` | `Hook.ModifyHandDraw`（毎回）、`ModifyHpLost` / `ModifyPowerAmountGiven` / `ModifyPowerAmountReceived` / `ModifyCardPlayResultLocation`（修正したモデルがあるときだけ）の postfix | `hook`・`original`・`result`・`modifiers`。パワーの量は `PowerCmd` が渡す可変のパワーのときだけ（カードの説明の `PowerVar` のプレビューは正準のモデルを渡すので出来事にしない） |
 | `pile_move` | 札が山に入ったとき（`CardPile.AddInternal` の prefix。`CardPileCmd.Add` が渡された札を置くときと、手動のプレイの Hand → Play。Add の listener の中で別の命令〔`CardCmd.Transform` など〕が置いた札は Add の行にしない） | `card`・`from`（直前の `RemoveInternal`）・`to`（手札が満杯なら捨て札）・`requested_to`・`position`（`top` / `bottom` / `random`）・`via`・`cloned_by` |
@@ -1156,8 +1156,19 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 | `potion` | `PotionCmd.TryToProcure`（`procure`）・`Player.AddPotionInternal`（`added`・`success`・`failure_reason`）・`PotionCmd.Discard` | |
 | `power` | `PowerCmd.Apply`（`apply`・要求した `amount`）/ `ModifyAmount` / `Decrement` / `TickDownDuration`（`skipped` = `SkipNextDurationTick`）/ `Remove` の prefix | 与えた後の量は `power_received` の行 |
 | `flash` | `RelicModel.Flash` / `PowerModel.Flash`（効果が働いた合図） | `model` |
-| `turn_phase` | `CombatManager` の手番の段階 12 件（`StartCombatInternal`・`StartTurn`・`RunAutoPrePlayPhase`・`SetupPlayerTurn`・`EndPlayerTurnPhaseOneInternal`・`DoTurnEnd`・`ResolveTurnEndCardEffects`・`FlushPlayerHand`・`EndPlayerTurnPhaseTwoInternal`・`SwitchFromPlayerToEnemySide`・`EndEnemyTurnInternal`・`EndCombatInternal`）の始まり | `phase`（snake_case）・`player_id`・`card` |
-| `selection` | `CardSelectCmd` / `RelicSelectCmd` の入口の Task が終わったとき（内側の入口だけ） | `selector`・`outer_selectors`・`opener`・`opened_at_seq`（開いたときの `next_seq`）・`offered`・`chosen`・`skipped` |
+| `turn_phase` | `CombatManager` の手番の段階 12 件（表の並びは宣言の順。実際の順は下の注）（`StartCombatInternal`・`StartTurn`・`RunAutoPrePlayPhase`・`SetupPlayerTurn`・`EndPlayerTurnPhaseOneInternal`・`DoTurnEnd`・`ResolveTurnEndCardEffects`・`FlushPlayerHand`・`EndPlayerTurnPhaseTwoInternal`・`SwitchFromPlayerToEnemySide`・`EndEnemyTurnInternal`・`EndCombatInternal`）の始まり | `phase`（snake_case）・`player_id`・`card` |
+| `selection` | `CardSelectCmd` / `RelicSelectCmd` の入口の Task が終わったとき（内側の入口だけ） | `selector`・`outer_selectors`・`opener`・`opened_at_seq`（開いたときの `next_seq`）・`offered`・`offered_from`・`chosen`・`skipped`。`offered` は入口に渡された札（`offered_from: "arguments"`）か、札の列を取らない入口では開いたときの手札・戦闘の山の札をその順で（`offered_from: "Hand"` / `"Discard"` など。選べるかはゲームが決める〔`FromHandForUpgrade` は強化できる札、`filter` の引数〕）。山札からの選択は `offered: null` と `offered_hidden_reason: "draw_pile"`、どちらも記録が無ければ `offered: null` と `offered_unavailable_reason` |
+
+行にならないもの・順の注:
+
+- 手番の段階の実際の順（プレイヤーの手番の終わりから）: `end_player_turn_phase_one_internal` → `do_turn_end`（→ 終了時の効果の札ごとに
+  `resolve_turn_end_card_effects`）→ `end_player_turn_phase_two_internal` → `flush_player_hand`（`EndPlayerTurnPhaseTwoInternal` の中で
+  呼ぶ）→ 手札の `pile_move` → `switch_from_player_to_enemy_side` → 敵の `start_turn` … → `end_enemy_turn_internal`。行は各メソッドの入口で書く。
+- 手番の初めのブロックの消失（`Creature.ClearBlock`）は行にならない。`block` の行は `CreatureCmd.LoseBlock` だけ（消えたことは
+  `AfterBlockCleared` の通知〔上書きする listener があるとき〕と state で見る）。
+- 戦闘を終わらせる一撃（とどめ）には `damage_received` の行が無い。ゲームが `CreatureCmd.Damage` で `!CombatManager.IsEnding` のときだけ
+  `History.DamageReceived` を書くため。`attacked` と `creature`（`kill`）の行はある。
+- 戦闘の初めに山札へ札を入れる処理（`Player.PopulateCombatState`）と初回のシャッフルは行にならない。
 
 隠すもの（山札の順・乱数・敵の非公開の情報には触らない）:
 
@@ -3530,7 +3541,7 @@ Harmony の prefix で記録する（列を作るのはその呼出し）。契�
   "screen": "deck",                      // hand / choose / combat_pile / simple_grid / deck / bundle / relic（他の grid は unknown）
   "in_combat": false,
   "selector": "FromDeckForUpgrade",      // 画面を出した入口（CardSelectCmd / RelicSelectCmd のメソッド）
-  "outer_selectors": [],                 // 同じ選択の外側の入口（FromDeckForRemoval → FromDeckGeneric など）
+  "outer_selectors": [],                 // 同じ選択の外側の入口（FromDeckForRemoval → FromDeckGeneric など。同じ名前の多重定義も入る: FromCombatPile の 4 引数の版は 5 引数の版に渡すので ["FromCombatPile"]）
   "chooser_player_id": "1",
   "opener": {
     "kind": "rest_site_option",          // relic / card / potion / power / event / enchantment / affliction / monster / model / rest_site_option / other

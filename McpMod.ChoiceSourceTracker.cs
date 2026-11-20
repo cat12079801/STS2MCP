@@ -85,6 +85,11 @@ internal sealed class OpenCardSelection
     /// <summary>Another entry point opened the same selection inside this one (FromHandForDiscard → FromHand): only the
     /// innermost record writes the combat_log selection row.</summary>
     public bool HasInner { get; set; }
+    /// <summary>The combat_log selection row's offered cards when the entry point takes no card list: the hand
+    /// (FromHand / FromHandForDiscard / FromHandForUpgrade) or the combat pile (FromCombatPile) as it was when the
+    /// selection opened, with the pile's name. Null for a draw pile (its order is hidden).</summary>
+    public IReadOnlyList<object?>? Offered { get; set; }
+    public string? OfferedPile { get; set; }
 }
 
 internal static class OpenCardSelections

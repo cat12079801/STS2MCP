@@ -103,6 +103,15 @@ public static partial class McpMod
                 handSource: Arg("source"), candidates: candidates, pile: Arg("pile"));
             // decision_context.opener and the combat_log seq it opened at (McpMod.DecisionContext.cs).
             AttachSelectionOpener(__state);
+            // What a hand / combat-pile selection offers, read now (the selection moves cards once it closes). The
+            // pile's cards in its order (hand and discard / exhaust orders are on screen); never a draw pile's order.
+            var offeredPile = Arg("pile") as CardPile
+                ?? (__originalMethod.Name.StartsWith("FromHand", StringComparison.Ordinal) ? player.PlayerCombatState?.Hand : null);
+            if (candidates == null && offeredPile != null)
+            {
+                __state.OfferedPile = offeredPile.Type.ToString();
+                if (offeredPile.Type != PileType.Draw) __state.Offered = offeredPile.Cards.Cast<object?>().ToList();
+            }
         }
         catch (Exception ex) { GD.PrintErr($"[STS2 MCP] Choice source record failed: {ex.GetType().Name}: {ex.Message}"); }
     }

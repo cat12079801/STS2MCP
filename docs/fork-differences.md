@@ -221,4 +221,4 @@
 ## 試験
 
 - `tests/*Contract/` に、ゲームの DLL を使わない契約試験を置いている（札の詳細・コスト・戦闘の強化結果・uid・カード選択・戦闘中の choose-a-card・敵に当てられるか・戦闘の履歴・戦闘の出来事の通し列と選択の文脈・開発コンソール・HTTP の要求の検査・パワーとレリックの内部状態・報酬・生成の候補・v0.113 対応・画面の遷移の解決中・検証用の採取の契約・ポーションの使用可否）
-- `tests/PatchTargetsContract/` だけはゲームの DLL（`sts2.dll`・`0Harmony.dll`）を参照する。MOD の install のメソッドを本物の `sts2.dll` に対して呼び、すべての Harmony の patch の当て先が解決して当たること（群ごとの失敗が無いこと・ID ごとの patch の数）を確かめる。ゲームは起動しない
+- `tests/PatchTargetsContract/` だけはゲームの DLL（`sts2.dll`・`0Harmony.dll`）を参照する。MOD の install のメソッドを本物の `sts2.dll` に対して呼び、すべての Harmony の patch の当て先が解決して当たること（群ごとの失敗が無いこと・ID ごとの patch の数・履歴の *Entry がすべて patch した記録メソッドから出ること・先に作られた置き換えに後から patch したメソッドがインライン化されうる呼出しが無いこと）を確かめる。ゲームは起動しない

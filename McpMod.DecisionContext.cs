@@ -231,12 +231,19 @@ public static partial class McpMod
                 row["offered_hidden_reason"] = "draw_pile";
             }
             else
-                row["offered"] = record.Candidates?.Select(c => c switch
+            {
+                // The cards passed to the entry point, or (no card list) the hand / combat pile when it opened. The game
+                // decides which of a pile's cards can be picked (FromHandForUpgrade: upgradable ones; a filter argument).
+                var offered = record.Candidates ?? record.Offered;
+                row["offered"] = offered?.Select(c => c switch
                 {
                     CardModel card => LogCardRef(card),
                     RelicModel relic => new Dictionary<string, object?> { ["relic_id"] = relic.Id.Entry },
                     _ => null
                 }).ToList();
+                row["offered_from"] = record.Candidates != null ? "arguments" : record.OfferedPile;
+                if (offered == null) row["offered_unavailable_reason"] = "no card list or pile recorded";
+            }
             bool fromDraw = record.Pile is CardPile { Type: PileType.Draw };
             var picked = chosen switch
             {
