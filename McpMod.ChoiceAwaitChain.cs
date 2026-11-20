@@ -120,8 +120,9 @@ public static partial class McpMod
         if (!HookListSnapshots.AnyOpen) return;
         try
         {
-            if (_hookListIteratorCombat?.GetValue(__instance) is not CombatState combat || !HookListSnapshots.IsActiveFor(combat)) return;
+            // Only the first MoveNext builds the list: every later one returns before any lock.
             if (_hookListIteratorState?.GetValue(__instance) is not 0) return;
+            if (_hookListIteratorCombat?.GetValue(__instance) is not CombatState combat || !HookListSnapshots.IsActiveFor(combat)) return;
             HookListSnapshots.Record(__instance, combat.Players
                 .SelectMany(p => p.PlayerCombatState?.DrawPile.Cards ?? (IEnumerable<CardModel>)Array.Empty<CardModel>()));
         }
@@ -146,8 +147,10 @@ public static partial class McpMod
         {
             if (record.SelectionTask is not Task selection)
                 throw new InvalidOperationException("the selection's Task was not recorded");
-            var (frames, end) = AsyncChain.Walk(selection);
+            var (frames, end, inconsistent) = AsyncChain.Walk(selection);
             result["end"] = end;
+            // A box registered on the task but suspended elsewhere: the chain may be cut short, so it is not known.
+            if (inconsistent) reasons.Add($"await chain inconsistent: {end}");
             var rows = new List<Dictionary<string, object?>>();
             for (int i = 0; i < frames.Count; i++)
                 rows.Add(BuildAwaitChainFrame(i, frames, contexts, models, reasons));

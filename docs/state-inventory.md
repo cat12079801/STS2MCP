@@ -307,7 +307,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Player.DiscoveredPotions` | entity | McpMod.Compendium.cs:87, McpMod.Profile.cs:347 | mod-scan |
 | `Player.DiscoveredRelics` | entity | McpMod.Compendium.cs:86, McpMod.Profile.cs:346, McpMod.Wiki.cs:78 | mod-scan |
 | `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1173 | mod-scan |
-| `Player.NetId` | entity | McpMod.CardIdentity.cs:110, McpMod.ChoiceAwaitChain.cs:213, McpMod.ChoiceAwaitChain.cs:231 … | mod-scan |
+| `Player.NetId` | entity | McpMod.CardIdentity.cs:110, McpMod.ChoiceAwaitChain.cs:216, McpMod.ChoiceAwaitChain.cs:234 … | mod-scan |
 | `Player.UnlockState` | entity | McpMod.GenerationPool.cs:39, McpMod.GenerationPool.cs:46, McpMod.GenerationPool.cs:57 … | mod-scan |
 | `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsabilityLive.cs:115 | mod-scan |
 | `Player._gold` | entity | McpMod.MultiplayerState.cs:444, McpMod.PowerInternalState.cs:47, McpMod.StateBuilder.cs:1514 … | mod-scan |
@@ -315,7 +315,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Player._relics` | entity | player.relics（McpMod.StateBuilder.cs:1743） | manual |
 | `Player._runPiles` | entity | player.deck（McpMod.StateBuilder.cs:1794） | manual |
 | `PlayerCombatState.DiscardPile` | entity | McpMod.StateBuilder.cs:1676, McpMod.StateBuilder.cs:1682 | mod-scan |
-| `PlayerCombatState.DrawPile` | entity | McpMod.ChoiceAwaitChain.cs:126, McpMod.ChoiceAwaitChain.cs:362, McpMod.StateBuilder.cs:1675 … | mod-scan |
+| `PlayerCombatState.DrawPile` | entity | McpMod.ChoiceAwaitChain.cs:127, McpMod.ChoiceAwaitChain.cs:365, McpMod.StateBuilder.cs:1675 … | mod-scan |
 | `PlayerCombatState.ExhaustPile` | entity | McpMod.StateBuilder.cs:1677, McpMod.StateBuilder.cs:1683 | mod-scan |
 | `PlayerCombatState.Hand` | entity | McpMod.Actions.cs:189, McpMod.Actions.cs:261, McpMod.Helpers.cs:49 … | mod-scan |
 | `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1691 | mod-scan |

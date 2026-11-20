@@ -65,7 +65,8 @@ namespace STS2_MCP
             // The selection is SimSelect's own Task (the box awaiting the TaskCompletionSource).
             var fromSource = AsyncChain.Walk(choice.Task).Frames;
             selection = GetAwaitedBy(choice.Task);
-            var (frames, end) = AsyncChain.Walk(selection);
+            var (frames, end, inconsistent) = AsyncChain.Walk(selection);
+            Check(!inconsistent, "正常な終わりは inconsistent でない");
             Check(frames.Select(f => f.Method).SequenceEqual(new[] { "SimListenerAfterShuffle", "SimHookAfterShuffle", "SimShuffle", "SimDraw" }),
                 "外側へ順に、選択を待つ async メソッドをたどる: " + string.Join(" < ", frames.Select(f => f.Method)));
             Check(frames.All(f => f.DeclaringType == typeof(McpMod)), "宣言した型を出す");
@@ -105,7 +106,7 @@ namespace STS2_MCP
                 outerTask = SimShuffle(() => SimListenerAfterShuffle(choice2));
             }
             finally { SynchronizationContext.SetSynchronizationContext(saved); }
-            var (ctxFrames, _) = AsyncChain.Walk(GetAwaitedBy(choice2.Task));
+            var (ctxFrames, _, _) = AsyncChain.Walk(GetAwaitedBy(choice2.Task));
             Check(ctxFrames.Select(f => f.Method).SequenceEqual(new[] { "SimListenerAfterShuffle", "SimShuffle" }),
                 "SynchronizationContext を捕まえた await（AwaitTaskContinuation.m_action）でもたどる");
 
@@ -122,8 +123,9 @@ namespace STS2_MCP
             var shared = new TaskCompletionSource<int>();
             var first = SimShuffle(() => shared.Task);
             var second = SimShuffle(() => shared.Task);
-            var (twoFrames, twoEnd) = AsyncChain.Walk(shared.Task);
-            Check(twoFrames.Count == 0 && twoEnd.StartsWith("2 async methods await", StringComparison.Ordinal), "複数が待つなら選ばずに止める: " + twoEnd);
+            var (twoFrames, twoEnd, twoInconsistent) = AsyncChain.Walk(shared.Task);
+            Check(twoFrames.Count == 0 && twoEnd.StartsWith("2 async methods await", StringComparison.Ordinal) && !twoInconsistent,
+                "複数が待つなら選ばずに止める（正常な打ち切り）: " + twoEnd);
             shared.SetResult(0);
             Task.WaitAll(first, second);
 
@@ -131,7 +133,7 @@ namespace STS2_MCP
             Check(AsyncChain.Walk(lone.Task).End == "no async method awaits the selection" && AsyncChain.FrameOf(lone.Task) == null,
                 "async メソッドでない Task は frame を持たない");
             var deep = GetDeep(20, lone.Task);
-            Check(AsyncChain.Walk(lone.Task, 4) is { Frames.Count: 4, End: "depth limit 4" }, "深さの上限で止める");
+            Check(AsyncChain.Walk(lone.Task, 4) is { Frames.Count: 4, End: "depth limit 4", Inconsistent: false }, "深さの上限で止める（正常な打ち切り）");
             lone.SetResult(0);
             deep.Wait(TimeSpan.FromSeconds(5));
 
@@ -254,6 +256,11 @@ namespace STS2_MCP
             Check(chain.Contains("private static void SnapshotHookListBuilding(object __instance)")
                 && chain.Contains("if (_hookListIteratorState?.GetValue(__instance) is not 0) return;"), "列を作る最初の MoveNext の前だけ記録する");
             Check(chain.Contains("if (!HookListSnapshots.AnyOpen) return;"), "対象の Hook が無いときは何もしない（毎回の列挙の負担を避ける）");
+            int stateFirst = chain.IndexOf("if (_hookListIteratorState?.GetValue(__instance) is not 0) return;", StringComparison.Ordinal);
+            int lockAfter = chain.IndexOf("!HookListSnapshots.IsActiveFor(combat)", StringComparison.Ordinal);
+            Check(stateFirst >= 0 && lockAfter > stateFirst, "最初の MoveNext でなければ lock に入る前に戻る");
+            Check(chain.Contains("if (inconsistent) reasons.Add($\"await chain inconsistent: {end}\");"),
+                "鎖が食い違って切れたときは known=false（正常な打ち切りは end だけ）");
             Check(chain.Contains("contains.Invoke(combat, new[] { m }) is true"), "残りは本体の CombatState.Contains で、いま走るものだけ");
             Check(chain.Contains("drawAtStart.Contains(own) || DrawPileOf(model) != null"), "山札にあった listener の位置は出さない");
             Check(choice.Contains("result[\"await_chain\"] = BuildChoiceAwaitChain(record, contextObjects, modelObjects);")

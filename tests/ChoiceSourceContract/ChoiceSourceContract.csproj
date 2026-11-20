@@ -4,6 +4,9 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- AwaitChainChecks reads compiler-made state machines and iterators: build them as the game's Release
+         build does (struct state machines, <>7__wrapN temporaries) whatever the configuration. -->
+    <Optimize>true</Optimize>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.ChoiceSourceTracker.cs" Link="ChoiceSourceTracker.cs" />

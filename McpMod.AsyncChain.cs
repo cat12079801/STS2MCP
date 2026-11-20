@@ -161,24 +161,27 @@ internal static class AsyncChain
     /// <summary>
     /// The async methods waiting on <paramref name="start"/>, innermost first: each step takes the only box awaiting
     /// the previous task and confirms that its suspended awaiter holds that task. Stops with <c>End</c> naming why.
+    /// <c>Inconsistent</c> is true when it stopped because the runtime's state contradicts itself (a box registered as
+    /// awaiting the task is suspended on something else): the assumptions about the runtime no longer hold. Running
+    /// out of awaiters, several awaiters, a completed task and the depth limit are ordinary ends.
     /// </summary>
-    internal static (List<AsyncFrame> Frames, string End) Walk(Task start, int maxDepth = MaxDepth)
+    internal static (List<AsyncFrame> Frames, string End, bool Inconsistent) Walk(Task start, int maxDepth = MaxDepth)
     {
         var frames = new List<AsyncFrame>();
         var current = start;
         while (true)
         {
-            if (frames.Count >= maxDepth) return (frames, $"depth limit {maxDepth}");
-            if (current.IsCompleted) return (frames, "completed");
+            if (frames.Count >= maxDepth) return (frames, $"depth limit {maxDepth}", false);
+            if (current.IsCompleted) return (frames, "completed", false);
             var (boxes, others) = Awaiters(current);
             string what = frames.Count == 0 ? "the selection" : $"{frames[^1].DeclaringType?.Name}.{frames[^1].Method}";
             if (boxes.Count == 0)
                 return (frames, others.Count == 0 ? $"no async method awaits {what}"
-                    : $"no async method awaits {what} (other continuations: {string.Join(", ", others)})");
-            if (boxes.Count > 1) return (frames, $"{boxes.Count} async methods await {what}");
+                    : $"no async method awaits {what} (other continuations: {string.Join(", ", others)})", false);
+            if (boxes.Count > 1) return (frames, $"{boxes.Count} async methods await {what}", false);
             var frame = FrameOf(boxes[0]) ?? throw new InvalidOperationException("awaiting box without a state machine");
             if (!ReferenceEquals(AwaitedTask(frame.StateMachine), current))
-                return (frames, $"{frame.DeclaringType?.Name}.{frame.Method} is not suspended on {what}");
+                return (frames, $"{frame.DeclaringType?.Name}.{frame.Method} is not suspended on {what}", true);
             frames.Add(frame);
             current = frame.Task;
         }

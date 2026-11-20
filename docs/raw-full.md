@@ -3313,7 +3313,9 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   その後にこのメソッドが続けて走らせる段（`following`、順に）と、`player_id`（そのメソッドの player 引数。
   `Hook.AfterShuffle` は `shuffler`）を持つ。`awaiting` / `following` はこの DLL の各 `MoveNext` の IL で
   `<>1__state` と await の対応を確かめた表による（表と内側の段が合わなければ理由を出す）。その他のメソッド（listener の本体、
-  札の `OnPlay` など）は `kind: null` で型と名前だけ。
+  札の `OnPlay` など）は `kind: null` で型と名前だけ。`following` は表で後ろにある段を並べたもので、ループの繰り返しは
+  含まない。`DrawInternal`・`AutoPlayFromDrawPile` がループで次の 1 枚に戻る分は `remaining_draws` /
+  `remaining_reservations` で表す。
 
   | `kind` | メソッド | `awaiting` の値（`<>1__state` の順） |
   |---|---|---|
@@ -3338,6 +3340,11 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   出さない（変化で入った札も後の段の listener になりうる）。走っている listener 自身が段の初めに山札にあった、段の初めの山札を
   記録できなかった、`ModHelper` に hook の subscriber がいるときは `position`・`count`・`remaining_listeners` が `null` で、
   理由を出す。
+- 手番の初めの選択（`setup_player_turn` の段がある）: 本体の `CombatManager.StartTurn` は、`SetupPlayerTurn` が選択で止まると
+  （`HookPlayerChoiceContext.WaitForPauseOrCompletionWithoutAssigningTask` が止まりで戻る）先へ進み、`Hook.AfterSideTurnStart` と
+  `OrbQueue.AfterTurnStart` を回してから `RunAutoPrePlayPhase` を作る。よって `auto_pre_play_phase` の段があれば、
+  `AfterSideTurnStart` と `OrbQueue.AfterTurnStart` は済んでいる。その後は `SetupPlayerTurn` の残り、続いて
+  `auto_pre_play_phase` の `following` の順に走る。
 - `draw`: `from_hand_draw`（手番の初めのドローか）、`draws_requested`（`ceil(count)`）、`draw_index`（いま引いている
   ループの添字）、`remaining_draws`（まだ山札から取っていないドローの数。`ShuffleIfNecessary` の待ちでは今回の 1 枚を含む
   `draws_requested - draw_index`、`AddToHand` / `AfterCardDrawn` の待ちではそれより 1 少ない。`AfterPreventingDraw` の待ちは
@@ -3356,7 +3363,8 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   している、`completed`、`depth limit 16`）。
 - 公開の情報だけ: 段の名前・ループの添字・残りの枚数・引数は、札の本文と画面で見えたドロー・予約から決まる。山札の順・
   予約した札・乱数・抽選の結果には触らない。
-- 分からないとき（入口の Task を記録できなかった、知らない状態、表と内側の段の食い違い、予約の記録が合わない）は
+- 分からないとき（入口の Task を記録できなかった、知らない状態、表と内側の段の食い違い、予約の記録が合わない、
+  Task に await として登録された box が別の Task で止まっている〔`end` に `is not suspended on`〕）は
   `known: false` と `unavailable_reasons`（`frames` は読めた分。全体が読めなければ `null`）。`choice_source` の他の
   項目と `known` には影響しない。warning は `choice_source.await_chain`。
 - Markdown は `Choice source:` の行の末尾に `awaited by hook AfterShuffle (1 listeners left) < shuffle <

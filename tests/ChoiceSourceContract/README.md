@@ -31,7 +31,8 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
   無いフィールドで例外になること。段の初めの山札の記録（開いた Hook の間・その戦闘だけ・終わった戦闘を捨てる・上限）、
   残りの listener の並べ方（山札にあった札の塊は公開の順に並べ替えて `order: null`、他は列の位置、いま走らない・override
   しない listener は出さない）、Markdown、ソースの文字列（乱数に触らない・列挙子を進めない・patch が本体を飛ばさない・
-  await の順の表・配線）。Release で回す（Debug では iterator の一時変数の名前が違う）。
+  await の順の表・配線）。csproj は `<Optimize>true</Optimize>` で、構成によらずゲームの Release と同じ形の状態機械・
+  iterator を作る（最適化なしでは iterator の一時変数の名前が違う）。
 
 Harmony の patch の当たり方・`PlayerChoiceContext` の連鎖・通知の列の読み直し・本体の状態機械のフィールドはゲームが無いと動かせない。実機の確認（調整役が行う）:
 
