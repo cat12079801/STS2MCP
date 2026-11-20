@@ -235,6 +235,9 @@ async def get_game_state(format: str = "markdown") -> str:
     ended_combat.combat_log を足した。
     schema 1.11.0 で、battle.enemies[].can_receive_powers（Creature.CanReceivePowers。パワーを付けられるか。
     PowerCmd.Apply の条件で、hittable と違い死亡では false にならない）を足した。
+    schema 1.12.0 で、戦闘の札の行の internal_state.deck_version_id（CardModel._deckVersion。戦闘の開始時に
+    デッキから写した札は元の札のモデルの id、戦闘中に作られた札は null）と、山札・捨て札・廃棄・プレイ中の
+    行の rarity（手札と同じ CardModel.Rarity の列挙名）を足した（泥棒バッタの窃盗の候補）。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
@@ -288,7 +291,7 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
-    契約の版は schema（semver の文字列。現在 "1.11.0"）で返す。規則の正本は docs/raw-full.md の
+    契約の版は schema（semver の文字列。現在 "1.12.0"）で返す。規則の正本は docs/raw-full.md の
     「Common Top-Level Fields」。MAJOR は後方互換の無い変更（既存の項目の意味・型・形の変更、
     項目・アクション・列挙の値・state_type の削除・改名、構造の変更）、MINOR は後方互換の追加
     （項目・アクション・任意の引数・state_type・既存の列挙の新しい値。版でなく項目の有無と

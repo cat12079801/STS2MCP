@@ -76,8 +76,12 @@ public static partial class McpMod
     /// 1.11.0: battle.enemies[].can_receive_powers, Creature.CanReceivePowers on every enemy row (the gate of
     /// PowerCmd.Apply: CombatState present and Hook.ShouldAllowHitting, with no IsDead check, unlike hittable;
     /// Queen.BurnBrightForMeMove, sts2#1175).
+    /// 1.12.0: every combat card row's internal_state carries deck_version_id (CardModel._deckVersion: the deck card's
+    /// model id for the copies Player.PopulateCombatState made, null for cards made during the fight), and the draw /
+    /// discard / exhaust / play pile rows carry rarity (CardModel.Rarity, as on hand rows; ThievingHopper.ThieveryMove,
+    /// sts2#1133).
     /// </summary>
-    public const string StateSchema = "1.11.0";
+    public const string StateSchema = "1.12.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

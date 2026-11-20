@@ -18,6 +18,9 @@ public static partial class McpMod
         // CardModel._currentTarget（Creature?）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_currentTarget", StateMemberKind.Field, "current_target_combat_id", StateValueConverter.CreatureCombatId, StateMarkdown.NonDefault,
             "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。今プレイ中のカードの対象"),
+        // CardModel._deckVersion（CardModel?）
+        new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_deckVersion", StateMemberKind.Field, "deck_version_id", StateValueConverter.CardModelId, StateMarkdown.Never,
+            "デッキ側の同じカードへの参照（戦闘のコピーの元）。入れるのは戦闘の開始時の Player.PopulateCombatState（デッキの各札の戦闘のコピーに元の札を入れる）だけで、CardModel.AfterCloned（複製・生成）は null にし、DeprecatedCard.OnPlay も null に戻す。戦闘中に作られた札（生成・複製・変化）は参照なしで、作った効果は人間に見えている（MOD の uid も g の採番で同じ区別を持つ）。値は参照先のモデルの id（デッキに見えている札）で、山の順は表さない。ThievingHopper.ThieveryMove が盗む候補（DeckVersion != null）に、SwipePower.Steal・BeforeDeath がデッキからの除去と返す報酬に使う"),
         // CardModel._floorAddedToDeck（int?）
         new("card", "MegaCrit.Sts2.Core.Models.CardModel", "MegaCrit.Sts2.Core.Models.CardModel", "_floorAddedToDeck", StateMemberKind.Field, "floor_added_to_deck", StateValueConverter.NullableInt, StateMarkdown.Never,
             "デッキに入った階。人間は取得した階を覚えている。今の版で効果に読む箇所は見当たらず、保存と履歴に使う。優先度は低い"),

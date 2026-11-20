@@ -39,7 +39,7 @@ public static partial class McpMod
     private static void RunGeneratedTableContract()
     {
         var sections = new HashSet<string> { "card", "relic", "power", "player", "battle" };
-        Check(StateAllowlist.Length == 32, "許可リストは 32 項目");
+        Check(StateAllowlist.Length == 33, "許可リストは 33 項目");
         Check(!StateAllowlist.Any(e => e.Key == "wongo_points"), "ラン中に読まれない wongo_points は出さない（cosmetic）");
         foreach (var e in StateAllowlist)
         {
@@ -69,9 +69,9 @@ public static partial class McpMod
         var player = new Player { PlayerCombatState = new PlayerCombatState() };
         var plain = new CardModel("STRIKE_IRONCLAD") { Owner = player };
         var values = Internal(Row("card", plain));
-        Check(values.Count == 8, "基底の 8 項目だけ（サブクラスの項目は付かない）");
+        Check(values.Count == 9, "基底の 9 項目だけ（サブクラスの項目は付かない）");
         Check(values["clone_of_uid"] == null && Equals(values["current_play_index"], 0)
-            && values["current_target_combat_id"] == null && values["floor_added_to_deck"] == null
+            && values["current_target_combat_id"] == null && values["deck_version_id"] == null && values["floor_added_to_deck"] == null
             && Equals(values["is_dupe"], false) && Seq<string>(values["keywords_added"]) && Seq<string>(values["keywords_removed"])
             && values["transform_into_after_play_id"] == null && Reasons(values) == null,
             "既定値は実値（null は参照が無い・未設定、理由なし）");
@@ -107,7 +107,7 @@ public static partial class McpMod
         var rampage = new Rampage { Owner = player };
         rampage.SetExtra(10m);
         values = Internal(Row("card", rampage));
-        Check(values.Count == 9 && Equals(values["extra_damage"], 10m), "Rampage は基底の 8 項目と extra_damage");
+        Check(values.Count == 10 && Equals(values["extra_damage"], 10m), "Rampage は基底の 9 項目と extra_damage");
         Check(Equals(Internal(Row("card", new Thrash()))["extra_damage"], 0m)
             && Equals(Internal(Row("card", new Maul()))["extra_damage"], 0m)
             && Equals(Internal(Row("card", new TheBall()))["extra_damage"], 0m), "累計の 0 も実値");
@@ -115,7 +115,51 @@ public static partial class McpMod
         var regret = new Regret();
         regret.SetCardsInHand(6);
         values = Internal(Row("card", regret));
-        Check(values.Count == 9 && Equals(values["cards_in_hand_at_turn_end"], 6), "後悔のターン終了時の手札の枚数（解決中の印）");
+        Check(values.Count == 10 && Equals(values["cards_in_hand_at_turn_end"], 6), "後悔のターン終了時の手札の枚数（解決中の印）");
+
+        RunDeckVersionContract(player);
+    }
+
+    // CardModel._deckVersion（sts2#1133）: Player.PopulateCombatState が戦闘の札に元のデッキの札を入れ、
+    // CardModel.AfterCloned（複製・生成）が null にする。値は参照先のモデルの id で、参照先に uid を振らない。
+    private static void RunDeckVersionContract(Player player)
+    {
+        BeginStateWarnings();
+        var deckRupture = new CardModel("RUPTURE");
+        player.Deck.Cards.Add(deckRupture);
+        var fromDeck = new CardModel("RUPTURE") { Owner = player, DeckVersion = deckRupture };
+        var generated = new CardModel("RUPTURE") { Owner = player };
+        player.PlayerCombatState!.Hand.Add(fromDeck);
+        player.PlayerCombatState!.Hand.Add(generated);
+        var deckRow = Internal(Row("card", fromDeck, "discard_pile"));
+        var generatedRow = Internal(Row("card", generated, "discard_pile"));
+        Check(Equals(deckRow["deck_version_id"], "RUPTURE") && Reasons(deckRow) == null,
+            "デッキから写した札は元の札のモデル id");
+        Check(generatedRow.ContainsKey("deck_version_id") && generatedRow["deck_version_id"] == null && Reasons(generatedRow) == null,
+            "同じ id の生成札は参照なしの null（理由なし）");
+        Check(!TryGetRegisteredCardUid(deckRupture, out _), "参照先のデッキの札に戦闘の uid を振らない");
+        Check(Equals(Internal(Row("card", new CardModel("BASH") { DeckVersion = new CardModel("BASH") }))["deck_version_id"], "BASH"),
+            "戦闘の山の外の札でも参照先の id を読む（uid を使わない）");
+
+        // 参照先の id が読めない: null と理由・warnings、ほかの項目は残る。
+        var broken = new CardModel("ANGER") { Owner = player, DeckVersion = new CardModel(null!) };
+        var brokenRow = Internal(Row("card", broken, "draw_pile"));
+        Check(brokenRow["deck_version_id"] == null && Reasons(brokenRow)!["deck_version_id"].Contains("Id.Entry"),
+            "読めない参照は null と理由（参照なしと区別する）");
+        Check(Equals(brokenRow["is_dupe"], false) && Reasons(brokenRow)!.Count == 1, "ほかの項目は残る");
+        Check(_stateWarnings.Count(w => w.StartsWith("draw_pile.internal_state.deck_version_id:")) == 1, "warnings にも出る");
+
+        // markdown: デッキ由来の全札に値があるので、読めたときは出さない（Never）。読めないときは理由を出す。
+        string shown = FormatAllowlistedState(Row("card", fromDeck), "card");
+        Check(!shown.Contains("deck version", StringComparison.Ordinal), "読めた deck_version_id は markdown に出さない");
+        Check(FormatAllowlistedState(Row("card", broken), "card").Contains("deck version id null (", StringComparison.Ordinal),
+            "読めない deck_version_id は理由を出す");
+        Check(StateAllowlist.Single(e => e.Key == "deck_version_id") is { Section: "card", Member: "_deckVersion",
+            Converter: StateValueConverter.CardModelId, Markdown: StateMarkdown.Never, Kind: StateMemberKind.Field },
+            "CardModel._deckVersion を CardModelId で読む");
+        player.PlayerCombatState!.Hand.Remove(fromDeck);
+        player.PlayerCombatState!.Hand.Remove(generated);
+        player.Deck.Cards.Remove(deckRupture);
     }
 
     private static void RunPowerContract()

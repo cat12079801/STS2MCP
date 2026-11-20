@@ -2092,6 +2092,10 @@ public static partial class McpMod
                 ["description"] = SafeGetCardDescription(card, pile)
             };
             AttachCardDetails(state, card);
+            // CardModel.Rarity, the enum name hand rows carry (BuildCardInfo). Shown on the card face, so it is
+            // public; ThievingHopper.ThieveryMove picks from Draw + Discard by it (schema 1.12.0, sts2#1133).
+            ReadCardDetailValue(state, (Dictionary<string, string>)state["unavailable_reasons"]!, "rarity",
+                () => card.Rarity.ToString());
             AttachAllowlistedState(state, "card", card, pile.ToString().ToLowerInvariant() + "_pile");
             AttachCardPlayability(state, card);
             AttachCombatUpgradeState(state, card, pile);

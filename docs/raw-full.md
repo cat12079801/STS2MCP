@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.11.0",       // Contract version (semver) — see below
+  "schema": "1.12.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.11.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.12.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.11.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.12.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -169,6 +169,11 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.11.0** — `battle.enemies[].can_receive_powers`: 敵のすべての行に本体の `Creature.CanReceivePowers`（`PowerCmd.Apply` が
   付与の前に見る条件）の bool を出す。クイーンの「燃え上がれ」が味方に筋力を付けるか（`cat12079801/sts2#1175`）。
   [パワーを付けられるか](#パワーを付けられるかcan_receive_powersschema-1110)。
+- **1.12.0** — 戦闘の札の行（手札・4 パイル）の `internal_state.deck_version_id`（`CardModel._deckVersion`。戦闘の開始時にデッキから
+  写した札は元の札のモデル id、戦闘中に作られた札は null）と、`draw_pile[]`・`discard_pile[]`・`exhaust_pile[]`・`play_pile[]` の
+  行の `rarity`（手札と同じ `CardModel.Rarity` の列挙名）。泥棒バッタの窃盗（`ThievingHopper.ThieveryMove`）が盗む候補を決める入力
+  （`cat12079801/sts2#1133`）。[棚卸しから生成した内部状態](#棚卸しから生成した内部状態internal_stateschema-120)・
+  [戦闘カードの詳細](#戦闘カードの詳細追加schema-4)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -1338,6 +1343,7 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
   "uid": "STRIKE_IRONCLAD#0",
   "name": "Strike",
   "type": "Attack",
+  "rarity": "Basic",         // CardModel.Rarity enum name, as on hand rows (schema 1.12.0)
   "target_type": "AnyEnemy",
   "is_upgraded": false,
   "is_upgradable": true,
@@ -1371,6 +1377,12 @@ the whole attack's damage, not a guarantee that every hit lands on this enemy.
 対象は戦闘中の手札と4パイルで、各行は既存の `uid` で照合できる。
 
 - `type` / `target_type` は `CardModel.Type` / `TargetType` の enum 名。
+- `rarity` は `CardModel.Rarity`（`CardRarity`）の enum 名（`Basic` / `Common` / `Uncommon` / `Rare` / `Ancient` / `Event` /
+  `Curse` / `Status` / `Quest` など、ゲームの `ToString()` のまま）。手札の行は以前から共通の表示項目（`BuildCardInfo`）で
+  同じ値を出しており、4 パイルの行にも同じ値を出す（schema 1.12.0）。札の表に描かれている（帯の色）公開の値。
+  泥棒バッタの窃盗（`ThievingHopper.ThieveryMove`）は山札と捨て札の札から `Rarity != Quest` と `_stealPriorities`
+  （アンコモン → コモン・レア・イベント → ベーシック → エンシェントかインビュード）で盗む札を絞る。
+  4 パイルの行では読取失敗を null と `unavailable_reasons.rarity`・`warnings` にする。山札の行の並びは変えない（表示順のまま）。
 - `is_upgraded` / `is_upgradable` は `CardModel.IsUpgraded`（`CurrentUpgradeLevel > 0`）/
   `IsUpgradable`（`CurrentUpgradeLevel < MaxUpgradeLevel`）の bool。手札では既存の値と同じ。
 - `tags` は `CardModel.Tags` の `CardTag` enum 名の配列（`Strike` / `Defend` / `Minion` /
@@ -2174,6 +2186,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `card` | `clone_of_uid` | string \| null | `CardModel._cloneOf` | 複製元のカード（`CreateClone` が入れる。`IsClone`・`DupeOf` の判定） |
 | `card` | `current_play_index` | int | `CardModel._currentPlayIndex` | 解決中の繰り返しプレイの何回目か（`OnPlayWrapper` が入れる。`LethalityPower` が読む） |
 | `card` | `current_target_combat_id` | uint \| null | `CardModel._currentTarget` | 解決中の対象（`OnPlayWrapper`） |
+| `card` | `deck_version_id` | string \| null | `CardModel._deckVersion` | 戦闘の札の元になったデッキ側の札のモデル id（schema 1.12.0）。入れるのは戦闘の開始時の `Player.PopulateCombatState`（デッキの各札を写した戦闘の札に元の札を入れる）だけで、`CardModel.AfterCloned`（複製・生成）と `DeprecatedCard.OnPlay` は null にする。戦闘中に作られた札（生成・複製・変化）と戦闘外の `player.deck[]` の行は null（理由なし）。参照先に uid は振らない。`ThievingHopper.ThieveryMove` が盗む候補（`DeckVersion != null`）に、`SwipePower.Steal` がデッキからの除去に、`SwipePower.BeforeDeath` が返す報酬に使う |
 | `card` | `floor_added_to_deck` | int \| null | `CardModel._floorAddedToDeck` | デッキに入った階（`CardPileCmd`・`CardCmd` が `TotalFloor` を入れる。効果に読む箇所は無く、保存と履歴に使う） |
 | `card` | `is_dupe` | bool | `CardModel._isDupe` | 複製（Dupe）の印（`CreateDupe`）。結果の山（`GetResultLocationForCardPlay`）と `ChainsOfBindingPower`・`FeralPower` が読む |
 | `card` | `keywords_added` / `keywords_removed` | string[] | `CardModel._keywordsAddedFromOutside` / `_keywordsRemovedFromOutside` | 効果が後から付けた・外したキーワード（`AddKeyword`・`RemoveKeyword`）。強化の取り消し（`DowngradeInternal`）で残すかを決める |
@@ -2207,12 +2220,12 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 
 Markdown は既定値（false・0・空・理由の無い null・`Normal`）を省き、`(internal: is dupe yes, extra damage 5)` の形で行に足す。
 カードは詳細の行（`  - internal: …`）、レリック・パワーは行の末尾、player はステータスの行、battle は `Round` の行。
-`floor_added_to_deck`・`applier_combat_id`・`target_combat_id`（ほぼ全パワーの行に値がある）は読めたときは出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。`golden_path_act`・`spoils_act_index` は 0（第 1 幕）も -1（未設定）も実値なので常に出す。読めなかった値は `null (理由)`。
+`floor_added_to_deck`・`deck_version_id`（デッキ由来の全札に値がある）・`applier_combat_id`・`target_combat_id`（ほぼ全パワーの行に値がある）は読めたときは出さず、`amount_on_turn_start` は `amount` と違うときだけ出す。`golden_path_act`・`spoils_act_index` は 0（第 1 幕）も -1（未設定）も実値なので常に出す。読めなかった値は `null (理由)`。
 デッキの markdown は同じ札を束ねて表示するので、デッキの行の `internal_state` は JSON だけ。
 
 ```json
 { "uid": "RAMPAGE#4", "internal_state": { "clone_of_uid": null, "current_play_index": 0, "current_target_combat_id": null,
-  "floor_added_to_deck": 6, "is_dupe": false, "keywords_added": [], "keywords_removed": [],
+  "deck_version_id": "RAMPAGE", "floor_added_to_deck": 6, "is_dupe": false, "keywords_added": [], "keywords_removed": [],
   "transform_into_after_play_id": null, "extra_damage": 5 } }
 ```
 

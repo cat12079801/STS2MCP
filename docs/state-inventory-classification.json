@@ -126,8 +126,17 @@
   "kind": "field"
  },
  "CardModel._deckVersion": {
-  "class": "static/derived",
-  "note": "デッキ側の同じカードへの参照（戦闘のコピーの元）。MOD は uid の採番に使うだけ"
+  "class": "public",
+  "note": "デッキ側の同じカードへの参照（戦闘のコピーの元）。入れるのは戦闘の開始時の Player.PopulateCombatState（デッキの各札の戦闘のコピーに元の札を入れる）だけで、CardModel.AfterCloned（複製・生成）は null にし、DeprecatedCard.OnPlay も null に戻す。戦闘中に作られた札（生成・複製・変化）は参照なしで、作った効果は人間に見えている（MOD の uid も g の採番で同じ区別を持つ）。値は参照先のモデルの id（デッキに見えている札）で、山の順は表さない。ThievingHopper.ThieveryMove が盗む候補（DeckVersion != null）に、SwipePower.Steal・BeforeDeath がデッキからの除去と返す報酬に使う",
+  "json_key": "deck_version_id",
+  "effect": "ThievingHopper.ThieveryMove（盗む候補）・SwipePower.Steal（RemoveFromDeck）・SwipePower.BeforeDeath（SpecialCardReward）・TheScythe・ShowOff・GeneticAlgorithm・Goopy（デッキ側の札も伸ばす）・DeprecatedCard.OnPlay",
+  "written": "Player.PopulateCombatState（cardModel.DeckVersion = item）・CardModel.AfterCloned（null）・DeprecatedCard.OnPlay（null）",
+  "section": "card",
+  "converter": "CardModelId",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "CardModel?",
+  "kind": "field",
+  "markdown": "Never"
  },
  "CardModel._floorAddedToDeck": {
   "class": "public",

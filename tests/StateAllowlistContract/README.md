@@ -14,10 +14,12 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
 
 確かめること:
 
-- 生成物: 32 項目、section が card / relic / power / player / battle のどれか、分類表の備考が残る、宣言型がモデルの型かその入れ子、
+- 生成物: 33 項目、section が card / relic / power / player / battle のどれか、分類表の備考が残る、宣言型がモデルの型かその入れ子、
   隠す情報（乱数・`RelicGrabBag`・`PlayerOdds`・山・エンシェントの提示の前の中身）を指さない、同じ section・キーが同じ行に 2 つ当たらない
-- カード: 基底の 8 項目の既定値（null は参照が無い・未設定の実値）、複製元の uid は同じ読み取りの山の行と同じ、山に無いカードには uid を振らず null・理由・warnings、
+- カード: 基底の 9 項目の既定値（null は参照が無い・未設定の実値）、複製元の uid は同じ読み取りの山の行と同じ、山に無いカードには uid を振らず null・理由・warnings、
   combat_id の無い対象は null と理由でほかの項目は残る、キーワードは列挙の値の順、派生（Rampage など）の項目は派生の行だけ
+- カードの `deck_version_id`（`CardModel._deckVersion`、sts2#1133）: デッキから写した札は元の札のモデル id、同じ id の生成札は理由なしの null、
+  参照先のデッキの札に uid を振らない、参照先の id が読めないと null・理由・warnings でほかの項目は残る、markdown は読めたときは出さず読めないときは理由
 - パワー: 全行の `amount_on_turn_start`・`applier_combat_id`・`target_combat_id`（無ければ null で理由なし、0 も実在する id、派生の行にも付く、`CombatId` の無い付与元は null・理由・warnings）、呪術の行の直下への写し（`CopyAllowlistedReference`。値・付与元なし・読取失敗で同じ理由と warnings 1 件）、かばう（`InterceptPower`）の `Data` の combat_id の昇順、`Data` が無い・型が違うときは null と理由
 - レリック: 基底の `status`・`is_wax`・`floor_added_to_deck`、`CardPlay` をカードの uid に、預けたカードを id の順に、未作成のリストを空に、2 倍にしたパワーの id と持ち主
 - player・battle: 自動実装プロパティの読取、味方・逃げた敵の combat_id、当てはまる項目が無い行には `internal_state` を付けない

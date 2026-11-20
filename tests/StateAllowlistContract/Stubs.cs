@@ -70,7 +70,10 @@ namespace MegaCrit.Sts2.Core.Models
     public class CardModel(string id) : IComparable<CardModel>
     {
         public ModelId Id { get; } = new(id);
-        public CardModel? DeckVersion;
+        // v0.113.1: DeckVersion is a property over the private _deckVersion (CardModel.cs:124, :1010). The allowlist
+        // reads the field; CardIdentity reads the property.
+        private CardModel? _deckVersion;
+        public CardModel? DeckVersion { get => _deckVersion; set => _deckVersion = value; }
         public int Rarity { get; set; }
         public Entities.Players.Player? Owner { get; set; }
         public int CompareTo(CardModel? other) => StringComparer.Ordinal.Compare(Id.Entry, other?.Id.Entry);

@@ -498,6 +498,18 @@ namespace STS2_MCP
             string pileBuilder = Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "private static List<Dictionary<string, object?>> BuildEnemyList");
             int pileDetails = pileBuilder.IndexOf("AttachCardDetails(state, card)", StringComparison.Ordinal);
             Check(pileDetails >= 0 && pileBuilder.IndexOf("AttachCardPlayability(state, card)", StringComparison.Ordinal) > pileDetails, "all pile rows share hand playability reader after the reasons dictionary exists");
+            // sts2#1133 (schema 1.12.0): pile rows carry the hand's rarity (CardModel.Rarity enum name) through the
+            // per-field reader, after the reasons dictionary exists; the row order stays the display order.
+            int pileRarity = pileBuilder.IndexOf("ReadCardDetailValue(state, (Dictionary<string, string>)state[\"unavailable_reasons\"]!, \"rarity\",", StringComparison.Ordinal);
+            Check(pileRarity > pileDetails && pileBuilder.IndexOf("() => card.Rarity.ToString());", pileRarity, StringComparison.Ordinal) > pileRarity,
+                "all pile rows read rarity with the per-field reader after the details");
+            Check(Slice("private static Dictionary<string, object?> BuildCardInfo", "private static Dictionary<string, object?>? BuildUpgradePreviewInfo").Contains("[\"rarity\"] = card.Rarity.ToString()"),
+                "hand rows keep the shared rarity (same enum name)");
+            var rarityRow = new Dictionary<string, object?>();
+            var rarityReasons = new Dictionary<string, string>();
+            ReadCardDetailValue(rarityRow, rarityReasons, "rarity", () => throw new InvalidOperationException("rarity boom"));
+            Check(rarityRow.ContainsKey("rarity") && rarityRow["rarity"] == null && rarityReasons["rarity"].Contains("rarity boom"),
+                "a failed rarity read is null with its reason");
             foreach (string pile in new[] { "Draw", "Discard", "Exhaust", "Play" })
                 Check(builder.Contains($"BuildPileCardList(combatState.{pile}Pile.Cards, PileType.{pile})"), $"{pile} wiring");
             Check(Slice("private static List<Dictionary<string, object?>> BuildPileCardList", "private static List<Dictionary<string, object?>> BuildEnemyList").Contains("OrderPileCardsForDisplay(cards, pile)"), "pile details use display ordering covered by CardIdentityContract");

@@ -19,6 +19,7 @@ StringVar の除外、PreviewValue / EnchantedValue と区別した値の取得�
 
 `is_upgraded` / `is_upgradable` の未強化・最大段階・多段階の途中、`tags` の enum 名と数値順・
 タグなしの `[]`・列挙途中の失敗、`UnplayableReason` の複数フラグの名前（ゲームの Flags の値を写した境界ダブル）、
+パイルの行が手札と同じ `rarity`（`CardModel.Rarity` の enum 名、schema 1.12.0）を項目別の読取で出すこと・読取失敗の null と理由（sts2#1133）、
 パイルの Markdown の `can_play false (…)` 子行（出せる札には付かない）と `tags` の1行を検査する。
 
 モメンタムの `extra_damage`（private の `_extraDamage`）は、未プレイの 0・プレイ後の伸び・
