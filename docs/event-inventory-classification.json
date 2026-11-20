@@ -26,7 +26,8 @@
   "1113": "カスケードの予約順の照合",
   "1115": "エントロピー・計略・スプラッシュ（進行中）",
   "1118": "オブスキュラの咆哮",
-  "1120": "滝の巨人・知識の悪魔の照合"
+  "1120": "滝の巨人・知識の悪魔の照合",
+  "1175": "クイーン「燃え上がれ」の味方への筋力"
  },
  "rules": [
   {
@@ -1130,9 +1131,14 @@
   "computed:Hook.ShouldAllowHitting": {
    "class": "exposed",
    "exposed_by": [
-    "McpMod.EnemyHittable.cs: try { state[\"hittable\"] = creature.IsHittable; }"
+    "McpMod.EnemyHittable.cs: try { state[\"hittable\"] = creature.IsHittable; }",
+    "McpMod.EnemyCanReceivePowers.cs: try { state[\"can_receive_powers\"] = creature.CanReceivePowers; }"
    ],
-   "proposed_key": "enemies[].hittable"
+   "proposed_key": "enemies[].hittable, enemies[].can_receive_powers",
+   "issues": [
+    1175
+   ],
+   "reason": "本体の getter は 2 つある。Creature.IsHittable は IsDead なら false で、それ以外がこの判定。Creature.CanReceivePowers は CombatState が無ければ false で、それ以外がこの判定（IsDead を見ない）。PowerCmd.Apply が読むのは後者。schema 1.11.0 より前は hittable だけを引いて exposed にしていたが、戦闘に残る死亡個体では hittable が常に false でこの判定の答えが出ておらず、パワーを付けられるか（クイーンの BurnBrightForMeMove の筋力など）が state から決まらなかった。enemies[].can_receive_powers で後者の getter の値も出す"
   },
   "computed:Hook.ShouldAllowMerchantCardRemoval": {
    "class": "exposed",

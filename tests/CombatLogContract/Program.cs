@@ -197,7 +197,7 @@ namespace STS2_MCP
             string mod = Read("McpMod.cs");
             Check(mod.Contains("InstallCombatLogTracking();") && mod.Contains("InstallDecisionContextTracking();"), "初期化で patch を当てる");
             Check(mod.Contains("request.QueryString[\"combat_log_since\"]") && mod.Contains("_combatLogSince = null;"), "?combat_log_since= は読むたびに戻す");
-            Check(mod.Contains("public const string StateSchema = \"1.10.0\";"), "schema 1.10.0");
+            Check(mod.Contains("/// 1.10.0: the public-missing rows of the event inventory"), "combat_log などの追加は MINOR（1.10.0）");
             string builder = Read("McpMod.StateBuilder.cs");
             Check(builder.Contains("battle[\"combat_log\"] = BuildCombatLogState(combatState);"), "battle に combat_log を付ける");
             Check(Regex.Matches(builder, "state\\[\"decision_context\"\\] = BuildDecisionContext\\(").Count == 5, "5 つの選択画面に decision_context を付ける");

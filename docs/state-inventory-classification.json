@@ -330,7 +330,7 @@
  },
  "Creature.CombatState": {
   "class": "static/derived",
-  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す。読む側の getter のうち IsHittable と CanReceivePowers は、この参照の有無と Hook.ShouldAllowHitting（戦闘の hook listener の答え）から決まる計算値で、項目ではないのでこの表に行が無い。どちらも出来事の棚卸し（docs/event-inventory.md）の computed:Hook.ShouldAllowHitting で exposed（enemies[].hittable・enemies[].can_receive_powers）。CanReceivePowers は PowerCmd.Apply が付与の前に見る条件で、IsDead を見ないので戦闘に残る死亡個体では hittable と食い違う。この参照が static/derived でも、listener の答えは公開の項目から作れないので getter の値を出す（schema 1.11.0、sts2#1175）"
  },
  "Creature.HpDisplay": {
   "class": "exposed",

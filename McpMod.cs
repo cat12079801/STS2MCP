@@ -73,8 +73,11 @@ public static partial class McpMod
     /// in order; ?combat_log_since=), decision_context on every selection screen (the entry point, who opened it, where in
     /// the combat_log, and choice_source), player.potion_generation_pool, energy_cost.x_value_if_played on hand cards and
     /// ended_combat.combat_log.
+    /// 1.11.0: battle.enemies[].can_receive_powers, Creature.CanReceivePowers on every enemy row (the gate of
+    /// PowerCmd.Apply: CombatState present and Hook.ShouldAllowHitting, with no IsDead check, unlike hittable;
+    /// Queen.BurnBrightForMeMove, sts2#1175).
     /// </summary>
-    public const string StateSchema = "1.10.0";
+    public const string StateSchema = "1.11.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

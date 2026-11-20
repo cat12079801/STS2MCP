@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.10.0",       // Contract version (semver) — see below
+  "schema": "1.11.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.10.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.11.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.10.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.11.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -166,6 +166,9 @@ and changing the meaning or shape of an existing field is MAJOR.
   `decision_context`（入口・開いた元・開いた時点の seq・`choice_source`）、`player.potion_generation_pool`、手札の
   `energy_cost.x_value_if_played`、`ended_combat.combat_log`。[戦闘の出来事の通し列](#戦闘の出来事の通し列battlecombat_logschema-1100)・
   [選択の文脈](#選択の文脈decision_contextschema-1100)・[ポーションの生成候補](#ポーションの生成候補playerpotion_generation_poolschema-1100)。
+- **1.11.0** — `battle.enemies[].can_receive_powers`: 敵のすべての行に本体の `Creature.CanReceivePowers`（`PowerCmd.Apply` が
+  付与の前に見る条件）の bool を出す。クイーンの「燃え上がれ」が味方に筋力を付けるか（`cat12079801/sts2#1175`）。
+  [パワーを付けられるか](#パワーを付けられるかcan_receive_powersschema-1110)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -2476,6 +2479,7 @@ Run state or room type not recognized.
         "name": "Jaw Worm",
         "alive": true,                 // Always present. false = dead but still in the fight
         "hittable": true,              // Creature.IsHittable; null when unreadable (see below)
+        "can_receive_powers": true,    // Creature.CanReceivePowers; null when unreadable (schema 1.11.0)
         "hp_display_is_infinite": false, // HpDisplayExtensions.IsInfinite(Creature.HpDisplay) (schema 1.7.0)
         "slot_name": "front",          // Creature.SlotName; null = no slot (schema 6)
         "hp": 44,
@@ -2505,6 +2509,7 @@ Run state or room type not recognized.
         "name": "Decimillipede Segment",
         "alive": false,
         "hittable": false,             // IsDead -> not hittable
+        "can_receive_powers": false,   // ReattachPower: its owner is reviving (no IsDead check here)
         "hp": 0,
         "max_hp": 46,
         "block": 0,
@@ -2557,6 +2562,36 @@ left to reattach to, the fight is over rather than about to restart.
   false と区別する。旧 MOD では欠落し、未観測として扱う。
 - Markdown は HP の行に `| Hittable: yes|no`（読めなければ `null (理由)`）。追加だけなので版は上げていない（schema 4 のときの追加）。
 - 契約試験は [`tests/EnemyHittableContract`](../tests/EnemyHittableContract/README.md)。
+
+#### パワーを付けられるか（`can_receive_powers`、schema 1.11.0）
+
+`battle.enemies[]` の**すべての行**（生存・戦闘に残る死亡個体、単独・協力プレイで共通）に `can_receive_powers` を出す。
+値は本体の `Creature.CanReceivePowers` の bool をそのまま。`hittable`・HP・`alive`・パワー名から作らない（`cat12079801/sts2#1175`）。
+
+- getter（v0.113.1 `sts2-a671e9ef` の `Creature.CanReceivePowers`）: `CombatState == null` なら false、
+  そうでなければ `Hook.ShouldAllowHitting(CombatState, creature)`。`hittable`（`Creature.IsHittable`）との違いは、先頭の `IsDead` の検査が無く、
+  代わりに `CombatState` の有無を見ること。本体の注釈も「死んだ個体は当てられないが、パワーは付けられる」と書く。
+  override は `hittable` と同じ（`ReattachPower`・`IllusionPower`・`AdaptablePower` は所有者が復活中なら false、
+  `DieForYouPower`・`WuppysLoyaltyPower` は対象が生存しているか）。
+- 効果で読む箇所: `PowerCmd.Apply<T>` は `CombatManager.IsEnding` の次にこれを見て、false なら付与しない（null を返す）。
+  `PowerCmd.Apply(power, …)` も入口と `power.BeforeApplied` の後の 2 回見る。どのパワーのどの付与元でも同じ。
+  例: クイーンの `BurnBrightForMeMove` は `GetTeammatesOf` の各個体（自分を除く）に `PowerCmd.Apply<StrengthPower>` を呼ぶので、
+  付くのはこの値が true の個体だけ（拒否された個体があっても、後の自分へのブロックは行う）。
+- `CombatState` を持つ生存中の行では `hittable` と同じ値になる（どちらも同じ `Hook.ShouldAllowHitting` を読む）。ただし MOD はこれを前提に値を作らず、両方とも本体の getter を読む。
+  違いが出るのは戦闘に残る死亡個体で、`hittable` は常に false、`can_receive_powers` は listener の答え
+  （復活中のムカデの体節は false、`DieForYouPower`・`WuppysLoyaltyPower` が戦闘にいれば false、それ以外は true）。
+  `hittable` から作れないのはこのためで、listener の答えを engine が写すと「推測」になるので getter の値を出す。
+- 読み取りは状態を書き換えない（`Hook.IterateCombatHookListeners` は新しい列を作って返すだけ、各 override は参照の比較と
+  private の bool・`IsAlive` を読むだけ。乱数を引かず、hook の効果を走らせない）。費用は `hittable` と同じ（listener の列を 1 回作る）。
+  `CombatManager.ShouldSkipCombatEffect` の間は listener が空になり true になる（本体の値のまま）。
+- 読めなければ `can_receive_powers: null`、敵の行の `unavailable_reasons.can_receive_powers` に理由、
+  warning `battle.enemies.<entity_id>.can_receive_powers`。false と区別する。旧 MOD（schema 1.11.0 より前）では欠落し、未観測として扱う。
+- プレイヤー（`player`・味方の行）には出さない（いま engine が読むのは敵の側だけ）。
+- 全ての戦闘の全ての敵の行に付ける。クイーンの戦闘に限らないのは、条件が `PowerCmd.Apply` のすべての付与に掛かり
+  （プレイヤーの札・ポーションの対象、敵どうしの付与）、読み取りの費用が `hittable` と同じで、戦闘ごとに有無が変わる契約にすると
+  engine が「無いのは対象外か、旧 MOD か」を見分ける必要が出るため。
+- Markdown は HP の行の `Hittable` の後に `| Receives powers: yes|no`（読めなければ `null (理由)`）。
+- 契約試験は [`tests/EnemyCanReceivePowersContract`](../tests/EnemyCanReceivePowersContract/README.md)。
 
 #### HP の無限表示（`hp_display_is_infinite`、schema 1.7.0）
 

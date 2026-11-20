@@ -337,7 +337,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `KnowledgeDemon.DynamicVars.DisintegrationPower` | monster | ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72） | manual |
 | `KnowledgeDemon._curseOfKnowledgeCounter` | monster | McpMod.EnemyCombatState.cs:82 | mod-scan |
 | `LivingFog._bloatAmount` | monster | McpMod.EnemyCombatState.cs:86 | mod-scan |
-| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2188 … | mod-scan |
+| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2189 … | mod-scan |
 | `MonsterModel._moveStateMachine` | base | McpMod.EnemyMoveState.cs:32 | mod-scan |
 | `MonsterModel._spawnedThisTurn` | base | McpMod.EnemyMoveState.cs:80 | mod-scan |
 | `Nibbit._isAlone` | monster | McpMod.EnemyCombatState.cs:90 | mod-scan |
@@ -540,7 +540,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CombatState.RunState` | IRunState | entity | 他のモデルへの参照（所属）。state では入れ子・id で表す |
 | `CombatState._allCards` | List<CardModel> | entity | 戦闘中の全カード（AddCard・RemoveCard）。各山と手札の和で、山は出ている |
 | `CombatState._nextCreatureId` | uint | entity | 次に振る combat_id の番号（AttachCreature）。採番の内部 |
-| `Creature.CombatState` | ICombatState? | entity | 他のモデルへの参照（所属）。state では入れ子・id で表す |
+| `Creature.CombatState` | ICombatState? | entity | 他のモデルへの参照（所属）。state では入れ子・id で表す。読む側の getter のうち IsHittable と CanReceivePowers は、この参照の有無と Hook.ShouldAllowHitting（戦闘の hook listener の答え）から決まる計算値で、項目ではないのでこの表に行が無い。どちらも出来事の棚卸し（docs/event-inventory.md）の computed:Hook.ShouldAllowHitting で exposed（enemies[].hittable・enemies[].can_receive_powers）。CanReceivePowers は PowerCmd.Apply が付与の前に見る条件で、IsDead を見ないので戦闘に残る死亡個体では hittable と食い違う。この参照が static/derived でも、listener の答えは公開の項目から作れないので getter の値を出す（schema 1.11.0、sts2#1175） |
 | `Creature.Monster` | MonsterModel? | entity | 他のモデルへの参照（所属）。state では入れ子・id で表す |
 | `Creature.MonsterMaxHpBeforeModification` | int? | entity | 修飾前の最大 HP（SetUniqueMonsterHpValue）。修飾後の最大 HP は出ている |
 | `Creature.Player` | Player? | entity | 他のモデルへの参照（所属）。state では入れ子・id で表す |

@@ -2172,6 +2172,7 @@ public static partial class McpMod
         };
         // Alive or dead, minion or reviving: always the game's own getter (false != unknown).
         AttachEnemyHittable(state, creature, entityId);
+        AttachEnemyCanReceivePowers(state, creature, entityId);
         AttachEnemyHpDisplay(state, creature, entityId);
         AttachEnemySlotName(state, creature, entityId);
         if (BuildEnemyCombatState(monster, entityId) is { } enemyCombatState)
