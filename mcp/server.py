@@ -276,7 +276,7 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
-    契約の版は schema（semver の文字列。現在 "1.7.0"）で返す。規則の正本は docs/raw-full.md の
+    契約の版は schema（semver の文字列。現在 "1.8.0"）で返す。規則の正本は docs/raw-full.md の
     「Common Top-Level Fields」。MAJOR は後方互換の無い変更（既存の項目の意味・型・形の変更、
     項目・アクション・列挙の値・state_type の削除・改名、構造の変更）、MINOR は後方互換の追加
     （項目・アクション・任意の引数・state_type・既存の列挙の新しい値。版でなく項目の有無と
@@ -527,7 +527,7 @@ async def use_potion(slot: int, target: str | None = None, wait: bool = False,
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
-            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            reply also carries `ended_combat` (schema 1.8.0): 戦闘が終わった時点の
             card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
             settled の応答のものだけを信じる。
     """
@@ -588,7 +588,7 @@ async def proceed_to_map(wait: bool = False) -> str:
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
-            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            reply also carries `ended_combat` (schema 1.8.0): 戦闘が終わった時点の
             card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
             settled の応答のものだけを信じる。
     """
@@ -626,7 +626,7 @@ async def combat_play_card(
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
-            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            reply also carries `ended_combat` (schema 1.8.0): 戦闘が終わった時点の
             card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
             settled の応答のものだけを信じる。
 
@@ -658,7 +658,7 @@ async def combat_end_turn(wait: bool = False) -> str:
             instead of answering as soon as the action was dispatched. Saves a
             follow-up get_game_state(). The reply adds `settled`, `changed`,
             `waited_ms`, `polls` and `state`. If the fight ended during the action, the
-            reply also carries `ended_combat` (schema 1.7.0): 戦闘が終わった時点の
+            reply also carries `ended_combat` (schema 1.8.0): 戦闘が終わった時点の
             card_resolution_events（終戦後の state には combat_history が無い）。wait=True で
             settled の応答のものだけを信じる。
     """

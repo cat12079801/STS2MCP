@@ -87,7 +87,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.7.0",        // Contract version (semver) — see below
+  "schema": "1.8.0",        // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -101,7 +101,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.7.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.8.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -121,7 +121,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.7.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.8.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -773,7 +773,7 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
 | `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
 | `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
-| `card_resolution_events` | schema 1.6.0。`History.Entries` を元の順のまま走査し、所有者の `CardDrawnEntry`・`CardPlayStartedEntry` / `CardPlayFinishedEntry`・`CardGeneratedEntry` を戦闘全体（手番の条件なし）で出す。下の「[札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160)」。schema 1.7.0 で、山札からの自動プレイの予約の行と play の行の `reservation` を足した（「[自動プレイの予約](#自動プレイの予約card_resolution_events-の予約の行schema-170)」）。 |
+| `card_resolution_events` | schema 1.6.0。`History.Entries` を元の順のまま走査し、所有者の `CardDrawnEntry`・`CardPlayStartedEntry` / `CardPlayFinishedEntry`・`CardGeneratedEntry` を戦闘全体（手番の条件なし）で出す。下の「[札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160)」。schema 1.8.0 で、山札からの自動プレイの予約の行と play の行の `reservation` を足した（「[自動プレイの予約](#自動プレイの予約card_resolution_events-の予約の行schema-180)」）。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
 | `bound_afflictions_this_turn` | `History.Entries.OfType<CardAfflictedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature && e.Affliction is Bound`。`ChainsOfBindingPower.AfterCardDrawn` と同じ集合の件数。 |
@@ -914,8 +914,8 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   | `draw` | `uid` | `CardDrawnEntry.Card` を手札・各パイルと共通の `GetStableCardUid` で変換 |
   | | `from_hand_draw` | `CardDrawnEntry.FromHandDraw`（bool）。手番の初めの通常のドロー（`CombatManager.SetupPlayerTurn` の `fromHandDraw: true`）なら true、札・レリック・パワーが引かせたドローは false |
   | `play` | `phase` ほか | `card_play_events_this_turn` の要素と同じ `phase`・`uid`・`is_auto_play`・`target`・`play_index`・`play_count`（同じ `BuildCardPlayEvent` で作る） |
-  | | `reservation` | schema 1.7.0。このプレイが山札からの自動プレイの予約の消化（`auto_play_dispatch`）から始まったなら `{ call_id, reserve_index }`、それ以外は null。下の「自動プレイの予約」 |
-  | `auto_play_reservation` ほか | | schema 1.7.0。下の「自動プレイの予約」 |
+  | | `reservation` | schema 1.8.0。このプレイが山札からの自動プレイの予約の消化（`auto_play_dispatch`）から始まったなら `{ call_id, reserve_index }`、それ以外は null。下の「自動プレイの予約」 |
+  | `auto_play_reservation` ほか | | schema 1.8.0。下の「自動プレイの予約」 |
   | `generated` | `card_id` | `CardGeneratedEntry.Card.Id.Entry` |
   | | `uid` | 同じく `GetStableCardUid`（生成札は `#g<number>` の空間） |
   | | `creator` | `CardGeneratedEntry.Creator`（`Player?`）。所有者なら `"owner"`、ほかのプレイヤーなら `"other_player"`、プレイヤーでない（敵の行動など）なら `null` |
@@ -937,7 +937,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
   `null` のままになりうる（v0.113.1 では起きる経路を確認していない。`CombatId` は消されず、uid は必ず振れる）。
   利用側はこれを未観測として扱い、止まる側に倒す（短い列や空の列に読み替えない）。
 - **戦闘の終わり**: 勝利の後の state（報酬・マップ）・敗北の後の state には `combat_history` が無く、勝利では本体の履歴も消える。
-  戦闘を終えた単独の POST の応答には、戦闘が終わった時点の列を `ended_combat` で付ける（下の「戦闘を終えた操作の応答」。schema 1.7.0）。
+  戦闘を終えた単独の POST の応答には、戦闘が終わった時点の列を `ended_combat` で付ける（下の「戦闘を終えた操作の応答」。schema 1.8.0）。
   終局の HP などは報酬の画面の公開値で読む。
 - **Markdown**: 列が長いので、History 行に `resolution events=13 (draw:4, play:5, generated:4)` のように種類ごとの件数だけを出す
   （`play` は開始・完了の行の数）。行そのものは JSON で読む。
@@ -948,7 +948,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 
 契約試験と実機確認の観点は [`tests/CombatHistoryContract`](../tests/CombatHistoryContract/README.md)。
 
-#### 自動プレイの予約（card_resolution_events の予約の行、schema 1.7.0）
+#### 自動プレイの予約（card_resolution_events の予約の行、schema 1.8.0）
 
 カスケード（`Cascade.OnPlay`）・荒廃（`Havoc.OnPlay`）・悪魔（`TheDevil.OnPlay`）・騒乱（`MayhemPower.AfterAutoPrePlayPhaseEntered`）・
 `IAmInvincible.AfterAutoPostPlayPhaseEntered`・`DistilledChaos.OnUse`・`LostLutePower` は、どれも
@@ -1006,7 +1006,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 `PlayerChoiceContext.LastInvolvedModel`、`BranchingPlayerChoiceContext`、`Hook.AfterCardPlayed` などの `PushModel` / `PopModel`、
 `Cascade.OnPlay`、`Havoc.OnPlay`、`TheDevil.OnPlay`、`MayhemPower`、`IAmInvincible`、`DistilledChaos`、`LostLutePower`。
 
-#### 戦闘を終えた操作の応答（ended_combat、schema 1.7.0）
+#### 戦闘を終えた操作の応答（ended_combat、schema 1.8.0）
 
 戦闘の勝利では `CombatManager.EndCombatInternal` が `History.Clear()` を呼び、敗北では `CombatManager.ProcessPendingLoss` が `IsInProgress` を下ろすので、
 戦闘を終えた操作の後の state には `combat_history` が無い。最後の子のプレイで戦闘が終わったカスケードの予約・子の解決を同じ操作から読めるように、
@@ -3920,7 +3920,7 @@ Response, with the wait's own fields appended after the action's:
 | `changed` | Whether anything observable moved compared with the state read just before the action. `false` means the action was a no-op. |
 | `state` | The final state, identical in shape to `GET /api/v1/singleplayer`. Omitted when `include_state` is `false`, and when the wait could not read a state at all. |
 | `wait_error` | Present only when the wait itself failed (the main thread stopped answering, or the state could not be built). The action already ran, so this is not a `503`. |
-| `ended_combat` | schema 1.7.0。この操作の間に戦闘が終わったときだけ。戦闘が終わった時点のローカル Player の `card_resolution_events`（[戦闘を終えた操作の応答](#戦闘を終えた操作の応答ended_combatschema-170)）。`wait` なしの応答にも、操作の実行の中で終わったなら付く。 |
+| `ended_combat` | schema 1.8.0。この操作の間に戦闘が終わったときだけ。戦闘が終わった時点のローカル Player の `card_resolution_events`（[戦闘を終えた操作の応答](#戦闘を終えた操作の応答ended_combatschema-180)）。`wait` なしの応答にも、操作の実行の中で終わったなら付く。 |
 
 **The settle rule.** Every ~60 ms the server re-reads the state on the main thread and calls it
 settled when `is_resolving` is false and, for `monster` / `elite` / `boss`, `battle.is_play_phase`

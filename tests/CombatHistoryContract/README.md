@@ -52,7 +52,7 @@ play の行が既存の要素に `kind` を足した形であること、各行�
 `FromHandDraw` の取得失敗・対象の `CombatId` 欠落・combat state の欠落で配列全体が null・理由・warning になり、他の項目を保持し、
 復旧・履歴のリセットで空配列に戻り、前の snapshot が独立であることも確認する。
 
-山札からの自動プレイの予約（schema 1.7.0）は `ReservationChecks.cs` で、本番の `McpMod.AutoPlayReservation.cs`（記録の台帳）を直接動かして検査する
+山札からの自動プレイの予約（schema 1.8.0）は `ReservationChecks.cs` で、本番の `McpMod.AutoPlayReservation.cs`（記録の台帳）を直接動かして検査する
 （Harmony の patch の `McpMod.AutoPlayReservationPatches.cs` はリンクしない。patch が呼ぶ順に台帳の関数を呼ぶ）。カスケード X=4 で
 荒廃・火傷（プレイ不可）・ストライク（リプレイで 2 回、終戦）・強打（終戦で残る）を確保し、荒廃が自分の予約（呼出し 2）を作る局面で、
 呼出し・確保・消化の行が記録した時点の履歴の位置に入ること、親の呼出し・親の札・親プレイの開始行の添字、子のプレイの `reservation`、

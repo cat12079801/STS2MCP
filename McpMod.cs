@@ -64,7 +64,7 @@ public static partial class McpMod
     /// auto_play_reserved / auto_play_dispatch rows; Cascade, Havoc, Mayhem) and each play row's reservation; a POST
     /// whose fight ended while it ran answers ended_combat with the stream as the fight ended (sts2#1113).
     /// </summary>
-    public const string StateSchema = "1.7.0";
+    public const string StateSchema = "1.8.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to
