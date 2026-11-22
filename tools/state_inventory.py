@@ -93,10 +93,13 @@ BASE_CLASS_FILES = [
     ("MegaCrit.Sts2.Core.Entities.Players", "PlayerCombatState", "entity"),
     ("MegaCrit.Sts2.Core.Entities.Players", "ExtraPlayerFields", "entity"),
     ("MegaCrit.Sts2.Core.Combat", "CombatState", "entity"),
+    ("MegaCrit.Sts2.Core.Runs", "RunState", "entity"),
     ("MegaCrit.Sts2.Core.Entities.Cards", "CardEnergyCost", "entity"),
     ("MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine", "MonsterMoveStateMachine", "entity"),
 ]
 BASE_CLASS_NAMES = {name for _, name, _ in BASE_CLASS_FILES}
+# ランの棚卸しは、パエルの歯の Deck 追加通知に関わる修飾子列を対象とする。
+BASE_MEMBER_SCOPE = {"RunState": {"Modifiers"}}
 
 POOL_NAMESPACES = {
     "card": "MegaCrit.Sts2.Core.Models.CardPools",
@@ -499,6 +502,8 @@ def collect(decompile: Path):
             continue
         for ci in parse_file(p, fam if name in BASE_CLASS_NAMES and fam != "entity" else fam, ns_dir):
             ci.family = fam
+            if name in BASE_MEMBER_SCOPE:
+                ci.members = [m for m in ci.members if m.name in BASE_MEMBER_SCOPE[name]]
             classes[ci.name] = ci
             lines_cache[p] = p.read_text(encoding="utf-8-sig").splitlines()
     parsed: list[ClassInfo] = []
@@ -1525,11 +1530,11 @@ def main() -> int:
 
 ALLOWLIST_FILE = "McpMod.StateAllowlist.Generated.cs"
 ALLOWLIST_SOURCE_FILES = (ALLOWLIST_FILE, "McpMod.StateAllowlist.cs", "McpMod.StateAllowlistFormatting.cs")
-ALLOWLIST_SECTIONS = ("card", "relic", "power", "player", "battle")
+ALLOWLIST_SECTIONS = ("card", "relic", "power", "player", "battle", "run")
 ALLOWLIST_KINDS = {"field": "Field", "auto_property": "AutoProperty", "data_field": "DataField"}
 ALLOWLIST_CONVERTERS = ("Bool", "Int", "NullableInt", "Decimal", "EnumName", "CardUid", "CardModelId",
                         "CardPlayCardUid", "CreatureCombatId", "CreatureCombatIds", "KeywordNames",
-                        "PowerRefs", "SerializableCards")
+                        "PowerRefs", "SerializableCards", "ModifierIds")
 ALLOWLIST_MARKDOWN = ("NonDefault", "Always", "Never", "DiffersFromAmount")
 # 種別をまたいで同じ section・キーを使ってよいのは、互いに継承関係の無い具象クラスどうしだけ
 BASE_TYPE_FULL = {f"{ns}.{name}" for ns, name, _ in BASE_CLASS_FILES}
@@ -1692,6 +1697,7 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
     out.append("範囲（pool）: `ironclad`・`colorless`・`curse`・`status`・`event-only`・`shared`・`ancient`・`monster`・"
                "`enchantment`・`affliction`・`base`（モデルの基底）・`entity`（Creature・Player など）を範囲に入れる。"
                "`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。"
+               "ランの `RunState` は、Deck の追加通知に使う `Modifiers` を対象にする。"
                "パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。\n")
 
     def table(title, sel, cols, intro=""):

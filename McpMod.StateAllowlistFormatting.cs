@@ -18,7 +18,7 @@ internal enum StateValueConverter
     Bool, Int, NullableInt, Decimal, EnumName,
     CardUid, CardModelId, CardPlayCardUid,
     CreatureCombatId, CreatureCombatIds,
-    KeywordNames, PowerRefs, SerializableCards
+    KeywordNames, PowerRefs, SerializableCards, ModifierIds
 }
 
 /// <summary>markdown に出す条件。NonDefault は false・0・空・null（理由なし）・Normal を省く。
@@ -27,7 +27,7 @@ internal enum StateMarkdown { NonDefault, Always, Never, DiffersFromAmount }
 
 /// <summary>
 /// 生成した許可リスト（McpMod.StateAllowlist.Generated.cs）の 1 項目。
-/// Section は state の行の種類（card / relic / power / player / battle）、ModelType は行のモデルが
+/// Section は state の行の種類（card / relic / power / player / battle / run）、ModelType は行のモデルが
 /// その型（の派生）のときだけ読む型、DeclaringType はメンバーを宣言した型（パワーの Data は Outer+Data）。
 /// Note は分類表の備考（人間に見える根拠）で、レビューのために生成物に残す。
 /// </summary>

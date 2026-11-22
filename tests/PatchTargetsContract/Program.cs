@@ -145,6 +145,7 @@ foreach (var name in new[] { "EndCombatInternal", "EndPlayerTurnPhaseOneInternal
     Check(patched.Count == 1 && patched[0].GetParameters().Length == 1 && ((MethodInfo)patched[0]).IsPrivate,
         $"{name}: patch only the private overload that takes CombatTurnState");
 }
+EntropicBrewChecks.Run(mod, Check);
 Console.WriteLine($"PatchTargetsContract: {checks} checks passed (combat_log {combatLog}, decision_context {decision}, choice_source {choice}, {lastChanged.Count} patched methods scanned for inlining)");
 
 static class GdConsole

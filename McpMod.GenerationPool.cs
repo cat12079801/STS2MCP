@@ -78,8 +78,7 @@ public static partial class McpMod
             result["players"] = run.Players.Count;
             result["multiplayer_constraint"] = run.CardMultiplayerConstraint.ToString();
             result["game_assembly_sha256"] = GenerationAssemblySha256.Value;
-            if (run.Players.Count < 1 || !run.Players.Contains(player))
-                throw new InvalidOperationException("対象playerがrun.Playersに存在しない");
+            RequireGenerationPoolOwner(player, run.Players);
 
             // FilterForRun は private なので、同じ式の public な CardModel.IsAllowedInRun を呼ぶ
             // （人数の制約と GameMode.Blitz の IsAllowedInBlitz）。条件を MOD に写さない。
@@ -98,5 +97,12 @@ public static partial class McpMod
             Warn(warningPath, ex);
         }
         return result;
+    }
+
+    private static void RequireGenerationPoolOwner(Player player, IEnumerable<Player> players)
+    {
+        if (!players.Any(p => ReferenceEquals(p, player)) || players.Count(p => p.NetId == player.NetId) != 1
+            || string.IsNullOrWhiteSpace(player.Character.Id.Entry))
+            throw new InvalidOperationException("the owner or character cannot be identified in run.Players");
     }
 }

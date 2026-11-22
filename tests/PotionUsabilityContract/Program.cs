@@ -262,10 +262,10 @@ namespace STS2_MCP
                 return j < 0 ? text[i..] : text[i..j];
             }
             string builder = Src("McpMod.StateBuilder.cs");
-            string playerState = Between(builder, "private static Dictionary<string, object?> BuildPlayerState(Player player)", "return state;");
+            string playerState = Between(builder, "private static Dictionary<string, object?> BuildPlayerState(Player player, string? screen)", "return state;");
             Check(playerState.Contains("potions.Add(BuildPotionRow(player, potion, slotIndex));") && !playerState.Contains("[\"target_type\"]"),
                 "BuildPlayerState は所持スロットごとに BuildPotionRow を通す（空き枠の行は作らない）");
-            Check(Src("McpMod.MultiplayerState.cs").Contains("result[\"player\"] = BuildPlayerState(localPlayer);"), "マルチのローカルプレイヤーも同じ builder");
+            Check(Src("McpMod.MultiplayerState.cs").Contains("result[\"player\"] = BuildPlayerState(localPlayer,"), "マルチのローカルプレイヤーも同じ builder");
             string shop = Between(builder, "private static Dictionary<string, object?> BuildShopState", "state[\"sellable_potions\"] = sellable;");
             Check(shop.Contains("_passiveRead\n                        ? CanSellPotionToMerchantNow(localPlayer, held)"), "passive の sellable_potions は在庫を閉じない照会");
 

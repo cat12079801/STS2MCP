@@ -80,8 +80,10 @@ public static partial class McpMod
     /// model id for the copies Player.PopulateCombatState made, null for cards made during the fight), and the draw /
     /// discard / exhaust / play pile rows carry rarity (CardModel.Rarity, as on hand rows; ThievingHopper.ThieveryMove,
     /// sts2#1133).
+    /// 1.13.0: Entropic Brew options, conditional slot usability, listeners and potion history (sts2#991),
+    /// and modifier ids on runs with PaelsTooth (sts2#1214).
     /// </summary>
-    public const string StateSchema = "1.12.0";
+    public const string StateSchema = "1.13.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

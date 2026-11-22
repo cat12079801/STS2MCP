@@ -38,7 +38,7 @@ public static partial class McpMod
         {
             var ftueState = BuildVisibleFtueState(tree.Root);
             if (ftueState != null)
-                return ftueState;
+                return WithRelevantFtueRunState(ftueState);
         }
 
         if (!RunManager.Instance.IsInProgress)
@@ -254,15 +254,7 @@ public static partial class McpMod
             catch (Exception ex) { Warn("battle.selection", ex); }
         }
 
-        // Common run info
-        result["run"] = new Dictionary<string, object?>
-        {
-            ["act"] = runState.CurrentActIndex + 1,
-            ["floor"] = runState.TotalFloor,
-            ["player_count"] = runState.Players.Count,
-            ["card_multiplayer_constraint"] = ((IRunState)runState).CardMultiplayerConstraint.ToString(),
-            ["ascension"] = runState.AscensionLevel
-        };
+        result["run"] = BuildRunState(runState);
 
         // All players summary (always included for multiplayer)
         result["players"] = BuildAllPlayersState(runState);
@@ -271,7 +263,7 @@ public static partial class McpMod
         // matching singleplayer behavior from BuildGameState()
         if (localPlayer != null)
         {
-            result["player"] = BuildPlayerState(localPlayer);
+            result["player"] = BuildPlayerState(localPlayer, result.GetValueOrDefault("state_type") as string);
         }
 
         return result;

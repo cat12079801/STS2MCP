@@ -211,14 +211,14 @@ public static partial class McpMod
         history.ThrowFinished = false;
         history.ThrowEntries = true;
         var failedEntries = BuildCombatHistoryState(owner);
-        Check(Reasons(failedEntries).Count == 13 && failedEntries["card_plays_finished_this_combat"] == null && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
+        Check(Reasons(failedEntries).Count == 14 && failedEntries["card_plays_finished_this_combat"] == null && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
         history.ThrowEntries = false;
         CombatManager.Instance.ThrowHistory = true;
         var failedHistory = BuildCombatHistoryState(owner);
-        Check(Reasons(failedHistory).Count == 13 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
+        Check(Reasons(failedHistory).Count == 14 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
         CombatManager.Instance.ThrowHistory = false;
         CombatManager.Instance.Value = null;
-        Check(Reasons(BuildCombatHistoryState(owner)).Count == 13, "null history is unavailable");
+        Check(Reasons(BuildCombatHistoryState(owner)).Count == 14, "null history is unavailable");
         CombatManager.Instance.Value = history;
         owner.Creature.CombatState = null;
         var failedCombat = BuildCombatHistoryState(owner);
@@ -251,6 +251,7 @@ public static partial class McpMod
         CheckCardPlayEvents();
         CheckCardResolutionEvents();
         CheckAutoPlayReservations();
+        CheckPotionUseHistory();
 
         string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
         string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
@@ -260,7 +261,7 @@ public static partial class McpMod
         Check(guard >= 0 && wiring > guard && wiring < playerBuilder.IndexOf("state[\"gold\"]", StringComparison.Ordinal), "history wired inside shared combat-only player block");
         int refresh = playerBuilder.IndexOf("RefreshCardUidRegistry(creature.CombatState)", StringComparison.Ordinal);
         Check(refresh > guard && refresh < wiring, "shared uid registry refreshed before serializing combat cards/history, including overlays");
-        Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer)"), "multiplayer uses same local-player history");
+        Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer,"), "multiplayer uses same local-player history");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCombatHistoryMarkdown(sb, player)"), "battle markdown wired");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
         Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");

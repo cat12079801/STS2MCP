@@ -90,6 +90,9 @@ public static partial class McpMod
         // RelicModel._status（RelicStatus）
         new("relic", "MegaCrit.Sts2.Core.Models.RelicModel", "MegaCrit.Sts2.Core.Models.RelicModel", "_status", StateMemberKind.Field, "status", StateValueConverter.EnumName, StateMarkdown.NonDefault,
             "RelicStatus（Normal/Active/Disabled）。画面ではレリックの光り方で見える。PaelsFlesh が Status を条件に使う（IsUsedUp・AfterSideTurnStart の base.Status == Active）。mod-scan の検出（.Status）はエンチャントの status の誤検出。Normal 以外のときだけ markdown に出す"),
+        // RunState.Modifiers（IReadOnlyList<ModifierModel>）
+        new("run", "MegaCrit.Sts2.Core.Runs.RunState", "MegaCrit.Sts2.Core.Runs.RunState", "Modifiers", StateMemberKind.AutoProperty, "modifier_ids", StateValueConverter.ModifierIds, StateMarkdown.Never,
+            "ラン開始時の選択・再開画面（NCustomRunScreen・NCustomRunLoadScreen）に表示される適用中の修飾子。RunState.IterateHookListeners(null) が Deck の追加通知で使う列。歯の所持中に ID を順に出す（Hoarder.AfterCardChangedPiles、sts2#1214）。"),
         // SpoilsMap._spoilsActIndex（int）
         new("card", "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap", "MegaCrit.Sts2.Core.Models.Cards.SpoilsMap", "_spoilsActIndex", StateMemberKind.Field, "spoils_act_index", StateValueConverter.Int, StateMarkdown.Always,
             "宝の地図の印を付ける幕（AfterCreated で 1）。印の付いた点は地図の quests に出るが、どの幕の印かはこの値で決まる"),

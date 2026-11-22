@@ -1231,7 +1231,7 @@
   },
   "computed:Hook.ShouldProcurePotion": {
    "class": "internal",
-   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない"
+   "reason": "判定。入力はモデルの項目（state inventory の範囲）、結果は状態か combat_log の行に出る。判定そのものは画面に出ない。醸造では player.entropic_brew_pool.listeners.notifications.should_procure_potion に実 listener の順と所有者を出す"
   },
   "computed:Hook.ShouldRefillMerchantEntry": {
    "class": "exposed",
@@ -1277,12 +1277,13 @@
   "computed:PotionFactory.GetPotionOptions": {
    "class": "exposed",
    "visible": "ランダム生成のポーションの候補（公開のプール）。Alchemize・EntropicBrew の評価に要る",
-   "proposed_key": "player.potion_generation_pool{potions[{id, rarity, can_be_generated_in_combat}]}",
+   "proposed_key": "player.potion_generation_pool{potions[{id, rarity, can_be_generated_in_combat}]} / player.entropic_brew_pool.options",
    "issues": [
     991
    ],
    "exposed_by": [
-    "McpMod.PotionGenerationPool.cs: result[\"potions\"] = PotionFactory.GetPotionOptions(player)"
+    "McpMod.PotionGenerationPool.cs: result[\"potions\"] = PotionFactory.GetPotionOptions(player)",
+    "McpMod.EntropicBrew.cs: models = PotionFactory.GetPotionOptions(player)"
    ]
   },
   "computed:RelicFactory.PullNextRelicForRewardFromFront": {
@@ -1421,12 +1422,13 @@
   "history:PotionUsedEntry": {
    "class": "exposed",
    "visible": "ポーションの使用（種類・対象）",
-   "proposed_key": "battle.combat_log[kind=potion_used,source=history]",
+   "proposed_key": "battle.combat_log[kind=potion_used,source=history] / player.combat_history.potion_uses",
    "issues": [
     991
    ],
    "exposed_by": [
-    "McpMod.CombatLogPatches.cs: PotionUsedEntry => \"potion_used\""
+    "McpMod.CombatLogPatches.cs: PotionUsedEntry => \"potion_used\"",
+    "McpMod.CombatHistory.cs: CombatManager.Instance.History.Entries.OfType<PotionUsedEntry>()"
    ]
   },
   "history:PowerReceivedEntry": {
@@ -1799,23 +1801,25 @@
   "hook:Hook.AfterPotionProcured": {
    "class": "exposed",
    "visible": "ポーション取得後の効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterPotionProcured]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterPotionProcured]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.after_potion_procured",
    "issues": [
     991
    ],
    "exposed_by": [
-    "McpMod.CombatLogPatches.cs: (\"AfterPotionProcured\", \""
+    "McpMod.CombatLogPatches.cs: (\"AfterPotionProcured\", \"",
+    "McpMod.EntropicBrew.cs: (\"after_potion_procured\", nameof(AbstractModel.AfterPotionProcured)"
    ]
   },
   "hook:Hook.AfterPotionUsed": {
    "class": "exposed",
    "visible": "ポーション使用後の効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterPotionUsed]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterPotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.after_potion_used",
    "issues": [
     991
    ],
    "exposed_by": [
-    "McpMod.CombatLogPatches.cs: (\"AfterPotionUsed\", \""
+    "McpMod.CombatLogPatches.cs: (\"AfterPotionUsed\", \"",
+    "McpMod.EntropicBrew.cs: (\"after_potion_used\", nameof(AbstractModel.AfterPotionUsed)"
    ]
   },
   "hook:Hook.AfterPowerAmountChanged": {
@@ -2037,12 +2041,13 @@
   "hook:Hook.BeforePotionUsed": {
    "class": "exposed",
    "visible": "ポーション使用直前の効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=BeforePotionUsed]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=BeforePotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.before_potion_used",
    "issues": [
     991
    ],
    "exposed_by": [
-    "McpMod.CombatLogPatches.cs: (\"BeforePotionUsed\", \""
+    "McpMod.CombatLogPatches.cs: (\"BeforePotionUsed\", \"",
+    "McpMod.EntropicBrew.cs: (\"before_potion_used\", nameof(AbstractModel.BeforePotionUsed)"
    ]
   },
   "hook:Hook.BeforePowerAmountChanged": {

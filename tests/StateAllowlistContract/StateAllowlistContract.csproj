@@ -10,7 +10,8 @@
     <Compile Include="../../McpMod.StateAllowlist.cs" Link="StateAllowlist.cs" />
     <Compile Include="../../McpMod.StateAllowlistFormatting.cs" Link="StateAllowlistFormatting.cs" />
     <Compile Include="../../McpMod.StateAllowlist.Generated.cs" Link="StateAllowlist.Generated.cs" />
-    <None Include="../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.CardDetailsFormatting.cs;../../McpMod.PowerInternalState.cs"
+    <Compile Include="../../McpMod.RunState.cs" Link="RunState.cs" />
+    <None Include="../../McpMod.StateBuilder.cs;../../McpMod.MultiplayerState.cs;../../McpMod.Formatting.cs;../../McpMod.CardDetailsFormatting.cs;../../McpMod.PowerInternalState.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

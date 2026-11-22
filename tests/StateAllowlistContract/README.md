@@ -33,3 +33,6 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec \
   幕の番号（`golden_path_act`・`spoils_act_index`）を markdown に常に出すこと
 
 棚卸しの文書（md・tsv）の古さはデコンパイルが要るので、この試験では見ない。`tools/state_inventory.py --check-docs` で確かめる（リポジトリの README）。
+
+パエルの歯では保管札の空・重複・異常な null を区別する。ランの修飾子は、歯の所持、空列、HOARDER を
+含む順序と重複、異常な null、報酬・選択・通常画面から共通の run 行への経路と FTUE の早期経路を検査する。

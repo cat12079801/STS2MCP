@@ -186,7 +186,7 @@ public static partial class McpMod
         Check(refresh >= 0 && refresh < player.IndexOf("BuildCardState(card, cardIndex)", StringComparison.Ordinal), "refresh before first hand and pile observation");
         foreach (string file in new[] { "McpMod.StateBuilder.cs", "McpMod.Actions.cs", "McpMod.CardSelection.cs", "McpMod.CombatHistory.cs" })
             Check(File.ReadAllText(Path.Combine(sources, file)).Contains("GetStableCardUid("), $"{file} shares card identity");
-        Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer)"), "multiplayer uses shared player serializer");
+        Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer,"), "multiplayer uses shared player serializer");
         Console.WriteLine($"CardIdentityContract: {Checks} checks passed");
     }
 }

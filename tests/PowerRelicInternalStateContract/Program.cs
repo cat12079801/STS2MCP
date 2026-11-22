@@ -1263,7 +1263,7 @@ public static partial class McpMod
         {
             // Dampen's downgraded_cards only looks up uids (TryGetRegisteredCardUid): in BuildPlayerState
             // the hand and pile rows, which register them, must be built before the status rows.
-            int playerStart = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState(Player player)", StringComparison.Ordinal);
+            int playerStart = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState(Player player, string? screen)", StringComparison.Ordinal);
             int hand = builder.IndexOf("state[\"hand\"] = hand;", playerStart, StringComparison.Ordinal);
             int playPile = builder.IndexOf("state[\"play_pile\"] = BuildPileCardList(", playerStart, StringComparison.Ordinal);
             int status = builder.IndexOf("state[\"status\"] = BuildPowersState(creature);", playerStart, StringComparison.Ordinal);

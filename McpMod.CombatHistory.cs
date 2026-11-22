@@ -14,6 +14,11 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
+    private const string EntropicBrewId = "ENTROPIC_BREW";
+
+    private static bool HasEntropicBrew(Player owner)
+        => owner.PotionSlots.Any(potion => potion?.Id.Entry == EntropicBrewId);
+
     // 各項目の式・ゲーム側の出典と参照版は docs/raw-full.md に記載。
     // Read engine history on every snapshot; never accumulate counts in the MOD.
     // BuildPlayerState refreshes the shared UID registry before serializing any cards.
@@ -80,6 +85,20 @@ public static partial class McpMod
             return events;
         });
         Read("card_resolution_events", () => BuildCardResolutionEvents(owner, CurrentCombat()));
+        const string potionUsesKey = "potion_uses";
+        try
+        {
+            var uses = CombatManager.Instance.History.Entries.OfType<PotionUsedEntry>()
+                .Where(entry => ReferenceEquals(entry.Actor, owner.Creature)).ToList();
+            if (HasEntropicBrew(owner) || uses.Any(entry => entry.Potion.Id.Entry == EntropicBrewId))
+                Read(potionUsesKey, () => BuildPotionUseRows(uses, CurrentCombat()));
+        }
+        catch (Exception ex)
+        {
+            // A failed read cannot prove that the conditional field is irrelevant.
+            RecordInternalStateFailure(state, potionUsesKey, ex, "player.combat_history");
+            state[potionUsesKey] = null;
+        }
         Read("last_player_turn_card_uids", () =>
         {
             _ = owner.PlayerCombatState ?? throw new InvalidOperationException("PlayerCombatState is unavailable");
@@ -133,6 +152,28 @@ public static partial class McpMod
                 Warn($"player.combat_history.{key}", ex);
             }
         }
+    }
+
+    private static List<Dictionary<string, object?>> BuildPotionUseRows(
+        List<PotionUsedEntry> entries, ICombatState combat)
+    {
+        RefreshEntityIdRegistry(combat);
+        return entries.Select(entry => new Dictionary<string, object?>
+        {
+            ["potion_id"] = entry.Potion.Id.Entry is { Length: > 0 } id
+                ? id : throw new InvalidOperationException("PotionUsedEntry has no potion id"),
+            ["target_entity_id"] = PotionHistoryTargetId(entry.Target)
+        }).ToList();
+    }
+
+    private static string? PotionHistoryTargetId(Creature? target)
+    {
+        if (target == null) return null;
+        if (target.Player is { } player) return PotionPlayerTargetId(player.NetId.ToString());
+        var combatId = target.CombatId ?? throw new InvalidOperationException("PotionUsedEntry target has no CombatId");
+        if (!target.IsEnemy) return $"combat:{combatId}";
+        if (target.Monster == null) throw new InvalidOperationException("PotionUsedEntry enemy has no monster model");
+        return GetStableEntityId(target);
     }
 
     // The whole combat's draw / play / generated entries in History order, across the end of a turn, the

@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Hooks;
+using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Potions;
 using MegaCrit.Sts2.Core.Nodes;
@@ -38,7 +39,7 @@ public static partial class McpMod
 
     /// <summary>A private field of a fixed game type, with its declared type checked. A renamed or
     /// retyped field throws (the slot becomes unobserved), never reads as a default.</summary>
-    private static T? ReadPotionPrivateField<T>(object owner, Type declaring, string name)
+    private static FieldInfo PotionPrivateField<T>(Type declaring, string name)
     {
         if (!_potionFieldCache.TryGetValue((declaring, name), out var field))
         {
@@ -48,8 +49,15 @@ public static partial class McpMod
                 throw new InvalidCastException($"{declaring.Name}.{name} is {field.FieldType.Name}, expected {typeof(T).Name}");
             _potionFieldCache[(declaring, name)] = field;
         }
-        return field.GetValue(owner) is T value ? value : default;
+        return field;
     }
+
+    private static T? ReadPotionPrivateField<T>(object owner, Type declaring, string name)
+        => PotionPrivateField<T>(declaring, name).GetValue(owner) is T value ? value : default;
+
+    private static Dictionary<string, decimal> ReadPotionPublicVars(PotionModel potion)
+        => potion.DynamicVars.Where(pair => pair.Value is not StringVar)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.BaseValue);
 
     /// <summary>
     /// One player.potions[] row. The three can-use-now fields are on every held row; a getter that throws
@@ -79,6 +87,7 @@ public static partial class McpMod
         Field("can_use_in_combat", () => potion.Usage == PotionUsage.CombatOnly || potion.Usage == PotionUsage.AnyTime);
         Field("target_type", () => potion.TargetType.ToString());
         Field("keywords", () => BuildHoverTips(potion.ExtraHoverTips));
+        Field("vars", () => ReadPotionPublicVars(potion));
 
         PotionUsabilityVerdict verdict;
         try { verdict = DecidePotionUsability(BuildPotionUsabilityReads(player, potion, slot)); }
@@ -87,7 +96,42 @@ public static partial class McpMod
         return row;
     }
 
-    private static PotionUsabilityReads BuildPotionUsabilityReads(Player player, PotionModel potion, int slot)
+    private static NPotionHolder GetPotionHolder(Player player, int slot)
+    {
+        // NPotionContainer.Holders is the local player's belt (GrowPotionHolders / Add).
+        if (!LocalContext.IsMe(player))
+            throw new InvalidOperationException("the potion belt UI is the local player's only");
+        var holders = NRun.Instance?.GlobalUi?.TopBar?.PotionContainer?.Holders
+            ?? throw new InvalidOperationException("NRun.GlobalUi.TopBar.PotionContainer is not ready");
+        if (slot < 0 || slot >= holders.Count || !GodotObject.IsInstanceValid(holders[slot]))
+            throw new InvalidOperationException($"no valid belt holder for slot {slot}");
+        return holders[slot];
+    }
+
+    private sealed record FreshPotionSlot(bool Usable, bool Disabled, string? Unavailable = null);
+
+    private static FreshPotionSlot ReadFreshPotionSlot(Player player, int slot, PotionModel? held)
+    {
+        try
+        {
+            var holder = GetPotionHolder(player, slot);
+            if (!ReferenceEquals(holder.Potion?.Model, held))
+                throw new InvalidOperationException("the belt holder does not match the current slot");
+            // NPotionHolder.RemoveUsedPotion resets the flag; AddPotion leaves both flags alone.
+            // On an already empty slot there is no removal, so keep its actual flag.
+            return new FreshPotionSlot(
+                ReadPotionPrivateField<bool>(holder, typeof(NPotionHolder), "_isUsable"),
+                held == null && ReadPotionPrivateField<bool>(holder, typeof(NPotionHolder), "_disabledUntilPotionRemoved"));
+        }
+        catch (Exception ex)
+        {
+            Warn($"player.entropic_brew_pool.preview.slots.{slot}", ex);
+            return new FreshPotionSlot(false, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static PotionUsabilityReads BuildPotionUsabilityReads(Player player, PotionModel potion, int slot,
+        FreshPotionSlot? freshSlot = null)
     {
         NPotionHolder? holder = null;
         PotionUsage usage = PotionUsage.None;
@@ -97,13 +141,13 @@ public static partial class McpMod
             // NPotionContainer.Holders is the local player's belt, one holder per slot (GrowPotionHolders / Add).
             HolderHoldsThisPotion = () =>
             {
-                if (!LocalContext.IsMe(player))
-                    throw new InvalidOperationException("the potion belt UI is the local player's only");
-                var holders = NRun.Instance?.GlobalUi?.TopBar?.PotionContainer?.Holders
-                    ?? throw new InvalidOperationException("NRun.GlobalUi.TopBar.PotionContainer is not ready");
-                if (slot >= holders.Count)
-                    throw new InvalidOperationException($"the belt has {holders.Count} holders");
-                holder = holders[slot];
+                if (freshSlot != null)
+                {
+                    if (freshSlot.Unavailable is { } detail)
+                        throw new PotionUnobservedException("holder_model", detail);
+                    return true; // Hypothesis: an independently checked holder receives this new model.
+                }
+                holder = GetPotionHolder(player, slot);
                 return ReferenceEquals(holder.Potion?.Model, potion);
             },
             // NPotionPopup._Ready: a queued potion or a dead owner disables use.
@@ -115,8 +159,8 @@ public static partial class McpMod
             CanUseOrRemovePotions = () => potion.Owner.CanUseOrRemovePotions,
             IsPotionUseLocked = () => RunManager.Instance.IsPotionUseLocked,
             // NPotionHolder.OnRelease (_isUsable) and OpenPotionPopup (_disabledUntilPotionRemoved).
-            HolderUsable = () => ReadPotionPrivateField<bool>(Holder(), typeof(NPotionHolder), "_isUsable"),
-            HolderDisabledUntilPotionRemoved = () => ReadPotionPrivateField<bool>(Holder(), typeof(NPotionHolder), "_disabledUntilPotionRemoved"),
+            HolderUsable = () => freshSlot?.Usable ?? ReadPotionPrivateField<bool>(Holder(), typeof(NPotionHolder), "_isUsable"),
+            HolderDisabledUntilPotionRemoved = () => freshSlot?.Disabled ?? ReadPotionPrivateField<bool>(Holder(), typeof(NPotionHolder), "_disabledUntilPotionRemoved"),
             PassesCustomUsabilityCheck = () => potion.PassesCustomUsabilityCheck,
             Usage = () => (usage = potion.Usage).ToString(),
             CombatInProgress = () => CombatManager.Instance.IsInProgress,
@@ -134,6 +178,7 @@ public static partial class McpMod
             // Only a live popup is compared; the closed holder's IsPotionUsable dereferences _popup, so it is not called.
             OpenPopupIsUsable = () =>
             {
+                if (freshSlot != null) return null;
                 var popup = ReadPotionPrivateField<NPotionPopup>(Holder(), typeof(NPotionHolder), "_popup");
                 if (popup == null || !GodotObject.IsInstanceValid(popup) || popup.IsMarkedForRemoval) return null;
                 return popup.IsUsable;

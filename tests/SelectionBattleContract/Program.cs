@@ -74,7 +74,7 @@ namespace STS2_MCP
         {
             string attach = $"result[\"battle\"] = {battleBuilder}(runState, selectionCombatRoom);";
             int central = source.IndexOf(attach, StringComparison.Ordinal);
-            int common = source.IndexOf("// Common run info", StringComparison.Ordinal);
+            int common = source.IndexOf("result[\"run\"] = BuildRunState(runState);", StringComparison.Ordinal);
             int grid = source.IndexOf(gridBranch, StringComparison.Ordinal);
             Check(central > 0 && common > central && grid > 0 && grid < central,
                 $"{label}: 画面の振り分けの後、run・player の前で一度だけ付ける");

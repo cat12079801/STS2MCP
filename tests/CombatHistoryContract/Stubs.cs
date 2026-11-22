@@ -28,6 +28,7 @@ namespace MegaCrit.Sts2.Core.Entities.Creatures
         public Combat.ICombatState? CombatState;
         public uint? CombatId;
         public Models.MonsterModel? Monster;
+        public Players.Player? Player;
         public bool Enemy;
         public bool IsEnemy => Enemy;
     }
@@ -37,7 +38,8 @@ namespace MegaCrit.Sts2.Core.Entities.Players
 {
     public class Player
     {
-        public ulong NetId => 0;
+        public ulong NetId { get; set; }
+        public List<Models.PotionModel?> PotionSlots { get; } = [];
         public Cards.CardPile Deck = new();
         public Creatures.Creature Creature = new();
         public PlayerCombatState? PlayerCombatState = new();
@@ -80,6 +82,7 @@ namespace MegaCrit.Sts2.Core.Models
         public Entities.Cards.CardType Type => ThrowType ? throw new MissingMemberException("Type renamed") : Value;
     }
     public class AfflictionModel { }
+    public class PotionModel(string id) { public ModelId Id { get; } = new(id); }
     public class MonsterModel(string id) { public ModelId Id = new(id); }
 }
 namespace MegaCrit.Sts2.Core.Models.Afflictions
@@ -129,6 +132,17 @@ namespace MegaCrit.Sts2.Core.Combat.History.Entries
         }
     }
     public class CardExhaustedEntry : CombatHistoryEntry { }
+    public class PotionUsedEntry : CombatHistoryEntry
+    {
+        public Models.PotionModel Potion { get; }
+        public Entities.Creatures.Creature? Target { get; }
+        public PotionUsedEntry(Models.PotionModel potion, Entities.Creatures.Creature actor, Entities.Creatures.Creature? target)
+        {
+            Potion = potion;
+            Target = target;
+            Actor = actor;
+        }
+    }
     // Actor is Card.Owner.Creature in the real constructors (CardDrawnEntry / CardGeneratedEntry).
     public class CardDrawnEntry : CombatHistoryEntry
     {

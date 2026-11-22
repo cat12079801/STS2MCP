@@ -102,3 +102,6 @@ uid registry は本番を実行し、パイルとこのターン・前手番の�
    リプレイを持つ札では同じ uid の `play_index` 0..`play_count`-1 が順に並ぶこと。
 
 ゲーム build・MOD commit・schema・前後の state を記録する。
+
+醸造の `potion_uses` は、初回前の空、同じ枠への同じ ID の補充、使用者の切替、記録順、対象の安定 ID、
+醸造がベルトから消えた後の履歴、読取失敗の null・理由・警告を検査する。

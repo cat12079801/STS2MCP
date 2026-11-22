@@ -12,6 +12,8 @@
     <Compile Include="../../McpMod.CombatHistoryFormatting.cs" Link="CombatHistoryFormatting.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
     <Compile Include="../../McpMod.EntityIdentity.cs" Link="EntityIdentity.cs" />
+    <Compile Include="../../McpMod.InternalState.cs" Link="InternalState.cs" />
+    <Compile Include="../../McpMod.PotionUsability.cs" Link="PotionUsability.cs" />
     <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs;../../McpMod.AutoPlayReservationPatches.cs;../../McpMod.ActionWait.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

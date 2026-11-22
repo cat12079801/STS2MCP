@@ -41,6 +41,7 @@ namespace MegaCrit.Sts2.Core.Entities.Players
     }
     public class Player
     {
+        public List<Models.RelicModel> Relics { get; } = [];
         public ulong NetId { get; set; }
         public Cards.CardPile Deck = new();
         public PlayerCombatState? PlayerCombatState { get; set; }
@@ -52,6 +53,26 @@ namespace MegaCrit.Sts2.Core.Entities.Players
         public int WongoPoints { get; set; }
         // 手書きの getter（backing field が無い）。自動実装プロパティとして読もうとすると null と理由になる。
         public int Computed => CardShopRemovalsUsed + 1;
+    }
+}
+namespace MegaCrit.Sts2.Core.Runs
+{
+    public interface IRunState { string CardMultiplayerConstraint { get; } }
+    public class RunState : IRunState
+    {
+        public int CurrentActIndex { get; set; }
+        public int TotalFloor { get; set; }
+        public int AscensionLevel { get; set; }
+        public string CardMultiplayerConstraint => "SingleplayerOnly";
+        public List<Entities.Players.Player> Players { get; } = [];
+        public IReadOnlyList<Models.ModifierModel>? Modifiers { get; set; } = [];
+    }
+    public class RunManager
+    {
+        public static RunManager Instance { get; } = new();
+        public RunState? State { get; set; }
+        public bool IsInProgress => State != null;
+        public RunState? DebugOnlyGetState() => State;
     }
 }
 namespace MegaCrit.Sts2.Core.Saves.Runs
@@ -67,6 +88,7 @@ namespace MegaCrit.Sts2.Core.Saves.Runs
 namespace MegaCrit.Sts2.Core.Models
 {
     public record ModelId(string Entry);
+    public class ModifierModel(string id) { public ModelId Id { get; } = new(id); }
     public class CardModel(string id) : IComparable<CardModel>
     {
         public ModelId Id { get; } = new(id);
@@ -112,6 +134,7 @@ namespace MegaCrit.Sts2.Core.Models
     }
     public class RelicModel
     {
+        public bool IsMelted { get; set; }
         private Entities.Relics.RelicStatus _status;
         private bool _isWax;
         private int _floorAddedToDeck;
@@ -149,7 +172,12 @@ namespace MegaCrit.Sts2.Core.Models.Relics
     public sealed class GoldenCompass : RelicModel { private int _goldenPathAct = -1; public void SetAct(int v) => _goldenPathAct = v; }
     public sealed class MusicBox : RelicModel { private CardModel? _cardBeingPlayed; }
     public sealed class PaelsLegion : RelicModel { private Entities.Cards.CardPlay? _affectedCardPlay; public void Set(Entities.Cards.CardPlay? p) => _affectedCardPlay = p; }
-    public sealed class PaelsTooth : RelicModel { private List<Saves.Runs.SerializableCard> _serializableCards = []; public List<Saves.Runs.SerializableCard> Cards => _serializableCards; }
+    public sealed class PaelsTooth : RelicModel
+    {
+        private List<Saves.Runs.SerializableCard> _serializableCards = [];
+        public List<Saves.Runs.SerializableCard> Cards => _serializableCards;
+        public void SetUnreadable() => _serializableCards = null!;
+    }
     public sealed class PenNib : RelicModel { private CardModel? _attackToDouble; public void Set(CardModel? c) => _attackToDouble = c; }
     public sealed class UnsettlingLamp : RelicModel
     {

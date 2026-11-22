@@ -56,7 +56,7 @@ namespace STS2_MCP
             owner.RunState.Blitz = true;
             Check(!Ids(BuildGenerationPool(owner)).Contains("BLITZ_FORBIDDEN"), "Blitz では IsAllowedInBlitz=false の札を本体の判定どおり除く");
             owner.RunState.Blitz = false;
-            var ally = new Player();
+            var ally = new Player { NetId = 8 };
             owner.RunState.Players.Add(ally);
             owner.RunState.CardMultiplayerConstraint = CardMultiplayerConstraint.MultiplayerOnly;
             var multi = BuildGenerationPool(owner);

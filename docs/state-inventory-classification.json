@@ -1050,6 +1050,17 @@
   "cs_type": "RelicStatus",
   "kind": "field"
  },
+ "RunState.Modifiers": {
+  "class": "public",
+  "section": "run",
+  "json_key": "modifier_ids",
+  "converter": "ModifierIds",
+  "type_full": "MegaCrit.Sts2.Core.Runs.RunState",
+  "cs_type": "IReadOnlyList<ModifierModel>",
+  "kind": "auto_property",
+  "markdown": "Never",
+  "note": "ラン開始時の選択・再開画面（NCustomRunScreen・NCustomRunLoadScreen）に表示される適用中の修飾子。RunState.IterateHookListeners(null) が Deck の追加通知で使う列。歯の所持中に ID を順に出す（Hoarder.AfterCardChangedPiles、sts2#1214）。"
+ },
  "SandpitPower._initialAmount": {
   "class": "cosmetic",
   "note": "UpdateCreaturePositions（クリーチャーの表示位置）だけ"

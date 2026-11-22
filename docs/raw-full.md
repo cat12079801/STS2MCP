@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.12.0",       // Contract version (semver) — see below
+  "schema": "1.13.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.12.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.13.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.12.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.13.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -174,6 +174,8 @@ and changing the meaning or shape of an existing field is MAJOR.
   行の `rarity`（手札と同じ `CardModel.Rarity` の列挙名）。泥棒バッタの窃盗（`ThievingHopper.ThieveryMove`）が盗む候補を決める入力
   （`cat12079801/sts2#1133`）。[棚卸しから生成した内部状態](#棚卸しから生成した内部状態internal_stateschema-120)・
   [戦闘カードの詳細](#戦闘カードの詳細追加schema-4)。
+- **1.13.0** — エントロピー醸造の抽選前の候補・枠ごとの条件付き使用可否・通知の受け手を `player.entropic_brew_pool` に、使用履歴を `player.combat_history.potion_uses` に出す。パエルの歯を所持するランは `run.internal_state.modifier_ids` を持つ。
+  [エントロピー醸造](#エントロピー醸造playerentropic_brew_poolschema-1130)・[ランの修飾子](#パエルの歯のあるランの修飾子runinternal_statemodifier_idsschema-1130)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -531,6 +533,40 @@ Markdown は `Other-character attack pool: N cards` または unknown と理由�
 - 出典は `sts2-a671e9ef` の `PotionFactory.GetPotionOptions` / `CreateRandomPotionsOutOfCombat` / `CreateRandomPotionInCombat`、
   `PotionModel.CanBeGeneratedInCombat`。
 
+#### エントロピー醸造（`player.entropic_brew_pool`、schema 1.13.0）
+
+戦闘中にローカルプレイヤーが `ENTROPIC_BREW` を所持するときに出す。マルチでもその `player` のベルトと抽選候補を表す。別のプレイヤーを対象にしたときの抽選元はそのプレイヤー自身の pool（`EntropicBrew.OnUse`）。
+
+| キー | 意味 |
+| --- | --- |
+| `known`, `unavailable_reasons` | 抽選母集団と抽選規則の検査結果。読めない入力があれば `false` と項目別の理由。候補の本文、枠の可否、listener の読取結果は各行や各欄で確認する |
+| `filter_version`, `filter_source`, `game_assembly_sha256` | 生成契約の版 1、使用する本体メソッド、実際に読み込んだ DLL の SHA-256。規則を照合済みの DLL は v0.113.1 の `sts2-a671e9ef` |
+| `player_id`, `character_id`, `players` | 候補の所有者・キャラ・参加人数。所有者は `RunState.Players` の同一参照で、同じ `NetId` の参加者が一人であることを確かめる |
+| `rarity_thresholds` | `Rare: 0.1`, `Uncommon: 0.35`, `Common: 1` の累積上限。 `order: ["Rare", "Uncommon", "Common"]`、`comparison: "first_upper_bound_inclusive"`、`precision: "float32"`。 `within_rarity: "uniform_by_occurrence"`、`between_slots: "with_replacement"` |
+| `options` | `PotionFactory.GetPotionOptions(player)` の全要素を ID の序数順で出す。同一 ID の複数要素も残し、`unlocked_pools.potions.character` と `shared` の連結と多重集合で照合する。解放済み 0 件の群は空列。読取不能な列は `null`。正の質量を持つレアリティに候補がなければ、候補列を残して `known: false` |
+| `options[]` | `id`・`rarity`・`usage`・`target_type`・`name`・`description`・`vars`・`slot_verdicts`。レアリティ・使用区分・対象は本体の列挙名。表示は所有者を設定した分離済みの `PotionModel.ToMutable` で読み、`vars` は所持行と同じ `DynamicVars` の数値 `BaseValue`（文字列変数を除く）。項目の失敗は当該項目の `null` と理由を残す |
+| `preview` | 仮定の適用範囲と `combat_id`（出来事の通し列と同じ戦闘 ID）・`floor`・`round`・所有者の `turn_number`、`slots[]`。空き枠と所持枠を全て列挙する。各枠の `current_potion_id` は空なら `null`、`requires` は `empty` または `remove_used_potion`。前提を読めない場合は `unavailable_reason` または pool の項目別理由 |
+| `options[].slot_verdicts[]` | 同じ判定の物理枠を `slots: [番号, ...]` でまとめる。各判定は `can_use_if_generated`・`can_use_if_generated_reason`・`valid_target_entity_ids`・`target_optional`。可否は `true` / `false` / `null`（未観測）。不許可と対象不要の可に空列、未観測には `null` と `unavailable_detail` |
+| `listeners` | `known`・`unavailable_reasons` と `notifications`。通知は `before_potion_used`・`should_procure_potion`・`after_potion_procured`・`after_potion_used`。各列は観測時点の `RunState.IterateHookListeners(combatState)` に含まれる override を実順に並べたもの。空列は有効な override がない通知 |
+
+`EntropicBrew.OnUse` は戦闘中も `PotionFactory.CreateRandomPotionOutOfCombat` を 1 枠ずつ呼ぶ。群分けは `PotionFactory.CreateRandomPotions` の単精度の比較と
+`Rng.NextItem` が使う要素の添字に従う。公称の群質量は Rare 0.10、Uncommon 0.25、Common 0.65。実際の取得は `PotionCmd.TryToProcure` と `Player.AddPotionInternal` が行う。
+MOD が読むのは抽選前の入力と公開済みの値。乱数器・抽選結果の先読み・取得操作は契約の対象外。
+
+枠の可否は、同じ戦闘と所有者のプレイ段階で、新品が指定枠に入り、解決後も権限と対象条件が観測時点と同じ場合に使える。
+`NPotionHolder.RemoveUsedPotion` が占有枠の無効化を解除し、`AddPotion` は枠のフラグを維持する。空き枠には現在のフラグを使う。
+新品は未キューで、旧瓶の popup の判定は引き継がない。権限・ロック・使用区分・対象判定は所持行と同じ読取
+（`Player.CanUseOrRemovePotions`、`RunManager.IsPotionUseLocked`、`NPotionPopup.CanEnableUseButton`、
+`PotionModel.PassesCustomUsabilityCheck` / `IsValidTarget`、`NTargetManager` の対象規則、`Hook.ShouldAllowTargeting` と `Creature.IsHittable`）。
+一時停止中、解決中、選択中、未知の listener、空手札で有効な `UnceasingTop` の追加ドローがありうる場合は、可否が未観測になる。
+枝で対象・ノードの操作可否・所有者の権限・手番等が変わった場合は再観測が必要。実送信は現物の holder と照合する `use_potion(expected_potion_id=...)` を使う。
+
+通知列の各行には `model_id`・`model_type`・`declared_by`・`kind`・所有者の ID と `owner_index`（所有者のレリック列またはパワー列の添字）が入る。
+`order` は観測時の本体の列挙位置。既知の override は `SurroundedPower.BeforePotionUsed`、`Sozu.ShouldProcurePotion`、
+`BeltBuckle.AfterPotionProcured / AfterPotionUsed`、`ReptileTrinket.AfterPotionUsed`。溶融レリックは本体の `CombatState.IterateHookListeners` が除く。
+`ShouldProcurePotion` は最初の拒否で止まる。列は発火前の入力で、発火後の事実は既存の `battle.combat_log` に残る。
+未同定の override や外部購読があれば `known: false` と理由を出す。山札の listener には `order: null` と公開順を使う。
+
 ### 戦闘中の解放済み pool（追加、schema 3）
 
 戦闘中のローカル `player.unlocked_pools` に、解放済みのモデル ID (`Id.Entry`) の一覧を追加する。
@@ -748,6 +784,16 @@ MOD は戦闘中の `PlayerActionsDisabled` の間は `use_potion` を受けな�
 同じ読み取りが行った在庫の開閉の後の状態を表す（悪臭ポーションの `custom_check_failed` / `true` がそれで変わりうる）。在庫に触れない答えは `?passive=1` で読む。
 
 Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` | Use now: yes (no target)` / ` | Use now: no (理由)` / ` | Use now: unobserved (段: 理由)` を付ける（旧 state の行には付けない）。
+
+### ポーションの使用履歴（`player.combat_history.potion_uses`、schema 1.13.0）
+
+戦闘中、ローカルプレイヤーが醸造を持つか、その戦闘で本人の醸造の使用が記録されているときに付く。
+`CombatManager.History.Entries` の `PotionUsedEntry` を `Actor == owner.Creature` で絞り、戦闘開始からの記録順にすべて出す。
+各行は `potion_id` と `target_entity_id`。対象がプレイヤーなら `player:<player_id>`、敵なら戦闘の安定 `entity_id`、
+ほかのクリーチャーなら `combat:<combat_id>`、対象なしは `null`。同じ枠が同じ ID で補充されても 1 回の使用につき 1 行増える。
+初回使用前の `[]` と読取失敗時の `null`（`unavailable_reasons.potion_uses` と warning）を区別する。
+記録時点は `PotionModel.OnUseWrapper` が効果実行後、所有者が生存し同じ戦闘が有効な場合に呼ぶ `CombatHistory.PotionUsed`。
+解決後の在庫と合わせて読み、終端を含む出来事は `battle.combat_log` / `ended_combat.combat_log` の契約に従う。
 
 ### 戦闘履歴の要約（追加・schema 4）
 
@@ -2152,6 +2198,18 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
   "downgraded_cards": [ { "uid": "BASH#1", "uid_known": true, "card_id": "BASH", "original_upgrade_level": 1 } ] }
 ```
 
+### パエルの歯のあるランの修飾子（`run.internal_state.modifier_ids`、schema 1.13.0）
+
+ランの参加者に `PAELS_TOOTH` の所持者がいるとき、戦闘・選択・報酬を含む run 行に適用中の `ModifierModel.Id.Entry` を並べる。
+所持は溶融中や保管札 0 枚を含む。順序と重複は `RunState.Modifiers` のまま。空列 `[]` は修飾子なし。
+読取不能は `null` と `run.internal_state.unavailable_reasons.modifier_ids`・`warnings`。
+
+`RunState.IterateHookListeners(null)` は `Hook.AfterCardChangedPiles` の Deck 追加通知にこのランの列を使う。
+`Hoarder.AfterCardChangedPiles` が受け手の一つで、`RunState.AddModifierDebug` で列が差し替わった場合も現在の列を読む。
+読み元は `RunState.Modifiers` の backing field。パエルの歯の `stored_cards` は `PaelsTooth._serializableCards` の候補列で、
+重複を保持し、実際の空列は `[]`、異常な null は `null`・理由・warning を出す。
+五輪書の通算は既存の `player.relics[].run_state.cards_added`（`BookOfFiveRings.AfterCardChangedPiles`）を読む。
+
 ### 棚卸しから生成した内部状態（`internal_state`、schema 1.2.0）
 
 ゲームのモデルが持つ内部状態の棚卸し（[`state-inventory.md`](state-inventory.md)）で `public`（人間に見える、または見たものから確定できる）と分類し、
@@ -2168,6 +2226,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `relic` | `player.relics[]` | `RelicModel` |
 | `player` | `player` 本体 | `Player.ExtraFields`（`ExtraPlayerFields`） |
 | `battle` | `battle` 本体 | `CombatState` |
+| `run` | パエルの歯を所持するランの `run` 本体 | `RunState` |
 
 形と読み方:
 
@@ -2204,11 +2263,12 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `relic` | `golden_path_act` | int | `GoldenCompass._goldenPathAct` | 黄金の道を引いた幕（`AfterObtained`）。その幕の地図と不明マスの部屋の種類（`ModifyUnknownMapPointRoomTypes`）を変える |
 | `relic` | `card_being_played_uid` | string \| null | `MusicBox._cardBeingPlayed` | このターン最初の自分のアタックで、解決中のもの（`BeforeCardPlayed` で入れ、`AfterCardPlayed` で複製を手札に加えて null に戻す） |
 | `relic` | `affected_card_uid` | string \| null | `PaelsLegion._affectedCardPlay`（の `Card`） | ブロックを 2 倍にする解決中のカード |
-| `relic` | `stored_cards` | `[{id, upgrade_level, enchantment_id}]` | `PaelsTooth._serializableCards` | 預けたカード（人間が選んだもの）。戦闘の終わりに乱数で 1 枚を返すので、並びは id・強化段階の順 |
+| `relic` | `stored_cards` | `[{id, upgrade_level, enchantment_id}]` | `PaelsTooth._serializableCards` | 預けたカード（人間が選んだもの）。戦闘の終わりに乱数で 1 枚を返すので、並びは id・強化段階・エンチャント ID の順。空列は `[]`、読取失敗は `null` と理由 |
 | `relic` | `attack_to_double_uid` | string \| null | `PenNib._attackToDouble` | 2 倍にする解決中のアタック |
 | `relic` | `triggering_card_uid` | string \| null | `UnsettlingLamp._triggeringCard`・`Vambrace._triggeringCard` | 戦闘で最初にデバフを付けた（UnsettlingLamp）・ブロックを得た（Vambrace）カード。そのカードの解決中だけ 2 倍にする。消すのは `BeforeCombatStart`・`AfterCombatEnd` だけなので、安定した state でも戦闘の終わりまで残る。効くかは `combat_state` の `used_this_combat`（UnsettlingLamp）・`block_gained_this_combat`（Vambrace）で決まる |
 | `relic` | `doubled_power_ids` | `[{id, owner_combat_id}]` | `UnsettlingLamp._doubledPowers` | 2 倍にしたパワー（一時パワーの内側を二重に倍にしないため）。リストが未作成なら空 |
 | `player` | `card_shop_removals_used` | int | `ExtraPlayerFields.CardShopRemovalsUsed` | ショップでカードを除去した回数（除去の値段が上がる） |
+| `run` | `modifier_ids` | string[] \| null | `RunState.Modifiers` | 適用中の修飾子 ID。適用順と重複を保持（schema 1.13.0） |
 | `battle` | `ally_combat_ids` | uint[] | `CombatState._allies` | 味方側のクリーチャー（プレイヤー・ペット・マルチプレイの味方） |
 | `battle` | `escaped_creature_ids` | uint[] | `CombatState._escapedCreatures` | 逃げた敵（`CreatureEscaped`） |
 

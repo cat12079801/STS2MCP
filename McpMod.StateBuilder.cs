@@ -78,7 +78,7 @@ public static partial class McpMod
         {
             var ftueState = BuildVisibleFtueState(tree.Root);
             if (ftueState != null)
-                return ftueState;
+                return WithRelevantFtueRunState(ftueState);
         }
 
         if (!RunManager.Instance.IsInProgress)
@@ -655,21 +655,13 @@ public static partial class McpMod
             catch (Exception ex) { Warn("battle.selection", ex); }
         }
 
-        // Common run info
-        result["run"] = new Dictionary<string, object?>
-        {
-            ["act"] = runState.CurrentActIndex + 1,
-            ["floor"] = runState.TotalFloor,
-            ["player_count"] = runState.Players.Count,
-            ["card_multiplayer_constraint"] = ((IRunState)runState).CardMultiplayerConstraint.ToString(),
-            ["ascension"] = runState.AscensionLevel
-        };
+        result["run"] = BuildRunState(runState);
 
         // Always include full player data (relics, potions, deck, etc.) on every screen
         var _player = LocalContext.GetMe(runState);
         if (_player != null)
         {
-            result["player"] = BuildPlayerState(_player);
+            result["player"] = BuildPlayerState(_player, result.GetValueOrDefault("state_type") as string);
         }
 
         AddResolvingState(result, result.GetValueOrDefault("state_type")?.ToString(), combatBoundaryReason);
@@ -1627,7 +1619,7 @@ public static partial class McpMod
         return battle;
     }
 
-    private static Dictionary<string, object?> BuildPlayerState(Player player)
+    private static Dictionary<string, object?> BuildPlayerState(Player player, string? screen)
     {
         var state = new Dictionary<string, object?>();
         var creature = player.Creature;
@@ -1651,7 +1643,10 @@ public static partial class McpMod
         {
             inCombat = true;
             if (creature.CombatState != null) RefreshCardUidRegistry(creature.CombatState);
-            state["unlocked_pools"] = BuildUnlockedPools(player, creature.CombatState);
+            var unlocked = BuildUnlockedPools(player, creature.CombatState);
+            state["unlocked_pools"] = unlocked;
+            if (HasEntropicBrew(player))
+                state["entropic_brew_pool"] = BuildEntropicBrewPool(player, unlocked, screen);
             // JackOfAllTrades.OnPlay の最終候補（自己除外・FilterForRun・FilterForCombat 後）。
             state["colorless_generation_pool"] = BuildColorlessGenerationPool(player);
             // Splash.OnPlay の抽選前の候補（他キャラの解放済み pool の Attack。FilterForRun・FilterForCombat 後）。

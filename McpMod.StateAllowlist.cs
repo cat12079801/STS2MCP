@@ -92,6 +92,7 @@ public static partial class McpMod
             StateValueConverter.KeywordNames => typeof(IEnumerable<CardKeyword>).IsAssignableFrom(memberType),
             StateValueConverter.PowerRefs => typeof(IEnumerable<PowerModel>).IsAssignableFrom(memberType),
             StateValueConverter.SerializableCards => typeof(IEnumerable<SerializableCard>).IsAssignableFrom(memberType),
+            StateValueConverter.ModifierIds => typeof(IReadOnlyList<ModifierModel>).IsAssignableFrom(memberType),
             _ => false
         };
         if (!ok)
@@ -142,7 +143,8 @@ public static partial class McpMod
                     .ToList();
             case StateValueConverter.SerializableCards:
                 // 預けたカード（PaelsTooth）。返すのは乱数で 1 枚なので、並びは意味を持たないよう id・強化段階の順にする。
-                if (raw is not IEnumerable<SerializableCard> cards) return new List<Dictionary<string, object?>>();
+                if (raw is not IEnumerable<SerializableCard> cards)
+                    throw new InvalidOperationException($"{entry.Member} が null");
                 return cards.Select(saved => new Dictionary<string, object?>
                     {
                         ["id"] = saved.Id?.Entry ?? throw new InvalidOperationException("SerializableCard.Id が null"),
@@ -153,6 +155,11 @@ public static partial class McpMod
                     .ThenBy(row => (int)row["upgrade_level"]!)
                     .ThenBy(row => row["enchantment_id"] as string, StringComparer.Ordinal)
                     .ToList();
+            case StateValueConverter.ModifierIds:
+                if (raw is not IReadOnlyList<ModifierModel> modifiers)
+                    throw new InvalidOperationException($"{entry.Member} が null");
+                return modifiers.Select(modifier => modifier?.Id.Entry is { Length: > 0 } id
+                    ? id : throw new InvalidOperationException("ModifierModel.Id.Entry を読めない")).ToList();
             default:
                 throw new InvalidOperationException($"未対応の変換 {entry.Converter}");
         }

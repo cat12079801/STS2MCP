@@ -534,7 +534,7 @@ namespace STS2_MCP
             Check(mod.Contains("public const int StateSchemaVersion = 12;"), "combat upgrade_preview changed meaning at schema 5; current schema is 12 (sts2#1020)");
             Check(System.Text.RegularExpressions.Regex.IsMatch(mod, @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
             Check(mod.Contains("BuildStateMeasured(BuildGameState, perf)") && mod.Contains("BuildStateMeasured(BuildMultiplayerGameState, perf)"), "?perf=1 on both state endpoints");
-            Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState(localPlayer)"), "multiplayer shares the player builder");
+            Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState(localPlayer,"), "multiplayer shares the player builder");
             Check(Source("McpMod.Formatting.cs").Contains("AppendUpgradePreviewLine(sb, card, showReady: false);"), "hand markdown prints failures only");
 
             Console.WriteLine($"CombatUpgradePreviewContract: {Checks} checks passed");

@@ -38,8 +38,8 @@ public static partial class McpMod
     // 生成物そのものの検査: section・キー・型名・備考の形と、隠す情報を指さないこと。
     private static void RunGeneratedTableContract()
     {
-        var sections = new HashSet<string> { "card", "relic", "power", "player", "battle" };
-        Check(StateAllowlist.Length == 33, "許可リストは 33 項目");
+        var sections = new HashSet<string> { "card", "relic", "power", "player", "battle", "run" };
+        Check(StateAllowlist.Length == 34, "許可リストは 34 項目");
         Check(!StateAllowlist.Any(e => e.Key == "wongo_points"), "ラン中に読まれない wongo_points は出さない（cosmetic）");
         foreach (var e in StateAllowlist)
         {
@@ -250,11 +250,24 @@ public static partial class McpMod
         Check(Internal(Row("relic", legion))["affected_card_uid"] == null, "解決の途中でなければ null（理由なし）");
 
         var tooth = new PaelsTooth();
+        Check(Internal(Row("relic", tooth))["stored_cards"] is List<Dictionary<string, object?>> { Count: 0 },
+            "空の歯は保管札 0 件");
         tooth.Cards.Add(new SerializableCard { Id = new ModelId("STRIKE_IRONCLAD"), CurrentUpgradeLevel = 1 });
         tooth.Cards.Add(new SerializableCard { Id = new ModelId("BASH"), Enchantment = new SerializableEnchantment { Id = new ModelId("GLAM") } });
-        var stored = (List<Dictionary<string, object?>>)Internal(Row("relic", tooth))["stored_cards"]!;
-        Check(stored.Count == 2 && Equals(stored[0]["id"], "BASH") && Equals(stored[0]["enchantment_id"], "GLAM")
-            && Equals(stored[1]["upgrade_level"], 1), "預けたカードは id の順（返すのは乱数なので並びに意味を持たせない）");
+        tooth.Cards.Add(new SerializableCard { Id = new ModelId("STRIKE_IRONCLAD"), CurrentUpgradeLevel = 1 });
+        for (int i = 0; i < 2; i++)
+        {
+            var stored = (List<Dictionary<string, object?>>)Internal(Row("relic", tooth))["stored_cards"]!;
+            Check(stored.Count == 3 && Equals(stored[0]["id"], "BASH") && Equals(stored[0]["enchantment_id"], "GLAM")
+                && Equals(stored[1]["upgrade_level"], 1) && stored[1].SequenceEqual(stored[2]),
+                "預けたカードを整列し、同一札の多重度を保つ");
+        }
+        Check(tooth.Cards.Count == 3 && tooth.Cards[0].Id?.Entry == "STRIKE_IRONCLAD", "読み取りで保管列を変更しない");
+        tooth.SetUnreadable();
+        values = Internal(Row("relic", tooth, "player.relics.PAELS_TOOTH"));
+        Check(values["stored_cards"] == null && Reasons(values)!.ContainsKey("stored_cards")
+            && _stateWarnings.Any(w => w.StartsWith("player.relics.PAELS_TOOTH.internal_state.stored_cards:")),
+            "異常な null の保管列は null・理由・警告");
 
         var lamp = new UnsettlingLamp();
         values = Internal(Row("relic", lamp));
@@ -276,6 +289,33 @@ public static partial class McpMod
             && Internal(Row("relic", new MusicBox())).ContainsKey("card_being_played_uid")
             && Internal(Row("relic", new Vambrace())).ContainsKey("triggering_card_uid"), "各レリックの項目");
         Check(Internal(Row("relic", new Byrdpip())).Count == 3, "許可リストに無いレリックは基底の項目だけ");
+    }
+
+    private static void RunModifierContract()
+    {
+        BeginStateWarnings();
+        var run = new MegaCrit.Sts2.Core.Runs.RunState { TotalFloor = 5 };
+        var owner = new Player();
+        run.Players.Add(owner);
+        Check(!BuildRunState(run).ContainsKey("internal_state"), "歯がなければ run の項目を省く");
+        owner.Relics.Add(new PaelsTooth { IsMelted = true });
+        Check(Seq<string>(Internal(BuildRunState(run))["modifier_ids"]), "歯があり修飾子がなければ空列");
+        var ordered = new ModifierModel[] { new("HOARDER"), new("OTHER"), new("HOARDER") };
+        run.Modifiers = ordered;
+        for (int i = 0; i < 2; i++)
+            Check(Seq(Internal(BuildRunState(run))["modifier_ids"], "HOARDER", "OTHER", "HOARDER"),
+                "修飾子は適用順と重複を保持する");
+        Check(ReferenceEquals(run.Modifiers, ordered) && ordered[0].Id.Entry == "HOARDER", "読み取りで修飾子の実体を変更しない");
+        var manager = MegaCrit.Sts2.Core.Runs.RunManager.Instance;
+        manager.State = run;
+        Check(Seq(Internal((Dictionary<string, object?>)WithRelevantFtueRunState(new())["run"]!)["modifier_ids"],
+            "HOARDER", "OTHER", "HOARDER"), "FTUE の早期 return にもランの修飾子を付ける");
+        manager.State = null;
+        Check(!WithRelevantFtueRunState(new()).ContainsKey("run"), "ランのない FTUE に run を作らない");
+        run.Modifiers = null;
+        var values = Internal(BuildRunState(run));
+        Check(values["modifier_ids"] == null && Reasons(values)!.ContainsKey("modifier_ids")
+            && _stateWarnings.Any(w => w.StartsWith("run.internal_state.modifier_ids:")), "修飾子の欠測は null・理由・警告");
     }
 
     private static void RunPlayerBattleContract()
@@ -368,6 +408,17 @@ public static partial class McpMod
     private static void RunWiringContract()
     {
         string builder = Source("McpMod.StateBuilder.cs");
+        string multiplayer = Source("McpMod.MultiplayerState.cs");
+        foreach (string source in new[] { builder, multiplayer })
+        {
+            int common = source.IndexOf("result[\"run\"] = BuildRunState(runState);", StringComparison.Ordinal);
+            Check(new[] { "rewards", "card_select", "map" }.All(screen =>
+            {
+                int branch = source.IndexOf($"result[\"state_type\"] = \"{screen}\";", StringComparison.Ordinal);
+                return branch >= 0 && branch < common;
+            }),
+                "報酬・選択・通常のラン画面は共通の run ビルダーを通る");
+        }
         foreach (string call in new[]
                  {
                      "AttachAllowlistedState(battle, \"battle\", combatState, \"battle\");",
@@ -424,6 +475,7 @@ public static partial class McpMod
         RunCardContract();
         RunPowerContract();
         RunRelicContract();
+        RunModifierContract();
         RunPlayerBattleContract();
         RunReaderGuardContract();
         RunMarkdownContract();
