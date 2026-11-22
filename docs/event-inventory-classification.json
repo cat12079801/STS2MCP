@@ -27,7 +27,9 @@
   "1115": "エントロピー・計略・スプラッシュ（進行中）",
   "1118": "オブスキュラの咆哮",
   "1120": "滝の巨人・知識の悪魔の照合",
-  "1175": "クイーン「燃え上がれ」の味方への筋力"
+  "1175": "クイーン「燃え上がれ」の味方への筋力",
+  "1203": "戦闘の試行と choose の呼出しの識別",
+  "1204": "道具箱が待つドロー前の段と残る listener"
  },
  "rules": [
   {
@@ -82,6 +84,11 @@
    "file": "MegaCrit.Sts2.Core.Combat/CombatState.cs",
    "grep": "public IEnumerable<AbstractModel> IterateHookListeners()",
    "scope": "ironclad"
+  },
+  "manual:CombatManager.CurrentCombatId": {
+   "file": "MegaCrit.Sts2.Core.Combat/CombatManager.cs",
+   "grep": "public CombatId? CurrentCombatId => _turnState?.Id;",
+   "scope": "core"
   },
   "manual:CardPileCmd.DrawInternal": {
    "file": "MegaCrit.Sts2.Core.Commands/CardPileCmd.cs",
@@ -2027,15 +2034,16 @@
   "hook:Hook.BeforeHandDraw": {
    "class": "exposed",
    "visible": "手番開始の通常ドローの直前の効果（通常と Late）。Toolbox の上書きで選択が開く。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=BeforeHandDraw]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=BeforeHandDraw]{scope, args, passes[{method, listeners[]}]}, choice_source.await_chain.frames[method=BeforeHandDraw]{awaiting, following, listener{position, count, remaining_listeners}}",
    "issues": [
     771,
     1115,
-    1088
+    1088,
+    1204
    ],
    "exposed_by": [
     "McpMod.CombatLogPatches.cs: (\"BeforeHandDraw\", \"",
-    "McpMod.ChoiceAwaitChain.cs: \"AfterEnergyReset\", \"BeforeHandDraw\""
+    "McpMod.ChoiceAwaitChain.cs: [(typeof(Hook), nameof(Hook.BeforeHandDraw))] = AsyncChain.BeforeHandDrawStages"
    ]
   },
   "hook:Hook.BeforePotionUsed": {
@@ -2128,6 +2136,18 @@
    "exposed_by": [
     "McpMod.DecisionContext.cs: row[\"skipped\"] = picked.Count == 0;"
    ]
+  },
+  "manual:CombatManager.CurrentCombatId": {
+   "class": "exposed",
+   "visible": "同じ遭遇に入り直したときも区別できる戦闘の試行。選択中と選択後の戦闘を結ぶ",
+   "proposed_key": "battle.attempt_identity",
+   "issues": [
+    1203
+   ],
+   "exposed_by": [
+    "McpMod.CombatLog.cs: manager?.CurrentCombatId is not"
+   ],
+   "reason": "CombatManager.SetUpCombat で作る CombatTurnState.Id と MOD の起動セッションを組にする。戦闘の開始と再試行は画面上で区別できる"
   },
   "manual:CombatState.IterateHookListeners": {
    "class": "exposed",
@@ -2359,11 +2379,15 @@
   },
   "select:CardSelectCmd.FromChooseACardScreen": {
    "class": "exposed",
-   "exposed_by": [
-    "McpMod.ChoiceSource.cs: (\"FromChooseACardScreen\", new[]"
+   "issues": [
+    1203
    ],
-   "proposed_key": "<screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ）",
-   "reason": "戦闘中の選択。何段目か・残り回数・skip の記録は manual:decision_context.* の行"
+   "exposed_by": [
+    "McpMod.ChoiceSource.cs: (\"FromChooseACardScreen\", new[]",
+    "McpMod.ChoiceSourceTracker.cs: row[\"choice_identity\"] = CombatAttempt.ChoiceIdentity"
+   ],
+   "proposed_key": "card_select.choice_source, card_select.decision_context.choice_identity, battle.combat_log.rows[kind=selection].choice_identity",
+   "reason": "戦闘中の選択。画面と確定行を同じ試行・呼出しで照合できる。何段目か・残り回数・skip は manual:decision_context.* の行"
   },
   "select:CardSelectCmd.FromCombatPile": {
    "class": "exposed",

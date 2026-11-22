@@ -17,14 +17,35 @@ public static partial class McpMod
     // ?combat_log_since=<seq> on GET /api/v1/singleplayer: the rows from that seq on instead of the last DefaultWindow.
     private static long? _combatLogSince;
 
+    private static CombatAttempt? CaptureCombatAttempt(ICombatState? combat, bool liveOnly = false)
+    {
+        var manager = CombatManager.Instance;
+        if (combat == null || manager?.CurrentCombatId is not { } id
+            || !ReferenceEquals(manager.DebugOnlyGetState(), combat)
+            || (liveOnly && !manager.IsCurrentLiveCombat(id))) return null;
+        return new CombatAttempt(combat, id.Value, Recorder.CombatRecorder.SessionId);
+    }
+
+    private static bool IsLiveCombatAttempt(CombatAttempt attempt)
+    {
+        var manager = CombatManager.Instance;
+        return attempt.IsLive(manager?.IsCurrentLiveCombat(new CombatId(attempt.Number)) == true, manager?.DebugOnlyGetState());
+    }
+
+    private static Dictionary<string, object?> BuildBattleAttemptIdentity(CombatAttempt? attempt)
+    {
+        if (attempt != null) CombatLogStore.Bind(attempt);
+        return CombatAttempt.Identity(attempt, $"no live {nameof(CombatManager.CurrentCombatId)} for this battle");
+    }
+
     /// <summary>
     /// <c>battle.combat_log</c>: what happened in this fight, in order (docs/raw-full.md「戦闘の出来事の通し列」). The rows
     /// come from read-only Harmony patches (McpMod.CombatLogPatches.cs); each is fixed once recorded. <c>known</c> is false
     /// when a patch group is missing or a row could not be made, since a log with a hole looks complete.
     /// </summary>
-    private static Dictionary<string, object?> BuildCombatLogState(ICombatState combat, long? since = null)
+    private static Dictionary<string, object?> BuildCombatLogState(CombatAttempt? attempt, long? since = null)
     {
-        var snapshot = CombatLogStore.Read(combat, since ?? _combatLogSince, CombatLogStore.DefaultWindow);
+        var snapshot = CombatLogStore.Read(attempt, since ?? _combatLogSince, CombatLogStore.DefaultWindow);
         var result = new Dictionary<string, object?>
         {
             ["version"] = CombatLogVersion,
@@ -42,12 +63,6 @@ public static partial class McpMod
         return result;
     }
 
-    private static string? CombatLogCombatId()
-    {
-        try { return CombatManager.Instance.CurrentCombatId?.Value.ToString(); }
-        catch { return null; }
-    }
-
     /// <summary>
     /// Appends one row to the current fight's log (nothing outside a fight). <paramref name="fill"/> runs after the
     /// uid and entity id registries are refreshed for the fight, so card and enemy references match the state's.
@@ -59,12 +74,19 @@ public static partial class McpMod
     /// <summary>As <see cref="LogCombatRow"/>, but <paramref name="fill"/> returning false drops the row (nothing happened).</summary>
     private static void LogCombatRowIf(string kind, Func<Dictionary<string, object?>, ICombatState, bool> fill)
     {
+        CombatAttempt? attempt;
+        try { attempt = CaptureCombatAttempt(CombatManager.Instance?.DebugOnlyGetState()); }
+        catch { return; }
+        if (attempt == null) return;
+        CombatLogStore.Bind(attempt);
+        AppendCombatRow(kind, attempt, fill);
+    }
+
+    private static void AppendCombatRow(string kind, CombatAttempt attempt, Func<Dictionary<string, object?>, ICombatState, bool> fill)
+    {
         // Inside the shuffle's CardPileCmd.Add every row would follow the new draw order: counted, not written.
         if (_combatLogSuppressed.Value is { } suppressed) { suppressed.Count++; return; }
-        CombatState? combat;
-        try { combat = CombatManager.Instance?.DebugOnlyGetState(); }
-        catch { return; }
-        if (combat == null) return;
+        var combat = (ICombatState)attempt.Combat;
         try
         {
             RefreshCardUidRegistry(combat);
@@ -77,11 +99,11 @@ public static partial class McpMod
                 ["side"] = combat.CurrentSide.ToString().ToLowerInvariant()
             };
             if (!fill(row, combat)) return;
-            CombatLogStore.Append(combat, CombatLogCombatId(), row);
+            CombatLogStore.TryAppend(attempt, row);
         }
         catch (Exception ex)
         {
-            CombatLogStore.MarkBroken(combat, CombatLogCombatId(), $"{kind}: {ex.GetType().Name}: {ex.Message}");
+            CombatLogStore.TryMarkBroken(attempt, $"{kind}: {ex.GetType().Name}: {ex.Message}");
             GD.PrintErr($"[STS2 MCP] combat_log {kind} row failed: {ex.GetType().Name}: {ex.Message}");
         }
     }

@@ -241,9 +241,10 @@ public static partial class McpMod
         // Same as singleplayer: every selection screen of a live fight carries the battle snapshot,
         // and a failure to build it is a warning that leaves battle out.
         // Selections recorded in a fight that is no longer live can never complete (choice_source).
-        OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());
+        var liveSelectionCombat = GetLiveCombatStateForSelection();
+        OpenCardSelections.DropOtherCombats(liveSelectionCombat, CaptureCombatAttempt(liveSelectionCombat, liveOnly: true));
         // Hook calls (await_chain listener lists) of a fight that is gone never complete either.
-        HookListSnapshots.DropOtherCombats(GetLiveCombatStateForSelection());
+        HookListSnapshots.DropOtherCombats(liveSelectionCombat);
         bool inCombatRoom = currentRoom is CombatRoom;
         if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
@@ -273,6 +274,7 @@ public static partial class McpMod
     {
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var battle = new Dictionary<string, object?>();
+        battle["attempt_identity"] = BuildBattleAttemptIdentity(CaptureCombatAttempt(combatState, liveOnly: true));
 
         if (combatState == null)
         {

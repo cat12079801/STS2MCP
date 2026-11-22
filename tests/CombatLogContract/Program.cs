@@ -19,6 +19,7 @@ namespace STS2_MCP
 
         public static void RunCombatLogContract()
         {
+            CheckChoiceIdentity();
             CheckStore();
             CheckTracker();
             CheckMarkdown();
@@ -30,8 +31,10 @@ namespace STS2_MCP
         private static void CheckStore()
         {
             CombatLogStore.Clear();
-            object fight = new(), next = new();
-            for (int i = 0; i < 5; i++) CombatLogStore.Append(fight, "7", Row("draw"));
+            var fight = new CombatAttempt(new object(), 7, "P");
+            var next = new CombatAttempt(new object(), 8, "P");
+            CombatLogStore.Bind(fight);
+            for (int i = 0; i < 5; i++) CombatLogStore.TryAppend(fight, Row("draw"));
             var read = CombatLogStore.Read(fight, null, 3);
             Check(read.Rows.Count == 3 && (long)read.Rows[0]["seq"]! == 2 && (long)read.Rows[2]["seq"]! == 4, "既定の窓は最後の N 行で、seq は 0 から順に振る");
             Check(read.FirstSeq == 0 && read.NextSeq == 5 && read.WindowFirstSeq == 2 && read.CombatId == "7", "first_seq・next_seq・窓の始まり・戦闘の ID");
@@ -39,22 +42,23 @@ namespace STS2_MCP
             var since = CombatLogStore.Read(fight, 1, 3);
             Check(since.Rows.Count == 4 && (long)since.Rows[0]["seq"]! == 1, "since を渡すとその seq から残っている全行");
             Check(CombatLogStore.Read(fight, 99, 3).Rows.Count == 0, "next_seq より先の since は空");
-            Check(CombatLogStore.NextSeqOf(fight) == 5 && CombatLogStore.NextSeqOf(next) == 0, "NextSeqOf は同じ戦闘の次の seq、別の戦闘は 0");
+            Check(CombatLogStore.Bind(fight) == 5 && CombatLogStore.Read(next, null, 3).NextSeq == 0, "Bind の戻り値は同じ戦闘の次の seq、別の戦闘は 0");
             Check(CombatLogStore.Read(next, null, 3).Rows.Count == 0, "別の戦闘の行は返さない");
 
             var first = read.Rows[0];
-            CombatLogStore.Append(fight, "7", Row("play"));
+            CombatLogStore.TryAppend(fight, Row("play"));
             Check(ReferenceEquals(CombatLogStore.Read(fight, 2, 100).Rows[0], first), "記録した行は後から変わらない（前の読みが後の読みの先頭になる）");
 
-            for (int i = 0; i < CombatLogStore.Capacity + 10; i++) CombatLogStore.Append(fight, "7", Row("hook"));
+            for (int i = 0; i < CombatLogStore.Capacity + 10; i++) CombatLogStore.TryAppend(fight, Row("hook"));
             var full = CombatLogStore.Read(fight, 0, CombatLogStore.DefaultWindow);
             Check(full.FirstSeq == 16 && full.NextSeq == CombatLogStore.Capacity + 16, "上限を超えた古い行を捨て、first_seq が進む");
             Check(full.SinceTruncated && full.WindowFirstSeq == 16 && full.Rows.Count == CombatLogStore.Capacity, "捨てた行より前の since は since_truncated で、残っている先頭から返す");
             Check(CombatLogStore.Read(fight, null, CombatLogStore.DefaultWindow).Rows.Count == CombatLogStore.DefaultWindow, "既定の窓の行数");
 
-            CombatLogStore.MarkBroken(fight, "7", "hook: boom");
+            CombatLogStore.TryMarkBroken(fight, "hook: boom");
             Check(CombatLogStore.Read(fight, null, 3).Reasons.Contains("hook: boom"), "行を作れなかった戦闘は理由を出す（known=false）");
-            CombatLogStore.Append(next, "8", Row("draw"));
+            CombatLogStore.Bind(next);
+            CombatLogStore.TryAppend(next, Row("draw"));
             var fresh = CombatLogStore.Read(next, null, 3);
             Check(fresh.Rows.Count == 1 && (long)fresh.Rows[0]["seq"]! == 0 && fresh.Reasons.Count == 0 && fresh.CombatId == "8",
                 "新しい戦闘で列・seq・欠けの印を初めからにする");
@@ -62,7 +66,7 @@ namespace STS2_MCP
 
             CombatLogStore.AddInstallError("flash: missing");
             Check(CombatLogStore.Read(next, null, 3).Reasons.Any(r => r.StartsWith("install: flash")), "当てられなかった patch の群は全戦闘の理由に出る");
-            Check(CombatLogStore.Read(new object(), null, 3).Reasons.Count == 1, "見たことの無い戦闘でも導入の失敗は出す");
+            Check(CombatLogStore.Read(null, null, 3).Reasons.Count == 1, "見たことの無い戦闘でも導入の失敗は出す");
             CombatLogStore.Clear();
         }
 
@@ -175,8 +179,8 @@ namespace STS2_MCP
                 "Add の listener の中で別の命令が置いた札に Add の位置を付けない");
             Check(patches.Contains("ResolveCombatLogPhase(p.Method, p.Parameters)") && !patches.Contains("AccessTools.DeclaredMethod(typeof(CombatManager), phase)"),
                 "手番の段階は引数の型で 1 つに決めてから当てる（多重定義で AmbiguousMatchException にしない）");
-            Check(decision.Contains("player, player, GetLiveCombatStateForSelection(), candidates: candidates)")
-                && Read("McpMod.ChoiceSource.cs").Contains("OpenCardSelections.Add(__originalMethod.Name, context, player, GetLiveCombatStateForSelection(),"),
+            Check(decision.Contains("player, player, combat,")
+                && Read("McpMod.ChoiceSource.cs").Contains("OpenCardSelections.Add(__originalMethod.Name, context, player, combat,"),
                 "選択の記録の戦闘は進行中の戦闘（戦闘後の報酬の画面では戦闘外として扱う）");
             Check(decision.Contains("(fromDraw ? OrderPileCardsForDisplay(cards, PileType.Draw) : cards)"), "山札から自動で選ばれた札は表示順");
             Check(patches.Contains("harmony.Patch(original, prefix: M(nameof(CombatLogHistoryRecording)), postfix: M(nameof(CombatLogHistoryRecorded)));")
@@ -191,19 +195,23 @@ namespace STS2_MCP
             Check(patches.Contains("if (!power.IsMutable || mods == null || mods.Count == 0) return;"), "PowerVar のプレビュー（正準のパワー）を出来事にしない");
             Check(patches.Contains("BuildHookListenerRows(listeners,"), "listener は既存の BuildHookListenerRows（山札の位置を隠す）で出す");
             Check(patches.Contains("HookOverrideDeclarer(model.GetType(), pass.Method, pass.Parameters) != null)))") && patches.Contains("                return false;"), "上書きする listener の無い通知は行にしない");
-            Check(log.Contains("CombatLogStore.MarkBroken") && log.Contains("[\"known\"] = snapshot.Reasons.Count == 0"), "行を作れなければ known=false");
-            Check(decision.Contains("if (record.HasInner || record.CombatState == null || !task.IsCompletedSuccessfully) return;"), "選択の行は内側の入口だけ・戦闘の中だけ");
+            Check(log.Contains("CombatLogStore.TryMarkBroken") && log.Contains("[\"known\"] = snapshot.Reasons.Count == 0"), "行を作れなければ known=false");
+            string choice = Read("McpMod.ChoiceSource.cs");
+            Check(choice.Contains("OpenCardSelections.Complete(record, task)") && choice.Contains("if (!IsLiveCombatAttempt(attempt)) return;")
+                && choice.Contains("RunOnMainThread(Publish)") && decision.Contains("AppendCombatRow(\"selection\", attempt"),
+                "成功した最内側の呼出しだけを、ゲームスレッドで試行の生存を確かめて元のログに追記する");
 
             string mod = Read("McpMod.cs");
             Check(mod.Contains("InstallCombatLogTracking();") && mod.Contains("InstallDecisionContextTracking();"), "初期化で patch を当てる");
             Check(mod.Contains("request.QueryString[\"combat_log_since\"]") && mod.Contains("_combatLogSince = null;"), "?combat_log_since= は読むたびに戻す");
             Check(mod.Contains("/// 1.10.0: the public-missing rows of the event inventory"), "combat_log などの追加は MINOR（1.10.0）");
             string builder = Read("McpMod.StateBuilder.cs");
-            Check(builder.Contains("battle[\"combat_log\"] = BuildCombatLogState(combatState);"), "battle に combat_log を付ける");
-            Check(Regex.Matches(builder, "state\\[\"decision_context\"\\] = BuildDecisionContext\\(").Count == 5, "5 つの選択画面に decision_context を付ける");
+            Check(builder.Contains("battle[\"attempt_identity\"] = BuildBattleAttemptIdentity(attempt);")
+                && builder.Contains("battle[\"combat_log\"] = BuildCombatLogState(attempt);"), "battle の試行 ID と combat_log は同じ試行から読む");
+            Check(Regex.Matches(builder, "state\\[\"decision_context\"\\] = BuildDecisionContext\\(").Count == 4 && builder.Contains("state[\"decision_context\"] = decision;"), "5 つの選択画面に decision_context を付ける");
             Check(builder.Contains("state[\"potion_generation_pool\"] = BuildPotionGenerationPool(player);"), "player.potion_generation_pool");
             Check(builder.Contains("AttachXValueIfPlayed((Dictionary<string, object?>)state[\"energy_cost\"]!, card);"), "手札の energy_cost に x_value_if_played");
-            Check(Read("McpMod.AutoPlayReservationPatches.cs").Contains("capture[\"combat_log\"] = BuildCombatLogState(combat, 0);"), "ended_combat に戦闘の残りの全行");
+            Check(Read("McpMod.AutoPlayReservationPatches.cs").Contains("capture[\"combat_log\"] = BuildCombatLogState(attempt, 0);"), "ended_combat に戦闘の残りの全行");
             string formatting = Read("McpMod.Formatting.cs");
             Check(formatting.Contains("AppendCombatLogMarkdown(sb, battle);") && Regex.Matches(formatting, "AppendDecisionContextMarkdown\\(sb, ").Count == 4, "Markdown の配線");
         }

@@ -82,8 +82,10 @@ public static partial class McpMod
     /// sts2#1133).
     /// 1.13.0: Entropic Brew options, conditional slot usability, listeners and potion history (sts2#991),
     /// and modifier ids on runs with PaelsTooth (sts2#1214).
+    /// 1.14.0: battle.attempt_identity and a shared choice_identity for the combat choose screen and its selection
+    /// log row; choice_source.await_chain observes Hook.BeforeHandDraw's current stage and its remaining listeners.
     /// </summary>
-    public const string StateSchema = "1.13.0";
+    public const string StateSchema = "1.14.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

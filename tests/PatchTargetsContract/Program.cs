@@ -1,5 +1,10 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using HarmonyLib;
+using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Hooks;
 
 // Calls the MOD's own install methods (the same code Initialize runs) against the real sts2.dll / 0Harmony.dll and
 // checks that every group bound and patched. Nothing is invoked in the game: patching only rewrites the methods.
@@ -55,6 +60,20 @@ for (int step = 0; step < steps.Length; step++)
 
 Check(Field(mod, "_choiceSourceTrackingError") == null, $"choice source: {Field(mod, "_choiceSourceTrackingError")}");
 Check(Field(mod, "_hookListSnapshotError") == null, $"hook list snapshot: {Field(mod, "_hookListSnapshotError")}");
+var beforeHandDraw = AccessTools.DeclaredMethod(typeof(Hook), nameof(Hook.BeforeHandDraw),
+    new[] { typeof(ICombatState), typeof(Player), typeof(PlayerChoiceContext) })!;
+var beforeDrawPatches = Harmony.GetPatchInfo(beforeHandDraw);
+Check(beforeDrawPatches.Prefixes.Any(p => p.owner == "com.sts2mcp.hooklistsnapshot")
+    && beforeDrawPatches.Postfixes.Any(p => p.owner == "com.sts2mcp.hooklistsnapshot"),
+    "BeforeHandDraw records the draw-pile membership at the start of each actual stage list");
+const BindingFlags Instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+var hookFrame = beforeHandDraw.GetCustomAttribute<AsyncStateMachineAttribute>()!.StateMachineType;
+Check(new[] { "combatState", "player", "playerChoiceContext", "<>7__wrap1", "<model>5__3" }
+    .All(name => hookFrame.GetField(name, Instance) != null), "BeforeHandDraw's two loops share the active iterator and model fields");
+var setupFrame = AccessTools.DeclaredMethod(typeof(CombatManager), "SetupPlayerTurn")!
+    .GetCustomAttribute<AsyncStateMachineAttribute>()!.StateMachineType;
+Check(new[] { "player", "playerChoiceContext", "<state>5__2" }
+    .All(name => setupFrame.GetField(name, Instance) != null), "SetupPlayerTurn holds the same player, context and combat across BeforeHandDraw");
 Check(Field(Internal("AutoPlayReservations"), "TrackingError") == null, $"auto-play reservation: {Field(Internal("AutoPlayReservations"), "TrackingError")}");
 Check(Field(Internal("EndedCombatCaptures"), "LossCaptureError") == null, $"ended combat loss: {Field(Internal("EndedCombatCaptures"), "LossCaptureError")}");
 Check(Field(mod, "_decisionContextTrackingError") == null, $"decision context: {Field(mod, "_decisionContextTrackingError")}");

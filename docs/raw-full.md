@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.13.0",       // Contract version (semver) — see below
+  "schema": "1.14.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.13.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.14.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.13.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.14.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -176,6 +176,10 @@ and changing the meaning or shape of an existing field is MAJOR.
   [戦闘カードの詳細](#戦闘カードの詳細追加schema-4)。
 - **1.13.0** — エントロピー醸造の抽選前の候補・枠ごとの条件付き使用可否・通知の受け手を `player.entropic_brew_pool` に、使用履歴を `player.combat_history.potion_uses` に出す。パエルの歯を所持するランは `run.internal_state.modifier_ids` を持つ。
   [エントロピー醸造](#エントロピー醸造playerentropic_brew_poolschema-1130)・[ランの修飾子](#パエルの歯のあるランの修飾子runinternal_statemodifier_idsschema-1130)。
+- **1.14.0** — `battle.attempt_identity` と戦闘中 choose の `decision_context.choice_identity`・確定行の
+  `choice_identity` を出す。`choice_source.await_chain` は `Hook.BeforeHandDraw` の通常段・Late 段の停止位置と残りの listener を出す。
+  [戦闘の試行と choose の識別](#戦闘の試行と-choose-の識別schema-1140)・
+  [選択を待つ処理の鎖](#選択を待つ処理の鎖choice_sourceawait_chainschema-190)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -1211,7 +1215,11 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 | `power` | `PowerCmd.Apply`（`apply`・要求した `amount`）/ `ModifyAmount` / `Decrement` / `TickDownDuration`（`skipped` = `SkipNextDurationTick`）/ `Remove` の prefix | 与えた後の量は `power_received` の行 |
 | `flash` | `RelicModel.Flash` / `PowerModel.Flash`（効果が働いた合図） | `model` |
 | `turn_phase` | `CombatManager` の手番の段階 12 件（表の並びは宣言の順。実際の順は下の注）（`StartCombatInternal`・`StartTurn`・`RunAutoPrePlayPhase`・`SetupPlayerTurn`・`EndPlayerTurnPhaseOneInternal`・`DoTurnEnd`・`ResolveTurnEndCardEffects`・`FlushPlayerHand`・`EndPlayerTurnPhaseTwoInternal`・`SwitchFromPlayerToEnemySide`・`EndEnemyTurnInternal`・`EndCombatInternal`）の始まり | `phase`（snake_case）・`player_id`・`card` |
-| `selection` | `CardSelectCmd` / `RelicSelectCmd` の入口の Task が終わったとき（内側の入口だけ） | `selector`・`outer_selectors`・`opener`・`opened_at_seq`（開いたときの `next_seq`）・`offered`・`offered_from`・`chosen`・`skipped`。`offered` は入口に渡された札（`offered_from: "arguments"`）か、札の列を取らない入口では開いたときの手札・戦闘の山の札をその順で（`offered_from: "Hand"` / `"Discard"` など。選べるかはゲームが決める〔`FromHandForUpgrade` は強化できる札、`filter` の引数〕）。山札からの選択は `offered: null` と `offered_hidden_reason: "draw_pile"`、どちらも記録が無ければ `offered: null` と `offered_unavailable_reason` |
+| `selection` | `CardSelectCmd` / `RelicSelectCmd` の Task が同じ生きた試行で成功したとき（内側の入口だけ） | `selector`・`outer_selectors`・`opener`・`opened_at_seq`（開いたときの `next_seq`）・`offered`・`offered_from`・`chosen`・`skipped`。`offered` は入口に渡された札（`offered_from: "arguments"`）か、札の列を取らない入口では開いたときの手札・戦闘の山の札をその順で（`offered_from: "Hand"` / `"Discard"` など。選べるかはゲームが決める〔`FromHandForUpgrade` は強化できる札、`filter` の引数〕）。山札からの選択は `offered: null` と `offered_hidden_reason: "draw_pile"`、どちらも記録が無ければ `offered: null` と `offered_unavailable_reason` |
+
+戦闘中 choose の `selection` 行に付く `choice_identity`・`chooser_player_id`・`screen_observed` と UID の契約は
+[戦闘の試行と choose の識別](#戦闘の試行と-choose-の識別schema-1140) を参照。
+schema 1.14.0 から、`FromChooseACardScreen` の確定行の `offered` / `chosen` に `uid` が入るのは、画面で照合した呼出しの候補実体について登録済みの UID を確認できた場合に限る。
 
 行にならないもの・順の注:
 
@@ -3447,8 +3455,9 @@ Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombat
 MOD は `CardSelectCmd` の上の 8 つの入口（`PlayerChoiceContext` を取るもの。`FromCombatPile` は 2 つの多重定義とも）に
 読むだけの Harmony の prefix・postfix を当て、呼ばれたときの引数（`context`・`player`・`FromHand` の `source`・
 choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の Task が終わったら記録を消す。state を作るときは、
-ローカル player・同じ戦闘・その画面を出す入口のうち、開いている最も新しい記録を使う（choose は画面の札が記録の札と
-同じ実体・同じ順のときだけ）。記録は、別の戦闘で選択が開いたときと、state を作るときに戦闘が終わっている
+戦闘中 choose は、ローカル chooser・生きた試行・入口・画面の札の個体と順が合う保留中の記録が 1 件のときに使う。
+ほかの画面は、ローカル player・同じ戦闘・対応する入口のうち、開いている最も新しい記録を使う。
+記録は、別の戦闘で選択が開いたときと、state を作るときに戦闘が終わっている
 （またはいまの戦闘と違う）ときに捨てる（選択の途中で保存して終了すると Task が終わらないため）。戦闘外の記録は残す。
 
 ```jsonc
@@ -3512,8 +3521,9 @@ choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の
   無い、`ModHelper` に hook の subscriber がいるときは `null`（`name` が `null` 以外の 3 つは `unavailable_reasons` も）。
 - 公開の情報だけ: 選択を開いた model は画面で光る・プレイ中の札として見えるもの、listener は場に出ているパワー・
   レリック・ポーション・札で、山札の順は出さない。抽選の結果・乱数・山札の順には触らない。
-- `await_chain`（schema 1.9.0）: 選択を待っている async の呼出しの鎖。下の「選択を待つ処理の鎖」。`hook.remaining_listeners`
-  がいま読み直した列なのに対し、こちらは本体がその段で実際に回している列から読む。
+- `await_chain`（schema 1.9.0）には、本体がその段で実際に回している列を出す。schema 1.14.0 で
+  ドロー前の通常段・Late 段を扱う。`models[0]` が走るドロー前の段の `hook.remaining_listeners` にも、
+  同じ停止中の列から得た結果を使う。読めなければ `null` と `remaining_listeners_unavailable_reason` を出す。
 - 分からないとき（記録が無い、patch を当てられなかった、知らない種類の context・listener）は `known: false` と
   `unavailable_reasons`（文字列の配列）。warning は `choice_source`。
 - Markdown は `Choice source: FromHand; models ENTROPY_POWER; hook AfterPlayerTurnStart (2 listeners left)` の 1 行
@@ -3578,6 +3588,7 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   |---|---|---|
   | `hook` | `Hook.AfterPlayerTurnStart` | `AfterPlayerTurnStartEarly` / `AfterPlayerTurnStart` / `AfterPlayerTurnStartLate`（走っている段） |
   | `hook` | `Hook.AfterShuffle` | `AfterShuffle` |
+  | `hook` | `Hook.BeforeHandDraw`（schema 1.14.0） | `BeforeHandDraw` / `BeforeHandDrawLate` |
   | `draw` | `CardPileCmd.DrawInternal` | `AfterPreventingDraw` / `ShuffleIfNecessary` / `AddToHand` / `AfterCardDrawn` |
   | `auto_play_from_draw_pile` | `CardPileCmd.AutoPlayFromDrawPile`（6 引数） | `ShuffleIfNecessary` / `AddToPlay` / `AutoPlay` |
   | `shuffle` | `CardPileCmd.Shuffle` | `AddToDrawPile` / `Wait` / `Tween` / `CustomScaledWait` / `AfterShuffle` |
@@ -3597,6 +3608,14 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   出さない（変化で入った札も後の段の listener になりうる）。走っている listener 自身が段の初めに山札にあった、段の初めの山札を
   記録できなかった、`ModHelper` に hook の subscriber がいるときは `position`・`count`・`remaining_listeners` が `null` で、
   理由を出す。
+- `Hook.BeforeHandDraw`（schema 1.14.0）は、選択を待つ listener フレームのメソッド・実体と、hook が積んだ
+  モデル・context、および同じ戦闘・player・context の `CombatManager.SetupPlayerTurn` が hook を待つ位置を照合する。
+  `Toolbox.BeforeHandDraw` ではさらにレリックの Owner・ドローする player・chooser の実体が一致することを確かめる。
+  `player_id` は hook を実行する対象の player、`model_index` と `context_index` は `choice_source.models` と
+  `contexts` の位置を指す。通常段で停止中の `following: ["BeforeHandDrawLate"]` は Late が未開始であることを示す。
+  Late は開始時に独自の列を作り、Late で停止中の `following` は空。いずれも `remaining_listeners: []` は
+  現在の段に残る有効な listener がいないことを示す。必要なフレーム・列・公開順を確認できないときは
+  `remaining_listeners: null` と `await_chain.unavailable_reasons` を返す。発見は `Discovery.OnPlay` の呼出しをたどる。
 - 手番の初めの選択（`setup_player_turn` の段がある）: 本体の `CombatManager.StartTurn` は、`SetupPlayerTurn` が選択で止まると
   （`HookPlayerChoiceContext.WaitForPauseOrCompletionWithoutAssigningTask` が止まりで戻る）先へ進み、`Hook.AfterSideTurnStart` と
   `OrbQueue.AfterTurnStart` を回してから `RunAutoPrePlayPhase` を作る。よって `auto_pre_play_phase` の段があれば、
@@ -3628,14 +3647,43 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   shuffle_if_necessary < draw (2 left, hand draw) < setup_player_turn < auto_pre_play_phase`（`kind` のある段だけ。
   無ければ足さない。未知なら理由）。
 
-出典（v0.113.1、`sts2-a671e9ef`）: `Hook.AfterPlayerTurnStart` / `AfterShuffle`（`<AfterPlayerTurnStart>d__59` /
+出典（v0.113.1、`sts2-a671e9ef`）: `Toolbox.BeforeHandDraw`、`Discovery.OnPlay`、`Hook.BeforeHandDraw`
+（`<BeforeHandDraw>d__39.MoveNext` の状態 0 / 1、`<>7__wrap1`・`<model>5__3`）、
+`Hook.AfterPlayerTurnStart` / `AfterShuffle`（`<AfterPlayerTurnStart>d__59` /
 `<AfterShuffle>d__76` の `<>7__wrap1`・`<model>5__3`）、`Hook.IterateCombatHookListeners`（`<>7__wrap1`）、
 `CombatState.IterateHookListeners`（`<IterateHookListeners>d__74` の `<>7__wrap1` = `List<AbstractModel>.Enumerator`、
 `Contains`）、`CardPileCmd.DrawInternal`（`<drawsRequested>5__6`・`<i>5__7`・`fromHandDraw`）・`AutoPlayFromDrawPile`
 （`count`・`<i>5__4`・`position`・`forceExhaust`）・`Shuffle`・`ShuffleIfNecessary`、`CombatManager.SetupPlayerTurn` /
 `RunAutoPrePlayPhase` / `StartTurn`、`EntropyPower.AfterPlayerTurnStart`、`StratagemPower.AfterShuffle`。段の初めの山札は、
-`Hook.AfterPlayerTurnStart` / `AfterShuffle` の間だけ、`<IterateHookListeners>d__74.MoveNext` の最初の呼出しの前に読むだけの
+`Hook.AfterPlayerTurnStart` / `AfterShuffle` / `BeforeHandDraw` の間だけ、`<IterateHookListeners>d__74.MoveNext` の最初の呼出しの前に読むだけの
 Harmony の prefix で記録する（列を作るのはその呼出し）。契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
+
+#### 戦闘の試行と choose の識別（schema 1.14.0）
+
+単独・マルチの `battle.attempt_identity` は `{known: true, attempt_id: A}` を公開する。A は MOD の起動セッション
+（`CombatRecorder.SessionId`）と `CombatManager.CurrentCombatId.Value` の十進表記を `/` で結んだ文字列。
+ログの初行前から取得でき、選択中と解決後の通常 `battle` を結べる。単独の `battle.combat_log.combat_id` は
+従来どおり戦闘番号の文字列で、記録前は `null`。生きた試行を確認できない battle にも
+`{known: false, attempt_id: null, unavailable_reasons: [...]}` を出す。
+
+戦闘中 choose の `card_select.decision_context.choice_identity` と対応する `battle.combat_log.rows[]` の
+`kind: "selection"`・`selector: "FromChooseACardScreen"` に `{known: true, attempt_id: A, selection_id: S}` を出す。
+S は A と `CardSelectCmd.FromChooseACardScreen` を呼んだ時点の MOD の連番 `OpenCardSelection.Sequence` を `/` で結んだ文字列。
+A と S は等値比較に使う。ローカル chooser・試行・入口・候補数・順・各カードの参照が一致する保留中の記録が 1 件なら、
+画面の `choice_source` と `decision_context` が同じ記録を読む。カード行の `index` は画面上の holder の位置。
+対応する記録が無い・複数ある・holder を読めない・読取中に記録や試行が閉じた場合、`known: false` と欠けた ID の
+`null`、非空の `unavailable_reasons` を出す。`attempt_id` が分かる場合は出す。opener や await の既知性はそれぞれの欄に従う。
+
+確定行の `chooser_player_id` と `opened_at_seq` は呼出し時に記録する。`screen_observed: true` は MOD が画面を
+照合したことを示す。その記録で観測した候補と返った実個体を参照で照合し、`offered` と `chosen` に同じ UID を載せる。
+対応が不明なカードは `uid: null` と行の `unavailable_reasons` を出す。空の成功は `chosen: []` と `skipped: true`。
+0 候補の早期 return・取消・失敗は確定行を作らない。実呼出しの結果を受け取った時点で、元の試行が生きていてログがまだ
+その試行を保持していれば追記する。終了後の `ended_combat.combat_log` は保存済みの値を使う。行の順と保持範囲は
+`seq`・`first_seq`・`next_seq`・`since_truncated` で確認する。
+
+出典（v0.113.1、`sts2-a671e9ef`）は `CombatManager.SetUpCombat` / `CurrentCombatId` / `DebugOnlyGetState` /
+`IsCurrentLiveCombat` / `EndCombatInternal` / `CancelCombat`、`CombatTurnState..ctor`、`CardSelectCmd.FromChooseACardScreen`、
+`NChooseACardSelectionScreen.ShowScreen` / `CardsSelected`。契約試験は [CombatLogContract](../tests/CombatLogContract/README.md)。
 
 #### 選択の文脈（`decision_context`、schema 1.10.0）
 
@@ -3668,6 +3716,7 @@ Harmony の prefix で記録する（列を作るのはその呼出し）。契�
   `FromDeckGeneric` / `FromChooseABundleScreen` / `RelicSelectCmd.FromChooseARelicScreen`）は別の読むだけの prefix・postfix
   （Harmony ID `com.sts2mcp.decisioncontext`。player を context の代わりにする）。state を作るときは、ローカル player・
   同じ戦闘（戦闘外なら戦闘の無い記録）・その画面を出す入口のうち、開いている最も新しい記録を使う。
+  戦闘中 choose は `choice_source` と同じ一意に照合した記録を使う。
 - `opener`: 入口が呼ばれたときの呼出し履歴（`System.Diagnostics.StackTrace`）でいちばん近いゲームのフレーム。async メソッドの
   同期の部分は呼んだ側のスタックで走るので、レリックの `AfterObtained`・イベントの選択肢・休憩所の `OnSelect`・札の `OnPlay`・
   パワーの通知がそこにある。コンパイラが作る状態機械・ラムダのフレームは元のメソッドの名前にする。MOD・Harmony・ランタイム・

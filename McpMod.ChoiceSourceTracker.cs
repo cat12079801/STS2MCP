@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace STS2_MCP;
 
@@ -68,16 +69,21 @@ public static partial class McpMod
 /// </summary>
 internal sealed class OpenCardSelection
 {
+    internal const string ChooseSelector = "FromChooseACardScreen";
     public required string Selector { get; init; }
     public required object Context { get; init; }
     public required object Player { get; init; }
+    public string? ChooserPlayerId { get; init; }
     public object? CombatState { get; init; }
+    public CombatAttempt? Attempt { get; init; }
     public object? HandSource { get; init; }
     public IReadOnlyList<object?>? Candidates { get; init; }
     public object? Pile { get; init; }
     public long Sequence { get; init; }
     /// <summary>The Task the CardSelectCmd method returned (set by its postfix): the start of choice_source.await_chain.</summary>
-    public object? SelectionTask { get; set; }
+    public Task? SelectionTask { get; set; }
+    public bool ScreenObserved { get; set; }
+    public bool Evicted { get; set; }
     /// <summary>decision_context.opener: the nearest game frame that called the entry point (McpMod.DecisionContext.cs).</summary>
     public object? Opener { get; set; }
     /// <summary>combat_log.next_seq when the selection opened: the selection row says where in the fight it began.</summary>
@@ -85,11 +91,44 @@ internal sealed class OpenCardSelection
     /// <summary>Another entry point opened the same selection inside this one (FromHandForDiscard → FromHand): only the
     /// innermost record writes the combat_log selection row.</summary>
     public bool HasInner { get; set; }
+    public IReadOnlyList<string> OpenedOuterSelectors { get; init; } = Array.Empty<string>();
     /// <summary>The combat_log selection row's offered cards when the entry point takes no card list: the hand
     /// (FromHand / FromHandForDiscard / FromHandForUpgrade) or the combat pile (FromCombatPile) as it was when the
     /// selection opened, with the pile's name. Null for a draw pile (its order is hidden).</summary>
     public IReadOnlyList<object?>? Offered { get; set; }
     public string? OfferedPile { get; set; }
+
+    internal void WriteChooseResult(Dictionary<string, object?> row, CombatAttempt attempt, object? chosen,
+        Func<object, Dictionary<string, object?>> cardRef, Func<object, string?> registeredUid)
+    {
+        row["choice_identity"] = CombatAttempt.ChoiceIdentity(attempt, this, "no captured choose call");
+        row["chooser_player_id"] = ChooserPlayerId;
+        row["screen_observed"] = ScreenObserved;
+        var reasons = new List<string>();
+        row["offered"] = Candidates?.Select(card => card == null ? null : WithUid(card)).ToList();
+        row["offered_from"] = "arguments";
+        row["chosen"] = chosen == null ? new List<object?>() : new List<object?> { WithUid(chosen) };
+        row["skipped"] = chosen == null;
+        if (reasons.Count > 0) row["unavailable_reasons"] = reasons.Distinct().ToList();
+
+        Dictionary<string, object?> WithUid(object card)
+        {
+            var result = cardRef(card);
+            result["uid"] = ObservedChooseUid(card, registeredUid, reasons);
+            return result;
+        }
+    }
+
+    private string? ObservedChooseUid(object card, Func<object, string?> registeredUid, List<string> reasons)
+    {
+        if (Candidates?.Any(candidate => ReferenceEquals(candidate, card)) != true)
+            reasons.Add("returned card was not among the offered instances");
+        else if (ScreenObserved && registeredUid(card) is { } uid)
+            return uid;
+        else
+            reasons.Add("no observed UID for the offered card instance");
+        return null;
+    }
 }
 
 internal static class OpenCardSelections
@@ -103,34 +142,61 @@ internal static class OpenCardSelections
     private static long _next;
 
     internal static OpenCardSelection Add(string selector, object context, object player, object? combatState,
-        object? handSource = null, IReadOnlyList<object?>? candidates = null, object? pile = null)
+        object? handSource = null, IReadOnlyList<object?>? candidates = null, object? pile = null, CombatAttempt? attempt = null,
+        string? chooserPlayerId = null)
     {
         lock (Gate)
         {
+            // A selection opened in another fight means the old fight's selections can no longer complete.
+            if (combatState != null) DropOtherCombatsLocked(combatState, attempt);
+            var outerSelectors = new List<string>();
+            foreach (var outer in Open)
+            {
+                // Forwarding happens before the outer method returns its Task. An already suspended
+                // call sharing the same context is a separate choice.
+                if (outer.SelectionTask != null || !ReferenceEquals(outer.Context, context) || !ReferenceEquals(outer.Player, player)) continue;
+                outer.HasInner = true;
+                outerSelectors.Add(outer.Selector);
+            }
             var record = new OpenCardSelection
             {
                 Selector = selector,
                 Context = context,
                 Player = player,
+                ChooserPlayerId = chooserPlayerId,
                 CombatState = combatState,
+                Attempt = attempt,
                 HandSource = handSource,
-                Candidates = candidates,
+                Candidates = candidates?.ToArray(),
                 Pile = pile,
+                OpenedOuterSelectors = outerSelectors,
                 Sequence = ++_next
             };
-            // A selection opened in another fight means the old fight's selections can no longer complete.
-            if (combatState != null) Open.RemoveAll(r => r.CombatState != null && !ReferenceEquals(r.CombatState, combatState));
-            foreach (var outer in Open)
-                if (ReferenceEquals(outer.Context, context) && ReferenceEquals(outer.Player, player)) outer.HasInner = true;
             Open.Add(record);
-            while (Open.Count > Capacity) Open.RemoveAt(0);
+            if (Open.Count > Capacity)
+            {
+                Open[0].Evicted = true;
+                Open.RemoveAt(0);
+            }
             return record;
         }
     }
 
-    internal static void Remove(OpenCardSelection record)
+    internal enum Completion { Ignored, Ready, Evicted }
+
+    internal static Completion Complete(OpenCardSelection record, Task? task)
     {
-        lock (Gate) Open.Remove(record);
+        lock (Gate)
+        {
+            if (!ReferenceEquals(record.SelectionTask, task)) return Completion.Ignored;
+            bool wasOpen = Open.Remove(record);
+            bool wasEvicted = record.Evicted;
+            record.Evicted = false;
+            if ((!wasOpen && !wasEvicted) || record.HasInner || task?.IsCompletedSuccessfully != true
+                || (record.Selector == OpenCardSelection.ChooseSelector && record.Candidates?.Count is not > 0))
+                return Completion.Ignored;
+            return wasOpen ? Completion.Ready : Completion.Evicted;
+        }
     }
 
     /// <summary>
@@ -138,10 +204,44 @@ internal static class OpenCardSelections
     /// in progress): their tasks never complete once the fight or the run is gone (save and quit mid-selection).
     /// Records opened outside a fight (no combat state) are kept.
     /// </summary>
-    internal static void DropOtherCombats(object? liveCombat)
+    internal static void DropOtherCombats(object? liveCombat, CombatAttempt? attempt = null)
     {
-        lock (Gate) Open.RemoveAll(r => r.CombatState != null && !ReferenceEquals(r.CombatState, liveCombat));
+        lock (Gate) DropOtherCombatsLocked(liveCombat, attempt);
     }
+
+    private static void DropOtherCombatsLocked(object? liveCombat, CombatAttempt? attempt) =>
+        Open.RemoveAll(r => r.CombatState != null && (!ReferenceEquals(r.CombatState, liveCombat)
+            || (r.Attempt != null && !r.Attempt.Matches(attempt))));
+
+    internal static (OpenCardSelection? Record, string Reason) MatchChoose(CombatAttempt attempt, object player, IReadOnlyList<object?> shown)
+    {
+        if (shown.Count == 0 || shown.Any(card => card == null)) return (null, "choose holders are empty or missing a card");
+        lock (Gate)
+        {
+            var matches = Open.Where(record => record.Selector == OpenCardSelection.ChooseSelector
+                && ReferenceEquals(record.Player, player) && attempt.Matches(record.Attempt)
+                && Pending(record) && record.Candidates is { } candidates && shown.Count == candidates.Count
+                && shown.Zip(candidates).All(pair => ReferenceEquals(pair.First, pair.Second))).Take(2).ToList();
+            return matches.Count switch
+            {
+                1 => (matches[0], ""),
+                0 => (null, "no pending choose call matches this chooser, combat and ordered holders"),
+                _ => (null, "multiple pending choose calls match this chooser, combat and ordered holders")
+            };
+        }
+    }
+
+    internal static bool ObserveChoose(OpenCardSelection record)
+    {
+        lock (Gate)
+        {
+            if (!Open.Contains(record) || !Pending(record)) return false;
+            record.ScreenObserved = true;
+            return true;
+        }
+    }
+
+    private static bool Pending(OpenCardSelection record) => record.SelectionTask is { IsCompleted: false };
 
     /// <summary>
     /// The entry points that opened the same selection further out: an outer CardSelectCmd method that forwards
@@ -150,6 +250,7 @@ internal static class OpenCardSelections
     /// </summary>
     internal static List<string> OuterSelectors(OpenCardSelection record)
     {
+        if (record.Selector == OpenCardSelection.ChooseSelector) return record.OpenedOuterSelectors.ToList();
         lock (Gate)
             return Open.Where(r => r.Sequence < record.Sequence && ReferenceEquals(r.Context, record.Context)
                     && ReferenceEquals(r.Player, record.Player))
@@ -186,7 +287,7 @@ internal static class OpenCardSelections
     internal static bool SelectorShowsScreen(string screenKind, string selector) => screenKind switch
     {
         "hand" => selector is "FromHand" or "FromHandForDiscard" or "FromHandForUpgrade",
-        "choose" => selector == "FromChooseACardScreen",
+        "choose" => selector == OpenCardSelection.ChooseSelector,
         "combat_pile" => selector == "FromCombatPile",
         "simple_grid" => selector is "FromSimpleGrid" or "FromSimpleGridForRewards",
         // The deck screens (NDeckCardSelectScreen / NDeckUpgradeSelectScreen / NDeckTransformSelectScreen /

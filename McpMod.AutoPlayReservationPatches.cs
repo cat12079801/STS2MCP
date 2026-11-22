@@ -200,7 +200,8 @@ public static partial class McpMod
     {
         try
         {
-            if (CombatManager.Instance.DebugOnlyGetState() is { } combat) CaptureEndedCombat(combat, "victory");
+            if (CombatManager.Instance.DebugOnlyGetState() is { } combat)
+                CaptureEndedCombat(combat, CaptureCombatAttempt(combat), "victory");
         }
         catch (Exception ex) { GD.PrintErr($"[STS2 MCP] Ended combat capture failed: {ex.GetType().Name}: {ex.Message}"); }
     }
@@ -221,12 +222,18 @@ public static partial class McpMod
                 ?? throw new MissingMemberException(type.Name, "PendingLoss")).GetValue(turnState);
             var combat = (AccessTools.Property(type, "State")
                 ?? throw new MissingMemberException(type.Name, "State")).GetValue(turnState) as CombatState;
-            if (pendingLoss != null && combat != null) CaptureEndedCombat(combat, "loss");
+            if (pendingLoss != null && combat != null)
+            {
+                var id = (AccessTools.Property(type, "Id")
+                    ?? throw new MissingMemberException(type.Name, "Id")).GetValue(turnState);
+                var attempt = id is CombatId combatId ? new CombatAttempt(combat, combatId.Value, Recorder.CombatRecorder.SessionId) : null;
+                CaptureEndedCombat(combat, attempt, "loss");
+            }
         }
         catch (Exception ex) { GD.PrintErr($"[STS2 MCP] Ended combat capture failed: {ex.GetType().Name}: {ex.Message}"); }
     }
 
-    private static void CaptureEndedCombat(CombatState combat, string outcome)
+    private static void CaptureEndedCombat(CombatState combat, CombatAttempt? attempt, string outcome)
     {
         var capture = new Dictionary<string, object?> { ["outcome"] = outcome };
         var reasons = new Dictionary<string, string>();
@@ -242,7 +249,7 @@ public static partial class McpMod
             reasons["card_resolution_events"] = $"{ex.GetType().Name}: {ex.Message}";
         }
         // Every row the fight's combat_log still holds (from seq 0; since_truncated when the oldest were dropped).
-        try { capture["combat_log"] = BuildCombatLogState(combat, 0); }
+        try { capture["combat_log"] = BuildCombatLogState(attempt, 0); }
         catch (Exception ex)
         {
             capture["combat_log"] = null;

@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.ChoiceSourceTracker.cs" Link="ChoiceSourceTracker.cs" />
+    <Compile Include="../../McpMod.CombatAttempt.cs" Link="CombatAttempt.cs" />
     <Compile Include="../../McpMod.AsyncChain.cs" Link="AsyncChain.cs" />
     <Compile Include="../../McpMod.TransformationOptionsTable.cs" Link="TransformationOptionsTable.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />

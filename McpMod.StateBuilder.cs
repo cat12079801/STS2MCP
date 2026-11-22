@@ -642,9 +642,10 @@ public static partial class McpMod
         // outside a live fight (see ShouldAttachSelectionBattle). A failure to build it is a warning
         // and leaves battle out; the selection screen itself is still reported.
         // Selections recorded in a fight that is no longer live can never complete (choice_source).
-        OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());
+        var liveSelectionCombat = GetLiveCombatStateForSelection();
+        OpenCardSelections.DropOtherCombats(liveSelectionCombat, CaptureCombatAttempt(liveSelectionCombat, liveOnly: true));
         // Hook calls (await_chain listener lists) of a fight that is gone never complete either.
-        HookListSnapshots.DropOtherCombats(GetLiveCombatStateForSelection());
+        HookListSnapshots.DropOtherCombats(liveSelectionCombat);
         bool inCombatRoom = currentRoom is CombatRoom;
         if (ShouldAttachSelectionBattle(
                 result.GetValueOrDefault("state_type") as string, result.ContainsKey("battle"),
@@ -1595,6 +1596,8 @@ public static partial class McpMod
     {
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var battle = new Dictionary<string, object?>();
+        var attempt = CaptureCombatAttempt(combatState, liveOnly: true);
+        battle["attempt_identity"] = BuildBattleAttemptIdentity(attempt);
 
         if (combatState == null)
         {
@@ -1613,7 +1616,7 @@ public static partial class McpMod
         // 生成した許可リストの CombatState の項目（味方・逃げた敵の combat_id。McpMod.StateAllowlist.cs）。
         AttachAllowlistedState(battle, "battle", combatState, "battle");
         // What happened in this fight, in order (McpMod.CombatLog.cs).
-        try { battle["combat_log"] = BuildCombatLogState(combatState); }
+        try { battle["combat_log"] = BuildCombatLogState(attempt); }
         catch (Exception ex) { battle["combat_log"] = null; Warn("battle.combat_log", ex); }
 
         return battle;
@@ -3351,6 +3354,7 @@ public static partial class McpMod
         var holderCards = FindAllSortedByPosition<NGridCardHolder>(screen).Select(holder => holder.CardModel).ToList();
         var combatState = GetLiveCombatStateForSelection();
         var cards = BuildChooseCardRows(holderCards, combatState);
+        Dictionary<string, object?> decision;
         if (combatState != null)
         {
             // Read-only: hook overrides are found by reflection, no hook is invoked.
@@ -3358,11 +3362,23 @@ public static partial class McpMod
             for (int i = 0; i < cards.Count; i++)
                 cards[i]["continuation_listeners"] = BuildCandidateContinuationListenersSafe(candidates[i]);
             state["continuation_context"] = BuildChoiceContinuationContext(runState, combatState);
-            // Who opened this screen (Splash.OnPlay, a potion, ...) and the card play it belongs to.
-            state["choice_source"] = BuildChoiceSource("choose", holderCards, runState);
+            var attempt = CaptureCombatAttempt(combatState, liveOnly: true);
+            var (record, reason) = MatchChooseScreen(attempt, runState, holderCards);
+            var source = BuildChoiceSource("choose", holderCards, runState, record, reason);
+            decision = BuildDecisionContext("choose", holderCards, runState, source, record, reason);
+            bool stillLive = attempt != null && IsLiveCombatAttempt(attempt);
+            if (record != null && (!stillLive || !OpenCardSelections.ObserveChoose(record)))
+            {
+                reason = "the choose call or combat closed during the read";
+                record = null;
+                source = BuildChoiceSource("choose", holderCards, runState, chooseReason: reason);
+                decision = BuildDecisionContext("choose", holderCards, runState, source, chooseReason: reason);
+            }
+            state["choice_source"] = source;
+            decision["choice_identity"] = CombatAttempt.ChoiceIdentity(stillLive ? attempt : null, record, reason);
         }
-        state["decision_context"] = BuildDecisionContext("choose", holderCards.Cast<object?>().ToList(), runState,
-            state.GetValueOrDefault("choice_source") as Dictionary<string, object?>);
+        else decision = BuildDecisionContext("choose", holderCards, runState, null);
+        state["decision_context"] = decision;
         state["cards"] = cards;
 
         var skipButton = screen.GetNodeOrNull<NClickableControl>("SkipButton");
@@ -3372,6 +3388,17 @@ public static partial class McpMod
         state["can_cancel"] = state["can_skip"];
 
         return state;
+    }
+
+    private static (OpenCardSelection? Record, string Reason) MatchChooseScreen(CombatAttempt? attempt, RunState runState,
+        IReadOnlyList<CardModel?> holderCards)
+    {
+        if (attempt == null) return (null, "no current live combat ID for the choose screen");
+        if (_choiceSourceTrackingError != null) return (null, $"choice source tracking unavailable: {_choiceSourceTrackingError}");
+        var local = LocalContext.GetMe(runState);
+        if (local == null || !ReferenceEquals(local.Creature.CombatState, attempt.Combat))
+            return (null, "local chooser is not in this combat");
+        return OpenCardSelections.MatchChoose(attempt, local, holderCards);
     }
 
     private static Dictionary<string, object?> BuildBundleSelectState(NChooseABundleSelectionScreen screen, RunState runState)

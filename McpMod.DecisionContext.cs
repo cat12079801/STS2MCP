@@ -83,7 +83,9 @@ public static partial class McpMod
                 : cards?.Cast<object?>().ToList();
             // The fight in progress, not player.Creature.CombatState: on the reward screen after a fight the creature still
             // points at the finished fight (CombatManager.DetachCreatures runs at CombatRoom.Exit) while no fight is live.
-            var record = OpenCardSelections.Add(__originalMethod.Name, player, player, GetLiveCombatStateForSelection(), candidates: candidates);
+            var combat = GetLiveCombatStateForSelection();
+            var record = OpenCardSelections.Add(__originalMethod.Name, player, player, combat,
+                candidates: candidates, attempt: CaptureCombatAttempt(combat, liveOnly: true));
             AttachSelectionOpener(record);
             __state = record;
         }
@@ -101,7 +103,7 @@ public static partial class McpMod
     {
         try { record.Opener = FindSelectionOpener(); }
         catch (Exception ex) { record.Opener = new Dictionary<string, object?> { ["kind"] = null, ["unavailable_reason"] = $"{ex.GetType().Name}: {ex.Message}" }; }
-        if (record.CombatState != null) record.OpenedAtLogSeq = CombatLogStore.NextSeqOf(record.CombatState);
+        if (record.Attempt is { } attempt) record.OpenedAtLogSeq = CombatLogStore.Bind(attempt);
     }
 
     /// <summary>
@@ -170,7 +172,8 @@ public static partial class McpMod
     /// <c>await_chain</c> says which stage of Entropy / Stratagem and which draw it belongs to).
     /// </summary>
     private static Dictionary<string, object?> BuildDecisionContext(string screenKind, IReadOnlyList<object?>? shown,
-        IRunState runState, Dictionary<string, object?>? choiceSource)
+        IRunState runState, Dictionary<string, object?>? choiceSource, OpenCardSelection? matchedChoose = null,
+        string? chooseReason = null)
     {
         var result = new Dictionary<string, object?> { ["version"] = DecisionContextVersion, ["known"] = false, ["screen"] = screenKind };
         try
@@ -182,15 +185,15 @@ public static partial class McpMod
                 throw new InvalidOperationException($"choice source tracking unavailable: {_choiceSourceTrackingError}");
             var local = LocalContext.GetMe(runState) ?? throw new InvalidOperationException("local player not found");
             object? live = GetLiveCombatStateForSelection();
-            var record = OpenCardSelections.Latest(s => ReferenceEquals(s.Player, local)
+            var record = (screenKind == "choose" && choiceSource != null ? matchedChoose : OpenCardSelections.Latest(s => ReferenceEquals(s.Player, local)
                     && ReferenceEquals(s.CombatState, live)
                     && OpenCardSelections.SelectorShowsScreen(screenKind, s.Selector)
-                    && (shown == null || OpenCardSelections.ShowsCandidates(s, shown)))
-                ?? throw new InvalidOperationException($"no open selection entry matches this {screenKind} screen");
+                    && (shown == null || OpenCardSelections.ShowsCandidates(s, shown))))
+                ?? throw new InvalidOperationException(chooseReason ?? $"no open selection entry matches this {screenKind} screen");
             result["in_combat"] = live != null;
             result["selector"] = record.Selector;
             result["outer_selectors"] = OpenCardSelections.OuterSelectors(record);
-            result["chooser_player_id"] = local.NetId.ToString();
+            result["chooser_player_id"] = record.ChooserPlayerId ?? local.NetId.ToString();
             result["opener"] = record.Opener;
             result["opened_at_combat_log_seq"] = record.OpenedAtLogSeq;
             result["choice_source"] = choiceSource;
@@ -206,9 +209,8 @@ public static partial class McpMod
     }
 
     // combat_log "selection" row when a selection the fight opened completes (the innermost entry point only).
-    private static void LogSelectionResult(OpenCardSelection record, Task task)
+    private static void LogSelectionResult(OpenCardSelection record, CombatAttempt attempt, Task task)
     {
-        if (record.HasInner || record.CombatState == null || !task.IsCompletedSuccessfully) return;
         object? chosen = task switch
         {
             Task<CardModel?> single => single.Result,
@@ -216,14 +218,23 @@ public static partial class McpMod
             Task<RelicModel?> relic => relic.Result,
             _ => null
         };
-        LogCombatRowIf("selection", (row, combat) =>
+        AppendCombatRow("selection", attempt, (row, _) =>
         {
-            if (!ReferenceEquals(combat, record.CombatState)) return false;
-            var reasons = new List<string>();
             row["selector"] = record.Selector;
-            row["outer_selectors"] = OpenCardSelections.OuterSelectors(record);
+            row["outer_selectors"] = record.OpenedOuterSelectors;
             row["opener"] = record.Opener;
             row["opened_at_seq"] = record.OpenedAtLogSeq;
+            if (record.Selector == OpenCardSelection.ChooseSelector)
+            {
+                record.WriteChooseResult(row, attempt, chosen,
+                    card => new Dictionary<string, object?>
+                    {
+                        ["card_id"] = ((CardModel)card).Id.Entry,
+                        ["pile"] = ((CardModel)card).Pile?.Type.ToString()
+                    },
+                    card => TryGetRegisteredCardUid((CardModel)card, out var uid) ? uid : null);
+                return true;
+            }
             if (record.Pile is CardPile { Type: PileType.Draw })
             {
                 // The candidates of a draw-pile selection, in the order given, would be the draw order.
@@ -257,7 +268,6 @@ public static partial class McpMod
             };
             row["chosen"] = picked;
             row["skipped"] = picked.Count == 0;
-            if (reasons.Count > 0) row["unavailable_reasons"] = reasons;
             return true;
         });
     }

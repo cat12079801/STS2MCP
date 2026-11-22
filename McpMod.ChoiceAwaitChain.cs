@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Relics;
 
 namespace STS2_MCP;
 
@@ -31,6 +32,7 @@ public static partial class McpMod
     {
         [(typeof(Hook), "AfterPlayerTurnStart")] = new[] { "AfterPlayerTurnStartEarly", "AfterPlayerTurnStart", "AfterPlayerTurnStartLate" },
         [(typeof(Hook), "AfterShuffle")] = new[] { "AfterShuffle" },
+        [(typeof(Hook), nameof(Hook.BeforeHandDraw))] = AsyncChain.BeforeHandDrawStages,
         [(typeof(CardPileCmd), "DrawInternal")] = new[] { "AfterPreventingDraw", "ShuffleIfNecessary", "AddToHand", "AfterCardDrawn" },
         [(typeof(CardPileCmd), "AutoPlayFromDrawPile")] = new[] { "ShuffleIfNecessary", "AddToPlay", "AutoPlay" },
         [(typeof(CardPileCmd), "Shuffle")] = new[] { "AddToDrawPile", "Wait", "Tween", "CustomScaledWait", "AfterShuffle" },
@@ -47,6 +49,7 @@ public static partial class McpMod
         [(typeof(CardPileCmd), "AutoPlayFromDrawPile", "ShuffleIfNecessary")] = (typeof(CardPileCmd), "ShuffleIfNecessary"),
         [(typeof(CardPileCmd), "ShuffleIfNecessary", "Shuffle")] = (typeof(CardPileCmd), "Shuffle"),
         [(typeof(CardPileCmd), "Shuffle", "AfterShuffle")] = (typeof(Hook), "AfterShuffle"),
+        [(typeof(CombatManager), "SetupPlayerTurn", "BeforeHandDraw")] = (typeof(Hook), nameof(Hook.BeforeHandDraw)),
         [(typeof(CombatManager), "SetupPlayerTurn", "HandDraw")] = (typeof(CardPileCmd), "DrawInternal"),
         [(typeof(CombatManager), "SetupPlayerTurn", "AfterPlayerTurnStart")] = (typeof(Hook), "AfterPlayerTurnStart"),
         [(typeof(CombatManager), "RunAutoPrePlayPhase", "SetupPlayerTurn")] = (typeof(CombatManager), "SetupPlayerTurn"),
@@ -56,6 +59,7 @@ public static partial class McpMod
     {
         [(typeof(Hook), "AfterPlayerTurnStart")] = "hook",
         [(typeof(Hook), "AfterShuffle")] = "hook",
+        [(typeof(Hook), nameof(Hook.BeforeHandDraw))] = "hook",
         [(typeof(CardPileCmd), "DrawInternal")] = "draw",
         [(typeof(CardPileCmd), "AutoPlayFromDrawPile")] = "auto_play_from_draw_pile",
         [(typeof(CardPileCmd), "Shuffle")] = "shuffle",
@@ -65,16 +69,19 @@ public static partial class McpMod
     };
 
     // Read-only patches for the listener list a Hook stage took (HookListSnapshots): Hook.AfterPlayerTurnStart /
-    // AfterShuffle mark the fight while they run, and the first MoveNext of CombatState.IterateHookListeners (it
+    // AfterShuffle / BeforeHandDraw mark the fight while they run, and the first MoveNext of CombatState.IterateHookListeners (it
     // builds the list there) notes which cards are in a draw pile at that moment. Nothing is skipped or changed.
     private static void InstallHookListSnapshotTracking()
     {
         var harmony = new Harmony(HookListSnapshotHarmonyId);
         try
         {
-            foreach (var method in new[] { nameof(Hook.AfterPlayerTurnStart), nameof(Hook.AfterShuffle) })
+            foreach (var method in new[] { nameof(Hook.AfterPlayerTurnStart), nameof(Hook.AfterShuffle), nameof(Hook.BeforeHandDraw) })
             {
-                var original = AccessTools.DeclaredMethod(typeof(Hook), method, new[] { typeof(ICombatState), typeof(PlayerChoiceContext), typeof(Player) })
+                var parameters = method == nameof(Hook.BeforeHandDraw)
+                    ? new[] { typeof(ICombatState), typeof(Player), typeof(PlayerChoiceContext) }
+                    : new[] { typeof(ICombatState), typeof(PlayerChoiceContext), typeof(Player) };
+                var original = AccessTools.DeclaredMethod(typeof(Hook), method, parameters)
                     ?? throw new MissingMethodException(nameof(Hook), method);
                 harmony.Patch(original,
                     prefix: new HarmonyMethod(typeof(McpMod), nameof(SnapshotHookRunStarting)),
@@ -153,7 +160,15 @@ public static partial class McpMod
             if (inconsistent) reasons.Add($"await chain inconsistent: {end}");
             var rows = new List<Dictionary<string, object?>>();
             for (int i = 0; i < frames.Count; i++)
-                rows.Add(BuildAwaitChainFrame(i, frames, contexts, models, reasons));
+                rows.Add(BuildAwaitChainFrame(i, frames, contexts, models, record, reasons));
+            bool openedByToolbox = record.Opener is Dictionary<string, object?> opener
+                && Equals(opener.GetValueOrDefault("model_type"), nameof(Toolbox))
+                && Equals(opener.GetValueOrDefault("method"), nameof(Toolbox.BeforeHandDraw));
+            bool hasBeforeDrawListener = frames.Any(f => typeof(AbstractModel).IsAssignableFrom(f.DeclaringType)
+                && AsyncChain.BeforeHandDrawStages.Contains(f.Method));
+            if ((openedByToolbox || hasBeforeDrawListener)
+                && !frames.Any(f => f.DeclaringType == typeof(Hook) && f.Method == nameof(Hook.BeforeHandDraw)))
+                reasons.Add("the BeforeHandDraw listener has no Hook.BeforeHandDraw frame in the selection's await chain");
             result["frames"] = rows;
             result["shuffle_origin"] = AwaitChainShuffleOrigin(rows);
             result["known"] = reasons.Count == 0;
@@ -169,7 +184,7 @@ public static partial class McpMod
     }
 
     private static Dictionary<string, object?> BuildAwaitChainFrame(int index, List<AsyncFrame> frames,
-        List<PlayerChoiceContext> contexts, List<AbstractModel> models, List<string> reasons)
+        List<PlayerChoiceContext> contexts, List<AbstractModel> models, OpenCardSelection record, List<string> reasons)
     {
         var frame = frames[index];
         var row = new Dictionary<string, object?>
@@ -186,6 +201,7 @@ public static partial class McpMod
         if (!AwaitChainSteps.TryGetValue(key, out var steps) || (key.Item2 == "AutoPlayFromDrawPile" && !sixArgAutoPlay)) return row;
 
         row["kind"] = AwaitChainKinds[key];
+        if (row["kind"] is "hook") row["listener"] = UnobservedHookListener();
         string label = $"{key.Item1.Name}.{key.Item2}";
         if (frame.State < 0 || frame.State >= steps.Length)
         {
@@ -199,36 +215,38 @@ public static partial class McpMod
             && (frames[index - 1].DeclaringType != callee.Type || frames[index - 1].Method != callee.Method))
             reasons.Add($"{label} waits on {step} but the frame inside it is {frames[index - 1].DeclaringType?.Name}.{frames[index - 1].Method}");
 
-        try { AddAwaitChainFrameDetails(row, index, frames, steps, step, label, contexts, models, reasons); }
+        try { AddAwaitChainFrameDetails(row, index, frames, steps, step, label, contexts, models, record, reasons); }
         catch (Exception ex) { reasons.Add($"frame {index} ({label}): {ex.GetType().Name}: {ex.Message}"); }
         return row;
     }
 
     // The public values of a described frame: who it runs for, and its loop's place.
     private static void AddAwaitChainFrameDetails(Dictionary<string, object?> row, int index, List<AsyncFrame> frames,
-        string[] steps, string step, string label, List<PlayerChoiceContext> contexts, List<AbstractModel> models, List<string> reasons)
+        string[] steps, string step, string label, List<PlayerChoiceContext> contexts, List<AbstractModel> models,
+        OpenCardSelection record, List<string> reasons)
     {
         var frame = frames[index];
         var sm = frame.StateMachine;
         switch (row["kind"])
         {
             case "hook":
-                row["player_id"] = (AsyncChain.Field(sm, frame.Method == "AfterShuffle" ? "shuffler" : "player") as Player)?.NetId.ToString();
-                var context = AsyncChain.Field(sm, "choiceContext");
+                bool beforeHandDraw = frame.Method == nameof(Hook.BeforeHandDraw);
+                var player = AsyncChain.Field(sm, frame.Method == "AfterShuffle" ? "shuffler" : "player") as Player;
+                row["player_id"] = player?.NetId.ToString();
+                var context = AsyncChain.Field(sm, beforeHandDraw ? "playerChoiceContext" : "choiceContext");
                 int contextIndex = contexts.FindIndex(c => ReferenceEquals(c, context));
                 row["context_index"] = contextIndex >= 0 ? contextIndex : null;
                 var model = AsyncChain.Hoisted(sm, "model") as AbstractModel
                     ?? throw new InvalidOperationException($"{label} runs no listener");
                 int modelIndex = models.FindIndex(m => ReferenceEquals(m, model));
                 row["model_index"] = modelIndex >= 0 ? modelIndex : null;
+                if (beforeHandDraw)
+                {
+                    ValidateBeforeHandDrawFrame(index, frames, step, record, player, contexts, contextIndex, model, modelIndex);
+                }
                 if (index > 0 && steps.Contains(frames[index - 1].Method) && frames[index - 1].Method != step)
                     reasons.Add($"{label} is at {step} but its listener runs {frames[index - 1].Method}");
-                try { row["listener"] = BuildAwaitChainListener(frame, step, model, reasons); }
-                catch (Exception ex)
-                {
-                    row["listener"] = new Dictionary<string, object?> { ["position"] = null, ["count"] = null, ["remaining_listeners"] = null };
-                    reasons.Add($"{label} listener list: {ex.GetType().Name}: {ex.Message}");
-                }
+                row["listener"] = BuildAwaitChainListener(frame, step, model, record.CombatState, reasons);
                 break;
             case "draw":
                 row["player_id"] = (AsyncChain.Field(sm, "player") as Player)?.NetId.ToString();
@@ -278,6 +296,23 @@ public static partial class McpMod
         }
     }
 
+    private static void ValidateBeforeHandDrawFrame(int index, List<AsyncFrame> frames, string step, OpenCardSelection record,
+        Player? player, List<PlayerChoiceContext> contexts, int contextIndex, AbstractModel model, int modelIndex)
+    {
+        if (record.Attempt == null || !IsLiveCombatAttempt(record.Attempt))
+            throw new InvalidOperationException("the selection has no matching live combat attempt");
+        var combat = record.Attempt.Combat;
+        if (player == null || contextIndex < 0 || modelIndex < 0 || !ReferenceEquals(contexts[contextIndex].ModelStack?.FirstOrDefault(), model)
+            || !ReferenceEquals(AsyncChain.Field(frames[index].StateMachine, "combatState"), combat))
+            throw new InvalidOperationException("Hook.BeforeHandDraw does not match the selection's combat, player or model stack");
+        if (model is Toolbox toolbox && (!ReferenceEquals(toolbox.Owner, player) || !ReferenceEquals(record.Player, player)))
+            throw new InvalidOperationException("Toolbox owner, hand draw player and chooser differ");
+        var declarer = HookOverrideDeclarer(model.GetType(), step,
+            new[] { typeof(Player), typeof(PlayerChoiceContext), typeof(ICombatState) })
+            ?? throw new InvalidOperationException($"the running model does not override {step}");
+        AsyncChain.ValidateBeforeHandDraw(frames, index, typeof(CombatManager), step, declarer, model, player, contexts[contextIndex], combat);
+    }
+
     private static int? AwaitChainReservationCallId(object? context, Player owner, int count, string position, bool forceExhaust, List<string> reasons)
     {
         try
@@ -313,25 +348,19 @@ public static partial class McpMod
     /// <c>CombatState.IterateHookListeners</c>, a List&lt;AbstractModel&gt; walked by its Enumerator), the place of the
     /// running listener in it and the listeners after it, read from the running enumerators without moving them.
     /// </summary>
-    private static Dictionary<string, object?> BuildAwaitChainListener(AsyncFrame hook, string stage, AbstractModel model, List<string> reasons)
+    private static Dictionary<string, object?> BuildAwaitChainListener(AsyncFrame hook, string stage, AbstractModel model, object? expectedCombat,
+        List<string> reasons)
     {
-        var row = new Dictionary<string, object?> { ["position"] = null, ["count"] = null, ["remaining_listeners"] = null };
+        var row = UnobservedHookListener();
         if (_hookListSnapshotError != null)
         {
             reasons.Add($"hook list snapshot unavailable: {_hookListSnapshotError}");
             return row;
         }
-        var outer = AsyncChain.Field(hook.StateMachine, "<>7__wrap1") ?? throw new InvalidOperationException($"{stage} has no listener enumerator");
-        ExpectIterator(outer, typeof(Hook), "<IterateCombatHookListeners>d__");
-        var inner = AsyncChain.Field(outer, "<>7__wrap1") ?? throw new InvalidOperationException("IterateCombatHookListeners has no inner enumerator");
-        ExpectIterator(inner, typeof(CombatState), "<IterateHookListeners>d__");
-        if (AsyncChain.Field(inner, "<>7__wrap2") != null)
-            throw new InvalidOperationException("IterateHookListeners is past its list (ModHelper subscribers)");
-        var (list, next) = AsyncChain.ListEnumerator(AsyncChain.Field(inner, "<>7__wrap1")!);
-        if (next < 1 || next > list.Count || !ReferenceEquals(list[next - 1], model)
-            || !ReferenceEquals(AsyncChain.Field(inner, "<>2__current"), model) || !ReferenceEquals(AsyncChain.Field(outer, "<>2__current"), model))
-            throw new InvalidOperationException($"{stage}'s list enumerator is not at {model.Id.Entry}");
+        var (list, next, inner) = HookListSnapshots.ReadCursor(hook, model, typeof(Hook), typeof(CombatState));
         var combat = AsyncChain.Field(inner, "<>4__this") as CombatState ?? throw new InvalidOperationException("IterateHookListeners has no CombatState");
+        if (!ReferenceEquals(combat, expectedCombat))
+            throw new InvalidOperationException("IterateHookListeners is enumerating a different combat");
 
         var drawAtStart = HookListSnapshots.DrawPileCardsAtStart(inner);
         if (drawAtStart == null)
@@ -397,10 +426,6 @@ public static partial class McpMod
         return row;
     }
 
-    private static void ExpectIterator(object iterator, Type declaring, string prefix)
-    {
-        var type = iterator.GetType();
-        if (type.DeclaringType != declaring || !type.Name.StartsWith(prefix, StringComparison.Ordinal))
-            throw new InvalidOperationException($"expected {declaring.Name}.{prefix}*, found {type.DeclaringType?.Name}.{type.Name}");
-    }
+    private static Dictionary<string, object?> UnobservedHookListener() =>
+        new() { ["position"] = null, ["count"] = null, ["remaining_listeners"] = null };
 }

@@ -366,8 +366,11 @@ public static partial class McpMod
         }
         catch (Exception ex)
         {
-            if (CombatManager.Instance?.DebugOnlyGetState() is { } combat)
-                CombatLogStore.MarkBroken(combat, CombatLogCombatId(), $"history {__originalMethod.Name}: {ex.GetType().Name}: {ex.Message}");
+            if (CaptureCombatAttempt(CombatManager.Instance?.DebugOnlyGetState()) is { } attempt)
+            {
+                CombatLogStore.Bind(attempt);
+                CombatLogStore.TryMarkBroken(attempt, $"history {__originalMethod.Name}: {ex.GetType().Name}: {ex.Message}");
+            }
             return;
         }
         LogCombatRow(HistoryLogKind(entry), (row, _) => FillHistoryRow(row, entry));

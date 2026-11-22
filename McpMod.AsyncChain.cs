@@ -36,6 +36,7 @@ internal sealed class AsyncFrame
 internal static class AsyncChain
 {
     internal const int MaxDepth = 16;
+    internal static readonly string[] BeforeHandDrawStages = { "BeforeHandDraw", "BeforeHandDrawLate" };
     private const BindingFlags InstanceFields = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     private static readonly Regex AsyncMethodName = new(@"^<([^>]+)>d__\d+$", RegexOptions.Compiled);
     private static readonly Dictionary<Type, bool> BoxTypes = new();
@@ -218,6 +219,22 @@ internal static class AsyncChain
         var list = Field(boxedEnumerator, "_list") as IList ?? throw new InvalidOperationException("List<T>.Enumerator._list is null");
         return (list, Field(boxedEnumerator, "_index") is int index ? index : throw new MissingFieldException(type.Name, "_index"));
     }
+
+    // Hook.BeforeHandDraw's direct caller and callee must agree with the suspended stage. SetupPlayerTurn
+    // is at its second await, holding the same player, combat and context as the Hook.
+    internal static void ValidateBeforeHandDraw(IReadOnlyList<AsyncFrame> frames, int index, Type managerType,
+        string stage, Type listenerType, object model, object player, object context, object combat)
+    {
+        var listener = index > 0 ? frames[index - 1] : null;
+        if (listener == null || listener.Method != stage || listener.DeclaringType != listenerType
+            || !ReferenceEquals(Field(listener.StateMachine, "<>4__this"), model))
+            throw new InvalidOperationException($"the frame inside Hook.BeforeHandDraw is not its running {stage} listener");
+        if (index + 1 >= frames.Count || frames[index + 1] is not { Method: "SetupPlayerTurn", State: 1 } setup
+            || setup.DeclaringType != managerType || !ReferenceEquals(Field(setup.StateMachine, "player"), player)
+            || !ReferenceEquals(Field(setup.StateMachine, "playerChoiceContext"), context)
+            || !ReferenceEquals(Hoisted(setup.StateMachine, "state"), combat))
+            throw new InvalidOperationException("no matching SetupPlayerTurn frame is awaiting Hook.BeforeHandDraw");
+    }
 }
 
 /// <summary>
@@ -282,6 +299,28 @@ internal static class HookListSnapshots
     internal static IReadOnlySet<object>? DrawPileCardsAtStart(object iterator)
     {
         lock (Gate) return DrawPileAtStart.TryGetValue(iterator, out var set) ? set : null;
+    }
+
+    internal static (IList List, int Next, object Inner) ReadCursor(AsyncFrame hook, object model, Type hookType, Type combatType)
+    {
+        var outer = ExpectIterator(AsyncChain.Field(hook.StateMachine, "<>7__wrap1"), hookType, "<IterateCombatHookListeners>d__");
+        var inner = ExpectIterator(AsyncChain.Field(outer, "<>7__wrap1"), combatType, "<IterateHookListeners>d__");
+        if (AsyncChain.Field(inner, "<>7__wrap2") != null)
+            throw new InvalidOperationException("IterateHookListeners is past its list (ModHelper subscribers)");
+        var (list, next) = AsyncChain.ListEnumerator(AsyncChain.Field(inner, "<>7__wrap1")!);
+        if (next < 1 || next > list.Count || !ReferenceEquals(list[next - 1], model)
+            || !ReferenceEquals(AsyncChain.Field(inner, "<>2__current"), model)
+            || !ReferenceEquals(AsyncChain.Field(outer, "<>2__current"), model))
+            throw new InvalidOperationException("the listener enumerators do not point at the running model");
+        return (list, next, inner);
+    }
+
+    private static object ExpectIterator(object? iterator, Type declaring, string prefix)
+    {
+        var type = iterator?.GetType();
+        if (type == null || type.DeclaringType != declaring || !type.Name.StartsWith(prefix, StringComparison.Ordinal))
+            throw new InvalidOperationException($"expected {declaring.Name}.{prefix}*, found {type?.DeclaringType?.Name}.{type?.Name}");
+        return iterator!;
     }
 
     /// <summary>Drops open calls of a fight that is gone (save and quit mid-hook never completes their Task).</summary>

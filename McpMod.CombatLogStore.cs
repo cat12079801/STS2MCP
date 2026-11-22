@@ -9,7 +9,7 @@ namespace STS2_MCP;
 /// A row is fixed once appended (its seq, values and order never change), so a later read of the same fight starts
 /// where an earlier one ended. The store keeps the last <see cref="Capacity"/> rows of one fight: a new fight (another
 /// combat token) empties it, and past the capacity the oldest rows go (<c>first_seq</c> moves on, <c>dropped</c> counts
-/// them). Free of game types so the contract test can drive it; the combat token is the game's CombatState as object.
+/// them). Free of game types so the contract test can drive it.
 /// </summary>
 internal static class CombatLogStore
 {
@@ -21,8 +21,7 @@ internal static class CombatLogStore
 
     private static readonly object Gate = new();
     private static readonly List<Dictionary<string, object?>> Rows = new();
-    private static object? _combat;
-    private static string? _combatId;
+    private static CombatAttempt? _attempt;
     private static long _nextSeq;
     private static long _firstSeq;
     private static readonly List<string> BrokenReasons = new();
@@ -39,11 +38,27 @@ internal static class CombatLogStore
         get { lock (Gate) return InstallErrorList.ToList(); }
     }
 
-    internal static void Append(object combat, string? combatId, Dictionary<string, object?> row)
+    /// <summary>Bind a combat observed as current on the game thread, returning its next seq.</summary>
+    internal static long Bind(CombatAttempt attempt)
     {
         lock (Gate)
         {
-            Switch(combat, combatId);
+            if (attempt.Matches(_attempt)) return _nextSeq;
+            _attempt = attempt;
+            Rows.Clear();
+            BrokenReasons.Clear();
+            _nextSeq = 0;
+            _firstSeq = 0;
+            return _nextSeq;
+        }
+    }
+
+    // A delayed completion never binds a combat. The ownership check and seq allocation are atomic.
+    internal static bool TryAppend(CombatAttempt attempt, Dictionary<string, object?> row)
+    {
+        lock (Gate)
+        {
+            if (!attempt.Matches(_attempt)) return false;
             row["seq"] = _nextSeq++;
             Rows.Add(row);
             while (Rows.Count > Capacity)
@@ -51,42 +66,26 @@ internal static class CombatLogStore
                 Rows.RemoveAt(0);
                 _firstSeq++;
             }
+            return true;
         }
     }
 
     /// <summary>A row this fight should have could not be made: the fight's log is incomplete from here on.</summary>
-    internal static void MarkBroken(object combat, string? combatId, string reason)
+    internal static bool TryMarkBroken(CombatAttempt attempt, string reason)
     {
         lock (Gate)
         {
-            Switch(combat, combatId);
+            if (!attempt.Matches(_attempt)) return false;
             if (BrokenReasons.Count < 8) BrokenReasons.Add(reason);
+            return true;
         }
-    }
-
-    private static void Switch(object combat, string? combatId)
-    {
-        if (ReferenceEquals(_combat, combat)) return;
-        _combat = combat;
-        _combatId = combatId;
-        Rows.Clear();
-        BrokenReasons.Clear();
-        _nextSeq = 0;
-        _firstSeq = 0;
-    }
-
-    /// <summary>The seq the next row of <paramref name="combat"/> gets (0 for a fight with no row yet).</summary>
-    internal static long NextSeqOf(object combat)
-    {
-        lock (Gate) return ReferenceEquals(_combat, combat) ? _nextSeq : 0;
     }
 
     internal static void Clear()
     {
         lock (Gate)
         {
-            _combat = null;
-            _combatId = null;
+            _attempt = null;
             Rows.Clear();
             BrokenReasons.Clear();
             _nextSeq = 0;
@@ -107,16 +106,16 @@ internal static class CombatLogStore
     }
 
     /// <summary>
-    /// The rows of <paramref name="combat"/> from <paramref name="since"/> (the retained rows from that seq on), or
+    /// The rows of <paramref name="attempt"/> from <paramref name="since"/> (the retained rows from that seq on), or
     /// the last <paramref name="window"/> rows when <paramref name="since"/> is null. Another fight's rows are never
     /// returned: a combat the store has not seen reads as empty.
     /// </summary>
-    internal static Snapshot Read(object combat, long? since, int window)
+    internal static Snapshot Read(CombatAttempt? attempt, long? since, int window)
     {
         lock (Gate)
         {
             var reasons = InstallErrorList.Select(e => $"install: {e}").ToList();
-            if (!ReferenceEquals(_combat, combat))
+            if (attempt?.Matches(_attempt) != true)
                 return new Snapshot { CombatId = null, FirstSeq = 0, NextSeq = 0, WindowFirstSeq = 0, Rows = new(), Reasons = reasons, SinceTruncated = false };
             reasons.AddRange(BrokenReasons);
             long from = since ?? Math.Max(_firstSeq, _nextSeq - Math.Max(window, 0));
@@ -126,7 +125,7 @@ internal static class CombatLogStore
             var rows = Rows.Skip((int)(from - _firstSeq)).ToList();
             return new Snapshot
             {
-                CombatId = _combatId,
+                CombatId = _nextSeq > 0 || BrokenReasons.Count > 0 ? attempt.CombatId : null,
                 FirstSeq = _firstSeq,
                 NextSeq = _nextSeq,
                 WindowFirstSeq = from,

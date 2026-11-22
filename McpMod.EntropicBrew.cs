@@ -125,7 +125,7 @@ public static partial class McpMod
                 preview = new Dictionary<string, object?>
                 {
                     ["scope"] = "same_combat_play_phase_and_permission_and_target_inputs",
-                    ["combat_id"] = CombatLogCombatId(),
+                    ["combat_id"] = CaptureCombatAttempt(combat)?.CombatId,
                     ["floor"] = player.RunState.TotalFloor,
                     ["round"] = combat.RoundNumber,
                     ["turn_number"] = player.PlayerCombatState?.TurnNumber,

@@ -11,7 +11,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 `McpMod.TransformationOptionsTable.cs`（変化の候補のまとめ方・Markdown の 1 行）、`McpMod.Warnings.cs` をリンクする。ゲームの型は使わない。
 
 - 記録: 開いた順の番号、最も新しい開いている記録、player・戦闘・画面の種類での絞り込み（別の戦闘の古い記録を使わない）、
-  choose の候補の照合（null の holder を飛ばし、同じ実体・同じ順だけ）、閉じた記録を返さないこと、上限を超えた古い記録を捨てること、同じ context の外側の入口（`outer_selectors`）、終わった戦闘・別の戦闘の記録を捨て戦闘外の記録を残すこと
+  候補の実体と順の照合、閉じた記録を返さないこと、上限を超えた古い記録を捨てること、同じ context の外側の入口（`outer_selectors`）、終わった戦闘・別の戦闘の記録を捨て戦闘外の記録を残すこと。戦闘中 choose の厳密な照合は `CombatLogContract` で検査する。
 - 画面と `CardSelectCmd` の入口の対応（`hand` = `FromHand` / `FromHandForDiscard` / `FromHandForUpgrade`、`choose` = `FromChooseACardScreen`、
   `combat_pile` = `FromCombatPile`、`simple_grid` = `FromSimpleGrid` / `FromSimpleGridForRewards`）
 - 変化の候補: 同じ ID・同じ候補の札を 1 行にまとめ uid を序数順に並べる（山札の順を出さない）、候補の重複除去と昇順、
@@ -33,6 +33,9 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
   しない listener は出さない）、Markdown、ソースの文字列（乱数に触らない・列挙子を進めない・patch が本体を飛ばさない・
   await の順の表・配線）。csproj は `<Optimize>true</Optimize>` で、構成によらずゲームの Release と同じ形の状態機械・
   iterator を作る（最適化なしでは iterator の一時変数の名前が違う）。
+- `BeforeHandDrawChecks.cs` は 2 段の iterator を通る通常段・Late 段を Task で止め、本番のフレームと現在位置の読み取りを動かす。
+  列を作ったあとでモデルを外す・足す操作を行い、有効な残り、実測した空列、フレームと列挙子の欠測、`OnPlay` の別 choose を検査する。
+  `PatchTargetsContract` ではゲーム DLL の `Hook.BeforeHandDraw` への patch と状態機械のフィールドを確認する。
 
 Harmony の patch の当たり方・`PlayerChoiceContext` の連鎖・通知の列の読み直し・本体の状態機械のフィールドはゲームが無いと動かせない。実機の確認（調整役が行う）:
 

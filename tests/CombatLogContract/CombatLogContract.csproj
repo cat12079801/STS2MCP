@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../McpMod.CombatLogStore.cs" Link="CombatLogStore.cs" />
+    <Compile Include="../../McpMod.CombatAttempt.cs" Link="CombatAttempt.cs" />
     <Compile Include="../../McpMod.CombatLogFormatting.cs" Link="CombatLogFormatting.cs" />
     <Compile Include="../../McpMod.ChoiceSourceTracker.cs" Link="ChoiceSourceTracker.cs" />
     <Content Include="../../McpMod.CombatLog.cs;../../McpMod.CombatLogPatches.cs;../../McpMod.DecisionContext.cs;../../McpMod.ChoiceSource.cs;../../McpMod.StateBuilder.cs;../../McpMod.cs;../../McpMod.PotionGenerationPool.cs;../../McpMod.CardXValue.cs;../../McpMod.AutoPlayReservationPatches.cs;../../McpMod.Formatting.cs"

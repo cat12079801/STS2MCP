@@ -99,8 +99,10 @@ public static partial class McpMod
                 _ => null
             };
             // The fight in progress (null on the reward screen after a fight, where the creature still points at it).
-            __state = OpenCardSelections.Add(__originalMethod.Name, context, player, GetLiveCombatStateForSelection(),
-                handSource: Arg("source"), candidates: candidates, pile: Arg("pile"));
+            var combat = GetLiveCombatStateForSelection();
+            __state = OpenCardSelections.Add(__originalMethod.Name, context, player, combat,
+                handSource: Arg("source"), candidates: candidates, pile: Arg("pile"), attempt: CaptureCombatAttempt(combat, liveOnly: true),
+                chooserPlayerId: player.NetId.ToString());
             // decision_context.opener and the combat_log seq it opened at (McpMod.DecisionContext.cs).
             AttachSelectionOpener(__state);
             // What a hand / combat-pile selection offers, read now (the selection moves cards once it closes). The
@@ -132,10 +134,31 @@ public static partial class McpMod
 
         void Closed()
         {
-            OpenCardSelections.Remove(record);
-            // The combat_log selection row (what was chosen); never lets a failure reach the game's continuation.
-            try { if (task != null) LogSelectionResult(record, task); }
+            var completion = OpenCardSelections.Complete(record, task);
+            if (completion == OpenCardSelections.Completion.Ignored || record.Attempt is not { } attempt) return;
+            try
+            {
+                if (OS.GetThreadCallerId() == OS.GetMainThreadId()) Publish();
+                else _ = RunOnMainThread(Publish);
+            }
             catch (Exception ex) { GD.PrintErr($"[STS2 MCP] combat_log selection row failed: {ex.GetType().Name}: {ex.Message}"); }
+
+            void Publish()
+            {
+                try
+                {
+                    if (!IsLiveCombatAttempt(attempt)) return;
+                    if (completion == OpenCardSelections.Completion.Evicted)
+                        CombatLogStore.TryMarkBroken(attempt, "selection: pending call evicted before completion");
+                    else
+                        LogSelectionResult(record, attempt, task!);
+                }
+                catch (Exception ex)
+                {
+                    CombatLogStore.TryMarkBroken(attempt, $"selection: {ex.GetType().Name}: {ex.Message}");
+                    GD.PrintErr($"[STS2 MCP] combat_log selection row failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
         }
     }
 
@@ -148,7 +171,8 @@ public static partial class McpMod
     /// the listeners after it in that hook's list. Everything named here is a model the player can see
     /// (powers, relics, potions, cards in public piles; draw-pile listeners never expose their place).
     /// </summary>
-    private static Dictionary<string, object?> BuildChoiceSource(string screenKind, IReadOnlyList<CardModel?>? shownCards, IRunState runState)
+    private static Dictionary<string, object?> BuildChoiceSource(string screenKind, IReadOnlyList<CardModel?>? shownCards, IRunState runState,
+        OpenCardSelection? matchedChoose = null, string? chooseReason = null)
     {
         var result = new Dictionary<string, object?> { ["version"] = ChoiceSourceVersion, ["known"] = false };
         var reasons = new List<string>();
@@ -159,17 +183,17 @@ public static partial class McpMod
             var local = LocalContext.GetMe(runState) ?? throw new InvalidOperationException("local player not found");
             var combat = local.Creature.CombatState ?? throw new InvalidOperationException("local player has no combat state");
             var shown = shownCards?.Cast<object?>().ToList();
-            var record = OpenCardSelections.Latest(s => ReferenceEquals(s.Player, local)
+            var record = (screenKind == "choose" ? matchedChoose : OpenCardSelections.Latest(s => ReferenceEquals(s.Player, local)
                     && ReferenceEquals(s.CombatState, combat)
                     && OpenCardSelections.SelectorShowsScreen(screenKind, s.Selector)
-                    && (shown == null || OpenCardSelections.ShowsCandidates(s, shown)))
-                ?? throw new InvalidOperationException($"no open CardSelectCmd call matches this {screenKind} screen");
+                    && (shown == null || OpenCardSelections.ShowsCandidates(s, shown))))
+                ?? throw new InvalidOperationException(chooseReason ?? $"no open CardSelectCmd call matches this {screenKind} screen");
 
             RefreshEntityIdRegistry(combat);
             result["selector"] = record.Selector;
             // FromHandForDiscard → FromHand and the like: the outer entry points of the same selection.
             result["outer_selectors"] = OpenCardSelections.OuterSelectors(record);
-            result["chooser_player_id"] = local.NetId.ToString();
+            result["chooser_player_id"] = record.ChooserPlayerId ?? local.NetId.ToString();
             result["hand_source"] = record.HandSource is AbstractModel handSource ? BuildHookListenerRow(handSource, reasons) : null;
 
             var contexts = new List<Dictionary<string, object?>>();
@@ -228,10 +252,14 @@ public static partial class McpMod
 
             var cardPlay = BuildChoiceSourceCardPlay(modelObjects);
             result["card_play"] = cardPlay;
-            result["hook"] = modelObjects.Count == 0 ? null
-                : BuildChoiceSourceHook(modelObjects[0], cardPlay?.GetValueOrDefault("model_index") is 0, runState, combat, reasons);
             // Its own known / unavailable_reasons: the fields above stay as they are when the chain cannot be read.
             result["await_chain"] = BuildChoiceAwaitChain(record, contextObjects, modelObjects);
+            var chain = (Dictionary<string, object?>)result["await_chain"]!;
+            var beforeDraw = (chain.GetValueOrDefault("frames") as List<Dictionary<string, object?>>)?.FirstOrDefault(frame =>
+                Equals(frame.GetValueOrDefault("kind"), "hook") && Equals(frame.GetValueOrDefault("type"), "Hook")
+                && Equals(frame.GetValueOrDefault("method"), "BeforeHandDraw") && Equals(frame.GetValueOrDefault("model_index"), 0));
+            result["hook"] = modelObjects.Count == 0 ? null
+                : BuildChoiceSourceHook(modelObjects[0], cardPlay?.GetValueOrDefault("model_index") is 0, runState, combat, beforeDraw, reasons);
             result["known"] = reasons.Count == 0;
         }
         catch (Exception ex)
@@ -282,7 +310,7 @@ public static partial class McpMod
     }
 
     private static Dictionary<string, object?> BuildChoiceSourceHook(AbstractModel top, bool topIsCardInPlay,
-        IRunState runState, ICombatState combat, List<string> reasons)
+        IRunState runState, ICombatState combat, Dictionary<string, object?>? beforeDraw, List<string> reasons)
     {
         var declared = new List<(string Method, string Scope, Type[] Parameters)>();
         foreach (var (method, scope) in ChoiceSourceHooks)
@@ -312,6 +340,21 @@ public static partial class McpMod
             ["scope"] = hook.Scope,
             ["remaining_listeners"] = null
         };
+        if (beforeDraw != null && beforeDraw.GetValueOrDefault("listener") is Dictionary<string, object?> listener
+            && listener.GetValueOrDefault("remaining_listeners") is { } remaining)
+        {
+            row["name"] = beforeDraw["awaiting"];
+            row["name_unavailable_reason"] = null;
+            row["scope"] = "combat";
+            row["remaining_listeners"] = remaining;
+            return row;
+        }
+        // The current phase can use a different list from a fresh enumeration; its cursor belongs to await_chain.
+        if (beforeDraw != null || AsyncChain.BeforeHandDrawStages.Contains(hook.Method))
+        {
+            row["remaining_listeners_unavailable_reason"] = "the suspended BeforeHandDraw listener list was not observed";
+            return row;
+        }
         if (hook.Method == null) return row;
         // The listeners after a draw-pile listener would be the cards behind it in the hidden draw order.
         if (DrawPileOf(top) != null)

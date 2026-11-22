@@ -141,6 +141,7 @@ namespace STS2_MCP
             Check(Throws(() => AsyncChain.Field(new object(), "missing")), "無いフィールドは例外");
             Check(Throws(() => AsyncChain.ListEnumerator(new object())), "List<T>.Enumerator でなければ例外");
 
+            CheckBeforeHandDraw();
             CheckHookListSnapshots();
             CheckAwaitChainMarkdown();
         }
@@ -265,6 +266,15 @@ namespace STS2_MCP
             Check(chain.Contains("drawAtStart.Contains(own) || DrawPileOf(model) != null"), "山札にあった listener の位置は出さない");
             Check(choice.Contains("result[\"await_chain\"] = BuildChoiceAwaitChain(record, contextObjects, modelObjects);")
                 && choice.Contains("record.SelectionTask = task;") && choice.Contains("InstallHookListSnapshotTracking();"), "choice_source に配線する");
+            Check(chain.Contains("[(typeof(Hook), nameof(Hook.BeforeHandDraw))] = AsyncChain.BeforeHandDrawStages")
+                && chain.Contains("[(typeof(Hook), nameof(Hook.BeforeHandDraw))] = \"hook\"")
+                && chain.Contains("[(typeof(CombatManager), \"SetupPlayerTurn\", \"BeforeHandDraw\")] = (typeof(Hook), nameof(Hook.BeforeHandDraw))"),
+                "通常段と Late 段を持つ hook を SetupPlayerTurn が待つ段に登録する");
+            var beforeDrawGuard = Regex.Match(choice,
+                @"if \(beforeDraw != null \|\| AsyncChain\.BeforeHandDrawStages\.Contains\(hook\.Method\)\)\s*\{\s*row\[""remaining_listeners_unavailable_reason""\] = ""[^""]+"";\s*return row;\s*\}");
+            int freshListeners = choice.IndexOf("var listeners = hook.Scope switch", StringComparison.Ordinal);
+            Check(beforeDrawGuard.Success && beforeDrawGuard.Index < freshListeners,
+                "ドロー前の段の停止中の列が読めなければ理由を付けて返し、再列挙しない");
             foreach (var steps in new[]
             {
                 "[(typeof(Hook), \"AfterPlayerTurnStart\")] = new[] { \"AfterPlayerTurnStartEarly\", \"AfterPlayerTurnStart\", \"AfterPlayerTurnStartLate\" }",

@@ -79,9 +79,9 @@ namespace STS2_MCP
             }
             Check(!OpenCardSelections.SelectorShowsScreen("bundle", "FromHand"), "知らない画面はどれとも一致しない");
 
-            OpenCardSelections.Remove(choose);
+            OpenCardSelections.Complete(choose, null);
             Check(ReferenceEquals(OpenCardSelections.Latest(_ => true), hand), "閉じた選択は返さない");
-            OpenCardSelections.Remove(choose);
+            OpenCardSelections.Complete(choose, null);
             Check(OpenCardSelections.Count == 1, "二度閉じても他を消さない");
 
             // A selection whose task never completes must not stay forever.
@@ -100,7 +100,7 @@ namespace STS2_MCP
             OpenCardSelections.Add("FromHand", ctx, other, combat);
             Check(OpenCardSelections.OuterSelectors(inner).SequenceEqual(new[] { "FromHandForDiscard" }), "同じ context・同じ player の外側の入口だけを古い順に出す");
             Check(OpenCardSelections.OuterSelectors(outer).Count == 0, "外側の記録自身には外側が無い");
-            OpenCardSelections.Remove(outer);
+            OpenCardSelections.Complete(outer, null);
             Check(OpenCardSelections.OuterSelectors(inner).Count == 0, "閉じた外側は出さない");
 
             // Records of a fight that is gone are dropped (save and quit mid-selection never completes the task).
@@ -255,15 +255,18 @@ namespace STS2_MCP
                 "使用中のポーション・オーブは自分で積むので通知を決めない");
             Check(choice.Contains("result[\"outer_selectors\"] = OpenCardSelections.OuterSelectors(record);"), "外側の入口を出す");
             foreach (var file in new[] { "McpMod.StateBuilder.cs", "McpMod.MultiplayerState.cs" })
-                Check(Read(file).Contains("OpenCardSelections.DropOtherCombats(GetLiveCombatStateForSelection());"), $"state を作るたびに終わった戦闘の記録を捨てる（{file}）");
+                Check(Read(file).Contains("OpenCardSelections.DropOtherCombats(liveSelectionCombat, CaptureCombatAttempt(liveSelectionCombat, liveOnly: true));"), $"state を作るたびに終わった試行の記録を捨てる（{file}）");
             Check(choice.Contains("CountModHookSubscribers(\"_runHookSubscribers\") + CountModHookSubscribers(\"_combatHookSubscribers\")"),
                 "ModHelper の購読者がいれば残りの listener を出さない");
             Check(!Regex.IsMatch(choice, @"\.Rng|Shuffle\(|NextItem|TakeRandom"), "乱数・抽選に触らない");
 
             string chooseBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildChooseCardState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildBundleSelectState", StringComparison.Ordinal)];
             int combatGuard = chooseBuilder.IndexOf("if (combatState != null)", StringComparison.Ordinal);
-            int chooseWiring = chooseBuilder.IndexOf("state[\"choice_source\"] = BuildChoiceSource(\"choose\", holderCards, runState);", StringComparison.Ordinal);
-            Check(combatGuard >= 0 && chooseWiring > combatGuard, "choose-a-card は戦闘中だけ choice_source を付け、表示中の札で照合する");
+            int chooseWiring = chooseBuilder.IndexOf("var (record, reason) = MatchChooseScreen(attempt, runState, holderCards);", StringComparison.Ordinal);
+            Check(combatGuard >= 0 && chooseWiring > combatGuard
+                && chooseBuilder.Contains("BuildChoiceSource(\"choose\", holderCards, runState, record, reason)")
+                && chooseBuilder.Contains("BuildDecisionContext(\"choose\", holderCards, runState, source, record, reason)"),
+                "戦闘中 choose は表示中の札を 1 回照合し、同じ記録を choice_source と decision_context に渡す");
             string handBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildHandSelectState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildRelicSelectState", StringComparison.Ordinal)];
             Check(handBuilder.Contains("if (combatState != null) state[\"choice_source\"] = BuildChoiceSource(\"hand\", null, runState);"), "hand_select は戦闘中だけ choice_source を付ける");
             string gridBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildCardSelectState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildChooseCardState", StringComparison.Ordinal)];
