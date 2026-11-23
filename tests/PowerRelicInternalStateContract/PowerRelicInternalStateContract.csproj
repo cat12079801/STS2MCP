@@ -10,7 +10,7 @@
     <Compile Include="../../McpMod.PowerInternalStateFormatting.cs" Link="PowerInternalStateFormatting.cs" />
     <Compile Include="../../McpMod.RelicCombatState.cs" Link="RelicCombatState.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
-    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs"
+    <None Include="../../McpMod.cs;../../McpMod.StateBuilder.cs;../../McpMod.PetsState.cs;../../McpMod.Formatting.cs;../../McpMod.MultiplayerState.cs"
           Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

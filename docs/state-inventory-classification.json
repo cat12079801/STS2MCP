@@ -362,11 +362,16 @@
  },
  "Creature._petOwner": {
   "class": "static/derived",
-  "note": "他のモデルへの参照（所属）"
+  "note": "PlayerCombatState.AddPetInternal が設定する所有者。ワッピー行を所有者の pets に出す前の照合に使う（McpMod.PetsState.cs）"
  },
  "Creature._powers": {
-  "class": "exposed",
-  "note": "status（McpMod.StateBuilder.cs:1710・2129）"
+  "class": "public",
+  "note": "表示用の status に加え、ワッピーでは Creature.Powers のモデル ID を元の順で pets[].power_ids に出す。WuppysLoyaltyPower.ModifyPreBlockDamageTarget が転送を決め、ShouldPowerBeRemovedAfterOwnerDeath は死亡後も忠誠を残す。表示で落ちるパワーの ID も含む（sts2#841）",
+  "json_key": "power_ids",
+  "reader_key": "PetPowerIdsKey",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Creatures.Creature",
+  "cs_type": "List<PowerModel>",
+  "kind": "field"
  },
  "CrossbowRubyRaider._isCrossbowReloaded": {
   "class": "cosmetic",
@@ -887,8 +892,13 @@
   "kind": "field"
  },
  "PlayerCombatState._pets": {
-  "class": "exposed",
-  "note": "player.pets（McpMod.StateBuilder.cs:1700）"
+  "class": "public",
+  "note": "PlayerCombatState.Pets から従来のオスティとワッピーを所有者の pets に出す。AddPetInternal で登録し、OnPetDied は Hook.ShouldCreatureBeRemovedFromCombatAfterDeath が許すときだけ除く。ワッピーの現在 HP と個体 ID は戦闘に残る死亡個体からも読む（sts2#841）",
+  "json_key": "pets",
+  "reader_key": "CombatPetsKey",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Players.PlayerCombatState",
+  "cs_type": "List<Creature>",
+  "kind": "field"
  },
  "PlayerCombatState._piles": {
   "class": "exposed",
@@ -1390,7 +1400,7 @@
  },
  "Wuppy[relic]._combatWuppy": {
   "class": "static/derived",
-  "note": "召喚したペットのクリーチャーへの参照。ペットは pets に出る"
+  "note": "Relics.Wuppy.SummonPet が設定する参照。通常の所持では CombatWuppy と PlayerCombatState.Pets のワッピーを照合し、同じ個体を pets に出す。参照自体は公開しない（McpMod.PetsState.cs、sts2#841）"
  },
  "Wuppy[relic]._currentHp": {
   "class": "exposed",

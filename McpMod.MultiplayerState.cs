@@ -445,13 +445,7 @@ public static partial class McpMod
 
                 // Include pets for teammates (local player's pets are under "player")
                 if (!LocalContext.IsMe(player))
-                {
-                    var pets = BuildPetsState(player);
-                    if (pets.Count > 0)
-                    {
-                        entry["pets"] = pets;
-                    }
-                }
+                    AttachPetsState(entry, player, $"players[{players.Count}]");
             }
             players.Add(entry);
         }

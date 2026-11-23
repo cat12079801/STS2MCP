@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.15.0",       // Contract version (semver) — see below
+  "schema": "1.16.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.15.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.16.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.15.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.16.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -183,6 +183,8 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.15.0** — `player.combat_history` の多段攻撃用の集計、戦闘の実カード個体の `star_cost_state` の星 X、
   `player.arrow_state` に矢の枠と刺突を出す（`cat12079801/sts2#1296`）。
   [履歴](#多段攻撃用の戦闘履歴schema-1150)・[星 X](#戦闘カード個体の星-xschema-1150)・[矢](#矢の枠と刺突schema-1150)。
+- **1.16.0** — 所有者の `pets` に戦闘中のワッピーを、生死・個体 ID・表示によらないパワー ID とともに出す（`cat12079801/sts2#841`）。
+  [戦闘中のワッピー](#戦闘中のワッピーschema-1160)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -670,7 +672,7 @@ Always present at the top level (except `menu`). Contains everything about the l
   "orbs": [ /* Orb Objects */ ],   // Defect only; omitted if orb capacity is 0
   "orb_slots": 3,
   "orb_empty_slots": 1,
-  "pets": [                        // Necrobinder only; omitted if no pets
+  "pets": [                        // Osty and Wuppy; see availability rules below
     {
       "id": "OSTY",
       "name": "Otsy",
@@ -726,6 +728,31 @@ notice, and `UpdateTexture` gives it a dark-red tint. The grey inventory tint co
 from `RelicStatus.Disabled` in `NRelicInventoryHolder.RefreshStatus`; for example,
 `LizardTail.WasUsed` sets that status when consumed. These booleans do not claim to
 encode every reason a relic can be disabled.
+
+### 戦闘中のワッピー（schema 1.16.0）
+
+ワッピーの行をローカル所有者の `player.pets[]`、協力プレイの仲間は `players[i].pets[]` に出す。
+`PlayerCombatState.Pets` から `Models.Monsters.Wuppy` を列挙して `Creature.PetOwner` と現在戦闘の味方側への所属を照合する。
+通常の所持では `Relics.Wuppy.CombatWuppy` と同一の個体であることも確かめる。溶解したレリックは
+`CombatState.IterateHookListeners` が除外するため、ペットの所属を使って判定する。
+オスティは従来の行のまま先頭に置く。
+
+| ワッピー行の項目 | 出典と値 |
+|---|---|
+| `id`, `name` | `Creature.Monster.Id.Entry`（`WUPPY`）と `Creature.Name`（ローカライズしたモンスター名） |
+| `combat_id` | `Creature.CombatId`（uint。0 も実在する ID）。同じ戦闘の `battle.combat_log.rows[]` の `damage_received.result.receiver.combat_id` と `attacked.hits[].receiver.combat_id` に対応 |
+| `hp`, `max_hp`, `alive`, `block` | `Creature.CurrentHp` / `MaxHp` / `IsAlive` / `Block`。HP 0 でも個体が戦闘に残っていれば同じ ID の行に `hp: 0`、`alive: false` を出す |
+| `status`, `power_ids` | `status` は既存の [Power Object](#power-object-status-effects) の配列。`power_ids` は `Creature.Powers` の全 `Id.Entry` を列挙順で並べた文字列配列。忠誠 `WUPPYS_LOYALTY_POWER` の有無は `power_ids` で読む |
+
+`WuppysLoyaltyPower.ShouldCreatureBeRemovedFromCombatAfterDeath` と `ShouldPowerBeRemovedAfterOwnerDeath` により、通常は
+死亡後も `PlayerCombatState.OnPetDied` が個体を残し、`Creature.RemoveAllPowersAfterDeath` が忠誠を残す。
+現在の戦闘に個体が登録されていない時点では、レリックを所持し他に対象ペットがいなければ `pets: []`。
+`Relics.Wuppy.SummonPet` は `CombatWuppy` の設定後に `PlayerCmd.AddPet` で登録する。
+
+- 対象ペットの列挙に失敗した場合や、所有者・所属・レリック参照の照合が食い違う場合は `pets: null` と、所有者行の `unavailable_reasons.pets`。
+- 個体の項目だけが読めなければ当該項目が `null` になり、個体行に `unavailable_reasons.<key>` が付く。`power_ids: []` はパワーが無いことを示す。
+- `warnings` は `player.pets`、`player.pets[0].power_ids`、`players[1].pets` など、失敗した欄のパスを含む。
+- ワッピーのレリックを持たず表示対象のペットもいない場合と、戦闘外では `pets` を省く。戦闘外の持ち越し値はレリック行の `counter` と `vars.CurrentHp` / `vars.MaxHp` で読む（`Relics.Wuppy.CurrentHp` / `MaxHp` / `DisplayAmount`）。
 
 ### ポーションをいま使えるか（`player.potions[]`、schema 11）
 

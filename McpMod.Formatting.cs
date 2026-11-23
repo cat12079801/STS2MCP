@@ -147,11 +147,7 @@ public static partial class McpMod
                 {
                     foreach (var pet in tPets)
                     {
-                        bool petAlive = pet.TryGetValue("alive", out var pa) && pa is true;
-                        string petStatus = petAlive
-                            ? $"HP: {pet["hp"]}/{pet["max_hp"]} | Block: {pet["block"]}"
-                            : "DEAD";
-                        sb.AppendLine($"  - Pet: **{pet["name"]}** - {petStatus}");
+                        sb.AppendLine($"  - Pet: **{pet["name"] ?? "?"}** - {FormatPetHealth(pet)}");
                     }
                 }
             }
@@ -649,6 +645,13 @@ public static partial class McpMod
         sb.AppendLine();
     }
 
+    private static string FormatPetHealth(Dictionary<string, object?> pet) => pet.GetValueOrDefault("alive") switch
+    {
+        true => $"HP: {pet["hp"] ?? "?"}/{pet["max_hp"] ?? "?"} | Block: {pet["block"] ?? "?"}",
+        false => "DEAD",
+        _ => "UNKNOWN"
+    };
+
     private static void FormatPetsMarkdown(StringBuilder sb, Dictionary<string, object?> player)
     {
         if (!player.TryGetValue("pets", out var petsObj)
@@ -660,10 +663,7 @@ public static partial class McpMod
         foreach (var pet in pets)
         {
             bool alive = pet.TryGetValue("alive", out var a) && a is true;
-            string status = alive
-                ? $"HP: {pet["hp"]}/{pet["max_hp"]} | Block: {pet["block"]}"
-                : "DEAD";
-            sb.AppendLine($"- **{pet["name"]}** (`{pet["id"]}`) - {status}");
+            sb.AppendLine($"- **{pet["name"] ?? "?"}** (`{pet["id"] ?? "?"}`) - {FormatPetHealth(pet)}");
             if (alive && pet.TryGetValue("status", out var statusObj)
                 && statusObj is List<Dictionary<string, object?>> statusList && statusList.Count > 0)
             {

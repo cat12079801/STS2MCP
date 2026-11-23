@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../McpMod.PetsState.cs" Link="PetsState.cs" />
+    <Compile Include="../../McpMod.InternalState.cs" Link="InternalState.cs" />
+    <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
+    <Compile Include="../../McpMod.StateAllowlist.Generated.cs" Link="StateAllowlist.Generated.cs" />
+    <Compile Include="../../McpMod.StateAllowlistFormatting.cs" Link="StateAllowlistFormatting.cs" />
+    <None Include="../../McpMod.StateBuilder.cs;../../McpMod.MultiplayerState.cs;../../McpMod.CombatLog.cs;../../McpMod.CombatLogPatches.cs"
+          Link="Sources/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

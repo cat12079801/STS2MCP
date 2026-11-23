@@ -1249,7 +1249,10 @@ public static partial class McpMod
         string Source(string name) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Sources", name));
         var builder = Source("McpMod.StateBuilder.cs");
         Check(builder.Contains("AttachPowerInternalState(entry, power, visibilityKnown && isVisible);") && builder.Split("AttachPowerInternalState(entry, power, visibilityKnown && isVisible);").Length == 3, "full and minimal power rows attach details conservatively");
-        Check(builder.Contains("[\"status\"] = BuildPowersState(creature)") && builder.Contains("[\"status\"] = BuildPowersState(osty)") && builder.Contains("state[\"status\"] = BuildPowersState(creature);"), "player, enemy and pet share builder");
+        var pets = Source("McpMod.PetsState.cs");
+        Check(builder.Contains("[\"status\"] = BuildPowersState(creature)") && builder.Contains("state[\"status\"] = BuildPowersState(creature);") &&
+            pets.Contains("[\"status\"] = BuildPowersState(osty)") && pets.Contains("() => BuildPowersState(pet)"),
+            "player, enemy, Osty and Wuppy share the power builder");
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
         {
             // sts2#1020: vars and run_state are attached for every relic, before (outside) the combat guard.

@@ -42,7 +42,6 @@ using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
 using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
 using MegaCrit.Sts2.Core.Rewards;
-using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Runs.History;
@@ -1722,16 +1721,10 @@ public static partial class McpMod
                 state["orb_slots"] = orbQueue.Capacity;
                 state["orb_empty_slots"] = orbQueue.Capacity - orbQueue.Orbs.Count;
             }
-
-            // Pets (Osty for Necrobinder)
-            var pets = BuildPetsState(player);
-            if (pets.Count > 0)
-            {
-                state["pets"] = pets;
-            }
         }
 
         state["gold"] = player.Gold;
+        AttachPetsState(state, player, "player");
         // 生成した許可リストの ExtraPlayerFields の項目（ショップの除去回数など。McpMod.StateAllowlist.cs）。
         try { AttachAllowlistedState(state, "player", player.ExtraFields, "player"); }
         catch (Exception ex)
@@ -3891,30 +3884,5 @@ public static partial class McpMod
     {
         try { return getter(); }
         catch { return null; }
-    }
-
-    private static List<Dictionary<string, object?>> BuildPetsState(Player player)
-    {
-        var pets = new List<Dictionary<string, object?>>();
-        var combatState = player.PlayerCombatState;
-        if (combatState == null) return pets;
-
-        // Check Osty specifically (Byrdpip/PaelsLegion are cosmetic with no real combat state)
-        var osty = combatState.GetPet<Osty>();
-        if (osty != null)
-        {
-            pets.Add(new Dictionary<string, object?>
-            {
-                ["id"] = osty.Monster?.Id.Entry ?? "OSTY",
-                ["name"] = SafeGetText(() => osty.Monster?.Title) ?? "Otsy",
-                ["alive"] = osty.IsAlive,
-                ["hp"] = osty.CurrentHp,
-                ["max_hp"] = osty.MaxHp,
-                ["block"] = osty.Block,
-                ["status"] = BuildPowersState(osty)
-            });
-        }
-
-        return pets;
     }
 }

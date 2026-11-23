@@ -191,7 +191,8 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | `BoneTea`・`EmberTea`・`TeaOfDiscourtesy` の `_combatsLeft` | setter が `vars.Combats` に同じ値を書くので `vars` で読める（v0.113.1 の `CombatsLeft`）。 |
 | `MawBank._hasItemBeenBought`、`BathRobes._wasUsed` | `IsUsedUp` が既存 `used_up` に出る。 |
 | `Byrdpip._swoopsPlayed` | 休憩所の進化の選択肢（`TryModifyRestSiteOptions`、6 以上）に効くが、`counter`（`DisplayAmount => Math.Min(SwoopsPlayed, 6)`）で閾値の 6 までは正確に読める。 |
-| `Byrdpip._skin`、`Byrdine._hair`、`PaelsLegion._skin`、`Wuppy` の HP（`_currentHp` / `_maxHp`。`counter` に出る）・`_combatWuppy` | ペットの外見と、ペットの生き物そのもの（`pets[]` の対象外）。 |
+| `Byrdpip._skin`、`Byrdine._hair`、`PaelsLegion._skin` | ペットの外見。 |
+| `Wuppy._currentHp` / `_maxHp`・`_combatWuppy` | 保存 HP は `counter` と `vars.CurrentHp` / `vars.MaxHp`。戦闘中の個体は `Relics.Wuppy.CombatWuppy` と照合して [所有者の `pets[]`](raw-full.md#戦闘中のワッピーschema-1160) に出す。 |
 | `ArchaicTooth`・`DustyTome`・`PaelsTooth`・`TouchOfOrobas`・`SeaGlass` の保存データ | 取得時のカード・レリックの選択の記録。戦闘・報酬の判断の入力ではない。 |
 | `SneckoEye`・`FakeSneckoEye._testEnergyCostOverride` | テスト用のコスト上書き。 |
 | `SilkenTress._isUsed`、`WongosMysteryTicket._gaveRelic`、`LizardTail._wasUsed` | それぞれの `IsUsedUp` が既存 `used_up` に出るため重複追加しない。 |

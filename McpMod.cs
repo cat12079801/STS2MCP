@@ -86,8 +86,9 @@ public static partial class McpMod
     /// log row; choice_source.await_chain observes Hook.BeforeHandDraw's current stage and its remaining listeners.
     /// 1.15.0: combat history inputs for dynamic hit counts, saved and manual-play star X values, and arrow state
     /// (ordered slots and impalements for the player; sts2#1296).
+    /// 1.16.0: live and dead Wuppy combat pets, including combat IDs and unfiltered power IDs (sts2#841).
     /// </summary>
-    public const string StateSchema = "1.15.0";
+    public const string StateSchema = "1.16.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

@@ -587,9 +587,9 @@
   "cmd:PlayerCmd.AddPet": {
    "class": "exposed",
    "exposed_by": [
-    "McpMod.StateBuilder.cs: state[\"pets\"] = pets;"
+    "McpMod.PetsState.cs: state[CombatPetsKey] = pets;"
    ],
-   "proposed_key": "player.pets"
+   "proposed_key": "player.pets（オスティ・ワッピー）"
   },
   "cmd:PlayerCmd.CompleteQuest": {
    "class": "unknown",
