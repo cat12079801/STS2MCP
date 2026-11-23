@@ -112,4 +112,12 @@ public static partial class McpMod
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.Vambrace", "MegaCrit.Sts2.Core.Models.Relics.Vambrace", "_triggeringCard", StateMemberKind.Field, "triggering_card_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
             "戦闘で最初にブロックを得たカード（AfterModifyingBlockAmount で入れる）。そのカードの解決中は ModifyBlockMultiplicative がブロックを 2 倍にし、AfterCardPlayed が block_gained_this_combat（combat_state）を true にする。消すのは BeforeCombatStart・AfterCombatEnd だけなので、安定した state でも戦闘の終わりまで残る。効くかは block_gained_this_combat で決まる（PR #108 のレビュー P3-2）"),
     };
+
+    // 通常の internal_state と別の形で出す専用 reader のキー。
+    // CardModel._lastStarsSpent（戦闘の手札・4 パイルの星 X 札の star_cost_state.last_stars_spent。CardModel.SpendStars と CardCmd.AutoPlay が保存した LastStarsSpent を読む。公開された個体の支払い・自動プレイ時の星から確定できる）
+    private const string StarXLastStarsSpentKey = "last_stars_spent";
+    // ImpaledPower.Data.arrowSources（戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する）
+    private const string ArrowImpalementsKey = "impalements";
+    // PlayerCombatState._arrows（戦闘中の player.arrow_state.slots。PlayerCombatState.Arrows の順で、所有者の画面の矢枠と公開された射撃・回収・破壊から確定できる状態を枠添字・状態・使用可否・破壊予定に整形する）
+    private const string ArrowSlotsKey = "slots";
 }

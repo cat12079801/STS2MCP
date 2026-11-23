@@ -4,9 +4,11 @@ using System.Linq;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Combat.History;
 using MegaCrit.Sts2.Core.Combat.History.Entries;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Afflictions;
 using MegaCrit.Sts2.Core.ValueProps;
 
@@ -131,6 +133,31 @@ public static partial class McpMod
         });
         Read("unblocked_damage_events_this_combat", () => CombatManager.Instance.History.Entries
             .OfType<DamageReceivedEntry>().Count(e => e.Receiver == owner.Creature && e.Result.UnblockedDamage > 0));
+        Read("energy_spent_this_turn", () =>
+        {
+            var combat = CurrentCombat();
+            return CombatManager.Instance.History.Entries.OfType<EnergySpentEntry>()
+                .Where(e => e.HappenedThisTurn(combat) && e.Actor?.Player == owner).Sum(e => e.Amount);
+        });
+        Read("unfinished_energy_spent_by_uid_this_turn", () => BuildUnfinishedEnergySpent(owner, CurrentCombat()));
+        Read("stars_gained_this_turn", () =>
+        {
+            var combat = CurrentCombat();
+            return CombatManager.Instance.History.Entries.OfType<StarsModifiedEntry>()
+                .Where(e => e.HappenedThisTurn(combat) && e.Amount > 0 && e.Actor == owner.Creature).Sum(e => e.Amount);
+        });
+        Read("ethereal_plays_finished_this_combat", () =>
+            CombatManager.Instance.History.CardPlaysFinished.Count(e => e.CardPlay.Player == owner && e.WasEthereal));
+        Read("osty_attacks_this_turn", () =>
+        {
+            var combat = CurrentCombat();
+            var osty = owner.Osty;
+            return osty == null ? 0 : CombatManager.Instance.History.Entries.OfType<CreatureAttackedEntry>()
+                .Count(e => e.Actor == osty && e.HappenedThisTurn(combat));
+        });
+        ReadMelody("played_wah_this_turn", MelodyCmd.PlayedWahThisTurn);
+        ReadMelody("played_cho_this_turn", MelodyCmd.PlayedChoThisTurn);
+        ReadMelody("played_ki_this_turn", MelodyCmd.PlayedKiThisTurn);
         Read("block_gains_this_turn", () =>
         {
             var combat = CurrentCombat();
@@ -142,6 +169,12 @@ public static partial class McpMod
         });
         return state;
 
+        void ReadMelody(string key, Func<Player, bool> played) => Read(key, () =>
+        {
+            _ = CurrentCombat();
+            return played(owner);
+        });
+
         void Read(string key, Func<object?> read)
         {
             try { state[key] = read() ?? throw new InvalidOperationException("History value is null"); }
@@ -152,6 +185,25 @@ public static partial class McpMod
                 Warn($"player.combat_history.{key}", ex);
             }
         }
+    }
+
+    // HelixDrill.CanonicalVars: 札個体ごとに最後の開始を選び、CardPlay の実参照で完了を照合する。
+    // 最後の開始が完了していれば、より古い未完了 play は拾わない。
+    private static Dictionary<string, int> BuildUnfinishedEnergySpent(Player owner, ICombatState combat)
+    {
+        var lastStarts = new Dictionary<CardModel, CardPlay>(ReferenceEqualityComparer.Instance);
+        var finishes = new HashSet<CardPlay>(ReferenceEqualityComparer.Instance);
+        foreach (var entry in CombatManager.Instance.History.Entries)
+        {
+            if (entry is not (CardPlayStartedEntry or CardPlayFinishedEntry)
+                || !entry.HappenedThisTurn(combat) || entry.Actor?.Player != owner) continue;
+            if (entry is CardPlayStartedEntry started)
+                lastStarts[started.CardPlay.Card] = started.CardPlay;
+            else if (entry is CardPlayFinishedEntry finished)
+                finishes.Add(finished.CardPlay);
+        }
+        return lastStarts.Values.Where(play => !finishes.Contains(play))
+            .ToDictionary(play => GetStableCardUid(play.Card), play => play.Resources.EnergySpent);
     }
 
     private static List<Dictionary<string, object?>> BuildPotionUseRows(

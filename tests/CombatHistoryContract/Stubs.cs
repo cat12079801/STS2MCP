@@ -1,5 +1,5 @@
-// Boundary doubles: turn predicates are configured answers, not reconstructed game
-// turn logic. Tests verify that the production builder delegates to these methods.
+// Boundary doubles: tests configure HappenedThisTurn for each entry and check
+// that the production builder uses the current combat.
 namespace MegaCrit.Sts2.Core.Combat
 {
     public interface ICombatState
@@ -30,6 +30,7 @@ namespace MegaCrit.Sts2.Core.Entities.Creatures
         public Models.MonsterModel? Monster;
         public Players.Player? Player;
         public bool Enemy;
+        public bool IsAlive = true;
         public bool IsEnemy => Enemy;
     }
     public class DamageResult(int damage) { public int UnblockedDamage = damage; }
@@ -41,8 +42,15 @@ namespace MegaCrit.Sts2.Core.Entities.Players
         public ulong NetId { get; set; }
         public List<Models.PotionModel?> PotionSlots { get; } = [];
         public Cards.CardPile Deck = new();
-        public Creatures.Creature Creature = new();
+        private Creatures.Creature _creature;
+        public Player() => _creature = new() { Player = this };
+        public Creatures.Creature Creature
+        {
+            get => _creature;
+            set { _creature = value; value.Player = this; }
+        }
         public PlayerCombatState? PlayerCombatState = new();
+        public Creatures.Creature? Osty;
     }
     public class PlayerCombatState
     {
@@ -54,6 +62,7 @@ namespace MegaCrit.Sts2.Core.Entities.Players
 namespace MegaCrit.Sts2.Core.Entities.Cards
 {
     public enum CardType { None, Attack, Skill, Power, Status, Curse, Quest }
+    public enum CardTag { Wah, Cho, Ki }
     public enum PileType { Hand, Draw, Discard, Exhaust, Play }
     public class CardPile { public List<Models.CardModel> Cards = new(); }
     public class CardPlay(Models.CardModel card, Players.Player player)
@@ -65,8 +74,12 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
         public Creatures.Creature? Target;
         public int PlayIndex;
         public int PlayCount = 1;
+        public ResourceInfo Paid = new();
+        public bool ThrowResources;
+        public ResourceInfo Resources => ThrowResources ? throw new MissingMemberException("Resources renamed") : Paid;
         public bool IsAutoPlay => ThrowAutoPlay ? throw new MissingMemberException("IsAutoPlay renamed") : AutoPlay;
     }
+    public class ResourceInfo { public int EnergySpent; }
 }
 namespace MegaCrit.Sts2.Core.Models
 {
@@ -79,6 +92,8 @@ namespace MegaCrit.Sts2.Core.Models
         public int Rarity => 0;
         public Entities.Cards.CardType Value = type;
         public bool ThrowType;
+        public bool Ethereal;
+        public HashSet<Entities.Cards.CardTag> Tags = [];
         public Entities.Cards.CardType Type => ThrowType ? throw new MissingMemberException("Type renamed") : Value;
     }
     public class AfflictionModel { }
@@ -121,15 +136,41 @@ namespace MegaCrit.Sts2.Core.Combat.History
 }
 namespace MegaCrit.Sts2.Core.Combat.History.Entries
 {
-    public class CardPlayStartedEntry(Entities.Cards.CardPlay play) : CombatHistoryEntry { public Entities.Cards.CardPlay CardPlay = play; }
-    public class CardPlayFinishedEntry : CombatHistoryEntry
+    public class CardPlayStartedEntry : CombatHistoryEntry
     {
         public Entities.Cards.CardPlay CardPlay;
-        public CardPlayFinishedEntry(Entities.Cards.CardPlay play)
+        public CardPlayStartedEntry(Entities.Cards.CardPlay play)
         {
             CardPlay = play;
             Actor = play.Player.Creature;
         }
+    }
+    public class CardPlayFinishedEntry : CombatHistoryEntry
+    {
+        public Entities.Cards.CardPlay CardPlay;
+        public bool WasEthereal { get; }
+        public CardPlayFinishedEntry(Entities.Cards.CardPlay play)
+        {
+            CardPlay = play;
+            Actor = play.Player.Creature;
+            WasEthereal = play.Card.Ethereal;
+        }
+    }
+    public class EnergySpentEntry : CombatHistoryEntry
+    {
+        public int Amount { get; }
+        public EnergySpentEntry(Entities.Players.Player owner, int amount) => (Actor, Amount) = (owner.Creature, amount);
+    }
+    public class StarsModifiedEntry : CombatHistoryEntry
+    {
+        public int Amount { get; }
+        public StarsModifiedEntry(Entities.Creatures.Creature actor, int amount) => (Actor, Amount) = (actor, amount);
+    }
+    public class CreatureAttackedEntry : CombatHistoryEntry
+    {
+        public IReadOnlyList<Entities.Creatures.DamageResult> DamageResults { get; }
+        public CreatureAttackedEntry(Entities.Creatures.Creature actor, params Entities.Creatures.DamageResult[] results)
+            => (Actor, DamageResults) = (actor, results);
     }
     public class CardExhaustedEntry : CombatHistoryEntry { }
     public class PotionUsedEntry : CombatHistoryEntry
@@ -182,6 +223,24 @@ namespace MegaCrit.Sts2.Core.Combat.History.Entries
     {
         public Entities.Cards.CardPlay? CardPlay = play;
         public ValueProps.ValueProp Props = props;
+    }
+}
+namespace MegaCrit.Sts2.Core.Commands
+{
+    using Combat;
+    using Entities.Cards;
+    using Entities.Players;
+
+    public static class MelodyCmd
+    {
+        public static bool ThrowCho;
+        public static bool PlayedWahThisTurn(Player owner) => PlayedThisTurn(owner, CardTag.Wah);
+        public static bool PlayedChoThisTurn(Player owner) => ThrowCho
+            ? throw new MissingMemberException("PlayedChoThisTurn renamed") : PlayedThisTurn(owner, CardTag.Cho);
+        public static bool PlayedKiThisTurn(Player owner) => PlayedThisTurn(owner, CardTag.Ki);
+        private static bool PlayedThisTurn(Player owner, CardTag tag) => CombatManager.Instance.History.CardPlaysFinished
+            .Any(e => e.HappenedThisTurn(owner.Creature.CombatState) && e.CardPlay.Card.Tags.Contains(tag)
+                && e.CardPlay.Player == owner);
     }
 }
 namespace STS2_MCP

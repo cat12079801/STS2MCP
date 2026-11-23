@@ -244,6 +244,8 @@ async def get_game_state(format: str = "markdown") -> str:
     decision_context.choice_identity（実呼出し）を出す。対応する combat_log の selection 行にも
     choice_identity と chooser_player_id が付く。choice_source.await_chain には Hook.BeforeHandDraw の
     通常段・Late 段と、停止中の列での位置・残りの listener が出る。
+    schema 1.15.0 は戦闘の多段攻撃の入力を出す。player.combat_history の所有者別集計、
+    手札と 4 パイルの star_cost_state の星 X、player.arrow_state の矢枠と刺突。
     ゲームの getter・フィールドの現在値で、false・0 も実値、失敗は null・理由・warnings。
     敵の status[] の THIEVERY_POWER は stolen_gold（盗んだ累計の int）と
     target_player_id、HEIST_POWER は target_player_id を持つ。対象ごとの別行で、
@@ -297,7 +299,7 @@ async def get_game_state(format: str = "markdown") -> str:
     無い札は uid_known=false。
     The state_type field indicates the current screen (combat, map, event, shop,
     fake_merchant, etc.).
-    契約の版は schema（semver の文字列。現在 "1.14.0"）で返す。規則の正本は docs/raw-full.md の
+    契約の版は schema（semver の文字列。現在 "1.15.0"）で返す。規則の正本は docs/raw-full.md の
     「Common Top-Level Fields」。MAJOR は後方互換の無い変更（既存の項目の意味・型・形の変更、
     項目・アクション・列挙の値・state_type の削除・改名、構造の変更）、MINOR は後方互換の追加
     （項目・アクション・任意の引数・state_type・既存の列挙の新しい値。版でなく項目の有無と

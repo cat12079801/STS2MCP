@@ -563,6 +563,27 @@
    "class": "out_of_scope",
    "reason": "オスティ（他キャラの仕組み）"
   },
+  "cmd:MelodyCmd.PlayedChoThisTurn": {
+   "class": "exposed",
+   "proposed_key": "player.combat_history.played_cho_this_turn",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: ReadMelody(\"played_cho_this_turn\", MelodyCmd.PlayedChoThisTurn);"
+   ]
+  },
+  "cmd:MelodyCmd.PlayedKiThisTurn": {
+   "class": "exposed",
+   "proposed_key": "player.combat_history.played_ki_this_turn",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: ReadMelody(\"played_ki_this_turn\", MelodyCmd.PlayedKiThisTurn);"
+   ]
+  },
+  "cmd:MelodyCmd.PlayedWahThisTurn": {
+   "class": "exposed",
+   "proposed_key": "player.combat_history.played_wah_this_turn",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: ReadMelody(\"played_wah_this_turn\", MelodyCmd.PlayedWahThisTurn);"
+   ]
+  },
   "cmd:PlayerCmd.AddPet": {
    "class": "exposed",
    "exposed_by": [
@@ -1110,7 +1131,8 @@
     848
    ],
    "exposed_by": [
-    "McpMod.CardXValue.cs: energyCost[\"x_value_if_played\"] = Hook.ModifyXValue("
+    "McpMod.CardXValue.cs: energyCost[\"x_value_if_played\"] = Hook.ModifyXValue(",
+    "McpMod.CardStarXValue.cs: return Hook.ModifyXValue(combat, card, stars);"
    ]
   },
   "computed:Hook.ShouldAddToDeck": {
@@ -1449,7 +1471,7 @@
   },
   "history:StarsModifiedEntry": {
    "class": "out_of_scope",
-   "reason": "他キャラの仕組み（オーブ・矢・星・召喚）"
+   "reason": "星の増減ごとの通知列は範囲外。当手番・所有者の正の増分合計は player.combat_history.stars_gained_this_turn（schema 1.15.0）"
   },
   "history:SummonedEntry": {
    "class": "out_of_scope",

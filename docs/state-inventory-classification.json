@@ -199,10 +199,13 @@
  },
  "CardModel._lastStarsSpent": {
   "class": "public",
-  "note": "直前に払った星（SpendStars）。星を X に使うカードの値（ResolveStarXValue）。星はリージェント専用",
+  "note": "戦闘の手札・4 パイルの星 X 札の star_cost_state.last_stars_spent。CardModel.SpendStars と CardCmd.AutoPlay が保存した LastStarsSpent を読む。公開された個体の支払い・自動プレイ時の星から確定できる",
   "json_key": "last_stars_spent",
   "effect": "ResolveStarXValue",
-  "pool": "other-character"
+  "reader_key": "StarXLastStarsSpentKey",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "int",
+  "kind": "field"
  },
  "CardModel._owner": {
   "class": "static/derived",
@@ -564,10 +567,14 @@
  },
  "ImpaledPower.Data.arrowSources": {
   "class": "public",
-  "note": "刺さった矢の出どころ（AddArrow・RemoveFirstArrow）。ImpaledPower を付けるのはフールのカード（Nail・BowSmack など）で、ToughEgg.cs:161 は孵化時に除外するだけなので、範囲は other-character に上書きする",
-  "json_key": "arrow_sources",
+  "note": "戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する",
+  "json_key": "impalements",
   "effect": "Arrows・RemoveFirstArrow",
-  "pool": "other-character"
+  "pool": "shared",
+  "reader_key": "ArrowImpalementsKey",
+  "type_full": "MegaCrit.Sts2.Core.Models.Powers.ImpaledPower+Data",
+  "cs_type": "List<ArrowSlot>",
+  "kind": "data_field"
  },
  "Inklet._middleInklet": {
   "class": "static/derived",
@@ -871,10 +878,13 @@
  },
  "PlayerCombatState._arrows": {
   "class": "public",
-  "note": "矢の枠（GainArrow。フール専用の仕組み）",
-  "json_key": "arrows",
+  "note": "戦闘中の player.arrow_state.slots。PlayerCombatState.Arrows の順で、所有者の画面の矢枠と公開された射撃・回収・破壊から確定できる状態を枠添字・状態・使用可否・破壊予定に整形する",
+  "json_key": "slots",
   "effect": "Arrows・AvailableArrowCount",
-  "pool": "other-character"
+  "reader_key": "ArrowSlotsKey",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Players.PlayerCombatState",
+  "cs_type": "List<ArrowSlot>",
+  "kind": "field"
  },
  "PlayerCombatState._pets": {
   "class": "exposed",

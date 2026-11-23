@@ -84,8 +84,10 @@ public static partial class McpMod
     /// and modifier ids on runs with PaelsTooth (sts2#1214).
     /// 1.14.0: battle.attempt_identity and a shared choice_identity for the combat choose screen and its selection
     /// log row; choice_source.await_chain observes Hook.BeforeHandDraw's current stage and its remaining listeners.
+    /// 1.15.0: combat history inputs for dynamic hit counts, saved and manual-play star X values, and arrow state
+    /// (ordered slots and impalements for the player; sts2#1296).
     /// </summary>
-    public const string StateSchema = "1.14.0";
+    public const string StateSchema = "1.15.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

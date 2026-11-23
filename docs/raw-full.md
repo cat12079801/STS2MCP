@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.14.0",       // Contract version (semver) — see below
+  "schema": "1.15.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.14.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.15.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.14.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.15.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -180,6 +180,9 @@ and changing the meaning or shape of an existing field is MAJOR.
   `choice_identity` を出す。`choice_source.await_chain` は `Hook.BeforeHandDraw` の通常段・Late 段の停止位置と残りの listener を出す。
   [戦闘の試行と choose の識別](#戦闘の試行と-choose-の識別schema-1140)・
   [選択を待つ処理の鎖](#選択を待つ処理の鎖choice_sourceawait_chainschema-190)。
+- **1.15.0** — `player.combat_history` の多段攻撃用の集計、戦闘の実カード個体の `star_cost_state` の星 X、
+  `player.arrow_state` に矢の枠と刺突を出す（`cat12079801/sts2#1296`）。
+  [履歴](#多段攻撃用の戦闘履歴schema-1150)・[星 X](#戦闘カード個体の星-xschema-1150)・[矢](#矢の枠と刺突schema-1150)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -982,6 +985,28 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 手動プレイの項目も旧 MOD では欠落し、欠落・null は unknown として扱う。
 読取不能時は `any_manual_cards_played_this_turn: null` と同名の `unavailable_reasons`、
 `player.combat_history.any_manual_cards_played_this_turn` の warning を出す。
+
+#### 多段攻撃用の戦闘履歴（schema 1.15.0）
+
+`player.combat_history` の次の項目は、戦闘中の選択画面を含む各 snapshot でローカル所有者について出す。
+当手番は `CombatHistoryEntry.HappenedThisTurn` が round・現在の側・記録時の各プレイヤーの `TurnNumber` で判定する。
+戦闘全体の集計には手番条件を付けない。`CombatManager.Reset` / `EndCombatInternal` が履歴を消す。
+
+| キー | 型 | 読取元 |
+| --- | --- | --- |
+| `energy_spent_this_turn` | int | 当手番の `EnergySpentEntry` のうち `Actor.Player == owner` の `Amount` の和。`HelixDrill.CanonicalVars` の自己支払い減算前の値 |
+| `unfinished_energy_spent_by_uid_this_turn` | object（uid → int） | `HelixDrill.CanonicalVars` と同じく、当手番・`Actor.Player == owner` の開始履歴で、カード実参照ごとの最新の `CardPlay` を選ぶ。同じ手番・Actor 条件の完了履歴にその `CardPlay` 実参照が無い場合だけ、既存 uid に `Resources.EnergySpent` を対応付ける |
+| `stars_gained_this_turn` | int | `Radiate.CanonicalVars` と同じく、当手番・`Actor == owner.Creature` の `StarsModifiedEntry` の正の `Amount` の和。`PlayerCombatState.Stars` は実際の増減差を記録する |
+| `ethereal_plays_finished_this_combat` | int | `PullFromBelow.CanonicalVars` と同じく、当戦闘・`CardPlay.Player == owner` の完了のうち、`CardPlayFinishedEntry` が完了時に保存した `WasEthereal` が真の件数。同じ uid で完了を繰り返せばその都度数える |
+| `osty_attacks_this_turn` | int | `Rattle.CanonicalVars` と同じく、当手番で `Actor == owner.Osty` の `CreatureAttackedEntry` の件数。`AttackCommand.Execute` の攻撃履歴を数える。現参照が死亡個体ならその履歴を数え、不在なら 0。生死は `player.pets` を併読する |
+| `played_wah_this_turn` / `played_cho_this_turn` / `played_ki_this_turn` | bool（各項目） | `MelodyCmd.PlayedWahThisTurn` / `PlayedChoThisTurn` / `PlayedKiThisTurn` の戻り値。当手番に所有者が完了した札のタグを調べる。複合タグはそれぞれ真、同じタグは繰り返しても真のまま |
+
+正常な空の集計は `0`・`false`・`{}`。未完了の 0 支払いは `{"<uid>": 0}`。
+最新の開始が完了済みなら古い未完了には遡らない。正常に取得した表に uid が無ければその札の減算量は 0。
+取得失敗は項目ごとに `null`、`combat_history.unavailable_reasons` に理由、トップレベルの `warnings` に項目パスを出す。
+表の行を一つでも読めなければ表全体を `null` にする。旧版のキー欠落は未観測として扱う。
+既存の被害・完了種類別件数、`card_resolution_events`、`combat_log` は各契約のまま併読できる。
+Markdown の History 行には正の集計値と取得失敗を出す。未完了表と旋律の真偽は JSON で読む。
 
 #### 札の解決の通し列（card_resolution_events、schema 1.6.0）
 
@@ -1875,7 +1900,7 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 ### Star Cost State Object（追加、schema 4）
 
 戦闘中の `player.hand[]` / `draw_pile[]` / `discard_pile[]` / `exhaust_pile[]` / `play_pile[]` と、
-戦闘中の choose-a-card の候補に `star_cost_state` を出す（`energy_cost` と同じ行）。
+戦闘中の choose-a-card の候補に、次の形の `star_cost_state` を出す（`energy_cost` と同じ行）。
 
 ```jsonc
 "star_cost_state": {
@@ -1902,6 +1927,25 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 
 出典は `sts2-a671e9ef` の `CardModel.BaseStarCost` / `CanonicalStarCost` / `HasStarCostX` / `CurrentStarCost` /
 `_temporaryStarCosts` / `SetToFreeThisTurn` / `SetStarCostThisTurn`、`TemporaryCardCost`。
+
+#### 戦闘カード個体の星 X（schema 1.15.0）
+
+戦闘中の手札・ドロー・捨て・廃棄・プレイ山の実カード行で、`star_cost_state.costs_x: true` のときに次を出す。
+戦闘外デッキ・生成候補・選択候補の表示用の行・切り離した強化プレビューにこの追加項目は付かない。
+
+| キー | 型 | 読取元 |
+| --- | --- | --- |
+| `last_stars_spent` | int | 実個体の `CardModel.LastStarsSpent`。`SpendStars` が保存し、`CardCmd.AutoPlay` は `skipXCapture` が偽なら現在の星を保存する。真なら保存値を保持する |
+| `resolved_x_value` | int | 同じ個体の `CardModel.ResolveStarXValue()`。保存値を `Hook.ModifyXValue` で補正した X |
+| `stars_if_played` | int | null | 手札から今手動で使う場合の支払要求額。`CardModel.SpendResources` の計算に従い、`GetStarCostWithModifiers()` を 0 以上にし、現在の Energy と `EnergyCost.GetAmountToSpend()` の差に対し `Hook.ShouldPayExcessEnergyCostWithStars` が成立すれば不足 1 につき星 2 を足す |
+| `x_value_if_played` | int | null | 手札からの支払要求額に `Hook.ModifyXValue` を一度適用した効果用 X。`ChemicalX.ModifyXValue` は所有者の X に補正を加える |
+
+プレイ可否は既存の `can_play` / `unplayable_reason` の契約に従う。取得時に実際の支払い・プレイ・保存値の代入は行わない。
+自動プレイの実支払い `Resources.StarsSpent` は 0。保存値は初期値 0 を含め、星残高が 0 になった後にも取得できる。
+非手札の `stars_if_played` と `x_value_if_played` は `null`、理由は各 `not_in_hand`。
+`costs_x: false` なら四項目を省略する。`costs_x` の読取失敗は `null` と理由・警告を保持する。
+個別の読取失敗は項目の `null`・`star_cost_state.unavailable_reasons`・トップレベルの `warnings` で示す。
+`stars_if_played` が読めなければ `x_value_if_played` も欠測になる。`current` は従来の `CardModel.CurrentStarCost`。
 
 ### 次回プレイ時の廃棄フラグ（追加、schema 3）
 
@@ -1945,6 +1989,41 @@ false・null・項目なしでは印を付けない。schema 3 で追加した�
 `exhaust_on_next_play: true` で廃棄札に入り、Markdown に `[exhaust-next]` が出た。
 
 `hand_select.cards[]` には出さない（`uid` と同じ。同じ札は `player.hand[]` で読む）。
+
+### 矢の枠と刺突（schema 1.15.0）
+
+戦闘中のローカル `player` に `arrow_state` を出す。通常の入力と戦闘中の選択画面は同じ形を使う。
+戦闘外では省略する。枠や刺突が無ければ `slots: []`、`available_count: 0`、`impalements: []` で表す。
+
+```json
+{
+  "slots": [
+    { "slot": 0, "status": "Retrieved", "is_available": true, "destroy_after_impaled": false },
+    { "slot": 1, "status": "Away", "is_available": false, "destroy_after_impaled": true }
+  ],
+  "available_count": 1,
+  "impalements": [
+    { "target_combat_id": 5, "target_entity_id": "WRIGGLER_0", "hit_counter": 2, "slot_indices": [1] }
+  ],
+  "unavailable_reasons": {}
+}
+```
+
+- `slots` は `PlayerCombatState.Arrows` 順。`slot` は所有者・当戦闘内だけの 0 始まりの添字。
+  `ArrowSlot.Status` は `Retrieved` / `Away` / `Destroyed`、使用可否は `ArrowSlot.IsAvailable`、
+  破壊予定は `ArrowSlot.DestroyAfterImpaled` を読む。`available_count` は `PlayerCombatState.AvailableArrowCount`。
+- `impalements` は戦闘の対象上で `Applier == owner.Creature` の `ImpaledPower` ごとの行。
+  `target_combat_id` は対象の戦闘 ID、敵には既存の安定 `target_entity_id`、回収までの値は `ImpaledPower.HitCounter`。
+  `slot_indices` は `ImpaledPower.Arrows` の格納順の実参照を枠添字に変換する。
+  `ImpaledPower.RemoveFirstArrow` は先頭を回収対象にする。`AfterDamageReceived` / `AfterDeath` と
+  `ArrowCmd.DislodgeArrow` / `RetrieveArrow` / `DestroyArrow` が射撃後の枠に影響する。
+- `ArrowCmd.ShootArrowAtTarget` は生きた対象に対し `TryGetNextArrowToShoot` で配列末尾から最初の使用可能枠を選ぶ。
+  `TryShootArrow` が枠を Away にした後、射撃後の hook と攻撃・刺突が続くため、Away でまだ刺さっていない枠もありうる。
+  空撃ちでは渡した攻撃コマンドは実行されず、`AfterArrowShot` には null が渡る。札の使用可否は既存の判定を使う。
+- 不明な enum、他の所有者の枠、解決できない参照や getter の失敗は、該当する項目を `null` にする。
+  残りの独立に読めた項目は保持する。枠の使用可能数と `available_count` が矛盾したら両方を `null` にする。
+  `unavailable_reasons` の項目名に理由を入れ、トップレベルの `warnings` に `player.arrow_state.<key>` を出す。
+  旧版のブロック欠落は未観測として扱う。
 
 ### Orb Object
 
@@ -2224,6 +2303,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 分類表（`docs/state-inventory-classification.json`）で `section` を付けた項目を、行ごとの `internal_state` に出す。
 項目の一覧は分類表から `tools/state_inventory.py --write-allowlist` が生成する `McpMod.StateAllowlist.Generated.cs` で、項目ごとに分類の根拠（分類表の備考）を持つ。
 生成物が分類表と一致するかは `--check-allowlist` で確かめる。読む処理は `McpMod.StateAllowlist.cs`。
+分類表の `reader_key` を持つ項目も同じ許可リストから公開キーを生成し、星 X と矢の専用 reader がそれぞれの公開パスに整形する。
 
 付く行:
 

@@ -1686,6 +1686,7 @@ public static partial class McpMod
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
             state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
             state["combat_history"] = BuildCombatHistoryState(player);
+            state["arrow_state"] = BuildArrowState(player, creature.CombatState);
             // EntropyPower の変化の候補（CardFactory.GetDefaultTransformationOptions）。エントロピーがある戦闘だけ。
             if (BuildTransformationOptionsIfRelevant(player, combatState) is { } transformationOptions)
                 state["transformation_options"] = transformationOptions;
@@ -1913,6 +1914,7 @@ public static partial class McpMod
         // The X an X-cost card in the hand would read if played now (Hook.ModifyXValue; McpMod.CardXValue.cs).
         AttachXValueIfPlayed((Dictionary<string, object?>)state["energy_cost"]!, card);
         state["star_cost_state"] = BuildCardStarCostState(card);
+        AttachCombatStarXValues((Dictionary<string, object?>)state["star_cost_state"]!, card, PileType.Hand);
         state["description"] = SafeGetCardDescription(card); // hand cards use default pile
         AttachCardPlayability(state, card);
         AttachCombatUpgradeState(state, card, PileType.Hand);
@@ -2089,6 +2091,7 @@ public static partial class McpMod
                 ["star_cost"] = GetStarCostDisplay(card),
                 ["description"] = SafeGetCardDescription(card, pile)
             };
+            AttachCombatStarXValues((Dictionary<string, object?>)state["star_cost_state"]!, card, pile);
             AttachCardDetails(state, card);
             // CardModel.Rarity, the enum name hand rows carry (BuildCardInfo). Shown on the card face, so it is
             // public; ThievingHopper.ThieveryMove picks from Draw + Discard by it (schema 1.12.0, sts2#1133).

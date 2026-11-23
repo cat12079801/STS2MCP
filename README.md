@@ -59,7 +59,7 @@ curl -s http://localhost:15526/
 A successful response looks like:
 
 ```json
-{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "1.14.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
+{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "1.15.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
 ```
 
 `commit` is the git revision the mod was built from (`null` if the build could not determine one) —
@@ -225,6 +225,7 @@ cp mod_manifest.json "$MODS_DIR/STS2_MCP.json"
 
 ゲームのモデルの内部状態の棚卸しは [`docs/state-inventory.md`](docs/state-inventory.md)、人の判断は `docs/state-inventory-classification.json` にある。
 分類表で `section` を付けた public の項目は、`McpMod.StateAllowlist.Generated.cs`（生成物。手で直さない）を通して state の `internal_state` に出る。
+`reader_key` を付けた項目は同じ生成物から公開キーを取り、専用 reader が分類表の備考にある公開パスに出す。
 分類表または MOD の `*.cs` を直した PR では、次を回して差分が無いことを確かめる（`<decompile>` はゲームの版のデコンパイル）:
 
 ```fish
