@@ -1937,13 +1937,14 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 | --- | --- | --- |
 | `last_stars_spent` | int | 実個体の `CardModel.LastStarsSpent`。`SpendStars` が保存し、`CardCmd.AutoPlay` は `skipXCapture` が偽なら現在の星を保存する。真なら保存値を保持する |
 | `resolved_x_value` | int | 同じ個体の `CardModel.ResolveStarXValue()`。保存値を `Hook.ModifyXValue` で補正した X |
-| `stars_if_played` | int | null | 手札から今手動で使う場合の支払要求額。`CardModel.SpendResources` の計算に従い、`GetStarCostWithModifiers()` を 0 以上にし、現在の Energy と `EnergyCost.GetAmountToSpend()` の差に対し `Hook.ShouldPayExcessEnergyCostWithStars` が成立すれば不足 1 につき星 2 を足す |
-| `x_value_if_played` | int | null | 手札からの支払要求額に `Hook.ModifyXValue` を一度適用した効果用 X。`ChemicalX.ModifyXValue` は所有者の X に補正を加える |
+| `stars_if_played` | int \| null | 手札から今手動で使う場合の支払要求額。`CardModel.SpendResources` の計算に従い、`GetStarCostWithModifiers()` を 0 以上にし、現在の Energy と `EnergyCost.GetAmountToSpend()` の差に対し `Hook.ShouldPayExcessEnergyCostWithStars` が成立すれば不足 1 につき星 2 を足す |
+| `x_value_if_played` | int \| null | 手札からの支払要求額に `Hook.ModifyXValue` を一度適用した効果用 X。`ChemicalX.ModifyXValue` は所有者の X に補正を加える |
 
 プレイ可否は既存の `can_play` / `unplayable_reason` の契約に従う。取得時に実際の支払い・プレイ・保存値の代入は行わない。
 自動プレイの実支払い `Resources.StarsSpent` は 0。保存値は初期値 0 を含め、星残高が 0 になった後にも取得できる。
 非手札の `stars_if_played` と `x_value_if_played` は `null`、理由は各 `not_in_hand`。
 `costs_x: false` なら四項目を省略する。`costs_x` の読取失敗は `null` と理由・警告を保持する。
+`costs_x: null` のときも四項目を省略し、`star_cost_state.unavailable_reasons.costs_x` の理由で未観測と判断する。
 個別の読取失敗は項目の `null`・`star_cost_state.unavailable_reasons`・トップレベルの `warnings` で示す。
 `stars_if_played` が読めなければ `x_value_if_played` も欠測になる。`current` は従来の `CardModel.CurrentStarCost`。
 
@@ -2015,6 +2016,7 @@ false・null・項目なしでは印を付けない。schema 3 で追加した�
 - `impalements` は戦闘の対象上で `Applier == owner.Creature` の `ImpaledPower` ごとの行。
   `target_combat_id` は対象の戦闘 ID、敵には既存の安定 `target_entity_id`、回収までの値は `ImpaledPower.HitCounter`。
   `slot_indices` は `ImpaledPower.Arrows` の格納順の実参照を枠添字に変換する。
+  `CombatState.CreatureEscaped` で戦闘から外れた対象に刺さった矢は `impalements` に出ない。
   `ImpaledPower.RemoveFirstArrow` は先頭を回収対象にする。`AfterDamageReceived` / `AfterDeath` と
   `ArrowCmd.DislodgeArrow` / `RetrieveArrow` / `DestroyArrow` が射撃後の枠に影響する。
 - `ArrowCmd.ShootArrowAtTarget` は生きた対象に対し `TryGetNextArrowToShoot` で配列末尾から最初の使用可能枠を選ぶ。

@@ -116,7 +116,7 @@ public static partial class McpMod
     // 通常の internal_state と別の形で出す専用 reader のキー。
     // CardModel._lastStarsSpent（戦闘の手札・4 パイルの星 X 札の star_cost_state.last_stars_spent。CardModel.SpendStars と CardCmd.AutoPlay が保存した LastStarsSpent を読む。公開された個体の支払い・自動プレイ時の星から確定できる）
     private const string StarXLastStarsSpentKey = "last_stars_spent";
-    // ImpaledPower.Data.arrowSources（戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する）
+    // ImpaledPower.Data.arrowSources（戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する。#1296（親指締め具の多段の入力）のため範囲に入れる。付与はフールのカード）
     private const string ArrowImpalementsKey = "impalements";
     // PlayerCombatState._arrows（戦闘中の player.arrow_state.slots。PlayerCombatState.Arrows の順で、所有者の画面の矢枠と公開された射撃・回収・破壊から確定できる状態を枠添字・状態・使用可否・破壊予定に整形する）
     private const string ArrowSlotsKey = "slots";

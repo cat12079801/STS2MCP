@@ -567,7 +567,7 @@
  },
  "ImpaledPower.Data.arrowSources": {
   "class": "public",
-  "note": "戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する",
+  "note": "戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する。#1296（親指締め具の多段の入力）のため範囲に入れる。付与はフールのカード",
   "json_key": "impalements",
   "effect": "Arrows・RemoveFirstArrow",
   "pool": "shared",
