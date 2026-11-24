@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.16.0",       // Contract version (semver) — see below
+  "schema": "1.17.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.16.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.17.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.16.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.17.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -184,6 +184,7 @@ and changing the meaning or shape of an existing field is MAJOR.
   `player.arrow_state` に矢の枠と刺突を出す（`cat12079801/sts2#1296`）。
   [履歴](#多段攻撃用の戦闘履歴schema-1150)・[星 X](#戦闘カード個体の星-xschema-1150)・[矢](#矢の枠と刺突schema-1150)。
 - **1.16.0** — 所有者の `pets` に戦闘中のワッピーを、生死・個体 ID・表示によらないパワー ID とともに出す（`cat12079801/sts2#841`）。
+- **1.17.0** — 表示中のエンシェントの対象6候補に、恒久デッキの各札の判定を `deck_targets` として出す（`cat12079801/sts2#1348`）。
   [戦闘中のワッピー](#戦闘中のワッピーschema-1160)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
@@ -3361,6 +3362,43 @@ Pick one card to add to your deck. Appears after claiming a card reward, or dire
   "player": { ... }
 }
 ```
+
+#### エンシェントのデッキ対象（`deck_targets`、schema 1.17.0）
+
+`event.options[]` のうち、会話のあとに表示されている未選択のボタンに下表のレリックが付いている場合、
+`deck_targets` を出す。ボタンとレリックの対応は `NEventRoom.SetOptions`、`AncientEventModel.RelicOption`、
+`EventOption.FromRelic` が作る `NEventOptionButton.Option.Relic` から読む。
+
+```json
+{
+  "known": true,
+  "rows": [
+    {"deck_index": 0, "card_id": "STRIKE_IRONCLAD", "enchantment_id": null, "can_enchant": true}
+  ],
+  "unavailable_reasons": {}
+}
+```
+
+成功時はローカルプレイヤーの `Player.Deck.Cards` 全件を順に返す。`deck_index` と `card_id` は
+同じ応答の `player.deck[].index` と `id` と一致し、同じ ID の札も位置で区別する。
+既存の `type`・`rarity`・強化段階は対応する `player.deck[]` の行、HP と最大 HP は `player` から読む。
+`enchantment_id` は全6候補の各行にあり、`CardModel.Enchantment.Id.Entry` の文字列か、付加がないときの `null`。
+デッキが空なら `known: true, rows: []`。取得・照合に失敗した場合は `known: false, rows: []` とし、
+`unavailable_reasons` に失敗位置と項目（例 `rows[2].enchantment_id`、デッキ全体なら `player.deck`）の理由を返す。
+Markdown は読み取れたデッキの枚数か取得失敗の項目を選択肢の下に表示する。
+
+| レリック ID | 行の追加項目と v0.113.1 の根拠 |
+|---|---|
+| `BEAUTIFUL_BRACELET` | `can_enchant` は `ModelDb.Enchantment<Swift>().CanEnchant(card)`。 `BeautifulBracelet.AfterObtained` が使う抽選母集団の判定。 |
+| `ELECTRIC_SHRYMP` | `can_enchant` は `ModelDb.Enchantment<Imbued>().CanEnchant(card)`。 `ElectricShrymp.AfterObtained` が呼ぶ `CardSelectCmd.FromDeckForEnchantment` の判定で、`Imbued.CanEnchantCardType` は Skill を許す。 |
+| `NEOWS_TALISMAN` | `tags` は `CardModel.Tags` の enum 名の配列。 `NeowsTalisman.AfterObtained` が Basic の末尾の Strike と Defend を決め、`CardCmd.Upgrade` が強化可否を判定する。 |
+| `LEAFY_POULTICE` | `tags` と `is_transformable`（`CardModel.IsTransformable`）。 `LeafyPoultice.AfterObtained` は最大 HP を減らしてから Basic の先頭の Strike と Defend を決める。 `CardCmd.Transform` が変化可否を検査する。 |
+| `ASTROLABE` | `is_transformable`。 `Astrolabe.AfterObtained` が呼ぶ `CardSelectCmd.FromDeckForTransformation` は Quest も除く。 |
+| `PANDORAS_BOX` | `is_basic_strike_or_defend` と `is_removable` は `CardModel.IsBasicStrikeOrDefend` と `CardModel.IsRemovable`。 `PandorasBox.AfterObtained` は両方が真の全個体を変化させる。 |
+
+`EnchantmentModel.CanEnchant` は札の種類・プレイ不可・既存付加を検査する。
+`CardModel.IsRemovable` は永劫を検査し、恒久デッキにある除去不能札は `CardModel.IsTransformable` も偽になる。
+公開範囲は提示時点のデッキと判定まで。取得後の対象選択・抽選・変化先の生成はゲームの効果処理が行う。
 
 ### `rest_site` — Rest Site
 

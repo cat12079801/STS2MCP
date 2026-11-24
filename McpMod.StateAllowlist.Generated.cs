@@ -114,6 +114,8 @@ public static partial class McpMod
     };
 
     // 通常の internal_state と別の形で出す専用 reader のキー。
+    // CardModel.Enchantment（付加したエンチャントは札のホバーで見える。戦闘のカード詳細は従来の enchantment を出し、提示中の対象エンシェント6候補では専用 reader が恒久デッキ各札の Enchantment の ID を出す。付加なしは null、読めない場合は deck_targets を未観測にする（sts2#1348））
+    private const string AncientDeckEnchantmentIdKey = "enchantment_id";
     // CardModel._lastStarsSpent（戦闘の手札・4 パイルの星 X 札の star_cost_state.last_stars_spent。CardModel.SpendStars と CardCmd.AutoPlay が保存した LastStarsSpent を読む。公開された個体の支払い・自動プレイ時の星から確定できる）
     private const string StarXLastStarsSpentKey = "last_stars_spent";
     // Creature._powers（表示用の status に加え、ワッピーでは Creature.Powers のモデル ID を元の順で pets[].power_ids に出す。WuppysLoyaltyPower.ModifyPreBlockDamageTarget が転送を決め、ShouldPowerBeRemovedAfterOwnerDeath は死亡後も忠誠を残す。表示で落ちるパワーの ID も含む（sts2#841））

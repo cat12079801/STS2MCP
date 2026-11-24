@@ -84,6 +84,16 @@
   "class": "exposed",
   "note": "energy_cost の local_modifiers（McpMod.CardEnergyCost.cs:52。ReadLocalEnergyCostModifiers〔同 :103〕が cost.GetType() で読むので型の文脈が無く、mod-scan では数えない）"
  },
+ "CardModel.Enchantment": {
+  "class": "public",
+  "note": "付加したエンチャントは札のホバーで見える。戦闘のカード詳細は従来の enchantment を出し、提示中の対象エンシェント6候補では専用 reader が恒久デッキ各札の Enchantment の ID を出す。付加なしは null、読めない場合は deck_targets を未観測にする（sts2#1348）",
+  "json_key": "enchantment_id",
+  "effect": "EnchantmentModel.CanEnchant・エンシェント取得で失う付加の確認",
+  "reader_key": "AncientDeckEnchantmentIdKey",
+  "type_full": "MegaCrit.Sts2.Core.Models.CardModel",
+  "cs_type": "EnchantmentModel?",
+  "kind": "auto_property"
+ },
  "CardModel.HasBeenRemovedFromState": {
   "class": "static/derived",
   "note": "state から外れたモデルの印（RemoveFromState）。外れたモデルは state の一覧に出ない"
@@ -221,7 +231,7 @@
  },
  "CardModel._tags": {
   "class": "static/derived",
-  "note": "カードの定義から決まる（プール・CanonicalTags・星のコストの初期化の印）"
+  "note": "CardModel.Tags は CanonicalTags から作るキャッシュ。戦闘のカード詳細と、タリスマン・湿布が提示されているときの deck_targets.rows に enum 名を出す。値は札の定義から決まる（sts2#1348）"
  },
  "CardModel._transformIntoAfterPlay": {
   "class": "public",

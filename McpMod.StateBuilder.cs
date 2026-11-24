@@ -560,7 +560,6 @@ public static partial class McpMod
             else
             {
                 result["state_type"] = "event";
-                result["event"] = BuildEventState(eventRoom, runState);
             }
         }
         else if (currentRoom is MapRoom)
@@ -659,10 +658,14 @@ public static partial class McpMod
 
         // Always include full player data (relics, potions, deck, etc.) on every screen
         var _player = LocalContext.GetMe(runState);
+        var screen = result.GetValueOrDefault("state_type") as string;
         if (_player != null)
         {
-            result["player"] = BuildPlayerState(_player, result.GetValueOrDefault("state_type") as string);
+            result["player"] = BuildPlayerState(_player, screen);
         }
+        if (screen == "event" && currentRoom is EventRoom visibleEventRoom)
+            result["event"] = BuildEventState(visibleEventRoom, _player,
+                result.GetValueOrDefault("player") as Dictionary<string, object?>);
 
         AddResolvingState(result, result.GetValueOrDefault("state_type")?.ToString(), combatBoundaryReason);
 
@@ -1784,7 +1787,13 @@ public static partial class McpMod
         state["potions"] = potions;
         state["max_potion_slots"] = player.MaxPotionCount;
 
-        AddDeckState(state, player, inCombat);
+        try { AddDeckState(state, player, inCombat); }
+        catch (Exception ex) when (screen == "event" &&
+            player.RunState.CurrentRoom is EventRoom { CanonicalEvent: AncientEventModel })
+        {
+            // Leave the failed deck absent so the option's deck_targets can report it as unknown.
+            Warn("player.deck", ex);
+        }
 
         return state;
     }
@@ -2346,7 +2355,8 @@ public static partial class McpMod
         return null;
     }
 
-    private static Dictionary<string, object?> BuildEventState(EventRoom eventRoom, RunState runState)
+    private static Dictionary<string, object?> BuildEventState(EventRoom eventRoom, Player? localPlayer,
+        Dictionary<string, object?>? playerState)
     {
         var state = new Dictionary<string, object?>();
 
@@ -2391,10 +2401,13 @@ public static partial class McpMod
                     ["is_proceed"] = opt.IsProceed,
                     ["was_chosen"] = opt.WasChosen
                 };
-                if (opt.Relic != null)
+                if (opt.Relic is { } relic)
                 {
-                    optData["relic_name"] = SafeGetText(() => opt.Relic.Title);
-                    optData["relic_description"] = SafeGetText(() => opt.Relic.DynamicDescription);
+                    optData["relic_name"] = SafeGetText(() => relic.Title);
+                    optData["relic_description"] = SafeGetText(() => relic.DynamicDescription);
+                    // NEventRoom sets up the button nodes before the dialogue shows them.
+                    AttachAncientDeckTargets(optData, isAncient && !inDialogue && !opt.WasChosen &&
+                        IsNodeVisible(button), relic, localPlayer, playerState);
                 }
                 optData["keywords"] = BuildHoverTips(opt.HoverTips);
                 options.Add(optData);

@@ -2193,10 +2193,17 @@
   },
   "manual:EventModel.CurrentOptions": {
    "class": "exposed",
-   "exposed_by": [
-    "McpMod.StateBuilder.cs: result[\"event\"] = BuildEventState("
+   "visible": "現在のイベントの選択肢と、表示中の対象エンシェントの効果が参照する恒久デッキの札",
+   "proposed_key": "event.options と対象の event.options[].deck_targets",
+   "issues": [
+    1348
    ],
-   "proposed_key": "event.options"
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: result[\"event\"] = BuildEventState(",
+    "McpMod.StateBuilder.cs: AttachAncientDeckTargets(optData, isAncient",
+    "McpMod.AncientDeckTargets.cs: option[\"deck_targets\"] ="
+   ],
+   "reason": "NEventRoom.SetOptions で作られた表示中のボタンのレリックを6種に限定する。CardModel.Tags・Enchantment・IsTransformable・IsRemovable・IsBasicStrikeOrDefend と EnchantmentModel.CanEnchant の現在値を読み、候補プールや取得時の抽選結果は出さない"
   },
   "manual:PotionModel.OnUseWrapper": {
    "class": "exposed",

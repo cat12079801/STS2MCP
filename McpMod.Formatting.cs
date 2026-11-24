@@ -702,6 +702,7 @@ public static partial class McpMod
                 string tag = locked ? " (LOCKED)" : chosen ? " (CHOSEN)" : proceed ? " (PROCEED)" : "";
                 string relic = opt.TryGetValue("relic_name", out var rn) && rn != null ? $" [Relic: {rn}]" : "";
                 sb.AppendLine($"- [{opt["index"]}] **{opt["title"]}**{tag}{relic} - {opt["description"]}");
+                FormatAncientDeckTargetsMarkdown(sb, opt);
             }
             sb.AppendLine();
         }

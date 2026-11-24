@@ -179,7 +179,6 @@ public static partial class McpMod
             else
             {
                 result["state_type"] = "event";
-                result["event"] = BuildMultiplayerEventState(eventRoom, runState);
             }
         }
         else if (currentRoom is MapRoom)
@@ -262,10 +261,14 @@ public static partial class McpMod
 
         // Always include full local player data (relics, potions, deck, etc.) on every screen,
         // matching singleplayer behavior from BuildGameState()
+        var screen = result.GetValueOrDefault("state_type") as string;
         if (localPlayer != null)
         {
-            result["player"] = BuildPlayerState(localPlayer, result.GetValueOrDefault("state_type") as string);
+            result["player"] = BuildPlayerState(localPlayer, screen);
         }
+        if (screen == "event" && currentRoom is EventRoom visibleEventRoom)
+            result["event"] = BuildMultiplayerEventState(visibleEventRoom, runState, localPlayer,
+                result.GetValueOrDefault("player") as Dictionary<string, object?>);
 
         return result;
     }
@@ -332,10 +335,11 @@ public static partial class McpMod
         return state;
     }
 
-    private static Dictionary<string, object?> BuildMultiplayerEventState(EventRoom eventRoom, RunState runState)
+    private static Dictionary<string, object?> BuildMultiplayerEventState(EventRoom eventRoom, RunState runState,
+        Player? localPlayer, Dictionary<string, object?>? playerState)
     {
         // Start with the standard event state
-        var state = BuildEventState(eventRoom, runState);
+        var state = BuildEventState(eventRoom, localPlayer, playerState);
 
         // Add multiplayer-specific event data
         try
