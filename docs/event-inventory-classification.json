@@ -837,6 +837,7 @@
   "computed:CardFactory.FilterForCombat": {
    "class": "exposed",
    "exposed_by": [
+    "McpMod.GenerationPool.cs: ColorlessPotionGenerationPoolFilterSource",
     "McpMod.StateBuilder.cs: state[\"generation_pool\"] = BuildGenerationPool(player);"
    ],
    "proposed_key": "player.generation_pool",
@@ -852,6 +853,7 @@
   "computed:CardFactory.GetDistinctForCombat": {
    "class": "exposed",
    "exposed_by": [
+    "McpMod.GenerationPool.cs: ColorlessPotionGenerationPoolFilterSource",
     "McpMod.StateBuilder.cs: state[\"generation_pool\"] = BuildGenerationPool(player);"
    ],
    "proposed_key": "player.generation_pool",
@@ -1547,7 +1549,7 @@
   "hook:Hook.AfterCardChangedPiles": {
    "class": "exposed",
    "visible": "札が山を移った後の効果。札の移動そのものも見える。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterCardChangedPiles]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterCardChangedPiles]{scope, args, passes[{method, listeners[]}]} / player.choice_potion_context.slots[].notifications[]",
    "issues": [
     327,
     771,
@@ -1557,6 +1559,7 @@
     997
    ],
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: nameof(AbstractModel.AfterCardChangedPilesLate)",
     "McpMod.CombatLogPatches.cs: (\"AfterCardChangedPiles\", \""
    ]
   },
@@ -1572,9 +1575,10 @@
   "hook:Hook.AfterCardEnteredCombat": {
    "class": "exposed",
    "visible": "札が戦闘に入ったときの効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterCardEnteredCombat]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterCardEnteredCombat]{scope, args, passes[{method, listeners[]}]} / player.choice_potion_context.slots[].notifications[]",
    "issues": [],
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: Stage(CardEnteredCombatHook",
     "McpMod.CombatLogPatches.cs: (\"AfterCardEnteredCombat\", \""
    ]
   },
@@ -1592,9 +1596,10 @@
   "hook:Hook.AfterCardGeneratedForCombat": {
    "class": "exposed",
    "visible": "生成札に反応する効果。生成自体は exposed。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterCardGeneratedForCombat]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterCardGeneratedForCombat]{scope, args, passes[{method, listeners[]}]} / player.choice_potion_context.slots[].notifications[]",
    "issues": [],
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: Stage(CardGeneratedForCombatHook",
     "McpMod.CombatLogPatches.cs: (\"AfterCardGeneratedForCombat\", \""
    ]
   },
@@ -1690,9 +1695,10 @@
   "hook:Hook.AfterHandEmptied": {
    "class": "exposed",
    "visible": "手札が空になったときの効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterHandEmptied]{scope, args, passes[{method, listeners[]}]}",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterHandEmptied]{scope, args, passes[{method, listeners[]}]} / player.choice_potion_context.slots[].notifications[]",
    "issues": [],
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: Stage(HandEmptiedHook)",
     "McpMod.CombatLogPatches.cs: (\"AfterHandEmptied\", \""
    ]
   },
@@ -1842,13 +1848,14 @@
   "hook:Hook.AfterPotionUsed": {
    "class": "exposed",
    "visible": "ポーション使用後の効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=AfterPotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.after_potion_used",
+   "proposed_key": "battle.combat_log[kind=hook,hook=AfterPotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.after_potion_used / player.choice_potion_context.slots[].notifications[]",
    "issues": [
     991
    ],
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: Stage(AfterPotionUsedHook)",
     "McpMod.CombatLogPatches.cs: (\"AfterPotionUsed\", \"",
-    "McpMod.EntropicBrew.cs: (\"after_potion_used\", nameof(AbstractModel.AfterPotionUsed)"
+    "McpMod.EntropicBrew.cs: AfterPotionUsedHook"
    ]
   },
   "hook:Hook.AfterPowerAmountChanged": {
@@ -2071,13 +2078,14 @@
   "hook:Hook.BeforePotionUsed": {
    "class": "exposed",
    "visible": "ポーション使用直前の効果。光る効果の順と、その間に開く選択の段階",
-   "proposed_key": "battle.combat_log[kind=hook,hook=BeforePotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.before_potion_used",
+   "proposed_key": "battle.combat_log[kind=hook,hook=BeforePotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.before_potion_used / player.choice_potion_context.slots[].notifications[]",
    "issues": [
     991
    ],
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: Stage(BeforePotionUsedHook)",
     "McpMod.CombatLogPatches.cs: (\"BeforePotionUsed\", \"",
-    "McpMod.EntropicBrew.cs: (\"before_potion_used\", nameof(AbstractModel.BeforePotionUsed)"
+    "McpMod.EntropicBrew.cs: BeforePotionUsedHook"
    ]
   },
   "hook:Hook.BeforePowerAmountChanged": {
@@ -2174,10 +2182,11 @@
   "manual:CombatState.IterateHookListeners": {
    "class": "exposed",
    "exposed_by": [
+    "McpMod.ChoicePotionContext.cs: combat.IterateHookListeners().ToList()",
     "McpMod.ChoiceSource.cs: row[\"remaining_listeners\"] = BuildHookListenerRows"
    ],
    "proposed_key": "<screen>.choice_source.hook.remaining_listeners",
-   "reason": "listener の順（陣営→生物のパワー→レリック→ポーション→オーブ→山の札）。選択画面の中だけ出る。山札の札の位置は非公開"
+   "reason": "listener の順（陣営→生物のパワー→レリック→ポーション→オーブ→山の札）。選択画面と、安定した三択瓶の飲用前で介入源がある局面に出る。山札の札の位置は非公開"
   },
   "manual:EntropyPower.selection_stage": {
    "class": "exposed",

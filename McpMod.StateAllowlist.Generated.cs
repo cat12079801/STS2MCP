@@ -122,6 +122,8 @@ public static partial class McpMod
     private const string PetPowerIdsKey = "power_ids";
     // ImpaledPower.Data.arrowSources（戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する。#1296（親指締め具の多段の入力）のため範囲に入れる。付与はフールのカード）
     private const string ArrowImpalementsKey = "impalements";
+    // Player._potionSlots（所持行は player.potions。安定した戦闘入力で三択瓶に既存の介入源があるときは同じ物理 slot を choice_potion_context に出す。PotionModel.RemoveBeforeUse で消える個体だけを通知の列から除く（sts2#1353）。）
+    private const string ChoicePotionContextKey = "choice_potion_context";
     // PlayerCombatState._arrows（戦闘中の player.arrow_state.slots。PlayerCombatState.Arrows の順で、所有者の画面の矢枠と公開された射撃・回収・破壊から確定できる状態を枠添字・状態・使用可否・破壊予定に整形する）
     private const string ArrowSlotsKey = "slots";
     // PlayerCombatState._pets（PlayerCombatState.Pets から従来のオスティとワッピーを所有者の pets に出す。AddPetInternal で登録し、OnPetDied は Hook.ShouldCreatureBeRemovedFromCombatAfterDeath が許すときだけ除く。ワッピーの現在 HP と個体 ID は戦闘に残る死亡個体からも読む（sts2#841））

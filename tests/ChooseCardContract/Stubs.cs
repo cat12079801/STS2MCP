@@ -52,6 +52,7 @@ namespace MegaCrit.Sts2.Core.Models
         public virtual Task AfterCardEnteredCombat(CardModel card) => Task.CompletedTask;
         public virtual Task AfterCardGeneratedForCombat(CardModel card, Player? creator) => Task.CompletedTask;
         public virtual Task AfterHandEmptied(PlayerChoiceContext choiceContext, Player player) => Task.CompletedTask;
+        public virtual Task BeforePotionUsed(PotionModel potion, Creature? target) => Task.CompletedTask;
         public virtual Task AfterPotionUsed(PotionModel potion, Creature? target) => Task.CompletedTask;
         // An unrelated overload: detection must match the exact parameter list.
         public virtual Task AfterPotionUsed(PotionModel potion) => Task.CompletedTask;

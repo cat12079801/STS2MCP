@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.17.0",       // Contract version (semver) — see below
+  "schema": "1.18.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.17.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.18.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -116,13 +116,13 @@ the canonical statement of the rules; the other documents point here.
 - **PATCH** — a fix that does not change the contract: a value that was wrong per the documented meaning becomes right,
   or a docs / formatting fix.
 
-Partial contracts that carry their own version — `generation_pool.filter_version`, each value of
+Partial contracts that carry their own version — `generation_pool.filter_version`, `choice_potion_context.version`, each value of
 `scenario_capabilities`, and the recorder's `sts2-mod-record/N` — are judged by that version, not by `schema`. A change
 to one of them still moves `schema` by the ordinary rules for what changed: adding fields or a new capability is MINOR,
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.17.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.18.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -184,8 +184,10 @@ and changing the meaning or shape of an existing field is MAJOR.
   `player.arrow_state` に矢の枠と刺突を出す（`cat12079801/sts2#1296`）。
   [履歴](#多段攻撃用の戦闘履歴schema-1150)・[星 X](#戦闘カード個体の星-xschema-1150)・[矢](#矢の枠と刺突schema-1150)。
 - **1.16.0** — 所有者の `pets` に戦闘中のワッピーを、生死・個体 ID・表示によらないパワー ID とともに出す（`cat12079801/sts2#841`）。
-- **1.17.0** — 表示中のエンシェントの対象6候補に、恒久デッキの各札の判定を `deck_targets` として出す（`cat12079801/sts2#1348`）。
   [戦闘中のワッピー](#戦闘中のワッピーschema-1160)。
+- **1.17.0** — 表示中のエンシェントの対象6候補に、恒久デッキの各札の判定を `deck_targets` として出す（`cat12079801/sts2#1348`）。
+- **1.18.0** — 無色ポーション所持中の戦闘に抽選前の母集団を、三択ポーションに既存の介入源がある安定した戦闘入力に通知列を出す（`cat12079801/sts2#1353`）。
+  [無色ポーションの母集団](#無色ポーションの母集団schema-1180)・[三択ポーションの飲用前通知](#三択ポーションの飲用前通知schema-1180)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -453,6 +455,88 @@ NotSeen にする。図鑑がこのラン固有の候補ID一覧をそのまま�
 Markdown は `Colorless generation pool: N cards` または unknown と理由の 1 行。
 解放済み一覧の `unlocked_pools.colorless_cards`（後段の filter 前）は従来どおり残す。
 出典は `sts2-a671e9ef` の `JackOfAllTrades.OnPlay`、上記の `CardFactory` / `CardModel` のメソッド。
+
+#### 無色ポーションの母集団（schema 1.18.0）
+
+`player.colorless_potion_generation_pool` は、ローカル `player` が `COLORLESS_POTION` を持つ戦闘中に付く。
+形・欠測時の `known: false, cards: [], reason` と warning は `generation_pool` と同じ。warning のパスは
+`player.colorless_potion_generation_pool`。正常時は `known: true` と ID の ordinal 昇順の `cards`（`id` と `type`）を返し、
+候補ゼロは `known: true, cards: []`。
+
+- `filter_version` は `2`。照合用の `filter_source` は
+  `ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;ColorlessPotion.OnUse`。
+- `ColorlessPotion.OnUse` の対象がこの player の場合の母集団。対象 player の `UnlockState` と人数制約で
+  `ColorlessCardPool.GetUnlockedCards` を呼び、`CardModel.IsAllowedInRun` → `CardFactory.FilterForCombat` を適用する。
+  解放済みで本体の条件を通る `JACK_OF_ALL_TRADES` を含む。型は全型。利用側は `player_id`・`character_id`・
+  `players`・`multiplayer_constraint`・`game_assembly_sha256` とフィルターの版・出典を照合する。
+  マルチで別人を対象とする使用の母集団はその対象本人の解放状態に依存する。
+- 出典は `sts2-a671e9ef` の `ColorlessPotion.OnUse`、`ColorlessCardPool.FilterThroughEpochs`、
+  `CardPoolModel.GetUnlockedCards`、`CardFactory.GetDistinctForCombat / FilterForRun / FilterForCombat`。
+
+#### 三択ポーションの飲用前通知（schema 1.18.0）
+
+`player.choice_potion_context` はローカル `player` が `ATTACK_POTION`、`SKILL_POTION`、`POWER_POTION`、
+`COLORLESS_POTION` のいずれかを持つ安定した戦闘の Play 入力で、既存の介入源がある場合、またはその有無の観測に失敗した場合に付く。
+欄の欠落を空列と解釈できるのは、固定 DLL と公開状態を使って利用側が無作用を確認できた場合に限る。
+対象の使用可否は同じ state の `potions[].can_use_now`・`valid_target_entity_ids` で確認する。
+
+- `version: 1`、`known`（全 slot で既存の列を扱えるか）、`owner_player_id`、
+  `game_assembly_sha256`、`should_skip_combat_effect`、`slots` を返す。対象全体の読取に失敗すると
+  `known: false, slots: null` と `unavailable_reasons`、warning を返す。失敗段より後のメタデータは省略される。
+  固定 DLL と異なる場合、owner を照合できない場合、未識別の `ModHelper` 購読がある場合もこの契約に従う。
+  購読を検出したこの reader は購読関数を実行せずに戻る。
+- `slots[]` は現物の `slot` 昇順。各行は `slot`、`potion_id`、`known`、`pick_known`、`skip_known`、
+  `notifications`、`unavailable_reasons` を持つ。瓶の所有者は `owner_player_id`。候補を受け取る対象は
+  `use_potion` の対象で決まる。各列は `PotionModel.RemoveBeforeUse` が空ける当該 slot の現物だけを除いた時点の
+  既存の列で、他の所持瓶は同じ ID でも列に残る。
+- `notifications[]` は下表の順。各段は `notification`、`scope`（`run` / `combat`）、`pick_only`、
+  `listener_count`（その範囲の全モデル数）、`listeners` を持つ。 `run` は
+  `RunState.IterateHookListeners(combat)`、`combat` は `CombatState.IterateHookListeners()`。
+  `CombatManager.ShouldSkipCombatEffect` が true のときは combat 側だけを空列とする。
+- `listeners[]` は既存の有効な override の個体。 `model_id`、`model_type`、`declared_by`、`kind`、
+  既存の `continuation_context` と同じ所有者・戦闘 ID・札の UID と pile 等を持つ。0 始まりの
+  `order` は、候補個体が加わる前の列の位置。山札の個体は `order: null` と `order_group: "draw_pile"`、
+  `order_group_start`、`order_group_owner_player_id` を持ち、UID の ordinal 昇順で並ぶ。コスト補正の
+  問い合わせを避けるため、この欄の山札の行は UID だけで並べる。
+- 既存のポーション handler に結べる行は `supported: true` と `owner_index`（レリック列またはパワー列の添字）を持つ。
+  `BeltBuckle.AfterPotionUsed` はベルト残数と既存の `relics[].combat_state.dexterity_applied`、
+  `ReptileTrinket.AfterPotionUsed` は瓶の所有者、`SurroundedPower.BeforePotionUsed` は既存の向きと対象のパワーを参照する。
+  未対応・照合不能・山札内の順が欠測の行は `supported: false` と段・ID を含む理由を返し、該当する pick / skip の
+  `*_known` を false にする。pick 専用の欠測だけなら skip の値は維持する。
+- `*_known` は既存の介入源の契約。候補自身の override、前段の効果による追加・除去・並べ替え、再帰的な通知は
+  枝ごとに解決する。後続列が確定できない枝は未評価とし、安定入力で読んだ列をそのまま後続に適用しない。
+  提示後の候補と実際の解決は `card_select.continuation_context`・`choice_source.await_chain`・
+  `decision_context`・`battle.combat_log`・`player.combat_history.card_resolution_events` から読む。
+
+| `notification` | 範囲 | 条件 |
+|---|---|---|
+| `before_potion_used` | run | 瓶が消費された後、本文の前 |
+| `after_card_entered_combat` | combat | pick の入場 |
+| `after_card_changed_piles` | run | pick の Hand / Discard への追加 |
+| `after_card_changed_piles_late` | run | 通常段に続く pick の Late |
+| `after_card_generated_for_combat` | combat | pick の生成 |
+| `after_potion_used` | run | 本文が終わり所有者が生存している場合 |
+| `after_hand_emptied` | combat | 同じ戦闘で処理が終わり所有者の手札が空の場合 |
+
+固定 DLL の override の監査対象を下表に示す。テストは `AbstractModel` の各シグネチャの実装宣言元が
+表の集合と一致することを DLL に対して検査する。既存の同一個体に限る効果、Deck に置いたときの効果、
+音楽更新は三択の直接の介入源から外す。型指定の3本と固定版の `ColorlessCardPool.GenerateAllCards` が扱う札は
+Attack / Skill / Power。 `TokenCardPool` の `Soul`・`SovereignBlade` と `StatusCardPool` の `Wither`・`Sadness` は候補外。
+
+| メソッド | 宣言元と発動条件の根拠 |
+|---|---|
+| `BeforePotionUsed` | `SurroundedPower` は瓶の所有者と対象の `BackAttackLeftPower` / `BackAttackRightPower` を見る |
+| `AfterCardEnteredCombat` | `BansheesCry`・`Flatten`・`Midnight`・`Pinpoint`・`Stomp` は自身、`Hexed` は親の札の入場を判定。 `GhostSeed`・`HexPower`・`RingingPower`・`SmoggyPower`・`TangledPower` は所有者や札の条件に従って効果を付ける。 `GalvanicPower` は Power、`VitalSparkPower` は Skill、`SwordSagePower` は `TryAddReplays` で対象札を判定 |
+| `AfterCardChangedPiles` | `SovereignBlade`・`SpoilsMap` は自身の移動。 `BingBong`・`BookOfFiveRings`・`DarkstonePeriapt`・`Hoarder`・`LuckyFysh` は Deck への移動。 `MockRecordCardChangedPilesPower`・`MockResetCombatOnShufflePower` は試験用モデル |
+| `AfterCardChangedPilesLate` | `SoulFysh` は `Beckon` が手札にあるかで音楽を変える |
+| `AfterCardGeneratedForCombat` | `Aeonglass` は `Wither`、`AllIsWellPower` と `Fertilizer` は `Sadness`、`SoulboundPower` は `Soul`。 `ArsenalPower`・`PillarOfCreationPower`・`Regalite` は生成者を確認する（`Regalite` は手番中の使用済み判定も持つ）。 `RocketPunch`・`SmokestackPower`・`TrashToTreasurePower` は Status と生成者を判定 |
+| `AfterPotionUsed` | `BeltBuckle` はベルトが空のとき、`ReptileTrinket` は自身の所有者が使ったとき |
+| `AfterHandEmptied` | `UnceasingTop` は自身の所有者と手番の段階を判定 |
+
+出典は `sts2-a671e9ef` の表にあるモデルの各メソッド、`PotionModel.OnUseWrapper / RemoveBeforeUse`、
+`CardPileCmd.AddGeneratedCardsToCombat / Add`、`Hook` の各通知、`CombatManager.CheckForEmptyHand /
+ShouldSkipCombatEffect / IsCombatEnding`。新しい reader はゲームの通知・カード生成・抽選を実行せず、
+山札の引く順、RNG、将来提示される札の個体を公開しない。
 
 #### スプラッシュの生成候補（`player.other_character_attack_generation_pool`、schema 1.5.0。filter_version 2）
 

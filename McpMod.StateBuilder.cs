@@ -14,6 +14,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
+using MegaCrit.Sts2.Core.Models.Potions;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine;
@@ -1654,6 +1655,8 @@ public static partial class McpMod
                 state["entropic_brew_pool"] = BuildEntropicBrewPool(player, unlocked, screen);
             // JackOfAllTrades.OnPlay の最終候補（自己除外・FilterForRun・FilterForCombat 後）。
             state["colorless_generation_pool"] = BuildColorlessGenerationPool(player);
+            if (player.PotionSlots.Any(potion => potion is ColorlessPotion))
+                state["colorless_potion_generation_pool"] = BuildColorlessPotionGenerationPool(player);
             // Splash.OnPlay の抽選前の候補（他キャラの解放済み pool の Attack。FilterForRun・FilterForCombat 後）。
             state["other_character_attack_generation_pool"] = BuildOtherCharacterAttackGenerationPool(player);
             state["energy"] = combatState.Energy;
@@ -1687,6 +1690,7 @@ public static partial class McpMod
             state["discard_pile"] = BuildPileCardList(combatState.DiscardPile.Cards, PileType.Discard);
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
             state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
+            AttachChoicePotionContext(state, player, screen);
             state["combat_history"] = BuildCombatHistoryState(player);
             state["arrow_state"] = BuildArrowState(player, creature.CombatState);
             // EntropyPower の変化の候補（CardFactory.GetDefaultTransformationOptions）。エントロピーがある戦闘だけ。

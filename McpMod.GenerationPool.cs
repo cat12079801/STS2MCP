@@ -28,6 +28,8 @@ public static partial class McpMod
         "CardPoolModel.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;OrobicAcid.OnUse:Attack,Skill,Power";
     private const string ColorlessGenerationPoolFilterSource =
         "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;JackOfAllTrades.OnPlay:ExcludeSelf";
+    private const string ColorlessPotionGenerationPoolFilterSource =
+        "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;ColorlessPotion.OnUse";
 
     private const string OtherCharacterAttackGenerationPoolFilterSource =
         "UnlockState.CharacterCardPools(Character.CardPool removed when Count>1).GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;Splash.OnPlay:Attack";
@@ -43,9 +45,16 @@ public static partial class McpMod
     // GetDistinctForCombat（FilterForRun → FilterForCombat）で抽選する。その抽選前の候補一覧。
     private static Dictionary<string, object?> BuildColorlessGenerationPool(Player player) =>
         BuildCombatGenerationPool(player, "player.colorless_generation_pool", ColorlessGenerationPoolFilterSource,
-            p => ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(p.UnlockState, p.RunState.CardMultiplayerConstraint)
-                .Where(c => c is not JackOfAllTrades),
+            p => GetUnlockedColorlessCards(p).Where(c => c is not JackOfAllTrades),
             _ => true);
+
+    // ColorlessPotion.OnUse passes the entire unlocked colorless pool to GetDistinctForCombat.
+    private static Dictionary<string, object?> BuildColorlessPotionGenerationPool(Player player) =>
+        BuildCombatGenerationPool(player, "player.colorless_potion_generation_pool", ColorlessPotionGenerationPoolFilterSource,
+            GetUnlockedColorlessCards, _ => true);
+
+    private static IEnumerable<CardModel> GetUnlockedColorlessCards(Player player) =>
+        ModelDb.CardPool<ColorlessCardPool>().GetUnlockedCards(player.UnlockState, player.RunState.CardMultiplayerConstraint);
 
     // Splash.OnPlay: UnlockState.CharacterCardPools を列挙し、2 つ以上あれば自キャラの Character.CardPool を除く
     // （1 つだけなら除かない）。各 pool の GetUnlockedCards から Attack だけを GetDistinctForCombat

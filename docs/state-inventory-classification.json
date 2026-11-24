@@ -876,8 +876,14 @@
   "note": "これから出るレリックの袋（順番を含む）。まだ見せていない生成物"
  },
  "Player._potionSlots": {
-  "class": "exposed",
-  "note": "player.potions（McpMod.StateBuilder.cs:1755）"
+  "class": "public",
+  "note": "所持行は player.potions。安定した戦闘入力で三択瓶に既存の介入源があるときは同じ物理 slot を choice_potion_context に出す。PotionModel.RemoveBeforeUse で消える個体だけを通知の列から除く（sts2#1353）。",
+  "json_key": "choice_potion_context",
+  "effect": "PotionModel.RemoveBeforeUse・Player.RemovePotionInternal・CombatState.IterateHookListeners",
+  "reader_key": "ChoicePotionContextKey",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Players.Player",
+  "cs_type": "List<PotionModel?>",
+  "kind": "field"
  },
  "Player._relics": {
   "class": "exposed",

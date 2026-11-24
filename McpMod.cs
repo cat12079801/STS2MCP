@@ -88,8 +88,9 @@ public static partial class McpMod
     /// (ordered slots and impalements for the player; sts2#1296).
     /// 1.16.0: live and dead Wuppy combat pets, including combat IDs and unfiltered power IDs (sts2#841).
     /// 1.17.0: deck targets for the six displayed Ancient relic options (sts2#1348).
+    /// 1.18.0: colorless potion generation pool and pre-use choice potion listeners (sts2#1353).
     /// </summary>
-    public const string StateSchema = "1.17.0";
+    public const string StateSchema = "1.18.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

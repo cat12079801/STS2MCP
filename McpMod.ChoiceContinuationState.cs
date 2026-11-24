@@ -17,18 +17,26 @@ public static partial class McpMod
 {
     private const int ChoiceContinuationVersion = 1;
 
-    // What runs after a choose-a-card pick of the potion screens (sts2-a671e9ef):
-    // SetToFreeThisTurn -> CardPileCmd.AddGeneratedCardToCombat (Hook.AfterCardEnteredCombat,
-    // then Hook.AfterCardGeneratedForCombat) -> PotionModel.OnUseWrapper (Hook.AfterPotionUsed)
-    // -> CombatManager.CheckForEmptyHand (Hook.AfterHandEmptied). Listed in that order.
-    // Run-scope notifications iterate IRunState.IterateHookListeners(combat), the others
-    // ICombatState.IterateHookListeners() (Hook.IterateCombatHookListeners).
+    private static (string Notification, string Method, Type[] Parameters, bool RunScope) BeforePotionUsedHook =>
+        ("before_potion_used", nameof(AbstractModel.BeforePotionUsed), new[] { typeof(PotionModel), typeof(Creature) }, true);
+    private static (string Notification, string Method, Type[] Parameters, bool RunScope) AfterPotionUsedHook =>
+        ("after_potion_used", nameof(AbstractModel.AfterPotionUsed), new[] { typeof(PotionModel), typeof(Creature) }, true);
+    private static (string Notification, string Method, Type[] Parameters, bool RunScope) CardEnteredCombatHook =>
+        ("after_card_entered_combat", nameof(AbstractModel.AfterCardEnteredCombat), new[] { typeof(CardModel) }, false);
+    private static (string Notification, string Method, Type[] Parameters, bool RunScope) CardGeneratedForCombatHook =>
+        ("after_card_generated_for_combat", nameof(AbstractModel.AfterCardGeneratedForCombat),
+            new[] { typeof(CardModel), typeof(Player) }, false);
+    private static (string Notification, string Method, Type[] Parameters, bool RunScope) HandEmptiedHook =>
+        ("after_hand_emptied", nameof(AbstractModel.AfterHandEmptied), new[] { typeof(PlayerChoiceContext), typeof(Player) }, false);
+
+    // Published choose-a-card v1 stages. CardPileCmd.Add also dispatches run-scope pile-change
+    // notifications after entry. The pre-use contract includes those stages in its own list.
     private static readonly (string Notification, string Method, Type[] Parameters, bool RunScope)[] ChoiceContinuationHooks =
     {
-        ("after_card_entered_combat", "AfterCardEnteredCombat", new[] { typeof(CardModel) }, false),
-        ("after_card_generated_for_combat", "AfterCardGeneratedForCombat", new[] { typeof(CardModel), typeof(Player) }, false),
-        ("after_potion_used", "AfterPotionUsed", new[] { typeof(PotionModel), typeof(Creature) }, true),
-        ("after_hand_emptied", "AfterHandEmptied", new[] { typeof(PlayerChoiceContext), typeof(Player) }, false),
+        CardEnteredCombatHook,
+        CardGeneratedForCombatHook,
+        AfterPotionUsedHook,
+        HandEmptiedHook,
     };
 
     private static readonly Dictionary<(Type, string), Type?> _hookOverrideCache = new();
@@ -97,25 +105,22 @@ public static partial class McpMod
     // (OrderPileCardsForDisplay), so neither the numbers nor the row order reveal the draw order.
     // Positions outside the block depend only on public counts and are kept.
     private static List<Dictionary<string, object?>> BuildHookListenerRows(List<AbstractModel> listeners,
-        (string Notification, string Method, Type[] Parameters, bool RunScope) hook, List<string> reasons)
+        (string Notification, string Method, Type[] Parameters, bool RunScope) hook, List<string> reasons,
+        Func<AbstractModel, Type, bool>? include = null, bool useDrawDisplayOrder = true)
     {
         var drawStart = new Dictionary<CardPile, int>(ReferenceEqualityComparer.Instance);
-        var drawRank = new Dictionary<CardModel, int>(ReferenceEqualityComparer.Instance);
         for (int i = 0; i < listeners.Count; i++)
         {
-            if (DrawPileOf(listeners[i]) is not { } pile || drawStart.ContainsKey(pile)) continue;
-            drawStart[pile] = i;
-            int rank = 0;
-            foreach (var card in OrderPileCardsForDisplay(pile.Cards, PileType.Draw))
-                drawRank[card] = rank++;
+            if (DrawPileOf(listeners[i]) is { } pile) drawStart.TryAdd(pile, i);
         }
 
+        var drawRanks = new Dictionary<CardPile, Dictionary<CardModel, int>>(ReferenceEqualityComparer.Instance);
         var rows = new List<(Dictionary<string, object?> Row, CardPile? Draw, int Rank, int Kind)>();
         for (int order = 0; order < listeners.Count; order++)
         {
             var model = listeners[order];
             var declarer = HookOverrideDeclarer(model.GetType(), hook.Method, hook.Parameters);
-            if (declarer == null) continue;
+            if (declarer == null || include?.Invoke(model, declarer) == false) continue;
             var row = BuildHookListenerRow(model, reasons);
             row["declared_by"] = declarer.Name;
             var draw = DrawPileOf(model);
@@ -130,6 +135,16 @@ public static partial class McpMod
             row["order_group"] = "draw_pile";
             row["order_group_start"] = drawStart[draw];
             row["order_group_owner_player_id"] = card.Owner.NetId.ToString();
+            if (!drawRanks.TryGetValue(draw, out var drawRank))
+            {
+                drawRank = new Dictionary<CardModel, int>(ReferenceEqualityComparer.Instance);
+                // CardModel.CompareTo can query the globally modified energy cost. A reader
+                // that must not call any hook uses just the already public, order-independent UID.
+                var cards = useDrawDisplayOrder ? OrderPileCardsForDisplay(draw.Cards, PileType.Draw)
+                    : draw.Cards.OrderBy(GetStableCardUid, StringComparer.Ordinal);
+                foreach (var drawCard in cards) drawRank.Add(drawCard, drawRank.Count);
+                drawRanks.Add(draw, drawRank);
+            }
             int kind = model is CardModel ? 0 : model is AfflictionModel ? 1 : 2; // game order within a card
             rows.Add((row, draw, drawRank.TryGetValue(card, out int r) ? r : int.MaxValue, kind));
         }

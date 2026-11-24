@@ -1,4 +1,4 @@
-# 生成の候補（`generation_pool` / `colorless_generation_pool` / `other_character_attack_generation_pool`）の契約試験
+# 戦闘生成 pool の契約試験
 
 本番の `McpMod.GenerationPool.cs` / `McpMod.Warnings.cs` を直接リンクする。ゲーム DLL・Godot は不要。
 
@@ -14,6 +14,7 @@ Blitz（`IsAllowedInBlitz=false` の除外）・複数人（SingleplayerOnly の
 GetUnlockedCards の例外・遅延列挙の途中失敗での `known: false`・`cards: []`・`reason`・warning、無色の失敗がキャラ pool に波及しないこと、
 run にいない player の拒否を検査する。スプラッシュの候補は、`UnlockState.CharacterCardPools` から 2 つ以上なら自キャラの pool を除くこと（1 つだけなら除かない、自キャラの pool の `GetUnlockedCards` を呼ばない）、Attack だけ・`IsAllowedInRun` → `FilterForCombat`・ID 昇順・重複なし、1 つの pool の失敗で `known: false`、filter_source の完全一致を検査する。state builder とはソースの文字列検査で、無色の候補が戦闘中だけ、酸液の pool は従来どおり、
 Markdown の 1 行、schema 12 を確認する。境界ダブルの判定は本体の `IsAllowedInRun` を写したもので、本体の判定を動かした証拠ではない。
+無色ポーションの所持時だけ専用欄を出す配線、何でも屋の解放有無と全型、別 owner、空集合・途中失敗も検査する。
 
 実機（調整役が v0.113.1 の検証用ランで確認する）:
 

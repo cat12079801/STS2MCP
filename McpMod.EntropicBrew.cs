@@ -22,13 +22,13 @@ public static partial class McpMod
     private const string EntropicBrewPath = "player.entropic_brew_pool";
     // PotionFactory.CreateRandomPotions: the const fields and the compiled comparison branches
     // were checked together for this DLL. A different build needs its own audit.
-    private const string EntropicBrewAssembly = "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb";
+    private const string AuditedPotionAssembly = "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb";
     private static readonly (string Notification, string Method, Type[] Parameters, bool RunScope)[] EntropicBrewHooks =
     {
-        ("before_potion_used", nameof(AbstractModel.BeforePotionUsed), new[] { typeof(PotionModel), typeof(Creature) }, true),
+        BeforePotionUsedHook,
         ("should_procure_potion", nameof(AbstractModel.ShouldProcurePotion), new[] { typeof(PotionModel), typeof(Player) }, true),
         ("after_potion_procured", nameof(AbstractModel.AfterPotionProcured), new[] { typeof(PotionModel) }, true),
-        ("after_potion_used", nameof(AbstractModel.AfterPotionUsed), new[] { typeof(PotionModel), typeof(Creature) }, true)
+        AfterPotionUsedHook
     };
 
     private static Dictionary<string, object?> BuildEntropicBrewPool(Player player,
@@ -93,14 +93,7 @@ public static partial class McpMod
             {
                 if (listeners["known"] is not true)
                     previewUnavailable = "potion listener effects are unobserved";
-                else if (screen is not ("monster" or "elite" or "boss")
-                    || !ReferenceEquals(CombatManager.Instance.DebugOnlyGetState(), combat)
-                    || !IsPlayPhase(player) || CombatManager.Instance.PlayerActionsDisabled || CombatManager.Instance.IsPaused
-                    || CombatManager.Instance.IsOverOrEnding || !RunManager.Instance.ActionQueueSet.IsEmpty
-                    || RunManager.Instance.ActionExecutor.CurrentlyRunningAction != null
-                    || NPlayerHand.Instance is not { InCardPlay: false, IsInCardSelection: false }
-                    || NOverlayStack.Instance is not { ScreenCount: 0 }
-                    || NCapstoneContainer.Instance is not { InUse: false })
+                else if (!IsSettledPotionInput(player, combat, screen))
                     previewUnavailable = "the snapshot is not at a settled player play phase";
                 else if (player.PlayerCombatState?.Hand.Cards.Count == 0
                     && player.Relics.Any(relic => relic is UnceasingTop && !relic.IsMelted))
@@ -160,7 +153,7 @@ public static partial class McpMod
 
     private static Dictionary<string, object?> ReadEntropicBrewThresholds(string hash)
     {
-        if (!string.Equals(hash, EntropicBrewAssembly, StringComparison.Ordinal))
+        if (!string.Equals(hash, AuditedPotionAssembly, StringComparison.Ordinal))
             throw new InvalidOperationException("the PotionFactory comparisons are unverified for this assembly");
         float Threshold(string field, float auditedValue)
         {
@@ -287,15 +280,11 @@ public static partial class McpMod
                     var model = models[order];
                     int index = (hook.Method, model) switch
                     {
-                        (nameof(AbstractModel.BeforePotionUsed), SurroundedPower power) =>
-                            IndexOfListener(power.Owner.Powers, power),
                         (nameof(AbstractModel.ShouldProcurePotion), Sozu relic) =>
                             IndexOfListener(relic.Owner.Relics, relic),
-                        (nameof(AbstractModel.AfterPotionProcured) or nameof(AbstractModel.AfterPotionUsed), BeltBuckle relic) =>
+                        (nameof(AbstractModel.AfterPotionProcured), BeltBuckle relic) =>
                             IndexOfListener(relic.Owner.Relics, relic),
-                        (nameof(AbstractModel.AfterPotionUsed), ReptileTrinket relic) =>
-                            IndexOfListener(relic.Owner.Relics, relic),
-                        _ => -1
+                        _ => PotionUseListenerOwnerIndex(hook.Method, model)
                     };
                     if (index >= 0) row["owner_index"] = index;
                     else reasons.Add($"{hook.Method}: unrecognized or unlocated listener {row["model_id"]}");
@@ -314,7 +303,25 @@ public static partial class McpMod
         return result;
     }
 
-    private static int IndexOfListener<T>(IReadOnlyList<T> collection, T model) where T : class
+    private static bool IsSettledPotionInput(Player player, ICombatState combat, string? screen, bool checkCombatEnding = true)
+        => screen is "monster" or "elite" or "boss"
+           && ReferenceEquals(CombatManager.Instance.DebugOnlyGetState(), combat)
+           && IsPlayPhase(player) && !CombatManager.Instance.PlayerActionsDisabled && !CombatManager.Instance.IsPaused
+           && (!checkCombatEnding || !CombatManager.Instance.IsOverOrEnding) && RunManager.Instance.ActionQueueSet.IsEmpty
+           && RunManager.Instance.ActionExecutor.CurrentlyRunningAction == null
+           && NPlayerHand.Instance is { InCardPlay: false, IsInCardSelection: false }
+           && NOverlayStack.Instance is { ScreenCount: 0 }
+           && NCapstoneContainer.Instance is { InUse: false };
+
+    private static int PotionUseListenerOwnerIndex(string method, AbstractModel model) => (method, model) switch
+    {
+        (nameof(AbstractModel.BeforePotionUsed), SurroundedPower power) => IndexOfListener(power.Owner.Powers, power),
+        (nameof(AbstractModel.AfterPotionUsed), BeltBuckle or ReptileTrinket) when model is RelicModel relic =>
+            IndexOfListener(relic.Owner.Relics, relic),
+        _ => -1
+    };
+
+    private static int IndexOfListener<T>(IReadOnlyList<T?> collection, T model) where T : class
     {
         for (int index = 0; index < collection.Count; index++)
             if (ReferenceEquals(collection[index], model)) return index;

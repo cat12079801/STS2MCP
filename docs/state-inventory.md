@@ -224,7 +224,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 |---|---|---|---|
 | `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:104 … | mod-scan |
 | `AbstractModel.Id` | base | McpMod.Actions.cs:1014, McpMod.Actions.cs:1729, McpMod.Actions.cs:2607 … | mod-scan |
-| `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:168, McpMod.CombatHistory.cs:126 | mod-scan |
+| `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:183, McpMod.CombatHistory.cs:126 | mod-scan |
 | `CardModel.Enchantment` | base | McpMod.StateAllowlist.Generated.cs:118 | allowlist |
 | `CardModel._baseReplayCount` | base | McpMod.CardDetails.cs:110 | mod-scan |
 | `CardModel._baseStarCost` | base | McpMod.CardStarCost.cs:23 | mod-scan |
@@ -233,7 +233,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CardModel._currentTarget` | base | McpMod.StateAllowlist.Generated.cs:19 | allowlist |
 | `CardModel._currentUpgradeLevel` | base | McpMod.CombatUpgradePreview.cs:165, McpMod.CombatUpgradePreview.cs:52, McpMod.CombatUpgradePreview.cs:99 … | mod-scan |
 | `CardModel._deckVersion` | base | McpMod.StateAllowlist.Generated.cs:22 | allowlist |
-| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1976, McpMod.StateBuilder.cs:2003 … | mod-scan |
+| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1980, McpMod.StateBuilder.cs:2007 … | mod-scan |
 | `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.CardStarXValue.cs:47, McpMod.CardXValue.cs:29 … | mod-scan |
 | `CardModel._exhaustOnNextPlay` | base | McpMod.CardSelection.cs:143, McpMod.ChooseCardSelection.cs:43, McpMod.SelectionCandidate.cs:92 … | mod-scan |
 | `CardModel._extraReplayThisTurn` | base | McpMod.CardDetails.cs:111 | mod-scan |
@@ -276,17 +276,17 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `EnchantmentModel._status` | base | McpMod.ArrowState.cs:28, McpMod.CardDetails.cs:140 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
 | `CardEnergyCost.Canonical` | entity | McpMod.CardEnergyCost.cs:47 | mod-scan |
-| `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1837 | mod-scan |
+| `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1841 | mod-scan |
 | `CardEnergyCost._base` | entity | energy_cost.base_raw（GetWithModifiers(None)。McpMod.CardEnergyCost.cs:46） | manual |
 | `CardEnergyCost._capturedXValue` | entity | McpMod.CardEnergyCost.cs:49 | mod-scan |
 | `CardEnergyCost._localModifiers` | entity | energy_cost の local_modifiers（McpMod.CardEnergyCost.cs:52。ReadLocalEnergyCostModifiers〔同 :103〕が cost.GetType() で読むので型の文脈が無く、mod-scan では数えない） | manual |
 | `CombatState.CurrentSide` | entity | McpMod.CombatLog.cs:99, McpMod.Helpers.cs:46, McpMod.MultiplayerState.cs:289 … | mod-scan |
-| `CombatState.RoundNumber` | entity | McpMod.CombatLog.cs:98, McpMod.EntropicBrew.cs:130, McpMod.MultiplayerActions.cs:127 … | mod-scan |
+| `CombatState.RoundNumber` | entity | McpMod.CombatLog.cs:98, McpMod.EntropicBrew.cs:123, McpMod.MultiplayerActions.cs:127 … | mod-scan |
 | `CombatState._allies` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
 | `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59 | mod-scan |
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
 | `CombatState._escapedCreatures` | entity | McpMod.StateAllowlist.Generated.cs:43 | allowlist |
-| `Creature.CombatId` | entity | McpMod.ArrowState.cs:79, McpMod.ChoiceContinuationState.cs:296, McpMod.ChoiceContinuationState.cs:299 … | mod-scan |
+| `Creature.CombatId` | entity | McpMod.ArrowState.cs:79, McpMod.ChoiceContinuationState.cs:311, McpMod.ChoiceContinuationState.cs:314 … | mod-scan |
 | `Creature.HpDisplay` | entity | McpMod.EnemyHpDisplay.cs:22 | manual |
 | `Creature.Side` | entity | McpMod.CombatLogPatches.cs:830, McpMod.PotionUsabilityLive.cs:170, McpMod.PotionUsabilityLive.cs:289 | mod-scan |
 | `Creature.SlotName` | entity | McpMod.EnemyMoveContext.cs:106, McpMod.EnemyMoveContext.cs:94 | mod-scan |
@@ -301,31 +301,31 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `MonsterMoveStateMachine._initialState` | entity | McpMod.EnemyMoveState.cs:76 | mod-scan |
 | `MonsterMoveStateMachine._performedFirstMove` | entity | McpMod.EnemyMoveState.cs:78 | mod-scan |
 | `Player.Character` | entity | McpMod.Actions.cs:2606, McpMod.Actions.cs:2607, McpMod.Actions.cs:2608 … | mod-scan |
-| `Player.Deck` | entity | McpMod.AncientDeckTargets.cs:29, McpMod.CardIdentity.cs:104, McpMod.ChoiceContinuationState.cs:282 … | mod-scan |
+| `Player.Deck` | entity | McpMod.AncientDeckTargets.cs:29, McpMod.CardIdentity.cs:104, McpMod.ChoiceContinuationState.cs:297 … | mod-scan |
 | `Player.DiscoveredCards` | entity | McpMod.Compendium.cs:85, McpMod.Profile.cs:345, McpMod.Wiki.cs:74 | mod-scan |
 | `Player.DiscoveredPotions` | entity | McpMod.Compendium.cs:87, McpMod.Profile.cs:347 | mod-scan |
 | `Player.DiscoveredRelics` | entity | McpMod.Compendium.cs:86, McpMod.Profile.cs:346, McpMod.Wiki.cs:78 | mod-scan |
-| `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1168 | mod-scan |
+| `Player.MaxEnergy` | entity | McpMod.StateBuilder.cs:1169 | mod-scan |
 | `Player.NetId` | entity | McpMod.CardIdentity.cs:110, McpMod.ChoiceAwaitChain.cs:235, McpMod.ChoiceAwaitChain.cs:252 … | mod-scan |
-| `Player.UnlockState` | entity | McpMod.GenerationPool.cs:39, McpMod.GenerationPool.cs:46, McpMod.GenerationPool.cs:57 … | mod-scan |
+| `Player.UnlockState` | entity | McpMod.GenerationPool.cs:41, McpMod.GenerationPool.cs:57, McpMod.GenerationPool.cs:66 … | mod-scan |
 | `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsabilityLive.cs:159 | mod-scan |
-| `Player._gold` | entity | McpMod.MultiplayerState.cs:442, McpMod.PowerInternalState.cs:47, McpMod.StateBuilder.cs:1509 … | mod-scan |
-| `Player._potionSlots` | entity | player.potions（McpMod.StateBuilder.cs:1755） | manual |
+| `Player._gold` | entity | McpMod.MultiplayerState.cs:442, McpMod.PowerInternalState.cs:47, McpMod.StateBuilder.cs:1510 … | mod-scan |
+| `Player._potionSlots` | entity | McpMod.StateAllowlist.Generated.cs:126 | allowlist |
 | `Player._relics` | entity | player.relics（McpMod.StateBuilder.cs:1743） | manual |
 | `Player._runPiles` | entity | player.deck（McpMod.StateBuilder.cs:1794） | manual |
-| `PlayerCombatState.DiscardPile` | entity | McpMod.StateBuilder.cs:1681, McpMod.StateBuilder.cs:1687 | mod-scan |
-| `PlayerCombatState.DrawPile` | entity | McpMod.ChoiceAwaitChain.cs:134, McpMod.ChoiceAwaitChain.cs:394, McpMod.StateBuilder.cs:1680 … | mod-scan |
-| `PlayerCombatState.ExhaustPile` | entity | McpMod.StateBuilder.cs:1682, McpMod.StateBuilder.cs:1688 | mod-scan |
+| `PlayerCombatState.DiscardPile` | entity | McpMod.StateBuilder.cs:1684, McpMod.StateBuilder.cs:1690 | mod-scan |
+| `PlayerCombatState.DrawPile` | entity | McpMod.ChoiceAwaitChain.cs:134, McpMod.ChoiceAwaitChain.cs:394, McpMod.StateBuilder.cs:1683 … | mod-scan |
+| `PlayerCombatState.ExhaustPile` | entity | McpMod.StateBuilder.cs:1685, McpMod.StateBuilder.cs:1691 | mod-scan |
 | `PlayerCombatState.Hand` | entity | McpMod.Actions.cs:189, McpMod.Actions.cs:261, McpMod.CardStarXValue.cs:22 … | mod-scan |
-| `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1697 | mod-scan |
-| `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1683, McpMod.StateBuilder.cs:1689 | mod-scan |
-| `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:36, McpMod.EntropicBrew.cs:131 | mod-scan |
-| `PlayerCombatState._arrows` | entity | McpMod.StateAllowlist.Generated.cs:126 | allowlist |
+| `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1701 | mod-scan |
+| `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1686, McpMod.StateBuilder.cs:1692 | mod-scan |
+| `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:36, McpMod.EntropicBrew.cs:124 | mod-scan |
+| `PlayerCombatState._arrows` | entity | McpMod.StateAllowlist.Generated.cs:128 | allowlist |
 | `PlayerCombatState._energy` | entity | McpMod.CardStarXValue.cs:46, McpMod.CombatLogPatches.cs:296, McpMod.CombatLogPatches.cs:880 … | mod-scan |
-| `PlayerCombatState._pets` | entity | McpMod.StateAllowlist.Generated.cs:128 | allowlist |
-| `PlayerCombatState._phase` | entity | McpMod.Helpers.cs:26, McpMod.Helpers.cs:36, McpMod.StateBuilder.cs:756 | mod-scan |
+| `PlayerCombatState._pets` | entity | McpMod.StateAllowlist.Generated.cs:130 | allowlist |
+| `PlayerCombatState._phase` | entity | McpMod.Helpers.cs:26, McpMod.Helpers.cs:36, McpMod.StateBuilder.cs:757 | mod-scan |
 | `PlayerCombatState._piles` | entity | McpMod.TransformationOptions.cs:29, McpMod.TransformationOptions.cs:44 | manual |
-| `PlayerCombatState._stars` | entity | McpMod.StateBuilder.cs:1663, McpMod.StateBuilder.cs:1665 | mod-scan |
+| `PlayerCombatState._stars` | entity | McpMod.StateBuilder.cs:1666, McpMod.StateBuilder.cs:1668 | mod-scan |
 | `RunState.Modifiers` | entity | McpMod.StateAllowlist.Generated.cs:94 | allowlist |
 | `Aeonglass._additionalStrength` | monster | McpMod.EnemyCombatState.cs:52 | mod-scan |
 | `Aeonglass._witherUpgradeCount` | monster | McpMod.EnemyCombatState.cs:54 | mod-scan |
@@ -338,7 +338,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `KnowledgeDemon.DynamicVars.DisintegrationPower` | monster | ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72） | manual |
 | `KnowledgeDemon._curseOfKnowledgeCounter` | monster | McpMod.EnemyCombatState.cs:82 | mod-scan |
 | `LivingFog._bloatAmount` | monster | McpMod.EnemyCombatState.cs:86 | mod-scan |
-| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2196 … | mod-scan |
+| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2200 … | mod-scan |
 | `MonsterModel._moveStateMachine` | base | McpMod.EnemyMoveState.cs:32 | mod-scan |
 | `MonsterModel._spawnedThisTurn` | base | McpMod.EnemyMoveState.cs:80 | mod-scan |
 | `Nibbit._isAlone` | monster | McpMod.EnemyCombatState.cs:90 | mod-scan |
@@ -478,7 +478,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Regalite._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:82 | mod-scan |
 | `RelicModel._dynamicVars` | base | McpMod.RelicCombatState.cs:271 | mod-scan |
 | `RelicModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:85 | allowlist |
-| `RelicModel._isMelted` | base | McpMod.PetsState.cs:77, McpMod.StateBuilder.cs:1753 | mod-scan |
+| `RelicModel._isMelted` | base | McpMod.PetsState.cs:77, McpMod.StateBuilder.cs:1757 | mod-scan |
 | `RelicModel._isWax` | base | McpMod.StateAllowlist.Generated.cs:88 | allowlist |
 | `RelicModel._status` | base | McpMod.StateAllowlist.Generated.cs:91 | allowlist |
 | `RuinedHelmet._usedThisCombat` | ironclad | McpMod.RelicCombatState.cs:85 | mod-scan |

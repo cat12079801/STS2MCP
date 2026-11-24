@@ -82,15 +82,47 @@ namespace STS2_MCP
             Check(colorlessPool["known"] is true && Equals(colorlessPool["filter_version"], 2), "無色の最終候補も版2");
             Check(Equals(colorlessPool["filter_source"], "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;JackOfAllTrades.OnPlay:ExcludeSelf"), "無色の filter_source");
             Check(Ids(colorlessPool).SequenceEqual(new[] { "CURSE_LIKE", "FLASH_OF_STEEL", "MY_SHINIES" }), "自己除外し、型では絞らない（何でも屋は型を絞らない）");
+            const string potionSource = "ColorlessCardPool.GetUnlockedCards(Player.UnlockState,IRunState.CardMultiplayerConstraint);CardFactory.FilterForRun;CardFactory.FilterForCombat;ColorlessPotion.OnUse";
+            var potionPool = BuildColorlessPotionGenerationPool(owner);
+            Check(potionPool["known"] is true && Equals(potionPool["filter_version"], 2) && Equals(potionPool["filter_source"], potionSource),
+                "無色ポーションは版2と固有の出典");
+            Check(Ids(potionPool).SequenceEqual(new[] { "CURSE_LIKE", "FLASH_OF_STEEL", "JACK_OF_ALL_TRADES", "MY_SHINIES" })
+                && Equals(potionPool["player_id"], "7") && Equals(potionPool["players"], 1)
+                && Equals(potionPool["multiplayer_constraint"], "SingleplayerOnly")
+                && Equals(potionPool["game_assembly_sha256"], colorlessPool["game_assembly_sha256"]),
+                "解放済みの何でも屋を含め、型と共通の所有者・人数・制約・DLL を維持する");
+            Check(((List<Dictionary<string, object?>>)potionPool["cards"]!).Single(row =>
+                Equals(row["id"], "JACK_OF_ALL_TRADES"))["type"] is "Skill", "候補に本体の型を付ける");
+            colorless.RemoveAll(card => card is JackOfAllTrades);
+            Check(Ids(BuildColorlessPotionGenerationPool(owner)).SequenceEqual(Ids(colorlessPool)), "何でも屋が未解放なら出ない");
             owner.RunState.Blitz = true;
             Check(!Ids(BuildColorlessGenerationPool(owner)).Contains("MY_SHINIES"), "Blitz では MY_SHINIES を除く");
+            Check(!Ids(BuildColorlessPotionGenerationPool(owner)).Contains("MY_SHINIES"), "無色ポーションにもランのフィルターを適用");
             owner.RunState.Blitz = false;
             Check(_stateWarnings.Count == 0, "成功時は warning なし");
+
+            var differentOwner = new Player { NetId = 8 };
+            owner.RunState.Players.Add(differentOwner);
+            differentOwner.RunState.Players.Add(differentOwner);
+            ModelDb.Colorless.Read = (unlocks, _) => ReferenceEquals(unlocks, differentOwner.UnlockState)
+                ? new[] { new CardModel("ALLY_OPTION", CardType.Power) } : [];
+            var differentPool = BuildColorlessPotionGenerationPool(differentOwner);
+            Check(Equals(differentPool["player_id"], "8") && Ids(differentPool).SequenceEqual(new[] { "ALLY_OPTION" })
+                && Ids(BuildColorlessPotionGenerationPool(owner)).Count == 0,
+                "別 owner の解放情報で候補を組み、既知の空集合を保持する");
+            differentOwner.RunState.Players.Clear();
+            Check(BuildColorlessPotionGenerationPool(differentOwner)["known"] is false, "run と結べない owner の候補は unknown");
+            owner.RunState.Players.Remove(differentOwner);
 
             ModelDb.Colorless.Read = (_, _) => throw new InvalidOperationException("pool renamed");
             var failed = BuildColorlessGenerationPool(owner);
             Check(failed["known"] is false && ((List<Dictionary<string, object?>>)failed["cards"]!).Count == 0 && ((string)failed["reason"]!).Contains("pool renamed"), "失敗は known=false・cards=[]・reason");
             Check(_stateWarnings.Any(w => w.StartsWith("player.colorless_generation_pool:")), "無色の warning パス");
+            ModelDb.Colorless.Read = (_, _) => Throwing();
+            var failedPotion = BuildColorlessPotionGenerationPool(owner);
+            Check(failedPotion["known"] is false && Ids(failedPotion).Count == 0 && ((string)failedPotion["reason"]!).Contains("enumeration failed")
+                && _stateWarnings.Any(w => w.StartsWith("player.colorless_potion_generation_pool:")),
+                "無色瓶の読み取り途中の失敗は部分一覧を出さず、専用の reason と warning を返す");
             Check(BuildGenerationPool(owner)["known"] is true, "無色の失敗はキャラ pool に波及しない");
             var lateFailure = new List<CardModel> { attack };
             owner.Character.CardPool.Read = (_, _) => lateFailure.Concat(Throwing());
@@ -109,6 +141,9 @@ namespace STS2_MCP
             int guard = playerBuilder.IndexOf("if (combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
             int wiring = playerBuilder.IndexOf("state[\"colorless_generation_pool\"] = BuildColorlessGenerationPool(player)", StringComparison.Ordinal);
             Check(guard >= 0 && wiring > guard, "無色の最終候補は戦闘中の共通 Player builder だけで出す");
+            int potionGuard = playerBuilder.IndexOf("if (player.PotionSlots.Any(potion => potion is ColorlessPotion))", StringComparison.Ordinal);
+            int potionWiring = playerBuilder.IndexOf("state[\"colorless_potion_generation_pool\"] = BuildColorlessPotionGenerationPool(player)", StringComparison.Ordinal);
+            Check(potionGuard > guard && potionWiring > potionGuard, "無色ポーションを持つ戦闘にだけ専用 pool を付ける");
             Check(playerBuilder.IndexOf("state[\"generation_pool\"] = BuildGenerationPool(player)", StringComparison.Ordinal) is >= 0 and var g && g < guard, "酸液の pool は従来どおり戦闘外も出す");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("Colorless generation pool:"), "Markdown の1行");
             int splashWiring = playerBuilder.IndexOf("state[\"other_character_attack_generation_pool\"] = BuildOtherCharacterAttackGenerationPool(player)", StringComparison.Ordinal);
