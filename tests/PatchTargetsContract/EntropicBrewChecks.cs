@@ -6,6 +6,8 @@ using MegaCrit.Sts2.Core.Modding;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Characters;
+using MegaCrit.Sts2.Core.Models.Enchantments;
+using MegaCrit.Sts2.Core.Models.Monsters;
 using MegaCrit.Sts2.Core.Models.PotionPools;
 using MegaCrit.Sts2.Core.Models.Potions;
 using MegaCrit.Sts2.Core.Models.Powers;
@@ -63,7 +65,8 @@ static class EntropicBrewChecks
             && t.IsSubclassOf(typeof(PotionModel)));
         ModelDb.Init(potionTypes.Concat(new[] { typeof(IroncladPotionPool), typeof(SharedPotionPool),
             typeof(ReptileTrinket), typeof(BeltBuckle), typeof(Sozu), typeof(SurroundedPower),
-            typeof(RocketPunch), typeof(Stomp), typeof(RingingPower) }).ToArray());
+            typeof(RocketPunch), typeof(Stomp), typeof(RingingPower), typeof(JackOfAllTrades),
+            typeof(DefendIronclad), typeof(Sharp), typeof(Nibbit) }).ToArray());
         typeof(ModelDb).GetField("_allPotionPools", PrivateStatic)!.SetValue(null,
             new PotionPoolModel[] { ModelDb.PotionPool<IroncladPotionPool>(), ModelDb.PotionPool<SharedPotionPool>() });
         typeof(ModelDb).GetField("_allEncounters", PrivateStatic)!.SetValue(null, Array.Empty<EncounterModel>());
@@ -184,6 +187,7 @@ static class EntropicBrewChecks
         check(unknownOwner["known"] is false && unknownOwner["options"] == null && RowReasons(unknownOwner).ContainsKey("contract"),
             "a player absent from their run cannot publish a known pool");
 
+        JackObservationChecks.Run(mod, check, owner, ally, combat);
         ChoicePotionChecks.Run(mod, check, owner, ally, combat);
 
         bool subscriberCalled = false;

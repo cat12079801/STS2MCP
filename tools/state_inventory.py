@@ -1729,6 +1729,11 @@ def write_md(path: Path, rows: list[dict], stale: list[str], decompile: Path, ve
                "`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。"
                "ランの `RunState` は、Deck の追加通知に使う `Modifiers` を対象にする。"
                "パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。\n")
+    out.append("何でも屋+ の使用前の `player.jack_observation_context` は、入力時点の派生値。"
+               "`CombatState.IterateHookListeners()` と `RunState.IterateHookListeners(combat)` から"
+               "型・ID ごとの件数を出す。run 側には恒久デッキの札とエンチャント、および combat 側の全モデルが入る。"
+               "モード固有のモデルも同じ集計に入る。個体の位置・山札の順は公開しない。"
+               "発火した通知の記録は [event inventory](event-inventory.md) を参照。\n")
 
     def table(title, sel, cols, intro=""):
         rs = [r for r in rows if sel(r)]

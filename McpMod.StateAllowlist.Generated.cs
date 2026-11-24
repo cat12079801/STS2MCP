@@ -121,6 +121,8 @@ public static partial class McpMod
     private const string AncientDeckEnchantmentIdKey = "enchantment_id";
     // CardModel._lastStarsSpent（戦闘の手札・4 パイルの星 X 札の star_cost_state.last_stars_spent。CardModel.SpendStars と CardCmd.AutoPlay が保存した LastStarsSpent を読む。公開された個体の支払い・自動プレイ時の星から確定できる）
     private const string StarXLastStarsSpentKey = "last_stars_spent";
+    // CombatState.RunModels（ランに適用中のモデル。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。）
+    private const string JackObservationContextKey = "jack_observation_context";
     // Creature._powers（表示用の status に加え、ワッピーでは Creature.Powers のモデル ID を元の順で pets[].power_ids に出す。WuppysLoyaltyPower.ModifyPreBlockDamageTarget が転送を決め、ShouldPowerBeRemovedAfterOwnerDeath は死亡後も忠誠を残す。表示で落ちるパワーの ID も含む（sts2#841））
     private const string PetPowerIdsKey = "power_ids";
     // ImpaledPower.Data.arrowSources（戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する。#1296（親指締め具の多段の入力）のため範囲に入れる。付与はフールのカード）

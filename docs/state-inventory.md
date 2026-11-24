@@ -36,8 +36,8 @@
 | affliction | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | orb | 1 | 0 | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 5 |
 | base | 1 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 53 | 0 | 0 | 3 | 8 | 15 | 4 | 0 | 0 | 83 |
-| **計** | 286 | 0 | 38 | 5 | 93 | 89 | 4 | 0 | 0 | 515 |
+| entity | 57 | 0 | 0 | 3 | 8 | 15 | 0 | 0 | 0 | 83 |
+| **計** | 290 | 0 | 38 | 5 | 93 | 89 | 0 | 0 | 0 | 515 |
 
 ### アイアンクラッドの範囲だけ（他キャラ・廃止・モックを除く）
 
@@ -52,10 +52,12 @@
 | affliction | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | orb | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 | 3 |
 | base | 1 | 0 | 0 | 0 | 0 | 3 | 0 | 0 | 0 | 4 |
-| entity | 53 | 0 | 0 | 3 | 8 | 15 | 4 | 0 | 0 | 83 |
-| **計** | 270 | 0 | 0 | 5 | 84 | 84 | 4 | 0 | 0 | 447 |
+| entity | 57 | 0 | 0 | 3 | 8 | 15 | 0 | 0 | 0 | 83 |
+| **計** | 274 | 0 | 0 | 5 | 84 | 84 | 0 | 0 | 0 | 447 |
 
 範囲（pool）: `ironclad`・`colorless`・`curse`・`status`・`event-only`・`shared`・`ancient`・`monster`・`enchantment`・`affliction`・`base`（モデルの基底）・`entity`（Creature・Player など）を範囲に入れる。`other-character`・`deprecated`・`mock`・`unreferenced` は範囲外（一覧には残す）。ランの `RunState` は、Deck の追加通知に使う `Modifiers` を対象にする。パワー・トークンのカード・プール外のレリックは、参照するクラスのプールから決める（アイアンクラッドの札・共有のレリックが付けるならその範囲）。
+
+何でも屋+ の使用前の `player.jack_observation_context` は、入力時点の派生値。`CombatState.IterateHookListeners()` と `RunState.IterateHookListeners(combat)` から型・ID ごとの件数を出す。run 側には恒久デッキの札とエンチャント、および combat 側の全モデルが入る。モード固有のモデルも同じ集計に入る。個体の位置・山札の順は公開しない。発火した通知の記録は [event inventory](event-inventory.md) を参照。
 
 ## public（まだ出ていない・出す対象）— アイアンクラッドの範囲（0 件）
 
@@ -128,14 +130,9 @@
 | `MonsterModel._rng` | Rng? | base | 型が乱数（Rng 系） |
 | `MonsterModel._runRng` | RunRngSet? | base | 型が乱数（Rng 系） |
 
-## out_of_scope（対象外）（4 件）
+## out_of_scope（対象外）（0 件）
 
-| クラス.メンバー | 型 | 範囲 | 理由 |
-|---|---|---|---|
-| `CombatState.BadgeModels` | IReadOnlyList<BadgeModel> | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
-| `CombatState.Dominion` | DominionModel? | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
-| `CombatState.Modifiers` | IReadOnlyList<ModifierModel> | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
-| `CombatState.RunModels` | IReadOnlyList<RunModel> | entity | ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19） |
+（なし）
 
 ## cosmetic（効果なし。engine は効果なしとして扱ってよい）
 
@@ -218,7 +215,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 |---|---|---|---|
 | `PowerModel._internalData` | base | McpMod.PowerInternalState.cs:393[only AdaptablePower,AutomationPower,CalamityPower,ChainsOfBindingPower,CurlUpPower,DampenPower,DarkEmbracePower,GigantificationPower,HardenedShellPower,HellraiserPower,IllusionPower,JugglingPower,PanachePower,PossessSpeedPower,PossessStrengthPower,ReattachPower,RupturePower,SkittishPower,StranglePower,VigorPower] | 容器そのものは値ではない。中身は派生ごとの Data の欄（Power.Data.field の行、kind=data_field）として一つずつ分類し、出すものはその行の判断で出す（PowerInternalState の各 case・許可リストの DataField）。Data を持たない派生には読むものが無い |
 
-## exposed（出ている）（286 件）
+## exposed（出ている）（290 件）
 
 | クラス.メンバー | 範囲 | MOD の箇所 | 判定 |
 |---|---|---|---|
@@ -233,7 +230,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CardModel._currentTarget` | base | McpMod.StateAllowlist.Generated.cs:19 | allowlist |
 | `CardModel._currentUpgradeLevel` | base | McpMod.CombatUpgradePreview.cs:165, McpMod.CombatUpgradePreview.cs:52, McpMod.CombatUpgradePreview.cs:99 … | mod-scan |
 | `CardModel._deckVersion` | base | McpMod.StateAllowlist.Generated.cs:22 | allowlist |
-| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1974, McpMod.StateBuilder.cs:2001 … | mod-scan |
+| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1975, McpMod.StateBuilder.cs:2002 … | mod-scan |
 | `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.CardStarXValue.cs:47, McpMod.CardXValue.cs:29 … | mod-scan |
 | `CardModel._exhaustOnNextPlay` | base | McpMod.CardSelection.cs:143, McpMod.ChooseCardSelection.cs:43, McpMod.SelectionCandidate.cs:92 … | mod-scan |
 | `CardModel._extraReplayThisTurn` | base | McpMod.CardDetails.cs:111 | mod-scan |
@@ -276,12 +273,16 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `EnchantmentModel._status` | base | McpMod.ArrowState.cs:28, McpMod.CardDetails.cs:140 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
 | `CardEnergyCost.Canonical` | entity | McpMod.CardEnergyCost.cs:47 | mod-scan |
-| `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1835 | mod-scan |
+| `CardEnergyCost.CostsX` | entity | McpMod.CardEnergyCost.cs:45, McpMod.StateBuilder.cs:1836 | mod-scan |
 | `CardEnergyCost._base` | entity | energy_cost.base_raw（GetWithModifiers(None)。McpMod.CardEnergyCost.cs:46） | manual |
 | `CardEnergyCost._capturedXValue` | entity | McpMod.CardEnergyCost.cs:49 | mod-scan |
 | `CardEnergyCost._localModifiers` | entity | energy_cost の local_modifiers（McpMod.CardEnergyCost.cs:52。ReadLocalEnergyCostModifiers〔同 :103〕が cost.GetType() で読むので型の文脈が無く、mod-scan では数えない） | manual |
+| `CombatState.BadgeModels` | entity | 参加バッジ。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。 | manual |
 | `CombatState.CurrentSide` | entity | McpMod.CombatLog.cs:99, McpMod.Helpers.cs:46, McpMod.MultiplayerState.cs:289 … | mod-scan |
+| `CombatState.Dominion` | entity | 適用中の支配。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。 | manual |
+| `CombatState.Modifiers` | entity | 適用中の修飾子。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。 | manual |
 | `CombatState.RoundNumber` | entity | McpMod.CombatLog.cs:98, McpMod.EntropicBrew.cs:123, McpMod.MultiplayerActions.cs:127 … | mod-scan |
+| `CombatState.RunModels` | entity | McpMod.StateAllowlist.Generated.cs:125 | allowlist |
 | `CombatState._allies` | entity | McpMod.StateAllowlist.Generated.cs:40 | allowlist |
 | `CombatState._encounter` | entity | McpMod.EnemyMoveContext.cs:59 | mod-scan |
 | `CombatState._enemies` | entity | battle.enemies（McpMod.StateBuilder.cs:1603） | manual |
@@ -293,7 +294,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Creature._block` | entity | McpMod.CombatLogPatches.cs:873, McpMod.MultiplayerState.cs:448, McpMod.PetsState.cs:103 … | mod-scan |
 | `Creature._currentHp` | entity | McpMod.CombatLogPatches.cs:871, McpMod.MultiplayerState.cs:441, McpMod.PetsState.cs:100 … | mod-scan |
 | `Creature._maxHp` | entity | McpMod.CombatLogPatches.cs:872, McpMod.MultiplayerState.cs:442, McpMod.PetsState.cs:101 … | mod-scan |
-| `Creature._powers` | entity | McpMod.StateAllowlist.Generated.cs:125 | allowlist |
+| `Creature._powers` | entity | McpMod.StateAllowlist.Generated.cs:127 | allowlist |
 | `ExtraPlayerFields.CardShopRemovalsUsed` | entity | McpMod.StateAllowlist.Generated.cs:46 | allowlist |
 | `MonsterMoveStateMachine.StateLog` | entity | McpMod.EnemyMoveState.cs:103, McpMod.EnemyMoveState.cs:45 | mod-scan |
 | `MonsterMoveStateMachine.States` | entity | McpMod.EnemyMoveState.cs:72 | mod-scan |
@@ -311,19 +312,19 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Player.UnlockState` | entity | McpMod.GenerationPool.cs:41, McpMod.GenerationPool.cs:57, McpMod.GenerationPool.cs:66 … | mod-scan |
 | `Player._canUseOrRemovePotions` | entity | McpMod.PotionUsabilityLive.cs:159 | mod-scan |
 | `Player._gold` | entity | McpMod.MultiplayerState.cs:443, McpMod.PowerInternalState.cs:47, McpMod.StateBuilder.cs:1510 … | mod-scan |
-| `Player._potionSlots` | entity | McpMod.StateAllowlist.Generated.cs:129 | allowlist |
+| `Player._potionSlots` | entity | McpMod.StateAllowlist.Generated.cs:131 | allowlist |
 | `Player._relics` | entity | player.relics（McpMod.StateBuilder.cs:1743） | manual |
 | `Player._runPiles` | entity | player.deck（McpMod.StateBuilder.cs:1794） | manual |
 | `PlayerCombatState.DiscardPile` | entity | McpMod.StateBuilder.cs:1684, McpMod.StateBuilder.cs:1690 | mod-scan |
 | `PlayerCombatState.DrawPile` | entity | McpMod.ChoiceAwaitChain.cs:134, McpMod.ChoiceAwaitChain.cs:394, McpMod.StateBuilder.cs:1683 … | mod-scan |
 | `PlayerCombatState.ExhaustPile` | entity | McpMod.StateBuilder.cs:1685, McpMod.StateBuilder.cs:1691 | mod-scan |
 | `PlayerCombatState.Hand` | entity | McpMod.Actions.cs:189, McpMod.Actions.cs:261, McpMod.CardStarXValue.cs:22 … | mod-scan |
-| `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1701 | mod-scan |
+| `PlayerCombatState.OrbQueue` | entity | McpMod.StateBuilder.cs:1702 | mod-scan |
 | `PlayerCombatState.PlayPile` | entity | McpMod.StateBuilder.cs:1686, McpMod.StateBuilder.cs:1692 | mod-scan |
 | `PlayerCombatState.TurnNumber` | entity | McpMod.Actions.cs:271, McpMod.CombatHistory.cs:36, McpMod.EntropicBrew.cs:124 | mod-scan |
-| `PlayerCombatState._arrows` | entity | McpMod.StateAllowlist.Generated.cs:131 | allowlist |
+| `PlayerCombatState._arrows` | entity | McpMod.StateAllowlist.Generated.cs:133 | allowlist |
 | `PlayerCombatState._energy` | entity | McpMod.CardStarXValue.cs:46, McpMod.CombatLogPatches.cs:296, McpMod.CombatLogPatches.cs:880 … | mod-scan |
-| `PlayerCombatState._pets` | entity | McpMod.StateAllowlist.Generated.cs:133 | allowlist |
+| `PlayerCombatState._pets` | entity | McpMod.StateAllowlist.Generated.cs:135 | allowlist |
 | `PlayerCombatState._phase` | entity | McpMod.Helpers.cs:26, McpMod.Helpers.cs:36, McpMod.StateBuilder.cs:757 | mod-scan |
 | `PlayerCombatState._piles` | entity | McpMod.TransformationOptions.cs:29, McpMod.TransformationOptions.cs:44 | manual |
 | `PlayerCombatState._stars` | entity | McpMod.StateBuilder.cs:1666, McpMod.StateBuilder.cs:1668 | mod-scan |
@@ -339,7 +340,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `KnowledgeDemon.DynamicVars.DisintegrationPower` | monster | ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72） | manual |
 | `KnowledgeDemon._curseOfKnowledgeCounter` | monster | McpMod.EnemyCombatState.cs:82 | mod-scan |
 | `LivingFog._bloatAmount` | monster | McpMod.EnemyCombatState.cs:86 | mod-scan |
-| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2194 … | mod-scan |
+| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2195 … | mod-scan |
 | `MonsterModel._moveStateMachine` | base | McpMod.EnemyMoveState.cs:32 | mod-scan |
 | `MonsterModel._spawnedThisTurn` | base | McpMod.EnemyMoveState.cs:80 | mod-scan |
 | `Nibbit._isAlone` | monster | McpMod.EnemyCombatState.cs:90 | mod-scan |
@@ -375,7 +376,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `IllusionPower._followUpStateId` | monster | McpMod.PowerInternalState.cs:169 | mod-scan |
 | `IllusionPower.Data.isReviving` | monster | McpMod.PowerInternalState.cs:159 | mod-scan |
 | `ImpaledPower.DynamicVars.HitCounter` | monster | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
-| `ImpaledPower.Data.arrowSources` | shared | McpMod.StateAllowlist.Generated.cs:127 | allowlist |
+| `ImpaledPower.Data.arrowSources` | shared | McpMod.StateAllowlist.Generated.cs:129 | allowlist |
 | `InfernoPower.DynamicVars.SelfDamage` | ironclad | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `InsatiableDominionPower.DynamicVars.Damage` | unreferenced | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `InterceptPower.Data.coveredCreatures` | colorless | McpMod.StateAllowlist.Generated.cs:52 | allowlist |
@@ -479,7 +480,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Regalite._usedThisTurn` | other-character | McpMod.RelicCombatState.cs:82 | mod-scan |
 | `RelicModel._dynamicVars` | base | McpMod.RelicCombatState.cs:271 | mod-scan |
 | `RelicModel._floorAddedToDeck` | base | McpMod.StateAllowlist.Generated.cs:88 | allowlist |
-| `RelicModel._isMelted` | base | McpMod.PetsState.cs:77, McpMod.StateBuilder.cs:1751 | mod-scan |
+| `RelicModel._isMelted` | base | McpMod.PetsState.cs:77, McpMod.StateBuilder.cs:1752 | mod-scan |
 | `RelicModel._isWax` | base | McpMod.StateAllowlist.Generated.cs:91 | allowlist |
 | `RelicModel._status` | base | McpMod.StateAllowlist.Generated.cs:94 | allowlist |
 | `RuinedHelmet._usedThisCombat` | ironclad | McpMod.RelicCombatState.cs:85 | mod-scan |

@@ -279,20 +279,29 @@
   "effect": "AfterDowngraded"
  },
  "CombatState.BadgeModels": {
-  "class": "out_of_scope",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
+  "class": "exposed",
+  "note": "参加バッジ。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。",
+  "json_key": "jack_observation_context"
  },
  "CombatState.Dominion": {
-  "class": "out_of_scope",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
+  "class": "exposed",
+  "note": "適用中の支配。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。",
+  "json_key": "jack_observation_context"
  },
  "CombatState.Modifiers": {
-  "class": "out_of_scope",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
+  "class": "exposed",
+  "note": "適用中の修飾子。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。",
+  "json_key": "jack_observation_context"
  },
  "CombatState.RunModels": {
-  "class": "out_of_scope",
-  "note": "ゲームモード（Blitz・Dread・カスタムの修飾子・バッジ）のモデルの一覧。IterateHookListeners でフックに入るので効果を持ちうるが、どのモードで何が入り何に効くかは各モデル（Models.Modifiers・Models.Dread・Models.Badges）を読まないと決められない。標準のモードだけを遊ぶので対象外（調整役の判断 2026-11-19）"
+  "class": "public",
+  "note": "ランに適用中のモデル。CombatState.IterateHookListeners と RunState.IterateHookListeners(combat) が列挙した型・ID・数を、安定入力で何でも屋+ が手札にあるとき player.jack_observation_context に出す。モード固有の効果そのものの監査は対象外。",
+  "json_key": "jack_observation_context",
+  "effect": "CombatState.IterateHookListeners・RunState.IterateHookListeners(combat)",
+  "reader_key": "JackObservationContextKey",
+  "type_full": "MegaCrit.Sts2.Core.Combat.CombatState",
+  "cs_type": "IReadOnlyList<RunModel>",
+  "kind": "auto_property"
  },
  "CombatState.RunState": {
   "class": "static/derived",

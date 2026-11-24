@@ -1691,6 +1691,7 @@ public static partial class McpMod
             state["exhaust_pile"] = BuildPileCardList(combatState.ExhaustPile.Cards, PileType.Exhaust);
             state["play_pile"] = BuildPileCardList(combatState.PlayPile.Cards, PileType.Play);
             AttachChoicePotionContext(state, player, screen);
+            AttachJackObservationContext(state, player, screen);
             state["combat_history"] = BuildCombatHistoryState(player);
             state["arrow_state"] = BuildArrowState(player, creature.CombatState);
             // EntropyPower の変化の候補（CardFactory.GetDefaultTransformationOptions）。エントロピーがある戦闘だけ。

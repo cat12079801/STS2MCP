@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.19.0",       // Contract version (semver) — see below
+  "schema": "1.20.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.19.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.20.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -116,13 +116,13 @@ the canonical statement of the rules; the other documents point here.
 - **PATCH** — a fix that does not change the contract: a value that was wrong per the documented meaning becomes right,
   or a docs / formatting fix.
 
-Partial contracts that carry their own version — `generation_pool.filter_version`, `choice_potion_context.version`, each value of
+Partial contracts that carry their own version — `generation_pool.filter_version`, `choice_potion_context.version`, `jack_observation_context.version`, each value of
 `scenario_capabilities`, and the recorder's `sts2-mod-record/N` — are judged by that version, not by `schema`. A change
 to one of them still moves `schema` by the ordinary rules for what changed: adding fields or a new capability is MINOR,
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.19.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.20.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -189,6 +189,7 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.18.0** — 無色ポーション所持中の戦闘に抽選前の母集団を、三択ポーションに既存の介入源がある安定した戦闘入力に通知列を出す（`cat12079801/sts2#1353`）。
   [無色ポーションの母集団](#無色ポーションの母集団schema-1180)・[三択ポーションの飲用前通知](#三択ポーションの飲用前通知schema-1180)。
 - **1.19.0** — 味方が 2 体以上いる戦闘では、戦闘中の選択画面も含めてローカルの `player.internal_state.combat_id` を出す（`cat12079801/sts2#1456`）。
+- **1.20.0** — 何でも屋+ が手札にある安定した戦闘入力で `player.jack_observation_context` を出す（`cat12079801/sts2#1466`）。
   [本人の戦闘個体 ID](#本人の戦闘個体-idschema-1190)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
@@ -457,6 +458,53 @@ NotSeen にする。図鑑がこのラン固有の候補ID一覧をそのまま�
 Markdown は `Colorless generation pool: N cards` または unknown と理由の 1 行。
 解放済み一覧の `unlocked_pools.colorless_cards`（後段の filter 前）は従来どおり残す。
 出典は `sts2-a671e9ef` の `JackOfAllTrades.OnPlay`、上記の `CardFactory` / `CardModel` のメソッド。
+
+#### 何でも屋+ の使用前の通知元（schema 1.20.0）
+
+`player.jack_observation_context` はローカルの実手札に強化済みの `JackOfAllTrades` があり、
+`monster` / `elite` / `boss` で本人が入力できるタイミングのスナップショット。
+手番の段階、行動キュー・実行中の行動、手札の操作・選択、オーバーレイを三択ポーションと同じガードで確認する。
+主敵の生存を確認してから `CombatManager.ShouldSkipCombatEffect` を読み、true なら省略する。
+主敵の生存が確認できない場面では、戦闘終了を判定する hook に入る可能性があるため、この getter を読まずに未観測を返す。
+
+| キー | 値 |
+|---|---|
+| `version` | `1` |
+| `known` / `unavailable_reasons` | 両列を取得・照合できたときは `true` と空配列。取得不能なら `false` と理由コードの配列 |
+| `owner_player_id` | ローカルの `player.player_id` と同じ NetId 文字列 |
+| `attempt_id` | 同じ戦闘の `battle.attempt_identity.attempt_id`。取得不能は null |
+| `game_assembly_sha256` | 本体 DLL の SHA-256。取得不能は null |
+| `should_skip_combat_effect` | `false`、または読んでいない場合は null |
+| `combat` / `run` | それぞれ `{listener_count, models}`。未観測では両方 null。既知の空列は `{listener_count: 0, models: []}` |
+
+`models[]` の各行は `{category, id, concrete_type, count}`。同じ具象型・同じ `AbstractModel.Id` をまとめ、
+`id` に実モデルの `Id.Entry`、`concrete_type` に完全修飾型名、`count` に列内の出現数を出す。
+`category` は `power`、`monster`、`relic`、`potion`、`orb`、`card`、`affliction`、
+`enchantment`、`modifier`、`badge`、`run_model`、`dominion` のいずれか。
+行は `category`、`id`、`concrete_type` の ordinal 昇順。各行の `count` の和が `listener_count` になる。
+
+`CombatState.IterateHookListeners / Contains` が集める、戦闘中のパワー・モンスターと、活動中のプレイヤーの
+溶けていないレリック・瓶・オーブ・5 パイルの札と付加、適用中の修飾子等が `combat` に入る。
+`RunState.IterateHookListeners(combat) / Contains` が集める恒久デッキの有効な札とエンチャント、および
+その後に列挙される戦闘側の全個体が `run` に入る。空き瓶枠は列に入らない。段に対応するスコープを参照する。
+既知は現在の列の完全性を表す。プレイ中に加わるモデルや個々の通知の実行・結果は、
+`battle.combat_log` と `player.combat_history.card_resolution_events` に記録された実行後の観測で確認する。
+
+監査済み DLL と本人・戦闘・ランの所属を照合する。主な欠測理由は次の通り。どの失敗でも両列を null にする。
+
+| 理由コード | 条件 |
+|---|---|
+| `unaudited_game_assembly` / `combat_attempt_unavailable` | 未監査の DLL、または同じ戦闘の試行を確認できない |
+| `no_living_primary_enemy` | 生存中の主敵がいない |
+| `owner_or_hand_mismatch` / `run_or_combat_players_mismatch` | 所有者・手札・戦闘・ランの所属に不一致がある |
+| `external_hook_subscribers` | `CountModHookSubscribers` が run / combat の外部購読を検出した |
+| `external_listener_model` / `unclassified_listener_model` | ゲーム assembly 外のモデル、または分類できないモデルがある |
+| `listener_identity_mismatch` / `run_combat_listeners_mismatch` | 型と ID、または両スコープの戦闘個体が一致しない |
+| `*_read_failed` | 読取中の例外。列挙は `combat_listener_read_failed` / `run_listener_read_failed` で区別する |
+
+ゲームの通知・生成・抽選を実行せず、個体順・位置・UID・山札順・将来の生成結果は公開しない。
+出典は `sts2-a671e9ef` の上記列挙と `CombatManager.ShouldSkipCombatEffect / IsCombatEnding`、
+`AbstractModel.Id / ModelDb.GetId`、`JackOfAllTrades.OnPlay`、`CardPileCmd.AddGeneratedCardsToCombat / Add`。
 
 #### 無色ポーションの母集団（schema 1.18.0）
 
