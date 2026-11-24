@@ -66,6 +66,9 @@ public static partial class McpMod
         // PenNib._attackToDouble（CardModel?）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.PenNib", "MegaCrit.Sts2.Core.Models.Relics.PenNib", "_attackToDouble", StateMemberKind.Field, "attack_to_double_uid", StateValueConverter.CardUid, StateMarkdown.NonDefault,
             "カードのプレイ・攻撃の解決の途中だけ意味を持つ値（書き込み・読む側のメソッドは表の列）。解決の途中で選択画面が開いたときに効くので出す。BeforeCardPlayed で 10 枚目のアタックを記録し、ModifyDamageMultiplicative で 2 倍にする"),
+        // Player.Creature（Creature）
+        new("player", "MegaCrit.Sts2.Core.Entities.Players.Player", "MegaCrit.Sts2.Core.Entities.Players.Player", "Creature", StateMemberKind.AutoProperty, "combat_id", StateValueConverter.CreatureCombatId, StateMarkdown.Always,
+            "画面で本人とほかの味方を区別できる。現在の戦闘で CombatState.Allies が 2 体以上なら、本人の個体がその戦闘の味方であることを照合し CombatId を出す"),
         // PowerModel._amountOnTurnStart（int）
         new("power", "MegaCrit.Sts2.Core.Models.PowerModel", "MegaCrit.Sts2.Core.Models.PowerModel", "_amountOnTurnStart", StateMemberKind.Field, "amount_on_turn_start", StateValueConverter.Int, StateMarkdown.DiffersFromAmount,
             "ターン開始時（Creature.BeforeTurnStart）の量の写し。DrawCardsNextTurnPower は 0 なら（このターンに付いたなら）引く枚数を増やさない。いつ付いたかは人間に見えている"),

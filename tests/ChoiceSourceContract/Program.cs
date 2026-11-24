@@ -274,7 +274,7 @@ namespace STS2_MCP
                 && gridBuilder.Contains("if (choiceScreen != null && GetLiveCombatStateForSelection() != null)"), "grid は戦闘中の CardSelectCmd の画面だけ");
 
             string playerBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildCardState", StringComparison.Ordinal)];
-            int guard = playerBuilder.IndexOf("if (combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
+            int guard = playerBuilder.IndexOf("if (creature != null && combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
             int transform = playerBuilder.IndexOf("BuildTransformationOptionsIfRelevant(player, combatState)", StringComparison.Ordinal);
             Check(guard >= 0 && transform > guard, "変化の候補は戦闘中の共通 Player builder だけ");
             string transformEdge = Read("McpMod.TransformationOptions.cs");

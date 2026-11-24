@@ -844,8 +844,16 @@
   "note": "オーブの枠の初期値（キャラクターの定義）。ディフェクト専用"
  },
  "Player.Creature": {
-  "class": "static/derived",
-  "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
+  "class": "public",
+  "note": "画面で本人とほかの味方を区別できる。現在の戦闘で CombatState.Allies が 2 体以上なら、本人の個体がその戦闘の味方であることを照合し CombatId を出す",
+  "json_key": "combat_id",
+  "effect": "TheInsatiable.LiquifyMove・SwipePower.Steal の対象個体との照合",
+  "section": "player",
+  "converter": "CreatureCombatId",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Players.Player",
+  "cs_type": "Creature",
+  "kind": "getonly_auto_property",
+  "markdown": "Always"
  },
  "Player.DiscoveredEnemies": {
   "class": "cosmetic",

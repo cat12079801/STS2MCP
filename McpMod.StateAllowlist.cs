@@ -3,8 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Saves.Runs;
 
@@ -42,13 +44,67 @@ public static partial class McpMod
                 continue;
             }
             if (!modelType.IsInstanceOfType(model)) continue;
-            values ??= new Dictionary<string, object?>();
+            values ??= GetOrAddAllowlistedState(row);
             ReadInternalStateValue(values, entry.Key, () => ReadAllowlistedValue(entry, model), $"{context}.internal_state");
         }
-        if (values != null) row["internal_state"] = values;
+    }
+
+    private static Dictionary<string, object?> GetOrAddAllowlistedState(Dictionary<string, object?> row)
+    {
+        if (row.GetValueOrDefault("internal_state") is not Dictionary<string, object?> values)
+            row["internal_state"] = values = new Dictionary<string, object?>();
+        return values;
+    }
+
+    private static void AttachPlayerAllowlistedState(Dictionary<string, object?> row, Player player)
+    {
+        const string context = "player.internal_state";
+        try
+        {
+            var extra = player.ExtraFields ?? throw new InvalidOperationException("Player.ExtraFields がない");
+            AttachAllowlistedState(row, "player", extra, "player");
+        }
+        catch (Exception ex)
+        {
+            var values = GetOrAddAllowlistedState(row);
+            values["card_shop_removals_used"] = null;
+            RecordInternalStateFailure(values, "card_shop_removals_used", ex, context);
+        }
+
+        const string key = "combat_id";
+        try
+        {
+            var manager = CombatManager.Instance;
+            if (!manager.IsInProgress) return;
+            var combat = manager.DebugOnlyGetState()
+                ?? throw new InvalidOperationException("現在の CombatState がない");
+            var allies = combat.Allies ?? throw new InvalidOperationException("CombatState.Allies がない");
+            if (allies.Count < 2) return;
+
+            var entry = StateAllowlist.Single(e => e.Section == "player" && e.Key == key);
+            var creature = ReadAllowlistedMember(entry, player) as Creature
+                ?? throw new InvalidOperationException("Player.Creature がない");
+            if (!ReferenceEquals(creature.CombatState, combat))
+                throw new InvalidOperationException("Player.Creature が現在の CombatState に属していない");
+            if (!ReferenceEquals(creature.Player, player))
+                throw new InvalidOperationException("Player.Creature の所有者がこの Player と一致しない");
+            if (!allies.Any(ally => ReferenceEquals(ally, creature)))
+                throw new InvalidOperationException("Player.Creature が現在の CombatState.Allies にいない");
+
+            GetOrAddAllowlistedState(row)[key] = ConvertAllowlistedValue(entry, creature);
+        }
+        catch (Exception ex)
+        {
+            var values = GetOrAddAllowlistedState(row);
+            values[key] = null;
+            RecordInternalStateFailure(values, key, ex, context);
+        }
     }
 
     private static object? ReadAllowlistedValue(StateAllowlistEntry entry, object model)
+        => ConvertAllowlistedValue(entry, ReadAllowlistedMember(entry, model));
+
+    private static object? ReadAllowlistedMember(StateAllowlistEntry entry, object model)
     {
         var declaring = ResolveAllowlistType(entry.DeclaringType)
             ?? throw new TypeLoadException($"型 {entry.DeclaringType} が見つからない");
@@ -69,10 +125,8 @@ public static partial class McpMod
         var field = declaring.GetField(fieldName,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
             ?? throw new MissingFieldException(declaring.Name, fieldName);
-        Type memberType = field.FieldType;
-        object? raw = field.GetValue(target);
-        RequireAllowlistMemberType(entry, memberType);
-        return ConvertAllowlistedValue(entry, raw);
+        RequireAllowlistMemberType(entry, field.FieldType);
+        return field.GetValue(target);
     }
 
     // 宣言の型が変換の前提と違えば読まない（版が上がって型が変わったときに誤った値を出さない）。

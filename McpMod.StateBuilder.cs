@@ -1637,15 +1637,15 @@ public static partial class McpMod
         state["generation_pool"] = BuildGenerationPool(player);
         // The potions a random potion is drawn from (PotionFactory.GetPotionOptions; McpMod.PotionGenerationPool.cs).
         state["potion_generation_pool"] = BuildPotionGenerationPool(player);
-        state["hp"] = creature.CurrentHp;
-        state["max_hp"] = creature.MaxHp;
-        state["block"] = creature.Block;
+        state["hp"] = creature?.CurrentHp;
+        state["max_hp"] = creature?.MaxHp;
+        state["block"] = creature?.Block;
 
         // PlayerCombatState can linger after combat while on map/rest/shop. Energy/MaxEnergy getters
         // run hooks (e.g. Hook.ModifyMaxEnergy) that null-ref without a live combat - only serialize
         // combat fields when a fight is actually in progress.
         bool inCombat = false;
-        if (combatState != null && CombatManager.Instance.IsInProgress)
+        if (creature != null && combatState != null && CombatManager.Instance.IsInProgress)
         {
             inCombat = true;
             if (creature.CombatState != null) RefreshCardUidRegistry(creature.CombatState);
@@ -1732,16 +1732,10 @@ public static partial class McpMod
 
         state["gold"] = player.Gold;
         AttachPetsState(state, player, "player");
-        // 生成した許可リストの ExtraPlayerFields の項目（ショップの除去回数など。McpMod.StateAllowlist.cs）。
-        try { AttachAllowlistedState(state, "player", player.ExtraFields, "player"); }
-        catch (Exception ex)
-        {
-            state["internal_state"] = null;
-            RecordInternalStateFailure(state, "internal_state", ex, "player");
-        }
+        AttachPlayerAllowlistedState(state, player);
 
         // Powers (status effects)
-        state["status"] = BuildPowersState(creature);
+        state["status"] = creature == null ? null : BuildPowersState(creature);
 
         // Relics
         var relics = new List<Dictionary<string, object?>>();

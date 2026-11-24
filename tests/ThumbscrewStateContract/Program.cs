@@ -39,7 +39,7 @@ public static partial class McpMod
         int player = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState", StringComparison.Ordinal);
         int hand = builder.IndexOf("private static Dictionary<string, object?> BuildCardState", StringComparison.Ordinal);
         string playerBuilder = builder[player..hand];
-        int guard = playerBuilder.IndexOf("if (combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
+        int guard = playerBuilder.IndexOf("if (creature != null && combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
         int arrows = playerBuilder.IndexOf("state[\"arrow_state\"] = BuildArrowState(player, creature.CombatState)", StringComparison.Ordinal);
         int end = playerBuilder.IndexOf("\n        }\n\n        state[\"gold\"]", StringComparison.Ordinal);
         Check(guard >= 0 && arrows > guard && arrows < end &&

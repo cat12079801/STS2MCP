@@ -433,18 +433,19 @@ public static partial class McpMod
         var players = new List<Dictionary<string, object?>>();
         foreach (var player in runState.Players)
         {
+            var creature = player.Creature;
             var entry = new Dictionary<string, object?>
             {
                 ["character"] = SafeGetText(() => player.Character.Title),
                 ["is_local"] = LocalContext.IsMe(player),
-                ["hp"] = player.Creature.CurrentHp,
-                ["max_hp"] = player.Creature.MaxHp,
+                ["hp"] = creature?.CurrentHp,
+                ["max_hp"] = creature?.MaxHp,
                 ["gold"] = player.Gold,
-                ["is_alive"] = player.Creature.IsAlive
+                ["is_alive"] = creature?.IsAlive
             };
             if (inCombat)
             {
-                entry["block"] = player.Creature.Block;
+                entry["block"] = creature?.Block;
                 entry["is_ready_to_end_turn"] = CombatManager.Instance.IsPlayerReadyToEndTurn(player);
 
                 // Include pets for teammates (local player's pets are under "player")

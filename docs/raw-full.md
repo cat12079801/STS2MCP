@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.113.0", // release_info.json version; null if unavailable
   "game_commit": "16ac0fe3",  // release_info.json commit; null if unavailable
-  "schema": "1.18.0",       // Contract version (semver) — see below
+  "schema": "1.19.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -102,7 +102,7 @@ and `expected_uid` on `combat_select_card` / `select_card`; `potion_availability
 on it, not on the schema number: an older build ignores unknown request parameters, so a guard or `expected_uid`
 sent to one would run unchecked.
 
-`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.18.0"`). This section is
+`schema` is the contract version as semantic versioning (`MAJOR.MINOR.PATCH`, currently `"1.19.0"`). This section is
 the canonical statement of the rules; the other documents point here.
 
 - **MAJOR** — a backward-incompatible change: an existing field's meaning, type or shape changes; a field, action, enum
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 1.18.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 1.19.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -188,6 +188,8 @@ and changing the meaning or shape of an existing field is MAJOR.
 - **1.17.0** — 表示中のエンシェントの対象6候補に、恒久デッキの各札の判定を `deck_targets` として出す（`cat12079801/sts2#1348`）。
 - **1.18.0** — 無色ポーション所持中の戦闘に抽選前の母集団を、三択ポーションに既存の介入源がある安定した戦闘入力に通知列を出す（`cat12079801/sts2#1353`）。
   [無色ポーションの母集団](#無色ポーションの母集団schema-1180)・[三択ポーションの飲用前通知](#三択ポーションの飲用前通知schema-1180)。
+- **1.19.0** — 味方が 2 体以上いる戦闘では、戦闘中の選択画面も含めてローカルの `player.internal_state.combat_id` を出す（`cat12079801/sts2#1456`）。
+  [本人の戦闘個体 ID](#本人の戦闘個体-idschema-1190)。
 
 `schema_version` is **deprecated**: the integer is frozen at `12` and no longer changes, and it is removed in the next
 MAJOR (`2.0.0`) once sts2 reads `schema`. Its history: it was bumped when an existing field or action changed meaning or
@@ -734,6 +736,10 @@ Always present at the top level (except `menu`). Contains everything about the l
   "max_hp": 80,
   "block": 0,
   "gold": 99,
+  "internal_state": {
+    "card_shop_removals_used": 0,
+    "combat_id": 0 // 現在の戦闘で味方が 2 体以上の場合。失敗時は下記の契約を参照
+  },
 
   // --- Combat-only fields (present only when CombatManager.IsInProgress) ---
   "unlocked_pools": { // 解放済み pool。最終的な抽選候補ではない。上記の契約を参照
@@ -2426,7 +2432,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `card` | `hand[]`・`draw_pile[]`・`discard_pile[]`・`exhaust_pile[]`・`play_pile[]` の行と、戦闘外の `player.deck[]` の行 | `CardModel`（派生の項目は派生の行だけ） |
 | `power` | 全員の `status[]` の全行（`hidden_in_ui` の行・説明を読めない最小行を含む） | `PowerModel`（`InterceptPower` は private `Data`） |
 | `relic` | `player.relics[]` | `RelicModel` |
-| `player` | `player` 本体 | `Player.ExtraFields`（`ExtraPlayerFields`） |
+| `player` | ローカルの `player` 本体 | `Player.ExtraFields`（`ExtraPlayerFields`）と `Player`（本人の戦闘個体 ID） |
 | `battle` | `battle` 本体 | `CombatState` |
 | `run` | パエルの歯を所持するランの `run` 本体 | `RunState` |
 
@@ -2470,6 +2476,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 | `relic` | `triggering_card_uid` | string \| null | `UnsettlingLamp._triggeringCard`・`Vambrace._triggeringCard` | 戦闘で最初にデバフを付けた（UnsettlingLamp）・ブロックを得た（Vambrace）カード。そのカードの解決中だけ 2 倍にする。消すのは `BeforeCombatStart`・`AfterCombatEnd` だけなので、安定した state でも戦闘の終わりまで残る。効くかは `combat_state` の `used_this_combat`（UnsettlingLamp）・`block_gained_this_combat`（Vambrace）で決まる |
 | `relic` | `doubled_power_ids` | `[{id, owner_combat_id}]` | `UnsettlingLamp._doubledPowers` | 2 倍にしたパワー（一時パワーの内側を二重に倍にしないため）。リストが未作成なら空 |
 | `player` | `card_shop_removals_used` | int | `ExtraPlayerFields.CardShopRemovalsUsed` | ショップでカードを除去した回数（除去の値段が上がる） |
+| `player` | `combat_id` | uint \| null | `Player.Creature` → `Creature.CombatId` | 現在の戦闘で味方が 2 体以上いるときの [本人の戦闘個体 ID](#本人の戦闘個体-idschema-1190) |
 | `run` | `modifier_ids` | string[] \| null | `RunState.Modifiers` | 適用中の修飾子 ID。適用順と重複を保持（schema 1.13.0） |
 | `battle` | `ally_combat_ids` | uint[] | `CombatState._allies` | 味方側のクリーチャー（プレイヤー・ペット・マルチプレイの味方） |
 | `battle` | `escaped_creature_ids` | uint[] | `CombatState._escapedCreatures` | 逃げた敵（`CreatureEscaped`） |
@@ -2490,6 +2497,23 @@ Markdown は既定値（false・0・空・理由の無い null・`Normal`）を�
   "deck_version_id": "RAMPAGE", "floor_added_to_deck": 6, "is_dupe": false, "keywords_added": [], "keywords_removed": [],
   "transform_into_after_play_id": null, "extra_damage": 5 } }
 ```
+
+#### 本人の戦闘個体 ID（schema 1.19.0）
+
+`CombatManager.IsInProgress` の間、`CombatManager.DebugOnlyGetState()` が返す現在の戦闘の
+`CombatState.Allies` が 2 体以上なら、ローカルの `player.internal_state.combat_id` に本人の ID を出す。
+通常の戦闘と戦闘中の選択画面は、単独・協力プレイとも共通の player 行を使う。
+対象になるかは `Allies` の個体数で決まる。味方が 1 体以下と確認できたときと戦闘外では `combat_id` を省く。
+
+`Player.Creature` の backing field から本人の個体を読み、個体の `CombatState` が現在の戦闘、
+`Player` がローカルのプレイヤーを参照し、個体そのものが `Allies` に含まれることを確認してから `Creature.CombatId` を出す。
+値は uint で、0 も有効。これは `player.player_id`（`Player.NetId`）と別の識別子。
+戦闘中に公開条件を判定できない場合や、公開対象で本人の参照・所属・ID を確認できない場合は、
+`combat_id: null`、`player.internal_state.unavailable_reasons.combat_id`、パス `player.internal_state.combat_id` の warning を返す。
+`card_shop_removals_used` と各項目の欠測理由は同じ `internal_state` に入る。Markdown にも ID 0 を含む値と読取失敗の理由を表示する。
+
+出典（v0.113.1、`sts2-a671e9ef`）は `Player` のコンストラクタ、`CombatState.AddPlayer`・
+`CombatState.AttachCreature`・`CombatState.AddCreature`・`CombatState.Allies`、`CombatManager.DebugOnlyGetState`。
 
 ### Keyword Object
 
@@ -3664,7 +3688,8 @@ Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombat
 `relic_select`）。画面のクラスでなく `state_type` で決めるので、計略（Stratagem）のシャッフル後の選択・未来視の雫などの
 `NCombatPileCardSelectScreen`（`screen_type` はクラス名のまま）も、今後 `_select` の state に入る画面も同じく付く。
 
-- `state_type` は変えない。`player` は従来どおり戦闘中なら 4 つの山・手札・エナジー・status を持つ（`battle` の有無によらない）。
+- `state_type` は変えない。戦闘中の `player` は 4 つの山・手札・エナジー・status と、条件を満たすときは
+  [本人の戦闘個体 ID](#本人の戦闘個体-idschema-1190) を持つ（`battle` の有無によらない）。
 - `battle` を作れなかったときは warning `battle.selection` を出して `battle` を省き、選択画面の残りの state はそのまま返す。
 - `battle` の中身と隠す情報は戦闘の画面と同じ（山札の順は出さない）。手番の初めのドローの途中で開いた画面では
   `is_play_phase` が false のことがある。

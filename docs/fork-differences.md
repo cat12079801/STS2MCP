@@ -20,7 +20,7 @@
 
 - **版の情報**: state の応答（`state_type` を持つもの。`menu`、マルチの `error`、`wait: true` の POST が返す `state` を含む）と `GET /` が `mod_version`（`GET /` は `version`）/ `mod_commit`（同 `commit`）/ `schema` / `schema_version` を返す。state の読み取りに失敗した 500、503 の `retry: true`、POST のアクションの結果とエラー、profile・図鑑・wiki のエンドポイントは返さない。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.18.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state`、`1.2.0` は棚卸しから生成した `internal_state`、`1.3.0` は全パワーの付与元・対象の `combat_id`、`1.4.0` は戦闘中の選択画面すべての `battle`、`1.5.0` は無色 4 札（金の斧・エントロピー・スプラッシュ・計略）の入力、`1.6.0` は戦闘全体の札の解決の通し列 `card_resolution_events`、`1.7.0` は敵の HP の無限表示 `hp_display_is_infinite`、`1.8.0` は札の解決の通し列への山札からの自動プレイの予約の行と、戦闘を終えた POST の応答の `ended_combat`、`1.9.0` は選択を待つ処理の鎖 `choice_source.await_chain`、`1.10.0` は出来事の棚卸しの public-missing（戦闘の出来事の通し列 `battle.combat_log`・全選択画面の `decision_context`・`player.potion_generation_pool`・手札の `energy_cost.x_value_if_played`）、`1.11.0` は敵のパワーを付けられるか `can_receive_powers`、`1.12.0` は戦闘の札の `internal_state.deck_version_id` と 4 パイルの行の `rarity`、`1.13.0` は醸造の候補・通知・使用履歴と歯のあるランの修飾子、`1.14.0` は試行と choose の識別子・初手ドロー前の待機段と残りの listener、`1.15.0` は多段攻撃用の戦闘履歴・戦闘の実カード個体の星 X・矢の枠と刺突、`1.16.0` は戦闘中のワッピーの個体行、`1.17.0` は提示中のエンシェント6候補の `deck_targets`、`1.18.0` は無色ポーションの母集団と三択ポーションの飲用前通知を足す）。Markdown は先頭の行に `mod … · schema 1.18.0 (schema_version 12)` と出す。
+- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.19.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state`、`1.2.0` は棚卸しから生成した `internal_state`、`1.3.0` は全パワーの付与元・対象の `combat_id`、`1.4.0` は戦闘中の選択画面すべての `battle`、`1.5.0` は無色 4 札（金の斧・エントロピー・スプラッシュ・計略）の入力、`1.6.0` は戦闘全体の札の解決の通し列 `card_resolution_events`、`1.7.0` は敵の HP の無限表示 `hp_display_is_infinite`、`1.8.0` は札の解決の通し列への山札からの自動プレイの予約の行と、戦闘を終えた POST の応答の `ended_combat`、`1.9.0` は選択を待つ処理の鎖 `choice_source.await_chain`、`1.10.0` は出来事の棚卸しの public-missing（戦闘の出来事の通し列 `battle.combat_log`・全選択画面の `decision_context`・`player.potion_generation_pool`・手札の `energy_cost.x_value_if_played`）、`1.11.0` は敵のパワーを付けられるか `can_receive_powers`、`1.12.0` は戦闘の札の `internal_state.deck_version_id` と 4 パイルの行の `rarity`、`1.13.0` は醸造の候補・通知・使用履歴と歯のあるランの修飾子、`1.14.0` は試行と choose の識別子・初手ドロー前の待機段と残りの listener、`1.15.0` は多段攻撃用の戦闘履歴・戦闘の実カード個体の星 X・矢の枠と刺突、`1.16.0` は戦闘中のワッピーの個体行、`1.17.0` は提示中のエンシェント6候補の `deck_targets`、`1.18.0` は無色ポーションの母集団と三択ポーションの飲用前通知、`1.19.0` は複数の味方がいる戦闘での本人の戦闘個体 ID を足す）。Markdown は先頭の行に `mod … · schema 1.19.0 (schema_version 12)` と出す。
   - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクション・列挙の値・`state_type` を消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
   - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type`、既存の列挙の項目〔`resolving_reasons`・`upgrade_preview.status`・`can_use_now_reason` など〕の新しい値を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する。知らない値は未観測として安全側で止め、既知の値に読み替えない
   - PATCH: 契約を変えない直し（文書の意味のとおりでなかった値を正す、文書・表示の直し）
@@ -90,6 +90,10 @@
 
 ## 戦闘
 
+- **ローカルプレイヤーの戦闘個体 ID**（schema 1.19.0） — 現在の `CombatState.Allies` が 2 体以上なら、選択画面を含む戦闘中の
+  `player.internal_state.combat_id` に、戦闘・所有者・味方陣営への所属を照合した `Player.Creature.CombatId` を出す。
+  味方が 1 体以下と確認できたときと戦闘外は省略し、読取や照合に失敗したときは null・キー別の理由・パス付き warnings を出す。
+  除去回数と各項目の欠測理由は同じ `internal_state` に入る。[入力契約と出典](raw-full.md#本人の戦闘個体-idschema-1190)
 - **三択ポーションの飲用前入力**（schema 1.18.0） — 無色瓶所持中の戦闘に `player.colorless_potion_generation_pool` を出す。
   `ColorlessPotion.OnUse` の解放・ラン・戦闘フィルター済みの全型を含む。安定した戦闘入力で三択瓶に既存の介入源がある場合は
   `player.choice_potion_context` に、使用する現物だけを除いた後の既存 listener を slot と段ごとに出す。

@@ -257,7 +257,7 @@ public static partial class McpMod
         string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
         string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
         string playerBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildCardState", StringComparison.Ordinal)];
-        int guard = playerBuilder.IndexOf("if (combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
+        int guard = playerBuilder.IndexOf("if (creature != null && combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
         int wiring = playerBuilder.IndexOf("state[\"combat_history\"] = BuildCombatHistoryState(player)", StringComparison.Ordinal);
         Check(guard >= 0 && wiring > guard && wiring < playerBuilder.IndexOf("state[\"gold\"]", StringComparison.Ordinal), "history wired inside shared combat-only player block");
         int refresh = playerBuilder.IndexOf("RefreshCardUidRegistry(creature.CombatState)", StringComparison.Ordinal);

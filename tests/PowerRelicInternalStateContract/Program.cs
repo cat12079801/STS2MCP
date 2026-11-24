@@ -1250,7 +1250,8 @@ public static partial class McpMod
         var builder = Source("McpMod.StateBuilder.cs");
         Check(builder.Contains("AttachPowerInternalState(entry, power, visibilityKnown && isVisible);") && builder.Split("AttachPowerInternalState(entry, power, visibilityKnown && isVisible);").Length == 3, "full and minimal power rows attach details conservatively");
         var pets = Source("McpMod.PetsState.cs");
-        Check(builder.Contains("[\"status\"] = BuildPowersState(creature)") && builder.Contains("state[\"status\"] = BuildPowersState(creature);") &&
+        const string playerStatus = "state[\"status\"] = creature == null ? null : BuildPowersState(creature);";
+        Check(builder.Contains("[\"status\"] = BuildPowersState(creature)") && builder.Contains(playerStatus) &&
             pets.Contains("[\"status\"] = BuildPowersState(osty)") && pets.Contains("() => BuildPowersState(pet)"),
             "player, enemy, Osty and Wuppy share the power builder");
         Check(builder.Contains("if (inCombat)") && builder.Contains("BuildRelicCombatState(relic)"), "relic details wired under combat guard");
@@ -1269,7 +1270,7 @@ public static partial class McpMod
             int playerStart = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState(Player player, string? screen)", StringComparison.Ordinal);
             int hand = builder.IndexOf("state[\"hand\"] = hand;", playerStart, StringComparison.Ordinal);
             int playPile = builder.IndexOf("state[\"play_pile\"] = BuildPileCardList(", playerStart, StringComparison.Ordinal);
-            int status = builder.IndexOf("state[\"status\"] = BuildPowersState(creature);", playerStart, StringComparison.Ordinal);
+            int status = builder.IndexOf(playerStatus, playerStart, StringComparison.Ordinal);
             Check(playerStart >= 0 && hand > playerStart && playPile > hand && status > playPile,
                 "BuildPlayerState builds the hand and pile rows before the status rows (Dampen uid lookup)");
         }

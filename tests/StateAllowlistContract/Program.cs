@@ -39,7 +39,7 @@ public static partial class McpMod
     private static void RunGeneratedTableContract()
     {
         var sections = new HashSet<string> { "card", "relic", "power", "player", "battle", "run" };
-        Check(StateAllowlist.Length == 34, "許可リストは 34 項目");
+        Check(StateAllowlist.Length == 35, "許可リストは 35 項目");
         Check(!StateAllowlist.Any(e => e.Key == "wongo_points"), "ラン中に読まれない wongo_points は出さない（cosmetic）");
         foreach (var e in StateAllowlist)
         {
@@ -332,12 +332,107 @@ public static partial class McpMod
         Check(guard["computed"] == null && Reasons(guard)!["computed"].Contains("<Computed>k__BackingField"),
             "backing field の無いプロパティは getter を呼ばず null と理由");
 
+        var combined = new Dictionary<string, object?> { ["internal_state"] = guard };
+        AttachAllowlistedState(combined, "player", extra, "player");
+        values = Internal(combined);
+        Check(Equals(values["card_shop_removals_used"], 2) && values.ContainsKey("computed") &&
+            Reasons(values)!.ContainsKey("computed"), "許可リストの追記で既存の値と理由を保持する");
+
         var combat = new CombatState();
         combat.SetAllies(new Creature { CombatId = 4 }, new Creature { CombatId = 1 });
         values = Internal(Row("battle", combat));
         Check(Seq(values["ally_combat_ids"], 1u, 4u) && Seq<uint>(values["escaped_creature_ids"]), "味方と逃げた敵の combat_id");
         Check(!Row("battle", new NullCombatState()).ContainsKey("internal_state"), "当てはまる項目が無ければ internal_state を付けない");
         Check(!Row("player", null).ContainsKey("internal_state"), "モデルが無ければ付けない");
+    }
+
+    private static void RunPlayerCombatIdContract()
+    {
+        const string key = "combat_id";
+        var manager = CombatManager.Instance;
+        var combat = new CombatState();
+        var own = new Creature { CombatState = combat, CombatId = 0 };
+        var player = new Player(own) { PlayerCombatState = new() };
+        own.Player = player;
+        player.ExtraFields.CardShopRemovalsUsed = 2;
+        var pet = new Creature { CombatState = combat, CombatId = 2 };
+        var teammate = new Creature { CombatState = combat, CombatId = 9 };
+        var other = new Player(teammate);
+        teammate.Player = other;
+        manager.State = combat;
+        manager.IsInProgress = true;
+
+        Dictionary<string, object?> Snapshot(Player? local = null)
+        {
+            BeginStateWarnings();
+            var row = new Dictionary<string, object?>();
+            AttachPlayerAllowlistedState(row, local ?? player);
+            return row;
+        }
+
+        void CheckFailure(string reason, string message, Player? local = null)
+        {
+            var values = Internal(Snapshot(local));
+            Check(values.ContainsKey(key) && values[key] == null &&
+                Reasons(values)?.GetValueOrDefault(key)?.Contains(reason) == true &&
+                _stateWarnings.Any(w => w.StartsWith("player.internal_state.combat_id:")), message);
+        }
+
+        combat.SetAllies(own);
+        var values = Internal(Snapshot());
+        Check(!values.ContainsKey(key) && Equals(values["card_shop_removals_used"], 2) &&
+            Reasons(values) == null && _stateWarnings.Count == 0, "味方が本人 1 体なら combat_id は省略");
+
+        combat.SetAllies(own, pet);
+        var row = Snapshot();
+        values = Internal(row);
+        Check(Equals(values[key], 0u) && Equals(values["card_shop_removals_used"], 2) &&
+            Reasons(values) == null && _stateWarnings.Count == 0, "ペットと同居する本人の ID 0 と除去回数の両方を出す");
+        Check(FormatAllowlistedState(row, "player").Contains("combat id 0"), "Markdown でも ID 0 を表示する");
+
+        own.CombatId = 8;
+        combat.SetAllies(pet, own);
+        Check(Equals(Internal(Snapshot())[key], 8u), "先頭のペットより大きい本人 ID を出す");
+        combat.SetAllies(teammate, own);
+        Check(Equals(Internal(Snapshot())[key], 8u), "ペットがいない協力戦でもローカル本人の ID を出す");
+        combat.SetAllies(teammate, pet);
+        pet.CombatId = own.CombatId;
+        CheckFailure("Allies", "同じ ID の別個体がいても、本人が味方にいなければ欠測");
+        pet.CombatId = 2;
+
+        combat.SetAllies(own, pet);
+        own.Player = other;
+        CheckFailure("所有者", "味方にいる個体でも所有者が別プレイヤーなら欠測");
+        own.Player = player;
+        own.CombatState = new CombatState();
+        CheckFailure("CombatState", "味方一覧に見えても別戦闘の参照なら欠測");
+        own.CombatState = combat;
+        CheckFailure("Player.Creature", "本人の参照がなければ欠測", new Player());
+
+        own.CombatId = null;
+        CheckFailure("CombatId", "本人の ID 未割当は理由付きの null");
+        Check(Equals(Internal(Snapshot())["card_shop_removals_used"], 2), "ID の欠測時にも除去回数を保持");
+        own.CombatId = uint.MaxValue;
+        pet.CombatId = null;
+        Check(Equals(Internal(Snapshot())[key], uint.MaxValue), "味方の数は ID の割当によらず、本人 ID は uint");
+
+        player.ExtraFields = null!;
+        values = Internal(Snapshot());
+        Check(Equals(values[key], uint.MaxValue) && values["card_shop_removals_used"] == null &&
+            Reasons(values)?.ContainsKey("card_shop_removals_used") == true &&
+            _stateWarnings.Any(w => w.StartsWith("player.internal_state.card_shop_removals_used:")),
+            "除去回数が欠測でも本人 ID を保持");
+        manager.State = null;
+        CheckFailure("現在の CombatState", "進行中に現在の味方数を確認できなければ欠測");
+        Check(Reasons(Internal(Snapshot()))?.Count == 2, "両方の欠測理由を同じ辞書に保持");
+
+        player.ExtraFields = new() { CardShopRemovalsUsed = 2 };
+        manager.State = combat;
+        manager.IsInProgress = false;
+        values = Internal(Snapshot());
+        Check(!values.ContainsKey(key) && Equals(values["card_shop_removals_used"], 2) &&
+            Reasons(values) == null && _stateWarnings.Count == 0, "戦闘外では残存する戦闘状態・本人 ID を公開しない");
+        manager.State = null;
     }
 
     private static void RunReaderGuardContract()
@@ -409,7 +504,7 @@ public static partial class McpMod
     {
         string builder = Source("McpMod.StateBuilder.cs");
         string multiplayer = Source("McpMod.MultiplayerState.cs");
-        foreach (string source in new[] { builder, multiplayer })
+        foreach (var (source, local) in new[] { (builder, "_player"), (multiplayer, "localPlayer") })
         {
             int common = source.IndexOf("result[\"run\"] = BuildRunState(runState);", StringComparison.Ordinal);
             Check(new[] { "rewards", "card_select", "map" }.All(screen =>
@@ -418,17 +513,24 @@ public static partial class McpMod
                 return branch >= 0 && branch < common;
             }),
                 "報酬・選択・通常のラン画面は共通の run ビルダーを通る");
+            int selection = source.IndexOf("if (ShouldAttachSelectionBattle(", StringComparison.Ordinal);
+            int player = source.IndexOf($"result[\"player\"] = BuildPlayerState({local}, screen);", StringComparison.Ordinal);
+            Check(selection >= 0 && selection < common && common < player,
+                "通常の戦闘と戦闘中の選択は、画面分岐の後で同じローカル player ビルダーを通る");
         }
         foreach (string call in new[]
                  {
                      "AttachAllowlistedState(battle, \"battle\", combatState, \"battle\");",
-                     "AttachAllowlistedState(state, \"player\", player.ExtraFields, \"player\");",
                      "AttachAllowlistedState(relicState, \"relic\", relic, $\"player.relics.{relic.Id.Entry}\");",
                      "AttachAllowlistedState(cardInfo, \"card\", card, \"deck\");",
                      "AttachAllowlistedState(state, \"card\", card, \"hand\");",
                      "AttachAllowlistedState(state, \"card\", card, pile.ToString().ToLowerInvariant() + \"_pile\");"
                  })
             Check(builder.Contains(call), "組み立てが呼ぶ: " + call);
+        int playerBuilder = builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState(", StringComparison.Ordinal);
+        int playerBuilderEnd = builder.IndexOf("return state;", playerBuilder, StringComparison.Ordinal);
+        Check(builder[playerBuilder..playerBuilderEnd].Contains("AttachPlayerAllowlistedState(state, player);"),
+            "共通のローカル player ビルダーで、渡された Player に許可リストの項目を付ける");
         Check(builder.Split("AttachAllowlistedState(entry, \"power\", power, $\"status.{entry[\"id\"]}\");").Length == 3,
             "パワーの行の 2 経路（通常・説明を読めないとき）とも");
         Check(System.Text.RegularExpressions.Regex.Matches(builder,
@@ -477,6 +579,7 @@ public static partial class McpMod
         RunRelicContract();
         RunModifierContract();
         RunPlayerBattleContract();
+        RunPlayerCombatIdContract();
         RunReaderGuardContract();
         RunMarkdownContract();
         RunWiringContract();

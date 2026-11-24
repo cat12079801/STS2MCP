@@ -10,8 +10,16 @@ namespace MegaCrit.Sts2.Core.Combat
         public IReadOnlyList<Entities.Players.Player> Players { get; set; } = [];
         private List<Entities.Creatures.Creature> _allies = [];
         private List<Entities.Creatures.Creature> _escapedCreatures = [];
+        public IReadOnlyList<Entities.Creatures.Creature> Allies => _allies;
         public void SetAllies(params Entities.Creatures.Creature[] c) => _allies = [.. c];
         public void SetEscaped(params Entities.Creatures.Creature[] c) => _escapedCreatures = [.. c];
+    }
+    public class CombatManager
+    {
+        public static CombatManager Instance { get; } = new();
+        public bool IsInProgress { get; set; }
+        public CombatState? State { get; set; }
+        public CombatState? DebugOnlyGetState() => State;
     }
     // The game's other ICombatState: no allowlist entry targets it.
     public class NullCombatState : ICombatState { public IReadOnlyList<Entities.Players.Player> Players { get; } = []; }
@@ -26,7 +34,12 @@ namespace MegaCrit.Sts2.Core.Entities.Cards
 }
 namespace MegaCrit.Sts2.Core.Entities.Creatures
 {
-    public class Creature { public uint? CombatId { get; set; } }
+    public class Creature
+    {
+        public uint? CombatId { get; set; }
+        public Combat.ICombatState? CombatState { get; set; }
+        public Players.Player? Player { get; set; }
+    }
 }
 namespace MegaCrit.Sts2.Core.Entities.Relics
 {
@@ -45,6 +58,9 @@ namespace MegaCrit.Sts2.Core.Entities.Players
         public ulong NetId { get; set; }
         public Cards.CardPile Deck = new();
         public PlayerCombatState? PlayerCombatState { get; set; }
+        public Creatures.Creature Creature { get; }
+        public ExtraPlayerFields ExtraFields { get; set; } = new();
+        public Player(Creatures.Creature? creature = null) => Creature = creature!;
     }
     // v0.113.1: auto-properties { get; set; }.
     public class ExtraPlayerFields

@@ -1533,7 +1533,8 @@ def main() -> int:
 ALLOWLIST_FILE = "McpMod.StateAllowlist.Generated.cs"
 ALLOWLIST_SOURCE_FILES = (ALLOWLIST_FILE, "McpMod.StateAllowlist.cs", "McpMod.StateAllowlistFormatting.cs")
 ALLOWLIST_SECTIONS = ("card", "relic", "power", "player", "battle", "run")
-ALLOWLIST_KINDS = {"field": "Field", "auto_property": "AutoProperty", "data_field": "DataField"}
+ALLOWLIST_KINDS = {"field": "Field", "auto_property": "AutoProperty",
+                   "getonly_auto_property": "AutoProperty", "data_field": "DataField"}
 ALLOWLIST_CONVERTERS = ("Bool", "Int", "NullableInt", "Decimal", "EnumName", "CardUid", "CardModelId",
                         "CardPlayCardUid", "CreatureCombatId", "CreatureCombatIds", "KeywordNames",
                         "PowerRefs", "SerializableCards", "ModifierIds")

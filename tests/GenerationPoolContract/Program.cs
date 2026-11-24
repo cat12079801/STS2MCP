@@ -138,7 +138,7 @@ namespace STS2_MCP
             string sources = Path.Combine(AppContext.BaseDirectory, "Sources");
             string builder = File.ReadAllText(Path.Combine(sources, "McpMod.StateBuilder.cs"));
             string playerBuilder = builder[builder.IndexOf("private static Dictionary<string, object?> BuildPlayerState", StringComparison.Ordinal)..builder.IndexOf("private static Dictionary<string, object?> BuildCardState", StringComparison.Ordinal)];
-            int guard = playerBuilder.IndexOf("if (combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
+            int guard = playerBuilder.IndexOf("if (creature != null && combatState != null && CombatManager.Instance.IsInProgress)", StringComparison.Ordinal);
             int wiring = playerBuilder.IndexOf("state[\"colorless_generation_pool\"] = BuildColorlessGenerationPool(player)", StringComparison.Ordinal);
             Check(guard >= 0 && wiring > guard, "無色の最終候補は戦闘中の共通 Player builder だけで出す");
             int potionGuard = playerBuilder.IndexOf("if (player.PotionSlots.Any(potion => potion is ColorlessPotion))", StringComparison.Ordinal);
