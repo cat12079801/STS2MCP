@@ -35,7 +35,8 @@ foreach (var method in typeof(Godot.GD).GetMethods(BindingFlags.Public | Binding
 var recorderApply = mod.Assembly.GetType("STS2_MCP.Recorder.RecorderPatches")?.GetMethod("Apply", Static)
     ?? throw new MissingMethodException("RecorderPatches", "Apply");
 var steps = new[] { "TryApplyHarmonyPatches", "InstallRewardTracking", "InstallChoiceSourceTracking",
-    "InstallAutoPlayReservationTracking", "InstallCombatLogTracking", "InstallDecisionContextTracking", "RecorderPatches.Apply" };
+    "InstallAutoPlayReservationTracking", "InstallCombatLogTracking", "InstallCardDamageInputTracking",
+    "InstallDecisionContextTracking", "RecorderPatches.Apply" };
 void Step(string name)
 {
     if (name == "RecorderPatches.Apply") recorderApply.Invoke(null, null);
@@ -77,6 +78,7 @@ Check(new[] { "player", "playerChoiceContext", "<state>5__2" }
 Check(Field(Internal("AutoPlayReservations"), "TrackingError") == null, $"auto-play reservation: {Field(Internal("AutoPlayReservations"), "TrackingError")}");
 Check(Field(Internal("EndedCombatCaptures"), "LossCaptureError") == null, $"ended combat loss: {Field(Internal("EndedCombatCaptures"), "LossCaptureError")}");
 Check(Field(mod, "_decisionContextTrackingError") == null, $"decision context: {Field(mod, "_decisionContextTrackingError")}");
+Check(Field(mod, "_cardDamageInputTrackingError") == null, $"damage_input: {Field(mod, "_cardDamageInputTrackingError")}");
 var installErrors = (IEnumerable<string>)Field(Internal("CombatLogStore"), "InstallErrors")!;
 Check(!installErrors.Any(), "combat_log: " + string.Join("; ", installErrors));
 
@@ -133,6 +135,7 @@ int choice = Patched("com.sts2mcp.choicesource");
 // combat_log: history 18 (CombatHistory's public recording methods), hooks 53, modify 5 + 1 dry-run guard,
 // piles 6, cards 3, creatures 10, energy 1, potions 3, powers 5, flash 2, phases 12.
 Check(combatLog == 119, $"combat_log patched {combatLog} methods, expected 119");
+Check(Patched("com.sts2mcp.carddamageinput") == 3, "damage_input patches the card preview and both damage variables");
 
 // Every history entry has an emitting path that cannot be inlined away: each public recording method of CombatHistory
 // (each makes one *Entry) carries the combat_log prefix and postfix itself.

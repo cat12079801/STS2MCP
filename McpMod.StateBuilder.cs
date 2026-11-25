@@ -1978,20 +1978,40 @@ public static partial class McpMod
 
                 try
                 {
-                    card.UpdateDynamicVarPreview(CardPreviewMode.Normal, enemy, card.DynamicVars);
-
                     var preview = new Dictionary<string, object?>
                     {
                         ["target"] = GetStableEntityId(enemy),
                         ["combat_id"] = enemy.CombatId
                     };
 
+                    var vars = card.DynamicVars;
+                    var capture = card.Pile?.Type == PileType.Hand && PickDamageVarName(vars.ContainsKey) != null
+                        ? new DamageInputCapture(card, enemy, vars) : null;
+                    var previousRequest = _requestedDamageInput;
+                    string? damageVar;
+                    try
+                    {
+                        _requestedDamageInput = capture;
+                        card.UpdateDynamicVarPreview(CardPreviewMode.Normal, enemy, vars);
+                    }
+                    catch (Exception ex) when (capture != null)
+                    {
+                        AddDamageInput(preview, capture, PickDamageVarName(vars.ContainsKey));
+                        preview["values"] = null;
+                        RecordInternalStateFailure(preview, "values", ex, "card.vs_targets");
+                        previews.Add(preview);
+                        continue;
+                    }
+                    finally { _requestedDamageInput = previousRequest; }
+
                     // Var names differ per card (Damage, CalculatedDamage, ExtraDamage...),
                     // and the typed accessors throw when a card has no var of that name,
                     // so read whatever the card actually carries.
-                    var values = ReadDynamicVarValues(card);
-                    AddCardPreviewValues(preview, values, enemy, card.Id.Entry,
+                    var values = ReadDynamicVarValues(vars);
+                    damageVar = AddCardPreviewValues(preview, values, enemy, card.Id.Entry,
                         card is Dismantle && enemy.HasPower<VulnerablePower>(), ownerLostHpThisTurn);
+                    AddDamageInput(preview, capture, damageVar ??
+                        (capture != null ? PickDamageVarName(vars.ContainsKey) : null));
 
                     if (values.Count > 0)
                         preview["values"] = values;
@@ -2022,12 +2042,12 @@ public static partial class McpMod
     /// printed number before any modifier. DamageVar and CalculatedDamageVar write the
     /// game's targeted damage results after the damage and HP loss modifiers.
     /// </summary>
-    private static Dictionary<string, object?> ReadDynamicVarValues(CardModel card)
+    private static Dictionary<string, object?> ReadDynamicVarValues(DynamicVarSet vars)
     {
         var values = new Dictionary<string, object?>();
         try
         {
-            foreach (var (name, dynamicVar) in card.DynamicVars)
+            foreach (var (name, dynamicVar) in vars)
             {
                 int? value = SafeGetInt(() => (int)System.Math.Round(dynamicVar.PreviewValue,
                     System.MidpointRounding.ToZero));

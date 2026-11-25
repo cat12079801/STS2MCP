@@ -135,7 +135,7 @@ public static partial class McpMod
     private const string PetPowerIdsKey = "power_ids";
     // ImpaledPower.Data.arrowSources（戦闘中の player.arrow_state.impalements[].slot_indices。ImpaledPower.Applier が所有者の Creature と一致する行だけ、公開された射撃・刺突から確定する矢の列を ImpaledPower.Arrows の順で所有者の枠添字に変換する。#1296（親指締め具の多段の入力）のため範囲に入れる。付与はフールのカード）
     private const string ArrowImpalementsKey = "impalements";
-    // MonsterModel._isPerformingMove（行動の進行は画面で見える。Monster を持つ戦闘個体に IsPerformingMove の実値を battle.creature_activity[].is_performing_move として出す。解決中に開いた選択にも付く）
+    // MonsterModel._isPerformingMove（行動の進行は画面で見える。読取は公開 getter IsPerformingMove。Monster を持つ戦闘個体に実値を battle.creature_activity[].is_performing_move として出す。解決中に開いた選択にも付く）
     private const string MonsterIsPerformingMoveKey = "is_performing_move";
     // Player._potionSlots（所持行は player.potions。安定した戦闘入力で三択瓶に既存の介入源があるときは同じ物理 slot を choice_potion_context に出す。PotionModel.RemoveBeforeUse で消える個体だけを通知の列から除く（sts2#1353）。）
     private const string ChoicePotionContextKey = "choice_potion_context";

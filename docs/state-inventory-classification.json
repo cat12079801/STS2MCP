@@ -773,7 +773,7 @@
   "kind": "field",
   "written": "MonsterModel.PerformMove",
   "effect": "CreatureCmd.KillWithoutCheckingWinCondition（戦闘 state からの除去や死亡後のパワー除去を保留する）",
-  "note": "行動の進行は画面で見える。Monster を持つ戦闘個体に IsPerformingMove の実値を battle.creature_activity[].is_performing_move として出す。解決中に開いた選択にも付く"
+  "note": "行動の進行は画面で見える。読取は公開 getter IsPerformingMove。Monster を持つ戦闘個体に実値を battle.creature_activity[].is_performing_move として出す。解決中に開いた選択にも付く"
  },
  "MusicBox._cardBeingPlayed": {
   "class": "public",

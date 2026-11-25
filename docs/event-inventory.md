@@ -130,7 +130,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:CreatureCmd.Escape` | battle.combat_log[kind=creature,action=escape] | McpMod.CombatLogPatches.cs:876 |
 | `cmd:CreatureCmd.GainBlock` | battle.combat_log[kind=block_gained]{amount, props, card_play_uid} | McpMod.CombatLogPatches.cs:397 |
 | `cmd:CreatureCmd.GainMaxHp` | battle.combat_log[kind=hp,action=gain_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:293 |
-| `cmd:CreatureCmd.GetDamageResultsPreview` | vs_targets[].values / damage | McpMod.StateBuilder.cs:1981 |
+| `cmd:CreatureCmd.GetDamageResultsPreview` | vs_targets[].values / damage / damage_input.before_block | McpMod.StateBuilder.cs:1995, McpMod.CardDamageInput.cs:192 |
 | `cmd:CreatureCmd.Heal` | battle.combat_log[kind=hp,action=heal]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:291 |
 | `cmd:CreatureCmd.Kill` | battle.combat_log[kind=creature,action=kill]{creatures, card_source, force} | McpMod.CombatLogPatches.cs:865 |
 | `cmd:CreatureCmd.LoseBlock` | battle.combat_log[kind=block,action=lose_block]{target, amount, block_before, remover} | McpMod.CombatLogPatches.cs:297 |
@@ -140,7 +140,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `cmd:CreatureCmd.SetMaxHp` | battle.combat_log[kind=hp,action=set_max_hp]{target, amount, hp_before, max_hp_before} | McpMod.CombatLogPatches.cs:295 |
 | `cmd:CreatureCmd.Stun` | enemies[].is_stun | McpMod.EnemyStunHandler.cs:61 |
 | `cmd:DamageCmd.Attack` | battle.combat_log[kind=attacked]{actor, hits[]} | McpMod.CombatLogPatches.cs:399 |
-| `cmd:MapCmd.SetBossEncounter` | map.boss | McpMod.StateBuilder.cs:2830 |
+| `cmd:MapCmd.SetBossEncounter` | map.boss | McpMod.StateBuilder.cs:2850 |
 | `cmd:MelodyCmd.PlayedChoThisTurn` | player.combat_history.played_cho_this_turn | McpMod.CombatHistory.cs:159 |
 | `cmd:MelodyCmd.PlayedKiThisTurn` | player.combat_history.played_ki_this_turn | McpMod.CombatHistory.cs:160 |
 | `cmd:MelodyCmd.PlayedWahThisTurn` | player.combat_history.played_wah_this_turn | McpMod.CombatHistory.cs:158 |
@@ -176,26 +176,26 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `computed:CardFactory.GetDefaultTransformationOptions` | player.transformation_options | McpMod.StateBuilder.cs:1701 |
 | `computed:CardFactory.GetDistinctForCombat` | player.generation_pool | McpMod.GenerationPool.cs:31, McpMod.StateBuilder.cs:1639 |
 | `computed:CardFactory.GetForCombat` | player.generation_pool | McpMod.StateBuilder.cs:1639 |
-| `computed:Hook.ModifyAttackHitCount` | hand[].preview.hits | McpMod.CardPreview.cs:20 |
-| `computed:Hook.ModifyBlock` | hand[].preview.block | McpMod.CardPreview.cs:27 |
+| `computed:Hook.ModifyAttackHitCount` | hand[].preview.hits | McpMod.CardPreview.cs:21 |
+| `computed:Hook.ModifyBlock` | hand[].preview.block | McpMod.CardPreview.cs:28 |
 | `computed:Hook.ModifyCardBeingAddedToDeck` | player.deck | McpMod.StateBuilder.cs:1834 |
 | `computed:Hook.ModifyCardPlayCount` | card_resolution_events[kind=play].play_count | McpMod.CombatHistory.cs:378 |
 | `computed:Hook.ModifyCardPlayResultLocation` | battle.combat_log[kind=modify,hook=ModifyCardPlayResultLocation]{card, original, result, modifiers} | McpMod.CombatLogPatches.cs:650 |
 | `computed:Hook.ModifyCardRewardAlternatives` | card_reward | McpMod.StateBuilder.cs:474 |
 | `computed:Hook.ModifyCardRewardCreationOptions` | card_reward | McpMod.StateBuilder.cs:474 |
-| `computed:Hook.ModifyDamage` | hand[].vs_targets / enemies[].intents | McpMod.StateBuilder.cs:1931, McpMod.StateBuilder.cs:2231 |
+| `computed:Hook.ModifyDamage` | hand[].vs_targets / enemies[].intents | McpMod.StateBuilder.cs:1931, McpMod.CardDamageInput.cs:181, McpMod.StateBuilder.cs:2251 |
 | `computed:Hook.ModifyEnergyCostInCombat` | hand[].energy_cost | McpMod.StateBuilder.cs:1920 |
 | `computed:Hook.ModifyExtraRestSiteHealText` | rest_site | McpMod.StateBuilder.cs:602 |
 | `computed:Hook.ModifyExtraRestSiteMendText` | rest_site | McpMod.StateBuilder.cs:602 |
-| `computed:Hook.ModifyGeneratedMap` | map | McpMod.StateBuilder.cs:2824 |
-| `computed:Hook.ModifyGeneratedMapLate` | map | McpMod.StateBuilder.cs:2824 |
+| `computed:Hook.ModifyGeneratedMap` | map | McpMod.StateBuilder.cs:2844 |
+| `computed:Hook.ModifyGeneratedMapLate` | map | McpMod.StateBuilder.cs:2844 |
 | `computed:Hook.ModifyGoldGained` | player.gold | McpMod.StateBuilder.cs:1736 |
 | `computed:Hook.ModifyHandDraw` | battle.combat_log[kind=modify,hook=ModifyHandDraw]{original, result, modifiers} | McpMod.CombatLogPatches.cs:566 |
 | `computed:Hook.ModifyHpLost` | battle.combat_log[kind=modify,hook=ModifyHpLost]{phase, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:593 |
 | `computed:Hook.ModifyKeywordsInCombat` | hand[].keywords | McpMod.StateBuilder.cs:1866 |
 | `computed:Hook.ModifyMaxEnergy` | player.max_energy | McpMod.StateBuilder.cs:1665 |
 | `computed:Hook.ModifyMerchantCardCreationResults` | shop | McpMod.StateBuilder.cs:589 |
-| `computed:Hook.ModifyMerchantPrice` | shop.*.price | McpMod.StateBuilder.cs:2508 |
+| `computed:Hook.ModifyMerchantPrice` | shop.*.price | McpMod.StateBuilder.cs:2528 |
 | `computed:Hook.ModifyPowerAmountGiven` | battle.combat_log[kind=modify,hook=ModifyPowerAmountGiven]{power_id, giver, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:613 |
 | `computed:Hook.ModifyPowerAmountReceived` | battle.combat_log[kind=modify,hook=ModifyPowerAmountReceived]{power_id, giver, target, original, result, modifiers} | McpMod.CombatLogPatches.cs:621 |
 | `computed:Hook.ModifyPreBlockDamageTarget` | battle.combat_log[kind=damage_received].result{receiver, original_target}・attacked.hits[] | McpMod.CombatLogPatches.cs:475 |
@@ -207,7 +207,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `computed:Hook.ModifyUnblockedDamageTarget` | battle.combat_log[kind=damage_received].result{receiver, original_target}・attacked.hits[] | McpMod.CombatLogPatches.cs:475 |
 | `computed:Hook.ModifyXValue` | player.hand[].energy_cost.x_value_if_played | McpMod.CardXValue.cs:29, McpMod.CardStarXValue.cs:36 |
 | `computed:Hook.ShouldAddToDeck` | player.deck | McpMod.StateBuilder.cs:1834 |
-| `computed:Hook.ShouldAllowFreeTravel` | map | McpMod.StateBuilder.cs:2824 |
+| `computed:Hook.ShouldAllowFreeTravel` | map | McpMod.StateBuilder.cs:2844 |
 | `computed:Hook.ShouldAllowHitting` | enemies[].hittable, enemies[].can_receive_powers | McpMod.EnemyHittable.cs:18, McpMod.EnemyCanReceivePowers.cs:23 |
 | `computed:Hook.ShouldAllowMerchantCardRemoval` | shop | McpMod.StateBuilder.cs:589 |
 | `computed:Hook.ShouldAllowSelectingMoreCardRewards` | rewards | McpMod.StateBuilder.cs:479 |
@@ -216,7 +216,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `computed:Hook.ShouldForcePotionReward` | rewards | McpMod.StateBuilder.cs:479 |
 | `computed:Hook.ShouldGenerateTreasure` | rewards | McpMod.StateBuilder.cs:479 |
 | `computed:Hook.ShouldPlay` | hand[].can_play | McpMod.CardDetails.cs:22 |
-| `computed:Hook.ShouldProceedToNextMapPoint` | map | McpMod.StateBuilder.cs:2824 |
+| `computed:Hook.ShouldProceedToNextMapPoint` | map | McpMod.StateBuilder.cs:2844 |
 | `computed:Hook.ShouldRefillMerchantEntry` | shop | McpMod.StateBuilder.cs:589 |
 | `computed:Hook.TryModifyCardRewardOptions` | card_reward | McpMod.StateBuilder.cs:474 |
 | `computed:Hook.TryReplaceDefaultRoomRewards` | rewards | McpMod.StateBuilder.cs:479 |
@@ -235,7 +235,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `history:MonsterPerformedMoveEntry` | battle.combat_log[kind=monster_move,source=history] | McpMod.CombatLogPatches.cs:401 |
 | `history:PotionUsedEntry` | battle.combat_log[kind=potion_used,source=history] / player.combat_history.potion_uses | McpMod.CombatLogPatches.cs:402, McpMod.CombatHistory.cs:93 |
 | `history:PowerReceivedEntry` | battle.combat_log[kind=power_received,source=history] | McpMod.CombatLogPatches.cs:403 |
-| `hook:Hook.AfterActEntered` | map | McpMod.StateBuilder.cs:2824 |
+| `hook:Hook.AfterActEntered` | map | McpMod.StateBuilder.cs:2844 |
 | `hook:Hook.AfterAttack` | battle.combat_log[kind=hook,hook=AfterAttack]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:39 |
 | `hook:Hook.AfterAutoPostPlayPhaseEntered` | battle.combat_log[kind=hook,hook=AfterAutoPostPlayPhaseEntered]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:40 |
 | `hook:Hook.AfterAutoPrePlayPhaseEntered` | battle.combat_log[kind=hook,hook=AfterAutoPrePlayPhaseEntered]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:41 |
@@ -259,7 +259,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `hook:Hook.AfterGoldGained` | player.gold | McpMod.StateBuilder.cs:1736 |
 | `hook:Hook.AfterHandEmptied` | battle.combat_log[kind=hook,hook=AfterHandEmptied]{scope, args, passes[{method, listeners[]}]} / player.choice_potion_context.slots[].notifications[] | McpMod.ChoicePotionContext.cs:31, McpMod.CombatLogPatches.cs:59 |
 | `hook:Hook.AfterItemPurchased` | shop | McpMod.StateBuilder.cs:589 |
-| `hook:Hook.AfterMapGenerated` | map.nodes | McpMod.StateBuilder.cs:2824 |
+| `hook:Hook.AfterMapGenerated` | map.nodes | McpMod.StateBuilder.cs:2844 |
 | `hook:Hook.AfterModifyingBlockAmount` | battle.combat_log[kind=hook,hook=AfterModifyingBlockAmount]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:60 |
 | `hook:Hook.AfterModifyingCardPlayCount` | battle.combat_log[kind=hook,hook=AfterModifyingCardPlayCount]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:61 |
 | `hook:Hook.AfterModifyingCardRewardOptions` | card_reward | McpMod.StateBuilder.cs:474 |
@@ -299,7 +299,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `hook:Hook.BeforeHandDraw` | battle.combat_log[kind=hook,hook=BeforeHandDraw]{scope, args, passes[{method, listeners[]}]}, choice_source.await_chain.frames[method=BeforeHandDraw]{awaiting, following, listener{position, count, remaining_listeners}} | McpMod.CombatLogPatches.cs:87, McpMod.ChoiceAwaitChain.cs:35 |
 | `hook:Hook.BeforePotionUsed` | battle.combat_log[kind=hook,hook=BeforePotionUsed]{scope, args, passes[{method, listeners[]}]} / player.entropic_brew_pool.listeners.notifications.before_potion_used / player.choice_potion_context.slots[].notifications[] | McpMod.ChoicePotionContext.cs:23, McpMod.CombatLogPatches.cs:88, McpMod.EntropicBrew.cs:28 |
 | `hook:Hook.BeforePowerAmountChanged` | battle.combat_log[kind=hook,hook=BeforePowerAmountChanged]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:89 |
-| `hook:Hook.BeforeRoomEntered` | map / state_type | McpMod.StateBuilder.cs:2824 |
+| `hook:Hook.BeforeRoomEntered` | map / state_type | McpMod.StateBuilder.cs:2844 |
 | `hook:Hook.BeforeSideTurnEnd` | battle.combat_log[kind=hook,hook=BeforeSideTurnEnd]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:90 |
 | `hook:Hook.BeforeSideTurnStart` | battle.combat_log[kind=hook,hook=BeforeSideTurnStart]{scope, args, passes[{method, listeners[]}]} | McpMod.CombatLogPatches.cs:91 |
 | `manual:CardModel.OnPlayWrapper` | card_resolution_events[kind=play] | McpMod.CombatHistory.cs:375 |
@@ -309,7 +309,7 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `manual:CombatManager.CurrentCombatId` | battle.attempt_identity | McpMod.CombatLog.cs:23 |
 | `manual:CombatState.IterateHookListeners` | <screen>.choice_source.hook.remaining_listeners / player.jack_observation_context.{combat,run} | McpMod.ChoicePotionContext.cs:105, McpMod.ChoiceSource.cs:386, McpMod.JackObservationContext.cs:92, McpMod.JackObservationContext.cs:95 |
 | `manual:EntropyPower.selection_stage` | <screen>.decision_context.choice_source.await_chain の hook{awaiting, following, listener} | McpMod.ChoiceAwaitChain.cs:60, McpMod.DecisionContext.cs:199 |
-| `manual:EventModel.CurrentOptions` | event.options と対象の event.options[].deck_targets | McpMod.StateBuilder.cs:668, McpMod.StateBuilder.cs:2413, McpMod.AncientDeckTargets.cs:88 |
+| `manual:EventModel.CurrentOptions` | event.options と対象の event.options[].deck_targets | McpMod.StateBuilder.cs:668, McpMod.StateBuilder.cs:2433, McpMod.AncientDeckTargets.cs:88 |
 | `manual:PotionModel.OnUseWrapper` | battle.combat_log[kind=potion_used] と hook BeforePotionUsed・AfterPotionUsed の行 | McpMod.CombatLogPatches.cs:402, McpMod.CombatLogPatches.cs:88, McpMod.CombatLogPatches.cs:70 |
 | `manual:PowerModel.Flash` | battle.combat_log[kind=flash]{model} | McpMod.CombatLogPatches.cs:336 |
 | `manual:RelicModel.Flash` | battle.combat_log[kind=flash]{model} | McpMod.CombatLogPatches.cs:335 |
@@ -339,11 +339,11 @@ public-missing を行ごとの Harmony の patch にせず、次の 3 つの共�
 | `select:CardSelectCmd.FromHandForUpgrade` | <screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ） | McpMod.ChoiceSource.cs:39 |
 | `select:CardSelectCmd.FromSimpleGrid` | <screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ） | McpMod.ChoiceSource.cs:34 |
 | `select:CardSelectCmd.FromSimpleGridForRewards` | <screen>.choice_source（開いたモデル・hook・後続の listener・親プレイ） | McpMod.ChoiceSource.cs:33 |
-| `select:CardSelectorPrefs.Cancelable` | <screen>.can_cancel | McpMod.StateBuilder.cs:3314 |
-| `select:CardSelectorPrefs.MaxSelect` | <screen>.max_select | McpMod.StateBuilder.cs:3278 |
-| `select:CardSelectorPrefs.MinSelect` | <screen>.min_select | McpMod.StateBuilder.cs:3278 |
-| `select:CardSelectorPrefs.Prompt` | <screen>.prompt | McpMod.StateBuilder.cs:3256 |
-| `select:CardSelectorPrefs.RequireManualConfirmation` | <screen>.can_confirm | McpMod.StateBuilder.cs:3334 |
+| `select:CardSelectorPrefs.Cancelable` | <screen>.can_cancel | McpMod.StateBuilder.cs:3334 |
+| `select:CardSelectorPrefs.MaxSelect` | <screen>.max_select | McpMod.StateBuilder.cs:3298 |
+| `select:CardSelectorPrefs.MinSelect` | <screen>.min_select | McpMod.StateBuilder.cs:3298 |
+| `select:CardSelectorPrefs.Prompt` | <screen>.prompt | McpMod.StateBuilder.cs:3276 |
+| `select:CardSelectorPrefs.RequireManualConfirmation` | <screen>.can_confirm | McpMod.StateBuilder.cs:3354 |
 | `select:RelicSelectCmd.FromChooseARelicScreen` | relic_select | McpMod.StateBuilder.cs:459 |
 
 ## hidden（プレイヤーに見えないもの）

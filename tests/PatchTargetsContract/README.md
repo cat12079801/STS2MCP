@@ -9,11 +9,11 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 既定の `STS2GameDir` は macOS の Steam の場所。違うなら `-p:STS2GameDir=...` を渡す。
 
 `Initialize` と同じ install のメソッドを同じ順（`TryApplyHarmonyPatches`・`InstallRewardTracking`・`InstallChoiceSourceTracking`・
-`InstallAutoPlayReservationTracking`・`InstallCombatLogTracking`・`InstallDecisionContextTracking`、最後に戦闘の記録器の `RecorderPatches.Apply`〔`CombatRecorder.StartIfConfigured` が当てるもの。設定ファイルと記録の置き場に触らないよう直接呼ぶ〕）で本物の `sts2.dll` に対して呼び、次を確かめる。
+`InstallAutoPlayReservationTracking`・`InstallCombatLogTracking`・`InstallCardDamageInputTracking`・`InstallDecisionContextTracking`、最後に戦闘の記録器の `RecorderPatches.Apply`〔`CombatRecorder.StartIfConfigured` が当てるもの。設定ファイルと記録の置き場に触らないよう直接呼ぶ〕）で本物の `sts2.dll` に対して呼び、次を確かめる。
 外では `GD.Print*` が native の Godot に入って落ちるので、試験の中だけ Harmony で標準エラーに回す。
 
 - すべての群が当たったこと（各 `*Error` が null、`CombatLogStore.InstallErrors` が空）
-- Harmony の ID ごとの patch の数（combat_log 119、decision_context 9、choice_source 8）
+- Harmony の ID ごとの patch の数（combat_log 119、damage_input 3、decision_context 9、choice_source 8）
 - 履歴の行の出どころ: `CombatHistory` の公開の記録メソッド 18 件のそれぞれに combat_log の prefix・postfix が当たり、各メソッドが *Entry をちょうど 1 つ作り、
   *Entry の型がすべてどれかで作られること（private の `Add` に頼らない）
 - インライン化の危険: patch したメソッドを、IL で呼出し先へ（patch していないゲームのメソッドを通って 3 段まで）たどり、そのメソッドの置き換えが
@@ -37,7 +37,8 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 外部購読者と外部パワーの判定はそれぞれのコードを呼ぶ前に止まり、主敵不在では戦闘終了の hook を呼ばない。
 片側だけの失敗は両列を未観測にし、既知の空列とは区別する。読み取りと山札の並べ替えを通じて、観測値とゲームの RNG・履歴・カウンタを照合する。
 
-v0.114.0 のプレビューは実際の `DamageVar`・`CalculatedDamageVar` で、ブロック、HP 減少の上限と下限、超過ダメージの合計を照合する。
-試算の前後で HP・ブロック・ログが変わらず、例外で試算が終わっても実際の HP 補正を記録できることを確かめる。
+v0.114.0 のプレビューは実際の `DamageVar`・`CalculatedDamageVar` で、対象二体の入力、十進数の JSON 精度、二段の与え手、
+ブロックによる全吸収、前段・HP 減少の上限、ブーツと超過ダメージ、複数変数の選択を照合する。
+連続読み取りで HP・ブロック・スタック・手札・ログが変わらず、途中例外の対象行を保持し、直後の実打を一回記録することを確かめる。
 ワッピーの追加行は設定済みの HP・最大 HP を、強化プレビューは実際の複製と、強化時の例外が起きたときの候補行・wiki の応答を照合する。
 戦闘個体の活動は本体の個体で本人・ワッピー・死亡処理を保留中の敵の参照と getter の実値を照合する。

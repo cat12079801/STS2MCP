@@ -100,8 +100,9 @@ public static partial class McpMod
     /// Combat log excludes preview-only ModifyHpLost rows. Markdown renames "resolved damage:" to "damage preview:".
     /// 2.1.0: battle.creature_activity reports attack and move activity for each live combat roster entry,
     /// including creatures pending death cleanup and in-combat selection screens (sts2#1491).
+    /// 2.2.0: targeted hand previews expose the damage variable's two inputs before Block (sts2#1483).
     /// </summary>
-    public const string StateSchema = "2.1.0";
+    public const string StateSchema = "2.2.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to
@@ -376,6 +377,7 @@ public static partial class McpMod
             InstallAutoPlayReservationTracking();
             // battle.combat_log: the fight's events in order (hooks, history, pile moves, turn phases, selections).
             InstallCombatLogTracking();
+            InstallCardDamageInputTracking();
             // decision_context on every selection screen: the CardSelectCmd / RelicSelectCmd entry and who opened it.
             InstallDecisionContextTracking();
 

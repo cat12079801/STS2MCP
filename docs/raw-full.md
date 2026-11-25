@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.114.0", // release_info.json version; null if unavailable
   "game_commit": "a7b9a9c0",  // release_info.json commit; null if unavailable
-  "schema": "2.1.0",       // Contract version (semver) — see below
+  "schema": "2.2.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 2.1.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 2.2.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -201,6 +201,8 @@ and changing the meaning or shape of an existing field is MAJOR.
   Markdown の対象別の行名は `resolved damage:` から `damage preview:` に変わる。
 - **2.1.0** — 通常戦闘と戦闘中の選択に [戦闘個体の攻撃・行動の進行](#戦闘個体の攻撃行動の進行schema-210)
   を `battle.creature_activity` として出す（`cat12079801/sts2#1491`）。
+- **2.2.0** — 手札の各対象プレビュー行に [ブロック前のダメージ入力](#ブロック前のダメージ入力schema-220)
+  を `damage_input` として出す（`cat12079801/sts2#1483`）。
 
 `schema_version` is **deprecated**: the integer remains frozen at `12` for legacy clients and recorder metadata. Its history: it was bumped when an existing field or action changed meaning or
 was removed, and also for **6**, **7**, **8**, **9**, **10**, **11** and **12**: additive contracts that a client treated as
@@ -1604,6 +1606,32 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
   連続ヒットでブロックが減る、Slippery の回数を消費する、HardenedShell の手番内残量を使う、
   ランダムな攻撃が別の対象に当たる、といった変化は反映しない。対象の HP 減少や撃破の判定には、ヒットごとの観測と別の計算が必要。
 
+##### ブロック前のダメージ入力（schema 2.2.0）
+
+`player.hand[].vs_targets[]` の各対象行に、同じ行の `damage` に使う動的変数の `damage_input` を返す。
+敵を対象とする実手札で、`CalculatedDamage` または `Damage` があるときが対象。`damage` と同じ優先順で選ぶ。
+
+| 項目 | 型と読取元 |
+| --- | --- |
+| `var_name` | 文字列。`CalculatedDamage` または `Damage` |
+| `base_for_target` | JSON 数値。`Hook.ModifyDamage` の入力。通常変数は `BaseValue`、計算変数は `CalculatedVar.Calculate(target)` の結果 |
+| `before_block` | JSON 数値。`CreatureCmd.GetDamageResultsPreview` の入力。ダメージ補正と前段の上限を経た量 |
+| `props` | 整数のビットマスク。両段に共通する実引数の `ValueProp`（`Unblockable=2`、`Unpowered=4`、`Move=8`、`SkipHurtAnim=16`、`FromArrow=32`） |
+| `modifier_dealer_combat_id` | `Hook.ModifyDamage` の dealer の `Creature.CombatId`（uint） |
+| `preview_dealer_combat_id` | `CreatureCmd.GetDamageResultsPreview` の dealer の `Creature.CombatId`（uint） |
+
+量は C# の `decimal` の精度のまま出す。利用側も JSON 数値を十進数として読み取る。
+各 dealer の実引数が null のときは対応する ID が null になり、理由は付かない。
+引数を観測できない場合、計算段の組合せが一致しない場合、個体の `CombatId` が欠ける場合は、対象行を保持し、
+該当項目を null にして `damage_input.unavailable_reasons.<項目>` と `warnings` に理由を出す。
+プレビュー自体が途中で例外終了した場合は、変数名を宣言から選び、`values: null` と対象行の
+`unavailable_reasons.values` を返す。
+
+出典は v0.114.0 の `CardModel.UpdateDynamicVarPreview`、`DamageVar.UpdateCardPreview`、
+`CalculatedDamageVar.UpdateCardPreview` と、上表のクラス・メソッド。
+カード・動的変数・対象の参照を照合し、同じ変数呼出し内の引数を取る。
+`CalculatedDamageVar.UpdateCardPreview` で `IsFromOsty` が真の場合、補正段の dealer は `card.Owner.Osty`、
+試算段の dealer は `card.Owner.Creature`。既存の `damage`、`values`、`hits`、`total_damage` は同じ対象プレビューから読む。
 
 ### Pile Card Object (draw/discard/exhaust/play piles)
 
@@ -2940,7 +2968,7 @@ left to reattach to, the fight is over rather than about to restart.
 | `combat_id` | 整数。戦闘内で割り当てられた `Creature.CombatId`（uint、0 も有効）。欠落時と異なる個体で重複したときは該当行で null と理由 |
 | `kind` | `player`（プレイヤー個体）、`enemy`（敵陣営）、`pet`（味方のペット）、`ally`（その他の味方）。`Creature.Player`、`IsEnemy`、`PetOwner` の順に判定 |
 | `player_id` | `player` 行のみ。所有者の `Player.NetId` の文字列。ローカル本人はトップレベルの `player.player_id` と照合できる |
-| `entity_id` | `enemy` 行のみ。`battle.enemies[].entity_id` と共通の個体 ID |
+| `entity_id` | `enemy` 行のみ。`battle.enemies[].entity_id` と共通の個体 ID。`combat_id` が null の行では null と `unavailable_reasons.entity_id` |
 | `owner_player_id` | `pet` 行のみ。`Creature.PetOwner.NetId` の文字列 |
 | `is_attacking` | bool。`Creature.IsAttacking` の現在値。`AttackCommand.Execute` が攻撃中に true にし、finally で直前の値に戻す |
 | `is_performing_move` | bool。`Creature.Monster` を持つ個体の `MonsterModel.IsPerformingMove` の現在値。`MonsterModel.PerformMove` が行動中に true にする。Monster が無い個体では省略 |

@@ -218,7 +218,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 
 | クラス.メンバー | 範囲 | MOD の箇所 | 判定 |
 |---|---|---|---|
-| `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:84 … | mod-scan |
+| `AfflictionModel._amount` | base | McpMod.CardDetails.cs:50, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:100 … | mod-scan |
 | `AbstractModel.Id` | base | McpMod.Actions.cs:1014, McpMod.Actions.cs:1729, McpMod.Actions.cs:2607 … | mod-scan |
 | `CardModel.Affliction` | base | McpMod.CardDetails.cs:47, McpMod.ChoiceContinuationState.cs:183, McpMod.CombatHistory.cs:126 | mod-scan |
 | `CardModel.Enchantment` | base | McpMod.StateAllowlist.Generated.cs:127 | allowlist |
@@ -229,7 +229,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `CardModel._currentTarget` | base | McpMod.StateAllowlist.Generated.cs:19 | allowlist |
 | `CardModel._currentUpgradeLevel` | base | McpMod.CombatUpgradePreview.cs:165, McpMod.CombatUpgradePreview.cs:52, McpMod.CombatUpgradePreview.cs:99 … | mod-scan |
 | `CardModel._deckVersion` | base | McpMod.StateAllowlist.Generated.cs:22 | allowlist |
-| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1981, McpMod.StateBuilder.cs:2008 … | mod-scan |
+| `CardModel._dynamicVars` | base | McpMod.CardDetails.cs:72, McpMod.StateBuilder.cs:1987, McpMod.StateBuilder.cs:2028 … | mod-scan |
 | `CardModel._energyCost` | base | McpMod.CardEnergyCost.cs:36, McpMod.CardStarXValue.cs:47, McpMod.CardXValue.cs:29 … | mod-scan |
 | `CardModel._exhaustOnNextPlay` | base | McpMod.CardSelection.cs:143, McpMod.ChooseCardSelection.cs:43, McpMod.SelectionCandidate.cs:92 … | mod-scan |
 | `CardModel._extraReplayThisTurn` | base | McpMod.CardDetails.cs:111 | mod-scan |
@@ -267,7 +267,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `Thrash.DynamicVars.Damage` | ironclad | McpMod.CardDetails.cs:72（DynamicVars を丸ごと出す） | mod-scan |
 | `Thrash._extraDamage` | ironclad | McpMod.StateAllowlist.Generated.cs:112 | allowlist |
 | `Adroit.DynamicVars.Block` | enchantment | McpMod.CardDetails.cs:130（DynamicVars を丸ごと出す） | mod-scan |
-| `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:84 … | mod-scan |
+| `EnchantmentModel._amount` | base | McpMod.CardDetails.cs:67, McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:100 … | mod-scan |
 | `EnchantmentModel._dynamicVars` | base | McpMod.CardDetails.cs:130 | mod-scan |
 | `EnchantmentModel._status` | base | McpMod.ArrowState.cs:28, McpMod.CardDetails.cs:140 | mod-scan |
 | `Momentum._extraDamage` | enchantment | McpMod.CardDetails.cs:162 | mod-scan |
@@ -340,7 +340,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `KnowledgeDemon.DynamicVars.DisintegrationPower` | monster | ChooseCurse が生成したカード Disintegration の DynamicVars を書き換える（モンスター自身の変数ではない）。カードの dynamic_vars に出る（McpMod.CardDetails.cs:72） | manual |
 | `KnowledgeDemon._curseOfKnowledgeCounter` | monster | McpMod.EnemyCombatState.cs:82 | mod-scan |
 | `LivingFog._bloatAmount` | monster | McpMod.EnemyCombatState.cs:86 | mod-scan |
-| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2200 … | mod-scan |
+| `MonsterModel.NextMove` | base | McpMod.EnemyMoveState.cs:30, McpMod.EnemyStunHandler.cs:48, McpMod.StateBuilder.cs:2220 … | mod-scan |
 | `MonsterModel._isPerformingMove` | base | McpMod.StateAllowlist.Generated.cs:139 | allowlist |
 | `MonsterModel._moveStateMachine` | base | McpMod.EnemyMoveState.cs:32 | mod-scan |
 | `MonsterModel._spawnedThisTurn` | base | McpMod.EnemyMoveState.cs:80 | mod-scan |
@@ -390,7 +390,7 @@ MOD の箇所の `[only T]` は、その読み取りが届く派生の型（`!T`
 | `PlatingPower.DynamicVars.Decrement` | ironclad | McpMod.PowerInternalState.cs:290（DynamicVars を丸ごと出す） | mod-scan |
 | `PossessSpeedPower.Data.stolenDexterity` | monster | McpMod.PowerInternalState.cs:227 | mod-scan |
 | `PossessStrengthPower.Data.stolenStrength` | monster | McpMod.PowerInternalState.cs:224 | mod-scan |
-| `PowerModel._amount` | base | McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:84, McpMod.CardPreview.cs:95 … | mod-scan |
+| `PowerModel._amount` | base | McpMod.CardEnergyCost.cs:114, McpMod.CardPreview.cs:100, McpMod.CardPreview.cs:89 … | mod-scan |
 | `PowerModel._amountOnTurnStart` | base | McpMod.StateAllowlist.Generated.cs:79 | allowlist |
 | `PowerModel._applier` | base | McpMod.StateAllowlist.Generated.cs:82 | allowlist |
 | `PowerModel._dynamicVars` | base | McpMod.PowerInternalState.cs:290 | mod-scan |

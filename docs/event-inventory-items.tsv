@@ -53,7 +53,7 @@ cmd:CreatureCmd.Damage	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/Creatur
 cmd:CreatureCmd.Escape	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:818	3	0			McpMod.CombatLogPatches.cs:288
 cmd:CreatureCmd.GainBlock	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:855	82	83			
 cmd:CreatureCmd.GainMaxHp	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:1046	14	0			McpMod.CombatLogPatches.cs:293
-cmd:CreatureCmd.GetDamageResultsPreview	exposed	item	core	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:473	0	0			McpMod.CombatLogPatches.cs:239
+cmd:CreatureCmd.GetDamageResultsPreview	exposed	item	core	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:473	0	0			McpMod.CardDamageInput.cs:69,McpMod.CardDamageInput.cs:159,McpMod.CardDamageInput.cs:192,McpMod.CombatLogPatches.cs:239
 cmd:CreatureCmd.Heal	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:943	25	4			McpMod.CombatLogPatches.cs:291
 cmd:CreatureCmd.Kill	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:618	4	3			McpMod.CombatLogPatches.cs:286
 cmd:CreatureCmd.LoseBlock	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CreatureCmd.cs:918	2	1	1		McpMod.CombatLogPatches.cs:297,McpMod.CombatLogPatches.cs:889,McpMod.CombatLogPatches.cs:891
@@ -146,7 +146,7 @@ computed:Hook.ModifyCardPlayResultLocation	exposed	item	ironclad	MegaCrit.Sts2.C
 computed:Hook.ModifyCardRewardAlternatives	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1476	1	0			
 computed:Hook.ModifyCardRewardCreationOptions	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1492	2	0			
 computed:Hook.ModifyCardRewardUpgradeOdds	hidden	item	core	MegaCrit.Sts2.Core.Hooks/Hook.cs:1536	0	0			
-computed:Hook.ModifyDamage	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1549	24	19			
+computed:Hook.ModifyDamage	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1549	24	19			McpMod.CardDamageInput.cs:65,McpMod.CardDamageInput.cs:158,McpMod.CardDamageInput.cs:181
 computed:Hook.ModifyEnergyCostInCombat	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1637	6	8			
 computed:Hook.ModifyEnergyGain	out_of_scope	rule:other-char-hook	other-only	MegaCrit.Sts2.Core.Hooks/Hook.cs:1669	0	1			
 computed:Hook.ModifyExtraRestSiteHealText	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1709	4	0			
@@ -188,7 +188,7 @@ computed:Hook.ShouldAllowMerchantCardRemoval	exposed	item	core	MegaCrit.Sts2.Cor
 computed:Hook.ShouldAllowSelectingMoreCardRewards	exposed	item	core	MegaCrit.Sts2.Core.Hooks/Hook.cs:2279	0	0			
 computed:Hook.ShouldAllowTargeting	exposed	item	core	MegaCrit.Sts2.Core.Hooks/Hook.cs:2294	0	0			McpMod.PotionUsabilityLive.cs:296,McpMod.PotionUsabilityLive.cs:329
 computed:Hook.ShouldClearBlock	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2311	4	0			
-computed:Hook.ShouldCreatureBeRemovedFromCombatAfterDeath	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2332	4	2			McpMod.StateBuilder.cs:2160
+computed:Hook.ShouldCreatureBeRemovedFromCombatAfterDeath	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2332	4	2			McpMod.StateBuilder.cs:2180
 computed:Hook.ShouldDie	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2347	2	0			
 computed:Hook.ShouldDisableRemainingRestSiteOptions	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2372	1	0			
 computed:Hook.ShouldDraw	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2387	2	0			
@@ -341,7 +341,7 @@ hook:Hook.BeforeSideTurnEnd	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.
 hook:Hook.BeforeSideTurnStart	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1207	23	10			McpMod.CombatLogPatches.cs:91
 manual:CardModel.OnPlayWrapper	exposed	item	ironclad	MegaCrit.Sts2.Core.Models/CardModel.cs:2020	0	0			
 manual:CardPileCmd.DrawInternal	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CardPileCmd.cs:1010	0	0			
-manual:CardReward	exposed	item	ironclad	MegaCrit.Sts2.Core.Rewards/CardReward.cs:34	0	0			McpMod.Actions.cs:884,McpMod.Rewards.cs:51,McpMod.StateBuilder.cs:3778
+manual:CardReward	exposed	item	ironclad	MegaCrit.Sts2.Core.Rewards/CardReward.cs:34	0	0			McpMod.Actions.cs:884,McpMod.Rewards.cs:51,McpMod.StateBuilder.cs:3798
 manual:CardSelectCmd.skip_and_result	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CardSelectCmd.cs:68	0	0			
 manual:CombatManager.CurrentCombatId	exposed	item	core	MegaCrit.Sts2.Core.Combat/CombatManager.cs:176	0	0			McpMod.CombatLog.cs:38
 manual:CombatState.IterateHookListeners	exposed	item	ironclad	MegaCrit.Sts2.Core.Combat/CombatState.cs:423	0	0			

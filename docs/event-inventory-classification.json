@@ -476,9 +476,10 @@
   "cmd:CreatureCmd.GetDamageResultsPreview": {
    "class": "exposed",
    "exposed_by": [
-    "McpMod.StateBuilder.cs: card.UpdateDynamicVarPreview(CardPreviewMode.Normal, enemy, card.DynamicVars);"
+    "McpMod.StateBuilder.cs: card.UpdateDynamicVarPreview(CardPreviewMode.Normal, enemy, vars);",
+    "McpMod.CardDamageInput.cs: return CreatureCmd.GetDamageResultsPreview(runState, combatState, target, damage, props, dealer, cardSource);"
    ],
-   "proposed_key": "vs_targets[].values / damage",
+   "proposed_key": "vs_targets[].values / damage / damage_input.before_block",
    "reason": "DamageVar・CalculatedDamageVar・OstyDamageVar が試算の合計を PreviewValue に出す。試算中の HP 損失補正は戦闘ログの出来事に数えない。"
   },
   "cmd:CreatureCmd.Heal": {
@@ -952,6 +953,7 @@
    "class": "exposed",
    "exposed_by": [
     "McpMod.StateBuilder.cs: state[\"vs_targets\"] = vsTargets;",
+    "McpMod.CardDamageInput.cs: var modified = Hook.ModifyDamage(runState, combatState, target, dealer, damage, props, cardSource,",
     "McpMod.StateBuilder.cs: state[\"intents\"] = intents;"
    ],
    "proposed_key": "hand[].vs_targets / enemies[].intents"

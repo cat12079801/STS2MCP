@@ -35,7 +35,7 @@ public static partial class McpMod
     }
 
     /// <summary>
-    /// The Markdown header line naming the build: `mod 0.4.0+&lt;commit&gt; · schema 2.1.0 (schema_version 12)`.
+    /// The Markdown header line naming the build: `mod 0.4.0+&lt;commit&gt; · schema 2.2.0 (schema_version 12)`.
     /// The deprecated integer is shown beside the semver when available.
     /// </summary>
     internal static string FormatStampLine(Dictionary<string, object?> state)
