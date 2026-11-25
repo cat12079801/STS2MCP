@@ -12,7 +12,7 @@ public static partial class McpMod
         "PotionFactory.GetPotionOptions(Player)=Character.PotionPool.GetUnlockedPotions(UnlockState)+SharedPotionPool.GetUnlockedPotions(UnlockState)";
 
     /// <summary>
-    /// <c>player.potion_generation_pool</c>: the potions a random potion is drawn from (v0.113.1 PotionFactory.GetPotionOptions,
+    /// <c>player.potion_generation_pool</c>: the potions a random potion is drawn from (v0.114.0 PotionFactory.GetPotionOptions,
     /// the list CreateRandomPotionsOutOfCombat / CreateRandomPotionInCombat filter and draw from). The game's own public static
     /// method builds the list; the MOD does not copy its conditions. <c>can_be_generated_in_combat</c> is the filter
     /// CreateRandomPotionInCombat adds (PotionModel.CanBeGeneratedInCombat); the rarity is what the draw weights by

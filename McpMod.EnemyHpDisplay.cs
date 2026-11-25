@@ -7,10 +7,10 @@ namespace STS2_MCP;
 public static partial class McpMod
 {
     // battle.enemies[].hp_display_is_infinite: the game's own HpDisplayExtensions.IsInfinite over
-    // Creature.HpDisplay (sts2-a671e9ef). IsInfinite is true for InfiniteWithNumbers and
+    // Creature.HpDisplay (sts2-ae309f85). IsInfinite is true for InfiniteWithNumbers and
     // InfiniteWithoutNumbers, false for Normal; it is a pure static switch on the enum and the getter is an
     // auto-property, so the read changes nothing and draws no RNG.
-    // Writers in v0.113.1: HardenedShellPower.AfterDamageReceived (InfiniteWithNumbers once the turn's
+    // Writers in v0.114.0: HardenedShellPower.AfterDamageReceived (InfiniteWithNumbers once the turn's
     // received damage reaches its Amount) / BeforeSideTurnStart (back to Normal), and
     // WaterfallGiant.TriggerAboutToBlowState (InfiniteWithoutNumbers for the death continuation).
     // Gameplay reader: HellraiserPower.AfterCardDrawnEarly (CombatState.HittableEnemies.All(IsInfinite)

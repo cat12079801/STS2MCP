@@ -25,7 +25,7 @@ public static partial class McpMod
     private const string DecisionContextHarmonyId = "com.sts2mcp.decisioncontext";
     private static string? _decisionContextTrackingError = "not installed";
 
-    // The selection entry points without a PlayerChoiceContext (v0.113.1, CardSelectCmd.cs / RelicSelectCmd.cs): the
+    // The selection entry points without a PlayerChoiceContext (v0.114.0, CardSelectCmd.cs / RelicSelectCmd.cs): the
     // deck screens out of combat, the bundle screen and the relic screen. FromDeckForRemoval forwards to FromDeckGeneric
     // and the Player overloads of FromDeckForEnchantment to the card-list one: all are patched, the inner record wins.
     private static readonly (Type Type, string Method, Type[] Parameters)[] DecisionContextPatchTargets =

@@ -16,6 +16,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 付けること、戦闘の部屋かどうかを計算して判定に渡すこと（部屋の取り出しは判定の後）、`battle` を作れなければ
 warning `battle.selection` にして `battle` だけを省くこと、振り分けの中で `battle` を付けるのは戦闘の画面だけ（`hand_select`・choose も共通の配線）であること、
 `BuildBattleState` が山の中身を持たないこと、版の履歴に 1.4.0 があることをソースの文字列で検査する。
+schema 2.1.0 の `battle.creature_activity` も通常戦闘と戦闘中の選択で同じビルダーが付けることを検査する。
 
 ゲームに接続しない。実機の確認（調整役が行う）:
 

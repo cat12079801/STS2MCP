@@ -21,7 +21,7 @@ public static partial class McpMod
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     });
 
-    // pool 契約の版。v0.113.1（sts2-a671e9ef）の CardFactory.GetDistinctForCombat は
+    // pool 契約の版。v0.114.0（sts2-ae309f85）の CardFactory.GetDistinctForCombat は
     // private な FilterForRun（= CardModel.IsAllowedInRun）を通す。版1は人数条件だけを手で写していた。
     private const int GenerationPoolFilterVersion = 2;
     private const string GenerationPoolFilterSource =

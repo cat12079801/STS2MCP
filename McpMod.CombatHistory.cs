@@ -52,7 +52,7 @@ public static partial class McpMod
         Read("any_manual_cards_played_this_turn", () =>
         {
             var combat = CurrentCombat();
-            // v0.113.1 PaelsEye.AnyCardsPlayedThisTurn の履歴条件をそのまま読む。
+            // v0.114.0 PaelsEye.AnyCardsPlayedThisTurn の履歴条件をそのまま読む。
             // WhisperingEarring 所持時の初手番の例外はレリック側の条件。
             return CombatManager.Instance.History.CardPlaysFinished
                 .Any(e => e.Actor == owner.Creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay);

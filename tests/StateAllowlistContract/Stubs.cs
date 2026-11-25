@@ -1,16 +1,25 @@
-// Boundary doubles: fields with the v0.113.1 (sts2-a671e9ef) names and types only; no game logic.
+// Boundary doubles for v0.114.0 (sts2-ae309f85). The activity getters can also simulate unreadable values.
 // The generated allowlist resolves types by full name in this assembly (typeof(CardModel).Assembly).
 // The private fields are read only through reflection, so the compiler sees them as unused.
 #pragma warning disable CS0169, CS0414
 namespace MegaCrit.Sts2.Core.Combat
 {
-    public interface ICombatState { IReadOnlyList<Entities.Players.Player> Players { get; } }
+    public interface ICombatState
+    {
+        IReadOnlyList<Entities.Players.Player> Players { get; }
+        IReadOnlyList<Entities.Creatures.Creature> Enemies { get; }
+        IReadOnlyList<Entities.Creatures.Creature> Creatures { get; }
+    }
     public class CombatState : ICombatState
     {
         public IReadOnlyList<Entities.Players.Player> Players { get; set; } = [];
         private List<Entities.Creatures.Creature> _allies = [];
         private List<Entities.Creatures.Creature> _escapedCreatures = [];
         public IReadOnlyList<Entities.Creatures.Creature> Allies => _allies;
+        public IReadOnlyList<Entities.Creatures.Creature> Enemies { get; set; } = [];
+        public bool CreaturesUnreadable { get; set; }
+        public IReadOnlyList<Entities.Creatures.Creature> Creatures => CreaturesUnreadable
+            ? throw new InvalidOperationException("roster unavailable") : [.. Allies, .. Enemies];
         public void SetAllies(params Entities.Creatures.Creature[] c) => _allies = [.. c];
         public void SetEscaped(params Entities.Creatures.Creature[] c) => _escapedCreatures = [.. c];
     }
@@ -22,12 +31,17 @@ namespace MegaCrit.Sts2.Core.Combat
         public CombatState? DebugOnlyGetState() => State;
     }
     // The game's other ICombatState: no allowlist entry targets it.
-    public class NullCombatState : ICombatState { public IReadOnlyList<Entities.Players.Player> Players { get; } = []; }
+    public class NullCombatState : ICombatState
+    {
+        public IReadOnlyList<Entities.Players.Player> Players { get; } = [];
+        public IReadOnlyList<Entities.Creatures.Creature> Enemies { get; } = [];
+        public IReadOnlyList<Entities.Creatures.Creature> Creatures { get; } = [];
+    }
 }
 namespace MegaCrit.Sts2.Core.Entities.Cards
 {
     public enum PileType { None, Draw, Hand, Discard, Exhaust, Play, Deck }
-    // v0.113.1 CardKeyword (the whole enum, same order).
+    // v0.114.0 CardKeyword (the whole enum, same order).
     public enum CardKeyword { None, Exhaust, Ethereal, Innate, Unplayable, Retain, Sly, Eternal }
     public class CardPile { public List<Models.CardModel> Cards = []; }
     public class CardPlay { public required Models.CardModel Card { get; init; } }
@@ -39,6 +53,25 @@ namespace MegaCrit.Sts2.Core.Entities.Creatures
         public uint? CombatId { get; set; }
         public Combat.ICombatState? CombatState { get; set; }
         public Players.Player? Player { get; set; }
+        public Players.Player? PetOwner { get; set; }
+        public Models.MonsterModel? Monster { get; set; }
+        public bool IsEnemy { get; set; }
+        public bool IsDead { get; set; }
+        public bool Attacking { get; set; }
+        public bool AttackUnreadable { get; set; }
+        public bool IsAttacking => AttackUnreadable
+            ? throw new InvalidOperationException("attack unavailable") : Attacking;
+    }
+}
+namespace MegaCrit.Sts2.Core.Models
+{
+    public class MonsterModel(string id)
+    {
+        public ModelId Id { get; } = new(id);
+        public bool PerformingMove { get; set; }
+        public bool MoveUnreadable { get; set; }
+        public bool IsPerformingMove => MoveUnreadable
+            ? throw new InvalidOperationException("move unavailable") : PerformingMove;
     }
 }
 namespace MegaCrit.Sts2.Core.Entities.Relics
@@ -62,7 +95,7 @@ namespace MegaCrit.Sts2.Core.Entities.Players
         public ExtraPlayerFields ExtraFields { get; set; } = new();
         public Player(Creatures.Creature? creature = null) => Creature = creature!;
     }
-    // v0.113.1: auto-properties { get; set; }.
+    // v0.114.0: auto-properties { get; set; }.
     public class ExtraPlayerFields
     {
         public int CardShopRemovalsUsed { get; set; }
@@ -108,14 +141,14 @@ namespace MegaCrit.Sts2.Core.Models
     public class CardModel(string id) : IComparable<CardModel>
     {
         public ModelId Id { get; } = new(id);
-        // v0.113.1: DeckVersion is a property over the private _deckVersion (CardModel.cs:124, :1010). The allowlist
+        // v0.114.0: DeckVersion is a property over the private _deckVersion. The allowlist
         // reads the field; CardIdentity reads the property.
         private CardModel? _deckVersion;
         public CardModel? DeckVersion { get => _deckVersion; set => _deckVersion = value; }
         public int Rarity { get; set; }
         public Entities.Players.Player? Owner { get; set; }
         public int CompareTo(CardModel? other) => StringComparer.Ordinal.Compare(Id.Entry, other?.Id.Entry);
-        // v0.113.1 CardModel private fields read by the allowlist.
+        // v0.114.0 CardModel private fields read by the allowlist.
         private CardModel? _cloneOf;
         private int _currentPlayIndex;
         private Entities.Creatures.Creature? _currentTarget;
@@ -139,7 +172,7 @@ namespace MegaCrit.Sts2.Core.Models
         public Entities.Creatures.Creature Owner { get; set; } = new();
         private object? _internalData;
         private int _amountOnTurnStart;
-        // v0.113.1 PowerModel._applier / _target (Creature?). The public getters exist in the game; the allowlist
+        // v0.114.0 PowerModel._applier / _target (Creature?). The public getters exist in the game; the allowlist
         // reads the fields, so the double has no getter and a getter call could not compile.
         private Entities.Creatures.Creature? _applier;
         private Entities.Creatures.Creature? _target;

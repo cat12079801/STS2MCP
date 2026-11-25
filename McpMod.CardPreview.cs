@@ -58,7 +58,7 @@ public static partial class McpMod
     private static readonly Dictionary<string, string> _perHitDamageCaps = new()
     {
         ["SlipperyPower"] = "HP loss after Block and Osty capped at 1 until Slippery is spent",
-        ["IntangiblePower"] = "damage before Block capped at 1",
+        ["IntangiblePower"] = "damage before Block and HP loss after Osty each capped at 1",
         ["HardToKillPower"] = "HP loss after Block, before Osty redirects it, capped at the power's amount"
     };
 

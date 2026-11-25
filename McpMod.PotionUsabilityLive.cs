@@ -30,7 +30,7 @@ namespace STS2_MCP;
 // Live reads for the potion can-use-now contract (cat12079801/sts2#1012); the verdict itself is in
 // McpMod.PotionUsability.cs. Read only: no popup is created or refreshed, no targeting is started,
 // no rejection VFX is played, nothing is enqueued and no shop inventory is opened or closed.
-// Sources are sts2-a671e9ef (v0.113.1): NPotionHolder, NPotionPopup, NTargetManager, PotionModel,
+// Sources are sts2-ae309f85 (v0.114.0): NPotionHolder, NPotionPopup, NTargetManager, PotionModel,
 // UsePotionAction, FoulPotion.
 public static partial class McpMod
 {

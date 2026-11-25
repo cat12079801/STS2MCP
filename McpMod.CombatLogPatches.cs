@@ -29,7 +29,7 @@ public static partial class McpMod
     [ThreadStatic]
     private static bool _inDamageResultsPreview;
 
-    // The notifications combat_log records (v0.113.1, sts2-a671e9ef, Hook.cs): the Hook method, the listener list it
+    // The notifications combat_log records (v0.114.0, sts2-ae309f85, Hook.cs): the Hook method, the listener list it
     // iterates ("combat" = Hook.IterateCombatHookListeners, nothing while CombatManager.ShouldSkipCombatEffect;
     // "combat_all" = ICombatState.IterateHookListeners(); "run" = IRunState.IterateHookListeners(combat)) and the
     // AbstractModel methods it calls on each listener, pass by pass (Early / normal / Late). Generated from
@@ -92,7 +92,7 @@ public static partial class McpMod
     };
 
     // The CombatManager turn steps combat_log marks with a turn_phase row when each begins (private async methods,
-    // CombatManager.cs v0.113.1): the phase:* rows of the inventory, with the parameter type names of the overload that
+    // CombatManager.cs v0.114.0): the phase:* rows of the inventory, with the parameter type names of the overload that
     // does the work. EndCombatInternal / EndPlayerTurnPhaseOneInternal / EndPlayerTurnPhaseTwoInternal also have an
     // internal parameterless overload that only forwards the current CombatTurnState (an internal type, hence names).
     private static readonly (string Method, string[] Parameters)[] CombatLogPhases =
@@ -178,7 +178,7 @@ public static partial class McpMod
     [ThreadStatic] private static PileType _lastRemovedPile;
 
     /// <summary>
-    /// Read-only patches for battle.combat_log (v0.113.1, decompile sts2-a671e9ef). None skips, repeats or reorders a
+    /// Read-only patches for battle.combat_log (v0.114.0, decompile sts2-ae309f85). None skips, repeats or reorders a
     /// game call, changes an argument or a result, or draws from an RNG. Each group installs on its own: a group that
     /// fails is reported in combat_log.unavailable_reasons (the log is then known=false), the others keep working.
     /// </summary>
@@ -347,7 +347,7 @@ public static partial class McpMod
 
     // ---- History (the public recording methods of CombatHistory) ----
 
-    // CombatHistory's public void instance methods other than Clear (v0.113.1: CardPlayStarted … Summoned, 18 methods):
+    // CombatHistory's public void instance methods other than Clear (v0.114.0: CardPlayStarted … Summoned, 18 methods):
     // each builds one *Entry and passes it to the private Add. A new recording method is picked up by name.
     internal static List<MethodInfo> CombatLogHistoryRecorders() =>
         typeof(CombatHistory).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)

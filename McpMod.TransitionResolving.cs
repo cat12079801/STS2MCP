@@ -12,7 +12,7 @@ public static partial class McpMod
     /// when the map is idle. <c>map</c> is an input screen, so every other reason is cleared on it;
     /// this one is added afterwards and must therefore clear by itself.
     ///
-    /// The game's own order (decompile <c>sts2-a671e9ef</c>):
+    /// The game's own order (decompile <c>sts2-ae309f85</c>):
     /// <list type="bullet">
     /// <item><b>Traveling.</b> <c>NMapScreen.OnMapPointSelectedLocally</c> enqueues a
     /// <c>VoteForMapCoordAction</c>; executing it (<c>MapSelectionSynchronizer.PlayerVotedForMapCoord</c>

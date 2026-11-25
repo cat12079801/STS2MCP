@@ -17,7 +17,7 @@ public static partial class McpMod
     {
         string context = $"status.{state["id"]}";
         void Read(string key, Func<object?> read) => ReadInternalStateValue(state, key, read, context);
-        // sts2#1034, v0.113.1 (sts2-a671e9ef): Rend.ShouldCountPower counts a target power when
+        // sts2#1034, v0.114.0 (sts2-ae309f85): Rend.ShouldCountPower counts a target power when
         // power.TypeForCurrentAmount == PowerType.Debuff && !(power is ITemporaryPower), over
         // Creature.Powers whatever the HUD shows, so every emitted row carries both.
         // TypeForCurrentAmount is GetTypeForAmount(Amount): Debuff for a Counter power that
@@ -34,7 +34,7 @@ public static partial class McpMod
         // reads them from the description. They act whatever the HUD shows, so hidden and minimal
         // rows carry them too.
         AttachPowerDynamicVars(state, power, context);
-        // v0.113.1 (sts2-a671e9ef): Thievery/Heist are Instanced powers, one per targeted
+        // v0.114.0 (sts2-ae309f85): Thievery/Heist are Instanced powers, one per targeted
         // player. PowerModel.IsVisible is false when Target is another player, but the row
         // is still emitted with its live stack, so its target and stolen gold are attached
         // to every row BuildPowersState emits, not only to HUD-visible ones.
@@ -58,7 +58,7 @@ public static partial class McpMod
                 AttachVigorAttackState(state, power, context);
                 break;
             case RitualPower:
-                // v0.113.1 (sts2-a671e9ef) RitualPower.AfterApplied sets the flag when an enemy
+                // v0.114.0 (sts2-ae309f85) RitualPower.AfterApplied sets the flag when an enemy
                 // owner gets the power during the enemy side's turn; AfterSideTurnEnd then clears
                 // it instead of applying Strength once (sts2#1018). The private field is read as
                 // is (false is a real value) on every emitted row.
@@ -66,7 +66,7 @@ public static partial class McpMod
                 Read("was_just_applied_by_enemy",
                     () => ReadDeclaredStateField<bool>(power, typeof(RitualPower), "_wasJustAppliedByEnemy"));
                 break;
-            // sts2#1019, v0.113.1 (sts2-a671e9ef): per-instance numbers the power's effect uses
+            // sts2#1019, v0.114.0 (sts2-ae309f85): per-instance numbers the power's effect uses
             // that Amount does not hold. They act whatever the HUD shows, so every emitted row
             // carries them. The set is read from PowerModel._dynamicVars as it is (the getter
             // builds it when null; DeepCloneFields always has on a live power): a null set or a
@@ -93,7 +93,7 @@ public static partial class McpMod
                 Read("already_applied", () => ReadPowerDataField<bool>(power, "alreadyApplied"));
                 break;
             case DampenPower:
-                // sts2#1031, v0.113.1 (sts2-a671e9ef): private DampenPower.Data. MagiKnight.DampenMove
+                // sts2#1031, v0.114.0 (sts2-ae309f85): private DampenPower.Data. MagiKnight.DampenMove
                 // calls AddCaster (casters.Add) on the target's existing power, or on a new one it
                 // then applies; AfterApplied records every upgraded combat card's
                 // CurrentUpgradeLevel and downgrades it; AfterDeath drops a dead caster (unless
@@ -103,7 +103,7 @@ public static partial class McpMod
                 Read("caster_combat_ids", () => ReadDampenCasterCombatIds(power));
                 Read("downgraded_cards", () => ReadDampenDowngradedCards(power, context));
                 break;
-            // sts2#1020, v0.113.1 (sts2-a671e9ef): private Data / fields the effect reads that neither
+            // sts2#1020, v0.114.0 (sts2-ae309f85): private Data / fields the effect reads that neither
             // Amount nor DynamicVars hold. The effects do not look at the HUD, so every emitted row
             // carries them. Data is read as is (never InitInternalData / GetInternalData); a card
             // reference becomes the uid this combat's registry already gave it (TryGetRegisteredCardUid,
@@ -159,7 +159,7 @@ public static partial class McpMod
                 Read("is_reviving", () => ReadPowerDataField<bool>(power, "isReviving"));
                 if (power is IllusionPower illusion)
                 {
-                    // IllusionPower.FollowUpStateId (a readable null is "none recorded"). v0.113.1 has no
+                    // IllusionPower.FollowUpStateId (a readable null is "none recorded"). v0.114.0 has no
                     // caller of its setter, so it is always null: AfterDeath builds REVIVE_MOVE with
                     // MoveState.FollowUpStateId = this ?? StateLog.Last().Id, and the real destination is
                     // that move's follow-up in battle.enemies[].move_state. Exposed as is, not as the target.
@@ -255,7 +255,7 @@ public static partial class McpMod
         }
     }
 
-    // sts2#1020, v0.113.1 (sts2-a671e9ef): PowerModel.DynamicVars is built from CanonicalVars
+    // sts2#1020, v0.114.0 (sts2-ae309f85): PowerModel.DynamicVars is built from CanonicalVars
     // (an empty set for the many powers without vars) and DeepCloneFields copies it to every live
     // power; the effects read and write DynamicVar.BaseValue (a plain field: InfernoPower's
     // SelfDamage, TheBombPower's Damage, VulnerablePower's DamageIncrease, SlowPower's SlowAmount,
@@ -289,7 +289,7 @@ public static partial class McpMod
     private static DynamicVarSet ReadPowerDynamicVarSet(PowerModel power)
         => ReadDeclaredStateField<DynamicVarSet>(power, typeof(PowerModel), "_dynamicVars");
 
-    // v0.113.1 (sts2-a671e9ef): PowerCmd.Apply sets PowerModel.Applier only on a new instance
+    // v0.114.0 (sts2-ae309f85): PowerCmd.Apply sets PowerModel.Applier only on a new instance
     // (HexPower keeps InstanceType None, so FindExistingInstanceForStacking sends a re-apply to
     // ModifyAmount and the first applier stays); SpectralKnight.HexMove passes its own Creature.
     // HexPower.AfterDeath removes the power when the dying creature is the applier (unless removal
@@ -306,7 +306,7 @@ public static partial class McpMod
         CopyAllowlistedReference(state, "applier_combat_id", "applier_readable", $"status.{state["id"]}");
     }
 
-    // v0.113.1 (sts2-a671e9ef) VigorPower.Data: BeforeAttack binds the owner's first
+    // v0.114.0 (sts2-ae309f85) VigorPower.Data: BeforeAttack binds the owner's first
     // powered attack (commandToModify, amountWhenAttackStarted = Amount) while unbound;
     // ModifyDamageAdditive skips a bound command whose Attacker is not the dealer;
     // AfterAttack subtracts amountWhenAttackStarted only for that same command and never

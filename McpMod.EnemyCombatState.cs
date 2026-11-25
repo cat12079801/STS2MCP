@@ -11,7 +11,7 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    // 許可リスト。v0.113.1（sts2-a671e9ef）の宣言型・型を検査した private フィールドと、
+    // 許可リスト。v0.114.0（sts2-ae309f85）の宣言型・型を検査した private フィールドと、
     // 副作用の無い getter（下記）だけを読む。move の実行・初期化・乱数・履歴からの再構成はしない。
     // 対象外の敵は null（combat_state を省略）。
     // 載せるのは、敵の行動の分岐・効果量に効く現在値のうち、ほかの state（HP・status・move_state・

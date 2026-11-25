@@ -15,7 +15,7 @@ public static partial class McpMod
 {
     private const string StunNoOpHandler = "CreatureCmd.Stun.no_op";
 
-    // v0.113.1（sts2-a671e9ef）で CreatureCmd.Stun(creature, stunMove, nextMoveId) に stunMove を渡す呼び出しの全件。
+    // v0.114.0（sts2-ae309f85）で CreatureCmd.Stun(creature, stunMove, nextMoveId) に stunMove を渡す呼び出しの全件。
     // 本体のソースを grep した結果（Whistle・PlowPower の他の敵・ImbalancedPower・ShriekPower は
     // 引数なしの CreatureCmd.Stun(creature, nextMoveId) で、no-op の lambda になる）。
     // OnMonster=true は、その敵自身のメソッド（delegate の Target がこの個体の MonsterModel）。
@@ -30,8 +30,8 @@ public static partial class McpMod
         (typeof(FlutterPower), "StunnedMove", false)         // FlutterPower.AfterDamageReceived
     ];
 
-    // CreatureCmd.Stun は stunMove をローカル関数 Wrapper（v0.113.1 では CreatureCmd+<>c__DisplayClass30_0 の
-    // <Stun>g__Wrapper|0。捕捉フィールドは creature と stunMove）で包み、Creature.StunInternal が
+    // CreatureCmd.Stun は stunMove をローカル関数 Wrapper（CreatureCmd の入れ子型の
+    // <Stun>g__Wrapper。捕捉フィールドは creature と stunMove）で包み、Creature.StunInternal が
     // new MoveState("STUNNED", Wrapper, StunIntent) を NextMove にする。_onPerform.Method.Name だけでは
     // 通常のスタンと起床（SlumberingBeetle.WakeUpMove など）を区別できないので、Wrapper の捕捉した stunMove を
     // 宣言型・delegate 型を検査して読み、許可リストの処理に対応付ける。delegate は呼ばない。
@@ -48,7 +48,7 @@ public static partial class McpMod
             var move = model.NextMove ?? throw new InvalidOperationException("NextMove がありません");
             var onPerform = ReadDeclaredStateField<Func<IReadOnlyList<Creature>, Task>>(move, typeof(MoveState), "_onPerform");
             bool wrapper = TryReadStunWrapper(onPerform, out inner, out captured);
-            // v0.113.1 では MonsterModel.stunnedMoveId（"STUNNED"）を使うのは Creature.StunInternal だけ。
+            // v0.114.0 では MonsterModel.stunnedMoveId（"STUNNED"）を使うのは Creature.StunInternal だけ。
             // Wrapper の名前・形が変わった版で、スタン中に is_stun=false を実値として返さない（未観測に倒す）。
             string id = move.Id ?? throw new InvalidOperationException("NextMove.Id が null です");
             bool stunnedId = id == MonsterModel.stunnedMoveId;
@@ -122,7 +122,7 @@ public static partial class McpMod
     }
 
     // CreatureCmd.Stun(creature, nextMoveId) の (IReadOnlyList<Creature> _) => Task.CompletedTask
-    // （v0.113.1 では CreatureCmd+<>c.<Stun>b__29_0）。名前の序数に頼らず、
+    // （CreatureCmd の入れ子型の <Stun>b__…）。名前の序数に頼らず、
     // 宣言型が CreatureCmd の入れ子で、本体の IL が「call Task.get_CompletedTask; ret」だけであることを確かめる。
     private static bool IsCreatureCmdStunNoOp(Delegate inner)
     {

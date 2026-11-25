@@ -24,7 +24,7 @@ public static partial class McpMod
     private const string ChoiceSourceHarmonyId = "com.sts2mcp.choicesource";
     private static string? _choiceSourceTrackingError = "not installed";
 
-    // The CardSelectCmd entry points that take a PlayerChoiceContext (v0.113.1). FromCombatPile's
+    // The CardSelectCmd entry points that take a PlayerChoiceContext (v0.114.0). FromCombatPile's
     // 4-argument overload and FromHandForDiscard forward to another patched method: both are patched
     // so a JIT-inlined forwarder still leaves a record (the inner, later record wins).
     private static readonly (string Method, Type[] Parameters, bool SingleCard)[] ChoiceSourcePatchTargets =

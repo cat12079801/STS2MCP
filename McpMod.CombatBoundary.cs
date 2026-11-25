@@ -10,7 +10,7 @@ public static partial class McpMod
     /// (map, rewards, game over, a choice screen) is in front of it: the state has no <c>battle</c>,
     /// and the game is moving on by itself.
     ///
-    /// The game's own order (decompile <c>sts2-a671e9ef</c>):
+    /// The game's own order (decompile <c>sts2-ae309f85</c>):
     /// <list type="bullet">
     /// <item><b>Starting.</b> <c>RunManager.EnterRoomInternal</c> pushes the room (<c>RunState.PushRoom</c>)
     /// before <c>CombatRoom.EnterInternal</c> → <c>StartCombat</c> loads the assets and calls

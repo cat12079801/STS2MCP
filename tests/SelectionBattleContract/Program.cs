@@ -57,6 +57,8 @@ namespace STS2_MCP
 
             CheckWiring(builder, "単独", "BuildBattleState", "NCardGridSelectionScreen cardSelectScreen");
             CheckWiring(multi, "マルチ", "BuildMultiplayerBattleState", "NCardGridSelectionScreen cardSelectScreen");
+            CheckActivityWiring(builder, "BuildBattleState");
+            CheckActivityWiring(multi, "BuildMultiplayerBattleState");
 
             // battle の中身は戦闘の画面と同じ作り方で、山の中身（順）を足さない。
             string battleBody = builder[builder.IndexOf("private static Dictionary<string, object?> BuildBattleState", StringComparison.Ordinal)..];
@@ -68,6 +70,18 @@ namespace STS2_MCP
                 "追加は MINOR（1.4.0。版の値そのものは V0113CompatContract）");
 
             Console.WriteLine($"SelectionBattleContract: {Checks} checks passed");
+        }
+
+        private static void CheckActivityWiring(string source, string battleBuilder)
+        {
+            string body = source[source.IndexOf($"private static Dictionary<string, object?> {battleBuilder}(", StringComparison.Ordinal)..];
+            body = body[..body.IndexOf("return battle;\n    }", StringComparison.Ordinal)];
+            const string attach = "AttachCreatureActivity(battle, combatState);";
+            Check(CountOf(body, attach) == 2 && CountOf(source, attach) == 2,
+                $"{battleBuilder}: 通常・選択共通の battle にだけ活動列を付ける。戦闘 state の欠落時も理由を出す");
+            Check(body.IndexOf("BuildEnemyList(combatState);", StringComparison.Ordinal)
+                < body.LastIndexOf(attach, StringComparison.Ordinal),
+                $"{battleBuilder}: 敵の ID を準備してから活動列を組み立てる");
         }
 
         private static void CheckWiring(string source, string label, string battleBuilder, string gridBranch)
@@ -97,6 +111,10 @@ namespace STS2_MCP
             string dispatch = source[grid..central];
             Check(CountOf(dispatch, $"result[\"battle\"] = {battleBuilder}(") == 1,
                 $"{label}: 振り分けの中の battle は戦闘の画面の 1 か所だけ（hand_select・choose は共通の配線）");
+            string normal = $"result[\"battle\"] = {battleBuilder}(runState, combatRoom);";
+            Check(dispatch.IndexOf("CombatManager.Instance.IsInProgress", StringComparison.Ordinal) is var inProgress
+                && inProgress >= 0 && inProgress < dispatch.IndexOf(normal, StringComparison.Ordinal),
+                $"{label}: 通常戦闘の battle は戦闘中に同じビルダーで作る");
             string handBranch = dispatch[dispatch.IndexOf("result[\"state_type\"] = \"hand_select\";", StringComparison.Ordinal)..];
             handBranch = handBranch[..handBranch.IndexOf("else", StringComparison.Ordinal)];
             Check(!handBranch.Contains("result[\"battle\"]", StringComparison.Ordinal), $"{label}: hand_select も共通の配線で付ける");

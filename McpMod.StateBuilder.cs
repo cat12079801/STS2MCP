@@ -1605,6 +1605,7 @@ public static partial class McpMod
         if (combatState == null)
         {
             battle["error"] = "Combat state unavailable";
+            AttachCreatureActivity(battle, combatState);
             return battle;
         }
 
@@ -1615,6 +1616,7 @@ public static partial class McpMod
         battle["is_play_phase"] = IsPlayPhase(combatState);
 
         battle["enemies"] = BuildEnemyList(combatState);
+        AttachCreatureActivity(battle, combatState);
         battle["enemy_move_context"] = BuildEnemyMoveContext(combatState);
         // 生成した許可リストの CombatState の項目（味方・逃げた敵の combat_id。McpMod.StateAllowlist.cs）。
         AttachAllowlistedState(battle, "battle", combatState, "battle");

@@ -59,7 +59,7 @@ curl -s http://localhost:15526/
 A successful response looks like:
 
 ```json
-{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "2.0.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
+{"message": "Hello from STS2 MCP v0.4.0+2de67cd", "status": "ok", "version": "0.4.0", "commit": "2de67cd", "schema": "2.1.0", "schema_version": 12, "scenario_capabilities": {"setup_guard": 1, "selection_uid": 1, "potion_availability": 1}}
 ```
 
 `commit` is the git revision the mod was built from (`null` if the build could not determine one) —
@@ -67,7 +67,7 @@ quote it when reporting a bug. `schema` is the state/action contract version as 
 (MAJOR = backward-incompatible change, MINOR = backward-compatible addition, PATCH = fix that does not change
 the contract). The rules — including that new enum values are MINOR and an unknown value must be treated as
 unobserved — are in [docs/raw-full.md](docs/raw-full.md#common-top-level-fields). `schema_version` is the deprecated
-integer predecessor, frozen at `12` (= `schema` `1.0.0`) and removed in `2.0.0`.
+integer predecessor, frozen at `12` (= `schema` `1.0.0`).
 Every state response (anything with a `state_type`) carries the same values as `mod_version`, `mod_commit`, `schema`
 and `schema_version`; error responses (500, 503, POST errors) do not.
 State also reports `game_version` and `game_commit` from the game's `release_info.json`

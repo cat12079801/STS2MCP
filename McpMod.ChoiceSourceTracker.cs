@@ -279,7 +279,7 @@ internal static class OpenCardSelections
     }
 
     /// <summary>
-    /// Which <c>CardSelectCmd</c> methods put up which screen (v0.113.1): <c>FromHand</c> and its
+    /// Which <c>CardSelectCmd</c> methods put up which screen (v0.114.0): <c>FromHand</c> and its
     /// wrappers the hand's select mode, <c>FromChooseACardScreen</c> the choose-a-card screen,
     /// <c>FromCombatPile</c> <c>NCombatPileCardSelectScreen</c>, <c>FromSimpleGrid</c> /
     /// <c>FromSimpleGridForRewards</c> <c>NSimpleCardSelectScreen</c>.

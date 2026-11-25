@@ -7,6 +7,8 @@
     <Compile Include="../../McpMod.InternalState.cs" Link="InternalState.cs" />
     <Compile Include="../../McpMod.Warnings.cs" Link="Warnings.cs" />
     <Compile Include="../../McpMod.CardIdentity.cs" Link="CardIdentity.cs" />
+    <Compile Include="../../McpMod.EntityIdentity.cs" Link="EntityIdentity.cs" />
+    <Compile Include="../../McpMod.CreatureActivity.cs" Link="CreatureActivity.cs" />
     <Compile Include="../../McpMod.StateAllowlist.cs" Link="StateAllowlist.cs" />
     <Compile Include="../../McpMod.StateAllowlistFormatting.cs" Link="StateAllowlistFormatting.cs" />
     <Compile Include="../../McpMod.StateAllowlist.Generated.cs" Link="StateAllowlist.Generated.cs" />

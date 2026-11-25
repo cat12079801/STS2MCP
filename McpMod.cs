@@ -93,8 +93,15 @@ public static partial class McpMod
     /// 1.20.0: pre-play run and combat listener multisets for an upgraded Jack of All Trades (sts2#1466).
     /// 2.0.0: targeted damage previews use game damage results, arrow slots use the two v0.114.0 states,
     /// and combat history also counts distinct block-producing card plays (sts2#1480).
+    /// Melody flags follow MelodyCmd.PlayedThisTurn and count starts (CardPlaysStarted).
+    /// Display upgrade_preview failures return null with a reason, and unavailable wiki upgrades carry
+    /// preview_available=false with a reason. Happy Flower and Fake Happy Flower expose
+    /// relics[].internal_state.grant_energy_this_turn. Wuppy added log rows include hp and max_hp.
+    /// Combat log excludes preview-only ModifyHpLost rows. Markdown renames "resolved damage:" to "damage preview:".
+    /// 2.1.0: battle.creature_activity reports attack and move activity for each live combat roster entry,
+    /// including creatures pending death cleanup and in-combat selection screens (sts2#1491).
     /// </summary>
-    public const string StateSchema = "2.0.0";
+    public const string StateSchema = "2.1.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to

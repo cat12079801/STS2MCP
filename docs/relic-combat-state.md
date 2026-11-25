@@ -63,7 +63,7 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | ベルトの留め具 `BeltBuckle` | `dexterity_applied` ← `_dexterityApplied` | このレリック由来の敏捷が付与済みか。`ApplyDexterity`／`RemoveDexterity`、ポーション取得・破棄・使用フックで変化。`BeforeCombatStart` と `AfterCombatVictory` で false にする。`AfterCombatEnd` は表示更新のみ。 |
 | 護摩木 `BurningSticks` | `used_this_combat` ← `_wasUsedThisCombat` | 初回スキル廃棄のコピー作成が消費されたか。`AfterCardExhausted` で true、CombatRoom への `AfterRoomEntered` と `AfterCombatEnd` で false。 |
 | オルゴール `MusicBox` | `used_this_turn` ← `_wasUsedThisTurn` | 初回アタックのコピー作成が消費されたか。`BeforeCardPlayed`／`AfterCardPlayed`。所有者が参加する `BeforeSideTurnStart` と `AfterCombatEnd` で false。 |
-| パエルの眼 `PaelsEye` | `used_this_combat` ← `_usedThisCombat`、`was_owner_part_of_last_player_turn` ← `_wasOwnerPartOfLastPlayerTurn` | v0.113.1 `sts2-a671e9ef` の `ShouldTakeExtraTurnEarly`／`BeforeSideTurnEndEarly` の追加手番条件。使用は `AfterTakingExtraTurn` で true、`AfterCombatEnd` で false。参加フラグは `AfterObtained` と未使用時の `AfterSideTurnStart` で更新する。後者は他プレイヤーのみの追加手番を区別し、終了時に戻さない。 |
+| パエルの眼 `PaelsEye` | `used_this_combat` ← `_usedThisCombat`、`was_owner_part_of_last_player_turn` ← `_wasOwnerPartOfLastPlayerTurn` | v0.114.0 `sts2-ae309f85` の `ShouldTakeExtraTurnEarly`／`BeforeSideTurnEndEarly` の追加手番条件。使用は `AfterTakingExtraTurn` で true、`AfterCombatEnd` で false。参加フラグは `AfterObtained` と未使用時の `AfterSideTurnStart` で更新する。後者は他プレイヤーのみの追加手番を区別し、終了時に戻さない。 |
 | 手投げ斧 `ThrowingAxe` | `used_this_combat` ← `_usedThisCombat` | 初回カードの追加プレイを消費したか。`ModifyCardPlayCount`／`AfterModifyingCardPlayCount`。CombatRoom への `AfterRoomEntered` と `AfterCombatEnd` で false。 |
 | パエルの肉兵 `PaelsLegion` | `cooldown` ← `_cooldown` | `ModifyBlockMultiplicative` は 0 以下なら倍化可能。`AfterCardPlayed` で 2、所有者が参加する `AfterSideTurnStart` で毎回 1 減算、`AfterCombatEnd` で 0。負値も原値のまま（0 に丸めない）。正数は `DisplayAmount` にも出るが、非正数は既存 `counter` が null となるため明示する。 |
 | 脈打つ亡骸 `BeatingRemnant` | `damage_received_this_turn` ← `_damageReceivedThisTurn` | `ModifyHpLostAfterOsty` の残り HP 損失上限を決める decimal。`AfterDamageReceived` で `UnblockedDamage` を累積、所有者が参加する `BeforeSideTurnStart` で 0。敵側の手番開始では戻らない。 |
@@ -73,7 +73,7 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 | 不気味なランプ `UnsettlingLamp` | `used_this_combat` ← `_isFinishedTriggering` | 名前は処理フラグに見えるが、`BeforePowerAmountChanged`／`ModifyPowerAmountGivenMultiplicative` が参照し、最初の対象カードの `AfterCardPlayed` 以降ずっと倍化を禁止する戦闘内消費。`BeforeCombatStart` と `AfterCombatEnd` で false。 |
 | 溶岩のランプ `LavaLamp`（追加） | `took_damage_this_combat` ← 公開 `TookDamageThisCombat` (`_tookDamageThisCombat`) | 無傷を維持して報酬アップグレードを守る戦闘判断に使う。`AfterDamageReceived` は CombatRoom 内の所有者への正の非ブロックダメージを記録するが `Unblockable` は除外。`TryModifyCardRewardOptionsLate` が参照。`AfterRoomEntered` で部屋種別にかかわらず false。 |
 
-## パエルの眼の手動プレイ判定（v0.113.1）
+## パエルの眼の手動プレイ判定（v0.114.0）
 
 `PaelsEye.AnyCardsPlayedThisTurn` は本体の `CombatHistory.CardPlaysFinished` を読み、
 `e.Actor == Owner.Creature && e.HappenedThisTurn(Owner.Creature.CombatState) && !e.CardPlay.IsAutoPlay`
@@ -86,7 +86,7 @@ Issue 草稿の「永久凍土」「燃える枝」「パエルの目」「ミ�
 公開する履歴値はその場合も手動プレイの実際の有無を示す。
 `ShouldTakeExtraTurnEarly` は未使用・この判定 false・前回参加・対象 Player が所有者の条件、
 `BeforeSideTurnEndEarly` は所有者が participants に含まれる条件も検査する。
-出典は `sts2-a671e9ef` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye` の上記3メソッド。
+出典は `sts2-ae309f85` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye` の上記3メソッド。
 式・履歴 entry の Actor・評価時点・失敗契約は
 [戦闘履歴の要約](raw-full.md#戦闘履歴の要約追加schema-4) を参照。
 所持の判定は `player.relics` に `WHISPERING_EARRING` があるかで行い、`melted` は見ない（本体は `Relics.Any(r => r is WhisperingEarring)` で、溶けたレリックも `_relics` に残る）。
@@ -128,7 +128,7 @@ Markdown は `(attacks played: 9)`、`(cards exhausted: 4, ethereal count: 0)`�
 
 ## 手番の数・オリハルコン（schema 12）
 
-v0.113.1（`sts2-a671e9ef`）の同名クラスを出典とする（`cat12079801/sts2#1020`）。private フィールドを名前・宣言型で読み、
+v0.114.0（`sts2-ae309f85`）の同名クラスを出典とする（`cat12079801/sts2#1020`）。private フィールドを名前・宣言型で読み、
 失敗はキーを `null`・`combat_state.unavailable_reasons.<key>`・`warnings` の `player.relics.<ID>.combat_state.<key>` にする。
 `counter` は `DisplayAmount` の表示値（数 % 閾値、`_isActivating` の演出中は閾値）なので、数そのものはこちらを読む。閾値・量は `vars`。
 
@@ -146,7 +146,7 @@ v0.113.1（`sts2-a671e9ef`）の同名クラスを出典とする（`cat12079801
 戦闘をまたいで残る `[SavedProperty]` の数・印は、戦闘中・戦闘外とも `player.relics[].run_state` に出す（`combat_state` は戦闘中だけ）。
 private の裏のフィールドを名前・宣言型で読み、getter・setter・フック・乱数は呼ばない。失敗はキーを `null`・`run_state.unavailable_reasons.<key>`・
 `warnings` の `player.relics.<ID>.run_state.<key>` にする。組み立て全体が失敗したとき（型の読み込み・JIT など）は `run_state: null` と
-レリック行の `unavailable_reasons.run_state`・`warnings` の `player.relics.<ID>.run_state`。対象外のレリックにはキーが無い。出典は v0.113.1（`sts2-a671e9ef`）の同名クラス。
+レリック行の `unavailable_reasons.run_state`・`warnings` の `player.relics.<ID>.run_state`。対象外のレリックにはキーが無い。出典は v0.114.0（`sts2-ae309f85`）の同名クラス。
 
 | レリック | 出す項目 ← 元の値 | 意味・戻る時機 |
 |---|---|---|
@@ -186,9 +186,9 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | Vambrace／UnsettlingLamp の `_triggeringCard`、MusicBox の `_cardBeingPlayed`、PaelsLegion の `_affectedCardPlay`、UnsettlingLamp の `_doubledPowers` | 同じカードの解決中に効果をまとめる参照。各クラスの `BeforeCardPlayed`／`BeforePowerAmountChanged`／`AfterModifyingBlockAmount`／`AfterCardPlayed`、UnsettlingLamp の `HasDoubledTemporaryPowerSource`。次の行動用の消費フラグだけを出す。 |
 | `_isActivating`（JossPaper、PenNib 等） | `DoActivateVisuals` の待機中の表示切替。戦闘能力の未使用／使用済みフラグではない。PenNib の `_attackToDouble` も `BeforeCardPlayed`〜`AfterCardPlayed` の解決中参照。 |
 | 黄金の羅針盤 `GoldenCompass._goldenPathAct` | `AfterObtained`／`ModifyGeneratedMap`／`ModifyUnknownMapPointRoomTypes` のマップ・部屋設定用。戦闘中の行動に応じた消費状態ではない。 |
-| `VelvetChoker` の手番の枚数 | private の数を持たず、`GetCardsPlayedThisTurn` が戦闘履歴から数える（v0.113.1）。`player.combat_history` と `counter` で読める。 |
+| `VelvetChoker` の手番の枚数 | private の数を持たず、`GetCardsPlayedThisTurn` が戦闘履歴から数える（v0.114.0）。`player.combat_history` と `counter` で読める。 |
 | `StoneCalendar` | `_isActivating`（演出）しか無い。発動の手番は公開の `TurnNumber`（`combat_history.turn_number`）と `vars.DamageTurn` で決まる。 |
-| `BoneTea`・`EmberTea`・`TeaOfDiscourtesy` の `_combatsLeft` | setter が `vars.Combats` に同じ値を書くので `vars` で読める（v0.113.1 の `CombatsLeft`）。 |
+| `BoneTea`・`EmberTea`・`TeaOfDiscourtesy` の `_combatsLeft` | setter が `vars.Combats` に同じ値を書くので `vars` で読める（v0.114.0 の `CombatsLeft`）。 |
 | `MawBank._hasItemBeenBought`、`BathRobes._wasUsed` | `IsUsedUp` が既存 `used_up` に出る。 |
 | `Byrdpip._swoopsPlayed` | 休憩所の進化の選択肢（`TryModifyRestSiteOptions`、6 以上）に効くが、`counter`（`DisplayAmount => Math.Min(SwoopsPlayed, 6)`）で閾値の 6 までは正確に読める。 |
 | `Byrdpip._skin`、`Byrdine._hair`、`PaelsLegion._skin` | ペットの外見。 |
@@ -197,7 +197,7 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | `SneckoEye`・`FakeSneckoEye._testEnergyCostOverride` | テスト用のコスト上書き。 |
 | `SilkenTress._isUsed`、`WongosMysteryTicket._gaveRelic`、`LizardTail._wasUsed` | それぞれの `IsUsedUp` が既存 `used_up` に出るため重複追加しない。 |
 
-v0.113.1（`sts2-a671e9ef`）のアイアンクラッド・共通・イベントの pool の全レリックで、private フィールド宣言と自動プロパティを横断して候補を再確認した
+v0.114.0（`sts2-ae309f85`）のアイアンクラッド・共通・イベントの pool の全レリックで、private フィールド宣言と自動プロパティを横断して候補を再確認した
 （`cat12079801/sts2#1020`）。上記以外は `combat_state` か `run_state` に出す。他キャラの pool のレリックは対象外。
 解決中（`is_resolving: true`）は各フック間の状態が見え得るため、行動計画には解決後の
 snapshot を使う。これはゲームの全内部状態を復元する契約ではない。

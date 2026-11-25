@@ -17,7 +17,7 @@ public static partial class McpMod
         "performed_first_move", "spawned_this_turn", "state_log", "is_stun", "stun_handler"
     ];
 
-    // v0.113.1: MonsterModel.NextMove / MoveStateMachine / SpawnedThisTurn と MoveState の getter、
+    // v0.114.0: MonsterModel.NextMove / MoveStateMachine / SpawnedThisTurn と MoveState の getter、
     // MonsterMoveStateMachine の private フィールド（_currentState / _initialState / _performedFirstMove）、
     // MoveState._onPerform（CreatureCmd.Stun の Wrapper の判定）だけを読む。
     // FollowUpState は分岐状態の場合もある。次の行動を抽選・実行して解決しない

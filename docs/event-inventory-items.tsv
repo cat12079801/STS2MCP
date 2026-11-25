@@ -188,7 +188,7 @@ computed:Hook.ShouldAllowMerchantCardRemoval	exposed	item	core	MegaCrit.Sts2.Cor
 computed:Hook.ShouldAllowSelectingMoreCardRewards	exposed	item	core	MegaCrit.Sts2.Core.Hooks/Hook.cs:2279	0	0			
 computed:Hook.ShouldAllowTargeting	exposed	item	core	MegaCrit.Sts2.Core.Hooks/Hook.cs:2294	0	0			McpMod.PotionUsabilityLive.cs:296,McpMod.PotionUsabilityLive.cs:329
 computed:Hook.ShouldClearBlock	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2311	4	0			
-computed:Hook.ShouldCreatureBeRemovedFromCombatAfterDeath	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2332	4	2			McpMod.StateBuilder.cs:2158
+computed:Hook.ShouldCreatureBeRemovedFromCombatAfterDeath	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2332	4	2			McpMod.StateBuilder.cs:2160
 computed:Hook.ShouldDie	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2347	2	0			
 computed:Hook.ShouldDisableRemainingRestSiteOptions	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2372	1	0			
 computed:Hook.ShouldDraw	internal	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:2387	2	0			
@@ -246,7 +246,7 @@ history:CombatHistory.PowerReceived	internal	rule:history-recorder	core	MegaCrit
 history:CombatHistory.StarsModified	internal	rule:history-recorder	core	MegaCrit.Sts2.Core.Combat.History/CombatHistory.cs:119	0	0			
 history:CombatHistory.Summoned	internal	rule:history-recorder	core	MegaCrit.Sts2.Core.Combat.History/CombatHistory.cs:124	0	0			
 history:CreatureAttackedEntry	exposed	item	core	MegaCrit.Sts2.Core.Combat.History.Entries/CreatureAttackedEntry.cs:1	0	0			McpMod.CombatHistory.cs:155,McpMod.CombatLogPatches.cs:399,McpMod.CombatLogPatches.cs:448
-history:DamageReceivedEntry	exposed	item	core	MegaCrit.Sts2.Core.Combat.History.Entries/DamageReceivedEntry.cs:1	0	0			McpMod.CombatHistory.cs:131,McpMod.CombatHistory.cs:135,McpMod.CombatLogPatches.cs:398,McpMod.CombatLogPatches.cs:443,McpMod.StateBuilder.cs:1970
+history:DamageReceivedEntry	exposed	item	core	MegaCrit.Sts2.Core.Combat.History.Entries/DamageReceivedEntry.cs:1	0	0			McpMod.CombatHistory.cs:131,McpMod.CombatHistory.cs:135,McpMod.CombatLogPatches.cs:398,McpMod.CombatLogPatches.cs:443,McpMod.StateBuilder.cs:1972
 history:EnergySpentEntry	exposed	item	core	MegaCrit.Sts2.Core.Combat.History.Entries/EnergySpentEntry.cs:1	0	0			McpMod.CombatHistory.cs:139,McpMod.CombatLogPatches.cs:400,McpMod.CombatLogPatches.cs:451
 history:MonsterPerformedMoveEntry	exposed	item	core	MegaCrit.Sts2.Core.Combat.History.Entries/MonsterPerformedMoveEntry.cs:1	0	0			McpMod.CombatLogPatches.cs:401,McpMod.CombatLogPatches.cs:454
 history:OrbChanneledEntry	out_of_scope	item	core	MegaCrit.Sts2.Core.Combat.History.Entries/OrbChanneledEntry.cs:1	0	0			
@@ -341,7 +341,7 @@ hook:Hook.BeforeSideTurnEnd	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.
 hook:Hook.BeforeSideTurnStart	exposed	item	ironclad	MegaCrit.Sts2.Core.Hooks/Hook.cs:1207	23	10			McpMod.CombatLogPatches.cs:91
 manual:CardModel.OnPlayWrapper	exposed	item	ironclad	MegaCrit.Sts2.Core.Models/CardModel.cs:2020	0	0			
 manual:CardPileCmd.DrawInternal	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CardPileCmd.cs:1010	0	0			
-manual:CardReward	exposed	item	ironclad	MegaCrit.Sts2.Core.Rewards/CardReward.cs:34	0	0			McpMod.Actions.cs:884,McpMod.Rewards.cs:51,McpMod.StateBuilder.cs:3776
+manual:CardReward	exposed	item	ironclad	MegaCrit.Sts2.Core.Rewards/CardReward.cs:34	0	0			McpMod.Actions.cs:884,McpMod.Rewards.cs:51,McpMod.StateBuilder.cs:3778
 manual:CardSelectCmd.skip_and_result	exposed	item	ironclad	MegaCrit.Sts2.Core.Commands/CardSelectCmd.cs:68	0	0			
 manual:CombatManager.CurrentCombatId	exposed	item	core	MegaCrit.Sts2.Core.Combat/CombatManager.cs:176	0	0			McpMod.CombatLog.cs:38
 manual:CombatState.IterateHookListeners	exposed	item	ironclad	MegaCrit.Sts2.Core.Combat/CombatState.cs:423	0	0			

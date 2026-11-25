@@ -25,7 +25,7 @@ public static partial class McpMod
     private static FieldInfo? _hookListIteratorState;
     private static FieldInfo? _hookListIteratorCombat;
 
-    // The async methods the chain describes (v0.113.1, sts2-a671e9ef), with what each await of the method body
+    // The async methods the chain describes (v0.114.0, sts2-ae309f85), with what each await of the method body
     // runs, in the order of the compiler's <>1__state (checked against the IL of each MoveNext): the state a
     // suspended frame holds is the index of the step it waits on; the steps after it run once that one completes.
     private static readonly Dictionary<(Type Type, string Method), string[]> AwaitChainSteps = new()

@@ -49,7 +49,7 @@ public static partial class McpMod
             return affliction == null ? null
                 : BuildCardAttachmentState(affliction, () => affliction.Amount, reasons, "affliction");
         });
-        // sts2-a671e9ef: HexPower.TryModifyKeywordsInCombat adds Ethereal to the owner's
+        // sts2-ae309f85: HexPower.TryModifyKeywordsInCombat adds Ethereal to the owner's
         // Hexed cards as a Global keyword, so the hand/pile keywords cannot tell whether the
         // card is Ethereal by itself. HexPower.AfterRemoved clears Hexed and the Global
         // Ethereal goes with it; the card's own (Local: canonical + CardCmd.ApplyKeyword
@@ -85,7 +85,7 @@ public static partial class McpMod
     /// Retain / Sly, the replay counts, and the Mad Science rider. Every key is present on every
     /// row; a failed read is null with its reason (a read 0 / false is a real value).
     ///
-    /// Sources (v0.113.1, sts2-a671e9ef), all plain getters or private fields:
+    /// Sources (v0.114.0, sts2-ae309f85), all plain getters or private fields:
     /// CardModel.ShouldRetainThisTurn = Keywords has Retain || _hasSingleTurnRetain;
     /// CardModel.IsSlyThisTurn = Keywords has Sly || _hasSingleTurnSly (GiveSingleTurnSly, i.e.
     /// CardCmd.ApplySingleTurnSly). EndOfTurnCleanup clears both private flags and resets
@@ -153,7 +153,7 @@ public static partial class McpMod
                 return values;
             }, $"{field}.dynamic_vars");
         }
-        // sts2-a671e9ef: Momentum.EnchantDamageAdditive returns the private _extraDamage
+        // sts2-ae309f85: Momentum.EnchantDamageAdditive returns the private _extraDamage
         // (PoweredAttack only) and Momentum.OnPlay adds Amount to it after each play.
         // Read the declared field only: no private getter, setter (AssertMutable) or hook.
         // model.GetType() is Momentum itself (sealed); DeclaredOnly rejects a moved field.

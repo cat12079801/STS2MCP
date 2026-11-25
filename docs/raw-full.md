@@ -88,7 +88,7 @@ Every state response (anything with a `state_type`: `menu`, the multiplayer `err
   "mod_commit": "2de67cd",  // Git commit built from ("<sha>-dirty" from an edited tree); null if unknown
   "game_version": "v0.114.0", // release_info.json version; null if unavailable
   "game_commit": "a7b9a9c0",  // release_info.json commit; null if unavailable
-  "schema": "2.0.0",       // Contract version (semver) — see below
+  "schema": "2.1.0",       // Contract version (semver) — see below
   "schema_version": 12,     // Deprecated integer, frozen at 12 — see below
   "scenario_capabilities": { "setup_guard": 1, "selection_uid": 1, "potion_availability": 1 }
 }
@@ -122,7 +122,7 @@ to one of them still moves `schema` by the ordinary rules for what changed: addi
 and changing the meaning or shape of an existing field is MAJOR.
 
 `1.0.0` is exactly the contract of `schema_version` 12. The Markdown header shows both:
-`mod 0.4.0+<commit> · schema 2.0.0 (schema_version 12)`. Since `1.0.0`:
+`mod 0.4.0+<commit> · schema 2.1.0 (schema_version 12)`. Since `1.0.0`:
 
 - **1.1.0** — `battle.enemies[].combat_state` covers GremlinMerc (`has_spoken`) and KinPriest (`speech_used`)
   (`cat12079801/sts2#1065`). See [敵の台詞の印](#敵の台詞の印schema-110).
@@ -193,6 +193,14 @@ and changing the meaning or shape of an existing field is MAJOR.
   [本人の戦闘個体 ID](#本人の戦闘個体-idschema-1190)。
 - **2.0.0** — [対象別のダメージプレビュー](#対象別のダメージプレビューschema-200)が v0.114.0 の試算結果を使う。
   [矢の枠](#矢の枠と刺突schema-200)から削除済みの項目・状態を外し、盤石用の `card_plays_with_block_gains_this_turn` を足す。
+  旋律の `played_wah_this_turn` / `played_cho_this_turn` / `played_ki_this_turn` は当手番に所有者が開始した札を調べる（`MelodyCmd.PlayedThisTurn`、`CardPlaysStarted`）。
+  選択・報酬候補の表示用 `upgrade_preview` は構築失敗時に null と `unavailable_reasons.upgrade_preview` を返す。
+  wiki の強化版は構築失敗時に `preview_available: false` と `unavailable_reasons.preview` を返す。
+  本物と偽物の花は `relics[].internal_state.grant_energy_this_turn` にエナジー付与の予約を出す。
+  `combat_log` のワッピーの `added` 行に `hp`・`max_hp` を足し、試算中に呼ばれた `ModifyHpLost` の行を除外する。
+  Markdown の対象別の行名は `resolved damage:` から `damage preview:` に変わる。
+- **2.1.0** — 通常戦闘と戦闘中の選択に [戦闘個体の攻撃・行動の進行](#戦闘個体の攻撃行動の進行schema-210)
+  を `battle.creature_activity` として出す（`cat12079801/sts2#1491`）。
 
 `schema_version` is **deprecated**: the integer remains frozen at `12` for legacy clients and recorder metadata. Its history: it was bumped when an existing field or action changed meaning or
 was removed, and also for **6**, **7**, **8**, **9**, **10**, **11** and **12**: additive contracts that a client treated as
@@ -329,7 +337,7 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 マップ・報酬・ゲームオーバー・選択画面などが前に出ていないとき、state は `state_type` が `monster` / `elite` / `boss` で
 `battle` を持たず、`message` と次の理由で解決中（`is_resolving: true`）を返す。ゲームの値は公開のものだけを読む。
 
-| 局面 | 理由 | `message` | ゲームの値（デコンパイル `sts2-a671e9ef`） |
+| 局面 | 理由 | `message` | ゲームの値（デコンパイル `sts2-ae309f85`） |
 |---|---|---|---|
 | 部屋に入ってから戦闘を組むまで | `combat_starting` | `Combat is starting. Waiting for the first turn...` | `RunManager.EnterRoomInternal` が部屋を積んだ後、`CombatRoom.StartCombat` が `CombatManager.SetUpCombat` を呼ぶ前。ターンの状態が無い（`CurrentCombatId` が null）で、部屋は終わっていない（`CombatRoom.IsPreFinished` が false） |
 | 戦闘を組んでから始まるまで | `combat_starting` | 同上 | `CombatManager.IsStarting`（`SetUpCombat` で true、`StartCombatInternal` が `IsInProgress` と同時に false にする） |
@@ -345,7 +353,7 @@ action の列の外で進める。このため `action_queue_not_empty` と `pla
 `message` は協力プレイの state でも同じ文言を返す（協力プレイの state は `is_resolving` を持たない）。
 
 **画面の遷移（`map_traveling` / `map_closing` / `room_changing` / `run_loading`）。** 入力を受け付けない遷移の途中を、
-入力待ちの画面や落ち着いた state と取り違えないための理由。ゲームの値（デコンパイル `sts2-a671e9ef`）は次のとおり。
+入力待ちの画面や落ち着いた state と取り違えないための理由。ゲームの値（デコンパイル `sts2-ae309f85`）は次のとおり。
 
 | 局面 | 理由 | ゲームの値 |
 |---|---|---|
@@ -403,7 +411,7 @@ POST の `wait: true` は、`is_resolving` が false で、戦闘なら `battle.
 ```
 
 オロビックの酸液（`OrobicAcid.OnUse`）は、キャラの解放済み pool を型ごとに
-`CardFactory.GetDistinctForCombat` へ渡す。v0.113.1 の `GetDistinctForCombat` は
+`CardFactory.GetDistinctForCombat` へ渡す。v0.114.0 の `GetDistinctForCombat` は
 private な `CardFactory.FilterForRun`（`c.IsAllowedInRun(runState)`）→ `FilterForCombat` の順に絞ってから抽選する。
 この欄は `GetUnlockedCards` の結果に、本体の public な `CardModel.IsAllowedInRun(player.RunState)`、
 `CardFactory.FilterForCombat`、Attack/Skill/Power の型 filter を適用し、ID の昇順で出す。
@@ -415,7 +423,7 @@ state にゲームモードが無くても Blitz の除外は反映される。
 
 `filter_version` はこの pool 契約の版であり、state の schema とは別。
 **版 2 は候補の条件の意味を変えた**（版 1 は人数の条件だけを MOD に写し、`filter_source` に
-`CardFactory.FilterForPlayerCount` と書いていた。v0.113.1 の本体の `FilterForRun` とは Blitz の条件が違う）。
+`CardFactory.FilterForPlayerCount` と書いていた。v0.114.0 の本体の `FilterForRun` とは Blitz の条件が違う）。
 利用側は `filter_version` と `filter_source` の完全一致で契約を判定し、版 1 の観測を版 2 として扱わない。
 利用側はこの契約を `filter_version` で判定する。`filter_version` が変わる更新でも、state の `schema` は
 [通常の規則](#common-top-level-fields)で動かす（項目の追加は MINOR、既存の項目の意味・形の変更は MAJOR）。
@@ -426,7 +434,7 @@ state の `warnings` を返す。取得前に失敗したメタデータは欠�
 旧 MOD にはこの欄が無い。取得不能と空一覧を同一視せず、欄の存在を検出すること。
 Markdown は単独・マルチのローカル player について件数・人数、または unknown と理由の1行だけを出す。
 
-出典は v0.113.1 のデコンパイル `sts2-a671e9ef` の `OrobicAcid.OnUse`、`CardPoolModel.GetUnlockedCards`、
+出典は v0.114.0 のデコンパイル `sts2-ae309f85` の `OrobicAcid.OnUse`、`CardPoolModel.GetUnlockedCards`、
 `CardFactory.GetDistinctForCombat` / `FilterForRun` / `FilterForCombat`、`CardModel.IsAllowedInRun` / `IsAllowedInBlitz`。
 これは discovered_cards とは別の情報。
 `NCardLibraryGrid.GetCardVisibility` は profile の解放条件と発見条件を分け、解放済みでも未発見なら
@@ -458,7 +466,7 @@ NotSeen にする。図鑑がこのラン固有の候補ID一覧をそのまま�
 失敗時の契約・抽選をしないことは `generation_pool` と同じ（warning のパスは `player.colorless_generation_pool`）。
 Markdown は `Colorless generation pool: N cards` または unknown と理由の 1 行。
 解放済み一覧の `unlocked_pools.colorless_cards`（後段の filter 前）は従来どおり残す。
-出典は `sts2-a671e9ef` の `JackOfAllTrades.OnPlay`、上記の `CardFactory` / `CardModel` のメソッド。
+出典は `sts2-ae309f85` の `JackOfAllTrades.OnPlay`、上記の `CardFactory` / `CardModel` のメソッド。
 
 #### 何でも屋+ の使用前の通知元（schema 1.20.0）
 
@@ -521,7 +529,7 @@ Markdown は `Colorless generation pool: N cards` または unknown と理由の
   解放済みで本体の条件を通る `JACK_OF_ALL_TRADES` を含む。型は全型。利用側は `player_id`・`character_id`・
   `players`・`multiplayer_constraint`・`game_assembly_sha256` とフィルターの版・出典を照合する。
   マルチで別人を対象とする使用の母集団はその対象本人の解放状態に依存する。
-- 出典は `sts2-a671e9ef` の `ColorlessPotion.OnUse`、`ColorlessCardPool.FilterThroughEpochs`、
+- 出典は `sts2-ae309f85` の `ColorlessPotion.OnUse`、`ColorlessCardPool.FilterThroughEpochs`、
   `CardPoolModel.GetUnlockedCards`、`CardFactory.GetDistinctForCombat / FilterForRun / FilterForCombat`。
 
 #### 三択ポーションの飲用前通知（schema 1.18.0）
@@ -613,7 +621,7 @@ ShouldSkipCombatEffect / IsCombatEnding`。新しい reader はゲームの通�
 解放済みのキャラは図鑑・キャラ選択で見え、各 pool の解放済みの札も公開の情報なので、集合は人間が見える範囲で決まる。
 失敗時の契約・抽選をしないことは `generation_pool` と同じ（warning のパスは `player.other_character_attack_generation_pool`）。
 Markdown は `Other-character attack pool: N cards` または unknown と理由の 1 行。
-出典は `sts2-a671e9ef` の `Splash.OnPlay`、`UnlockState.CharacterCardPools`、`CardFactory.GetDistinctForCombat` /
+出典は `sts2-ae309f85` の `Splash.OnPlay`、`UnlockState.CharacterCardPools`、`CardFactory.GetDistinctForCombat` /
 `FilterForCombat`、`CardModel.IsAllowedInRun`。契約試験は [`tests/GenerationPoolContract`](../tests/GenerationPoolContract/README.md)。
 
 #### エントロピーの変化の候補（`player.transformation_options`、schema 1.5.0）
@@ -649,7 +657,7 @@ Markdown は `Other-character attack pool: N cards` または unknown と理由�
 - 抽選・`CardCmd.Transform`・乱数は呼ばない。候補の集合は元の札の pool・解放状態・ランから決まる公開の情報で、
   どの札に変わるか（抽選の結果）は出さない。
 - Markdown は `Transformation options (Entropy): DEFEND_IRONCLAD 70, …`（ID と候補の数）の 1 行。
-出典は `sts2-a671e9ef` の `EntropyPower.AfterPlayerTurnStart`、`CardCmd.TransformToRandom` / `Transform`、
+出典は `sts2-ae309f85` の `EntropyPower.AfterPlayerTurnStart`、`CardCmd.TransformToRandom` / `Transform`、
 `CardTransformation`、`CardFactory.CreateRandomCardForTransform` / `GetDefaultTransformationOptions` /
 `GetFilteredTransformationOptions`、`PlayerCombatState.AllPiles`。契約試験は [`tests/ChoiceSourceContract`](../tests/ChoiceSourceContract/README.md)。
 
@@ -915,7 +923,7 @@ encode every reason a relic can be disabled.
 CombatId か monster が無い敵、2 体が同じ ID になった場合は、許可される敵に限らず `unknown_0` や位置で代用せず `unobserved:entity_id` /
 `unobserved:entity_id_duplicate`。プレイヤーはこの配列の中だけ `player:<player_id>`（`Player.NetId` の 10 進）で表す。商人には ID を振らない。
 
-**判定の順（最初の禁止が理由になり、それより後の読取はしない）。** 出典は v0.113.1（sts2-a671e9ef）。
+**判定の順（最初の禁止が理由になり、それより後の読取はしない）。** 出典は v0.114.0（sts2-ae309f85）。
 
 | 順 | 読むもの（出典） | 理由 |
 |---|---|---|
@@ -1035,10 +1043,10 @@ Markdown はポーションの行の末尾に ` | Use now: yes → ID, …` / ` 
 | `turn_number` | `owner.PlayerCombatState.TurnNumber`。`StoneCalendar.DisplayAmount` / `AfterSideTurnStart` / `BeforeSideTurnEnd`、`MrStruggles.AfterPlayerTurnStart`。追加ターンでは `battle.round` と一致しない。 |
 | `card_plays_started_this_turn` | `History.CardPlaysStarted` で `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner`。型は `e.CardPlay.Card.Type`。`NostalgiaPower.ModifyCardPlayResultLocation` の Attack + Skill、`JugglingPower.AfterApplied` の Attack、`VelvetChoker.GetCardsPlayedThisTurn` の全型と同じ。 |
 | `card_plays_finished_this_turn` | `History.CardPlaysFinished` で同じターン・Player 条件。`RippleBasin.BeforeSideTurnEnd` の Attack、`LunarBlast.CanonicalVars` の Skill と同じ。 |
-| `card_plays_finished_this_combat` | int（schema 1.5.0）。`History.CardPlaysFinished.Count()`。戦闘全体・**全 Player**（ターン・Player の条件なし）。v0.113.1 `sts2-a671e9ef` の `GoldAxe.CanonicalVars`（`CalculatedDamageVar.WithMultiplier` の式そのもの）。完了（`CardModel.OnPlayWrapper` の `CardPlayFinished`）だけを数えるので、解決中の金の斧自身や、本文の途中の親の札は入らない。リプレイ・自動プレイ・スキップした選択の札も完了の entry の数だけ数える。 |
-| `any_manual_cards_played_this_turn` | bool。v0.113.1 `sts2-a671e9ef` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
+| `card_plays_finished_this_combat` | int（schema 1.5.0）。`History.CardPlaysFinished.Count()`。戦闘全体・**全 Player**（ターン・Player の条件なし）。v0.114.0 `sts2-ae309f85` の `GoldAxe.CanonicalVars`（`CalculatedDamageVar.WithMultiplier` の式そのもの）。完了（`CardModel.OnPlayWrapper` の `CardPlayFinished`）だけを数えるので、解決中の金の斧自身や、本文の途中の親の札は入らない。リプレイ・自動プレイ・スキップした選択の札も完了の entry の数だけ数える。 |
+| `any_manual_cards_played_this_turn` | bool。v0.114.0 `sts2-ae309f85` の `PaelsEye.AnyCardsPlayedThisTurn` の履歴条件。`History.CardPlaysFinished.Any(e => e.Actor == creature && e.HappenedThisTurn(combat) && !e.CardPlay.IsAutoPlay)`。空履歴は false。 |
 | `card_plays_finished_this_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedThisTurn(combat))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。次手番の `Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` の個体判定用。`CardPlay.Player == owner` を追加しない。 |
-| `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
+| `card_play_events_this_turn` | `History.Entries` を元の順のまま走査し、`CardPlayStartedEntry` / `CardPlayFinishedEntry` のうち `e.HappenedThisTurn(combat) && e.CardPlay.Player == owner` のもの（開始・完了の集計と同じ条件）。各要素は下記。v0.114.0 `sts2-ae309f85` の `CombatHistory.CardPlayStarted/CardPlayFinished`、`CardPlay.IsAutoPlay/Target/PlayIndex/PlayCount`、`CardModel.OnPlayWrapper`。 |
 | `card_resolution_events` | schema 1.6.0。`History.Entries` を元の順のまま走査し、所有者の `CardDrawnEntry`・`CardPlayStartedEntry` / `CardPlayFinishedEntry`・`CardGeneratedEntry` を戦闘全体（手番の条件なし）で出す。下の「[札の解決の通し列](#札の解決の通し列card_resolution_eventsschema-160)」。schema 1.8.0 で、山札からの自動プレイの予約の行と play の行の `reservation` を足した（「[自動プレイの予約](#自動プレイの予約card_resolution_events-の予約の行schema-180)」）。 |
 | `last_player_turn_card_uids` | `History.CardPlaysFinished.Where(e => e.HappenedLastPlayerTurn(owner))` の `CardPlay.Card` を既存の `GetStableCardUid` で変換する。`Bolas.BeforeHandDraw` / `ThrummingHatchet.BeforeHandDraw` がこの集合の札との個体一致を調べる。両クラスと同じく `CardPlay.Player == owner` を追加しない。 |
 | `cards_exhausted_this_turn` | `History.Entries.OfType<CardExhaustedEntry>()` で `e.HappenedThisTurn(combat) && e.Actor == creature`。`ForgottenRitual.WasCardExhaustedThisTurn` / `EvilEye.WasCardExhaustedThisTurn` の Any と同じ集合の件数。 |
@@ -1087,7 +1095,7 @@ MOD も記録済み Actor と `CardPlay.IsAutoPlay` を読む。
 `PaelsEye.ShouldTakeExtraTurnEarly` は未使用・判定値 false・所有者の前回参加・対象 Player が所有者の条件を使い、
 `BeforeSideTurnEndEarly` は所有者が participants に含まれる条件も検査して手札を廃棄する。
 既存の `PAELS_EYE.combat_state.used_this_combat` と `was_owner_part_of_last_player_turn` も合わせて読む。
-参照元は v0.113.1 `sts2-a671e9ef` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye`、
+参照元は v0.114.0 `sts2-ae309f85` の `MegaCrit.Sts2.Core.Models.Relics.PaelsEye`、
 `MegaCrit.Sts2.Core.Combat.History.CombatHistory.CardPlaysFinished`、
 `CardPlayFinishedEntry` のコンストラクタ、`CombatHistoryEntry.HappenedThisTurn`、`CardPlay.IsAutoPlay`。
 副作用のあるフックを呼ばず、trace の履歴の保持期間にも依存しない。
@@ -1165,7 +1173,7 @@ Markdown は手動プレイの bool・正の件数・非空の uid 配列・取�
 | `stars_gained_this_turn` | int | `Radiate.CanonicalVars` と同じく、当手番・`Actor == owner.Creature` の `StarsModifiedEntry` の正の `Amount` の和。`PlayerCombatState.Stars` は実際の増減差を記録する |
 | `ethereal_plays_finished_this_combat` | int | `PullFromBelow.CanonicalVars` と同じく、当戦闘・`CardPlay.Player == owner` の完了のうち、`CardPlayFinishedEntry` が完了時に保存した `WasEthereal` が真の件数。同じ uid で完了を繰り返せばその都度数える |
 | `osty_attacks_this_turn` | int | `Rattle.CanonicalVars` と同じく、当手番で `Actor == owner.Osty` の `CreatureAttackedEntry` の件数。`AttackCommand.Execute` の攻撃履歴を数える。現参照が死亡個体ならその履歴を数え、不在なら 0。生死は `player.pets` を併読する |
-| `played_wah_this_turn` / `played_cho_this_turn` / `played_ki_this_turn` | bool（各項目） | `MelodyCmd.PlayedWahThisTurn` / `PlayedChoThisTurn` / `PlayedKiThisTurn` の戻り値。当手番に所有者が完了した札のタグを調べる。複合タグはそれぞれ真、同じタグは繰り返しても真のまま |
+| `played_wah_this_turn` / `played_cho_this_turn` / `played_ki_this_turn` | bool（各項目） | `MelodyCmd.PlayedWahThisTurn` / `PlayedChoThisTurn` / `PlayedKiThisTurn` の戻り値。`MelodyCmd.PlayedThisTurn` が当手番に所有者が開始した札（`CardPlaysStarted`）のタグを調べる（v0.114.0、`sts2-ae309f85`）。複合タグはそれぞれ真、同じタグは繰り返しても真のまま |
 
 正常な空の集計は `0`・`false`・`{}`。未完了の 0 支払いは `{"<uid>": 0}`。
 最新の開始が完了済みなら古い未完了には遡らない。正常に取得した表に uid が無ければその札の減算量は 0。
@@ -1220,7 +1228,7 @@ Markdown の History 行には正の集計値と取得失敗を出す。未完�
 - **失敗**: 読取（History・entry の判定・各 getter・対象の `CombatId`）のどれかに失敗したら配列全体を `null` にし、
   `unavailable_reasons.card_resolution_events` と warning `player.combat_history.card_resolution_events` を出す。1 行を飛ばした短い列は返さない。
   正常な空の戦闘履歴は `[]`。行は戦闘の終わりまで消えずに残るので、ある行が読めなくなったら、その戦闘の後の snapshot も
-  `null` のままになりうる（v0.113.1 では起きる経路を確認していない。`CombatId` は消されず、uid は必ず振れる）。
+  `null` のままになりうる（v0.114.0 では起きる経路を確認していない。`CombatId` は消されず、uid は必ず振れる）。
   利用側はこれを未観測として扱い、止まる側に倒す（短い列や空の列に読み替えない）。
 - **戦闘の終わり**: 勝利の後の state（報酬・マップ）・敗北の後の state には `combat_history` が無く、勝利では本体の履歴も消える。
   戦闘を終えた単独の POST の応答には、戦闘が終わった時点の列を `ended_combat` で付ける（下の「戦闘を終えた操作の応答」。schema 1.8.0）。
@@ -1228,7 +1236,7 @@ Markdown の History 行には正の集計値と取得失敗を出す。未完�
 - **Markdown**: 列が長いので、History 行に `resolution events=13 (draw:4, play:5, generated:4)` のように種類ごとの件数だけを出す
   （`play` は開始・完了の行の数）。行そのものは JSON で読む。
 
-出典は v0.113.1 `sts2-a671e9ef` の `CombatHistory.CardDrawn / CardGenerated / CardPlayStarted / CardPlayFinished / Clear`、
+出典は v0.114.0 `sts2-ae309f85` の `CombatHistory.CardDrawn / CardGenerated / CardPlayStarted / CardPlayFinished / Clear`、
 `CardDrawnEntry.Card / FromHandDraw`、`CardGeneratedEntry.Card / Creator`、`CombatHistoryEntry.Actor`、
 `CardPileCmd.DrawInternal / AddGeneratedCardsToCombat`、`CardCmd.Transform`、`CombatManager.EndCombatInternal / CancelCombat`。
 
@@ -1286,7 +1294,7 @@ Markdown の History 行には正の集計値と取得失敗を出す。未完�
   （開始の entry に予約を結ぶ）、`CombatHistory.Clear` の前置・後置（戦闘の終わりの列を取ってから予約を捨てる）、`CombatManager.ProcessPendingLoss` の前置。
 - **Markdown**: 既存の History 行の件数に `auto_play_reservation:1, auto_play_reserved:3, auto_play_dispatch:3` のように種類ごとに足される。
 
-出典は v0.113.1 `sts2-a671e9ef` の `CardPileCmd.AutoPlayFromDrawPile`（5・6 引数）/ `ShuffleIfNecessary` / `Add` / `GetTweenForCardsChangingPiles` /
+出典は v0.114.0 `sts2-ae309f85` の `CardPileCmd.AutoPlayFromDrawPile`（5・6 引数）/ `ShuffleIfNecessary` / `Add` / `GetTweenForCardsChangingPiles` /
 `CreateCardNodeAndUpdateVisuals` / `AppendPlayPileLerpTween`、`PileTypeExtensions.GetTargetPosition`、`NCard.UpdateVisuals`、
 `CardCmd.AutoPlay` / `MoveToResultPileWithoutPlaying`、`CardModel.OnPlayWrapper` / `MoveToResultPileWithoutPlaying`、`CardPile.AddInternal`、
 `PlayerChoiceContext.LastInvolvedModel`、`BranchingPlayerChoiceContext`、`Hook.AfterCardPlayed` などの `PushModel` / `PopModel`、
@@ -1328,7 +1336,7 @@ Markdown の History 行には正の集計値と取得失敗を出す。未完�
   読んだもの（保持している全行。捨てた行があれば `since_truncated: true`）。勝利では `AfterCombatEnd` の通知までの行が入り、
   その後の `AfterCombatVictory` の行は入らない。読めなければ `null` と `unavailable_reasons.combat_log`。
 
-出典は v0.113.1 `sts2-a671e9ef` の `CombatManager.EndCombatInternal` / `ProcessPendingLoss` / `CancelCombat` / `DebugOnlyGetState` / `IsAboutToLose`、
+出典は v0.114.0 `sts2-ae309f85` の `CombatManager.EndCombatInternal` / `ProcessPendingLoss` / `CancelCombat` / `DebugOnlyGetState` / `IsAboutToLose`、
 `CombatHistory.Clear`、`LocalContext.GetMe`。試験は [`tests/DevConsoleContract`](../tests/DevConsoleContract/README.md)（応答への付け方）。
 
 ### 戦闘の出来事の通し列（`battle.combat_log`、schema 1.10.0）
@@ -1588,6 +1596,7 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
   例えば単一の結果行で、ブロックが 5、HardToKill が 3、補正前の攻撃が 10、HP が十分なら、値は 8（吸収 5 と HP 減少 3）。
   `damage_cap` は対象にある最初の該当パワーの説明。HardToKill の `per_hit_max` はブロックを引いた後、
   Osty へ転送する前の HP 減少の上限を表す。`damage_cap.effective_damage` は schema 2.0.0 で削除。
+  霊体は `IntangiblePower.ModifyDamageCap` でブロック前のダメージを、`ModifyHpLostAfterOsty` で Osty 処理後の HP 減少を、それぞれ 1 に制限する。
 - `hits` は `HitCount`、無ければ `CalculatedHits`。明示された 0・1 も出す。`Repeat` は攻撃回数に含めない。
   解体は対象に弱体（Vulnerable）が無いとき、悪意は所有者が当手番に HP を失っていないときに 1 回とする。
   条件を満たす場合は本体のプレビュー回数を使う（`Dismantle.OnPlay`、`Spite.OnPlay` / `LostHpThisTurn`）。
@@ -1742,9 +1751,9 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 `Affliction` / `Enchantment` / `DynamicVars` / `CanPlay`、`AfflictionModel.Amount`、
 `EnchantmentModel.Amount` / `Status`、`EnchantmentStatus`、`DynamicVar.BaseValue`、`DynamicVarSet.GetEnumerator`、
 `StringVar`。契約試験は詳細の取得・失敗・表示を検査する。
-`extra_damage` の出典（v0.113.1、`sts2-a671e9ef` デコンパイル）は `Momentum._extraDamage` /
+`extra_damage` の出典（v0.114.0、`sts2-ae309f85` デコンパイル）は `Momentum._extraDamage` /
 `ExtraDamage` / `OnPlay` / `EnchantDamageAdditive`。
-パイルの `can_play`・`is_upgraded` / `is_upgradable`・`tags` の出典（v0.113.1、`sts2-a671e9ef` デコンパイル）は
+パイルの `can_play`・`is_upgraded` / `is_upgradable`・`tags` の出典（v0.114.0、`sts2-ae309f85` デコンパイル）は
 `CardModel.CanPlay(out UnplayableReason, out AbstractModel)` / `IsPlayable` / `IsUpgraded` / `IsUpgradable` / `Tags`、
 `UnplayableReason`、`CardTag`、`PlayerCombatState.HasEnoughResourcesFor`、`Hook.ShouldPlay`、
 `Clash.IsPlayable`、`GrandFinale.IsPlayable`、`Normality.ShouldPlay`、`Enthralled.ShouldPlay`、
@@ -1759,14 +1768,14 @@ Markdown はパイルの札の本行末尾に `[Attack/AnyEnemy]` の形で型�
 どのキーも**全行に必ずあり**、読めた false・0 は実値、読取失敗は null と行の `unavailable_reasons.<key>`・`warnings`
 （`ready` では失敗が1つでもあれば `unavailable`）。
 
-| キー | 型 | 出典（v0.113.1、`sts2-a671e9ef`） |
+| キー | 型 | 出典（v0.114.0、`sts2-ae309f85`） |
 |---|---|---|
 | `retain_this_turn` | bool | `CardModel.ShouldRetainThisTurn`（Retain キーワード〔実効〕、または単ターン保留） |
 | `single_turn_retain` | bool | private `CardModel._hasSingleTurnRetain`（`GiveSingleTurnRetain` が立てる） |
 | `sly_this_turn` | bool | `CardModel.IsSlyThisTurn`（Sly キーワード〔実効〕、または単ターンの Sly） |
 | `single_turn_sly` | bool | private `CardModel._hasSingleTurnSly`（`GiveSingleTurnSly`。`CardCmd.ApplySingleTurnSly`〔`HandTrick`〕が呼ぶ） |
 | `base_replay_count` | int | `CardModel.BaseReplayCount`（`SoldiersStew`・`Transfigure`・`HiddenGem`・`SwordSagePower` が足す。ターン終わりに戻らない） |
-| `extra_replay_this_turn` | int | `CardModel.ExtraReplayThisTurn`（今ターンだけの追加。v0.113.1 では書き手が本体に無く、常に 0 の実値） |
+| `extra_replay_this_turn` | int | `CardModel.ExtraReplayThisTurn`（今ターンだけの追加。v0.114.0 の本体での代入は `CardModel.EndOfTurnCleanup` の 0 へのリセットのみ） |
 | `enchanted_replay_count` | int | `CardModel.GetEnchantedReplayCount()` = `Enchantment?.EnchantPlayCount(BaseReplayCount + ExtraReplayThisTurn)`、付与が無ければその和 |
 | `tinker_time_rider` | enum 名 | `MadScience.TinkerTimeRider`（`TinkerTime.RiderEffect`: `None` / `Sapping` / `Violence` / `Choking` / `Energized` / `Wisdom` / `Chaos` / `Expertise` / `Curious` / `Improvement`）。Mad Science（`MAD_SCIENCE`）の行だけ |
 
@@ -2111,7 +2120,7 @@ Markdown は local modifier が非空、修正後のコストが基礎値と異�
 - 読取失敗はその項目だけ `null`、`unavailable_reasons` に理由、warning `card.star_cost_state.<key>`。
 - Markdown には出さない（既存の `star_cost` 表示は変えない）。追加だけなので版は上げていない（schema 4 のときの追加）。
 
-出典は `sts2-a671e9ef` の `CardModel.BaseStarCost` / `CanonicalStarCost` / `HasStarCostX` / `CurrentStarCost` /
+出典は `sts2-ae309f85` の `CardModel.BaseStarCost` / `CanonicalStarCost` / `HasStarCostX` / `CurrentStarCost` /
 `_temporaryStarCosts` / `SetToFreeThisTurn` / `SetStarCostThisTurn`、`TemporaryCardCost`。
 
 #### 戦闘カード個体の星 X（schema 1.15.0）
@@ -2294,7 +2303,7 @@ schema 9 の全パワーの `type_for_current_amount` / `is_temporary_power`、s
 | `GIGANTIFICATION_POWER` | `has_command_to_modify` | bool（schema 12。同上） |
 | `HARDENED_SHELL_POWER` | `damage_received_this_turn` | decimal（schema 12。同上） |
 | `ADAPTABLE_POWER` / `REATTACH_POWER` / `ILLUSION_POWER` | `is_reviving` | bool（schema 12。同上） |
-| `ILLUSION_POWER` | `follow_up_state_id` / `follow_up_state_readable` | string / null と bool（schema 12。同上。readable=true の null は記録なし。v0.113.1 では代入箇所が無く常に null で、復活の行き先は復活の行動の `move_state` から読む） |
+| `ILLUSION_POWER` | `follow_up_state_id` / `follow_up_state_readable` | string / null と bool（schema 12。同上。readable=true の null は記録なし。v0.114.0 では代入箇所が無く常に null で、復活の行き先は復活の行動の `move_state` から読む） |
 | `NEMESIS_POWER` | `should_apply_intangible` | bool（schema 12。同上） |
 | `SLOTH_POWER` / `TENDER_POWER` | `cards_played_this_turn` | int（schema 12。同上） |
 | `BEACON_OF_HOPE_POWER` | `has_already_been_given_block` | bool（schema 12。同上） |
@@ -2391,7 +2400,7 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 
 パワーの量のうち `amount` に無いもの（インフェルノ・深紅の衣の自傷、爆弾の威力、脆弱・脱力の倍率、プレートアーマーの減り方など）を、
 説明文から読まずに済むように、player・敵・ペットのすべての `status[]` の行（`hidden_in_ui` の行・説明失敗時の最小行も）に
-パワー自身の `DynamicVars` を付ける（出典は v0.113.1 `sts2-a671e9ef`、`cat12079801/sts2#1020`）。
+パワー自身の `DynamicVars` を付ける（出典は v0.114.0 `sts2-ae309f85`、`cat12079801/sts2#1020`）。
 
 - `dynamic_vars` — `{変数名: BaseValue}`。変数名は `CanonicalVars` の名前のまま（`SelfDamage`・`DamageIncrease` など。snake_case にしない）、
   並びは集合の順、値は decimal。`PowerModel.DynamicVars` は `CanonicalVars`（既定は空）から作られ、生きたパワーには `DeepCloneFields` が複製を持たせる。
@@ -2415,18 +2424,18 @@ Markdown は既存行に短く追記し、通常の skip=false と空の盗難�
 #### 破壊（`Rend`）の入力（schema 9）
 
 破壊（`Rend`）の倍率は対象の `Creature.Powers` のうち `Rend.ShouldCountPower` を満たすパワーの数
-（`power.TypeForCurrentAmount == PowerType.Debuff && !(power is ITemporaryPower)`。出典は v0.113.1 `sts2-a671e9ef`、
+（`power.TypeForCurrentAmount == PowerType.Debuff && !(power is ITemporaryPower)`。出典は v0.114.0 `sts2-ae309f85`、
 `cat12079801/sts2#1034`）。その 2 つの入力を、player・敵・ペットのすべての `status[]` の行（`hidden_in_ui` の行・説明失敗時の最小行も）に付ける。
 `status[]` が `Creature.Powers` から落とす行は、`IsVisible` が false・`Amount` が 0・`TypeForCurrentAmount` が `Debuff` でない、の 3 つがそろう行だけ
 （`TypeForCurrentAmount` が読めない行も落とさない）。破壊が数えるパワーは、HUD に出なくても必ず `status[]` に出る。
 
 - `type_for_current_amount` — `PowerModel.TypeForCurrentAmount`（`GetTypeForAmount(Amount)`）の enum 名。
   `GetTypeForAmount` は、`StackType` が `Counter` で `AllowNegative` のパワーの負の量を `Debuff`、`AllowNegative` でない
-  `Debuff` 型のパワーの負の量を `Buff` とし、それ以外は `Type`。v0.113.1 で `AllowNegative` なのは `StrengthPower`・
+  `Debuff` 型のパワーの負の量を `Buff` とし、それ以外は `Type`。v0.114.0 で `AllowNegative` なのは `StrengthPower`・
   `DexterityPower`・`FocusPower`（`Type` は `Buff`）と `ShriekPower`・`ShrinkPower`（`Type` は `Debuff`）なので、
   `type` と食い違うのは負の筋力・敏捷・集中（`Debuff`）。`AllowNegative` でないパワーは量が 0 以下になると外れる（`ShouldRemoveDueToAmount`）。
   既存の `type` は `PowerModel.Type` のままで意味を変えない（負の筋力も `Buff`）。
-- `is_temporary_power` — インスタンスが `ITemporaryPower` を実装するか。v0.113.1 では `TemporaryStrengthPower`・
+- `is_temporary_power` — インスタンスが `ITemporaryPower` を実装するか。v0.114.0 では `TemporaryStrengthPower`・
   `TemporaryDexterityPower`・`TemporaryFocusPower`・`TemporaryThornsPower` とその派生。一時パワーは付与の前（`BeforeApplied`）に
   内部の筋力などを別の行（`STRENGTH_POWER` など。こちらは一時パワーではない）として付ける。
 
@@ -2466,7 +2475,7 @@ getter は `_amount` と `Type` / `StackType` / `AllowNegative` を読むだけ�
   付与後に手に入った札・付与後に強化された札は記録されない。
 - `DampenPower.AfterDeath` は死んだ creature が caster で、除去が防がれていなければ caster から外し、caster が空になれば弱化を外す。
 - `DampenPower.AfterRemoved` は記録した各札を元の段階の回数だけ `CardCmd.Upgrade` する（`IsUpgradable` でない札は飛ばす）。
-- `CombatManager.IsEnding` の間は `Downgrade`・`Upgrade` とも何もしない。
+- `CombatManager.IsEnding` の間は `RemoveAllUpgrades`・`Downgrade`・`Upgrade` が処理を見送る。
 
 空の配列は読めた空（理由・警告なし）。Data が無い・型違い・フィールドの欠落は、項目を null・行の `unavailable_reasons.<key>`・
 `warnings` の `status.DAMPEN_POWER.<key>` にする。Markdown は
@@ -2496,7 +2505,7 @@ registry に無い札は `CARD_ID (uid unknown) from +1`、読取失敗は `null
 分類表（`docs/state-inventory-classification.json`）で `section` を付けた項目を、行ごとの `internal_state` に出す。
 項目の一覧は分類表から `tools/state_inventory.py --write-allowlist` が生成する `McpMod.StateAllowlist.Generated.cs` で、項目ごとに分類の根拠（分類表の備考）を持つ。
 生成物が分類表と一致するかは `--check-allowlist` で確かめる。読む処理は `McpMod.StateAllowlist.cs`。
-分類表の `reader_key` を持つ項目も同じ許可リストから公開キーを生成し、星 X と矢の専用 reader がそれぞれの公開パスに整形する。
+分類表の `reader_key` を持つ項目も同じ許可リストから公開キーを生成する。戦闘個体の活動、星 X、矢などは、専用 reader でそれぞれの公開パスに出す。
 
 付く行:
 
@@ -2585,7 +2594,7 @@ Markdown は既定値（false・0・空・理由の無い null・`Normal`）を�
 `combat_id: null`、`player.internal_state.unavailable_reasons.combat_id`、パス `player.internal_state.combat_id` の warning を返す。
 `card_shop_removals_used` と各項目の欠測理由は同じ `internal_state` に入る。Markdown にも ID 0 を含む値と読取失敗の理由を表示する。
 
-出典（v0.113.1、`sts2-a671e9ef`）は `Player` のコンストラクタ、`CombatState.AddPlayer`・
+出典（v0.114.0、`sts2-ae309f85`）は `Player` のコンストラクタ、`CombatState.AddPlayer`・
 `CombatState.AttachCreature`・`CombatState.AddCreature`・`CombatState.Allies`、`CombatManager.DebugOnlyGetState`。
 
 ### Keyword Object
@@ -2637,7 +2646,7 @@ Markdown は既定値（false・0・空・理由の無い null・`Normal`）を�
 | `event_not_neow` | Neow 以外のイベント |
 
 同じ判定を、`scenario_setup_guard` 付きの `dev_console` がコマンドを実行する直前にも行う（[検証用の開発コンソール](#検証用の開発コンソール既定は無効)）。
-出典（v0.113.1、`sts2-a671e9ef`）: `RunState.CurrentRoom` / `IsGameOver`、`CombatManager.IsStarting` / `IsInProgress`、`EventRoom.CanonicalEvent`、`Neow`。
+出典（v0.114.0、`sts2-ae309f85`）: `RunState.CurrentRoom` / `IsGameOver`、`CombatManager.IsStarting` / `IsInProgress`、`EventRoom.CanonicalEvent`、`Neow`。
 GET は何も押さず、乱数・hook を使わない。
 
 ## State Types
@@ -2844,6 +2853,10 @@ Run state or room type not recognized.
     "round": 1,
     "turn": "player",       // "player" or "enemy"
     "is_play_phase": true,
+    "creature_activity": [
+      { "combat_id": 0, "kind": "player", "player_id": "123", "is_attacking": false },
+      { "combat_id": 42, "kind": "enemy", "entity_id": "JAW_WORM_0", "is_attacking": false, "is_performing_move": false }
+    ],
     "enemies": [
       {
         "entity_id": "JAW_WORM_0",    // Synthesized ID for targeting
@@ -2916,6 +2929,30 @@ fight by something that never revives it (`DieForYouPower`, `IllusionPower`) has
 and no `revive`, and neither does the last segment of a Decimillipede — with no living peer
 left to reattach to, the fight is over rather than about to restart.
 
+#### 戦闘個体の攻撃・行動の進行（schema 2.1.0）
+
+単独・協力プレイの通常戦闘と戦闘中の選択画面に `battle.creature_activity` を返す。戦闘外では省略する。
+列は `ICombatState.Creatures`（`CombatState.Creatures` が返す味方と敵）から作る。戦闘 state に残る死亡個体を含め、
+同じ個体の参照が重複しても一行にする。空の列は `[]`。
+
+| 項目 | 型と読取元 |
+| --- | --- |
+| `combat_id` | 整数。戦闘内で割り当てられた `Creature.CombatId`（uint、0 も有効）。欠落時と異なる個体で重複したときは該当行で null と理由 |
+| `kind` | `player`（プレイヤー個体）、`enemy`（敵陣営）、`pet`（味方のペット）、`ally`（その他の味方）。`Creature.Player`、`IsEnemy`、`PetOwner` の順に判定 |
+| `player_id` | `player` 行のみ。所有者の `Player.NetId` の文字列。ローカル本人はトップレベルの `player.player_id` と照合できる |
+| `entity_id` | `enemy` 行のみ。`battle.enemies[].entity_id` と共通の個体 ID |
+| `owner_player_id` | `pet` 行のみ。`Creature.PetOwner.NetId` の文字列 |
+| `is_attacking` | bool。`Creature.IsAttacking` の現在値。`AttackCommand.Execute` が攻撃中に true にし、finally で直前の値に戻す |
+| `is_performing_move` | bool。`Creature.Monster` を持つ個体の `MonsterModel.IsPerformingMove` の現在値。`MonsterModel.PerformMove` が行動中に true にする。Monster が無い個体では省略 |
+
+出典は v0.114.0（`sts2-ae309f85`）の上記メンバーと `CombatState.AttachCreature` の個体 ID 割当、
+`CreatureCmd.KillWithoutCheckingWinCondition` の死亡時の保留判定。活動値は棚卸しの許可リストに登録した getter の実値で、
+攻撃・行動・乱数を実行せずに読む。
+
+列を取得できないときは `battle.creature_activity: null` と `battle.unavailable_reasons.creature_activity`、
+個体の項目を取得できないときはその項目だけ null と行の `unavailable_reasons.<項目>` を返す。
+`warnings` のパスは列なら `battle.creature_activity`、項目なら `battle.creature_activity.<添字>.<項目>`。
+
 #### 敵に当てられるか（`hittable`、追加。schema 4）
 
 `battle.enemies[]` の**すべての行**（通常の敵・ミニオン・復活待ちの死亡個体・復活後）に `hittable` を出す。
@@ -2923,7 +2960,7 @@ left to reattach to, the fight is over rather than about to restart.
 本体の対象の抽選（`CombatState.HittableEnemies` → `CardCmd.AutoPlay` の `CombatTargets` の抽選。ジャガーノートなどのランダムな対象）と同じ getter である。
 `targetable`（手で狙えるか）とは別で、本体の注釈どおり「当てられない」のではない全体攻撃もある。
 
-- getter（v0.113.1 `sts2-a671e9ef` の `Creature.IsHittable`）: `IsDead`（`CurrentHp <= 0`）なら false、
+- getter（v0.114.0 `sts2-ae309f85` の `Creature.IsHittable`）: `IsDead`（`CurrentHp <= 0`）なら false、
   そうでなければ `Hook.ShouldAllowHitting(CombatState, creature)`（戦闘の hook listener の `ShouldAllowHitting` が 1 つでも false なら false）。
   override は敵では `ReattachPower`（ムカデの体節）・`IllusionPower`（パラフライト `PARAFRIGHT`・牙むく眼 `EYE_WITH_TEETH`）・`AdaptablePower`（実験体 `TEST_SUBJECT`）で、
   どれも「その所有者が復活中（private の `isReviving`）なら false」。味方の `DieForYouPower`・`WuppysLoyaltyPower` は対象が生存しているかを返す。
@@ -2940,7 +2977,7 @@ left to reattach to, the fight is over rather than about to restart.
 `battle.enemies[]` の**すべての行**（生存・戦闘に残る死亡個体、単独・協力プレイで共通）に `can_receive_powers` を出す。
 値は本体の `Creature.CanReceivePowers` の bool をそのまま。`hittable`・HP・`alive`・パワー名から作らない（`cat12079801/sts2#1175`）。
 
-- getter（v0.113.1 `sts2-a671e9ef` の `Creature.CanReceivePowers`）: `CombatState == null` なら false、
+- getter（v0.114.0 `sts2-ae309f85` の `Creature.CanReceivePowers`）: `CombatState == null` なら false、
   そうでなければ `Hook.ShouldAllowHitting(CombatState, creature)`。`hittable`（`Creature.IsHittable`）との違いは、先頭の `IsDead` の検査が無く、
   代わりに `CombatState` の有無を見ること。本体の注釈も「死んだ個体は当てられないが、パワーは付けられる」と書く。
   override は `hittable` と同じ（`ReattachPower`・`IllusionPower`・`AdaptablePower` は所有者が復活中なら false、
@@ -2971,7 +3008,7 @@ left to reattach to, the fight is over rather than about to restart.
 値は本体の拡張 `HpDisplayExtensions.IsInfinite(Creature.HpDisplay)` の bool をそのまま。HP・最大 HP・パワー名・行動 ID から作らない
 （`cat12079801/sts2#1088`）。
 
-- 出典（v0.113.1 `sts2-a671e9ef`）: `Creature.HpDisplay` は列挙 `HpDisplay`（`Normal` / `InfiniteWithNumbers` / `InfiniteWithoutNumbers`）の
+- 出典（v0.114.0 `sts2-ae309f85`）: `Creature.HpDisplay` は列挙 `HpDisplay`（`Normal` / `InfiniteWithNumbers` / `InfiniteWithoutNumbers`）の
   public な自動プロパティ。`HpDisplayExtensions.IsInfinite` は `InfiniteWithNumbers` と `InfiniteWithoutNumbers` で true、`Normal` で false。
   2 つの無限の違い（数字を見せるか）は `HpDisplayExtensions.ShowsNumbers` で、読むのは `NHealthBar`（HP バーの見た目）だけなので出さない。
 - 書き込み（本体の全件）:
@@ -3048,7 +3085,7 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
 これは次行動の事前抽選ではない。公開 getter のみを読み、`RollMove`・`GetNextState`・
 `PerformMove`・遷移メソッドを呼ばず、乱数・行動ロック・ゲームのログを変更しない。
 
-根拠（v0.113.1、逆コンパイル `sts2-a671e9ef`）:
+根拠（v0.114.0、逆コンパイル `sts2-ae309f85`）:
 
 - `MonsterModel.NextMove/MoveStateMachine` は現在の参照を返す getter。
 - `MoveState.Id/FollowUpState/FollowUpStateId` と `CanTransitionAway` は ID・参照・
@@ -3102,11 +3139,11 @@ Markdown は敵の HP 行の次に `Move: STUNNED | follow-up: POUNCE_MOVE` の�
 | `performed_first_move` | private `MonsterMoveStateMachine._performedFirstMove`。`OnMovePerformed` で true。false の間、現在地点が `MoveState` なら `FindNextMoveState` は遷移しない（最初の行動の保持） |
 | `spawned_this_turn` | `MonsterModel.SpawnedThisTurn`。`SetUpForCombat` で true、`OnSideSwitch` で false。`Creature.TakeTurn` は true の敵の行動を飛ばす |
 | `state_log` | `MonsterMoveStateMachine.StateLog` の全要素を順序・重複のまま `{id, is_move}`（`MonsterState.Id` / `IsMove`）で。`RandomBranchState` の `UseOnlyOnce` は全ログ、`CannotRepeat` / `CanRepeatXTimes` は末尾の連続、cooldown は `is_move` の要素だけを末尾から数える。空配列 `[]` はログが本当に空（分岐状態から始まり未抽選）という実値で、`last_logged_id` の読取失敗（空）と区別する。要素が一つでも読めなければ全体を `null`（途中までの配列は返さない）。末尾が `last_logged_id` と一致しなければ `null` と理由 |
-| `is_stun` | `NextMove` の private `MoveState._onPerform` が `CreatureCmd.Stun` のローカル関数 Wrapper（v0.113.1 では `CreatureCmd+<>c__DisplayClass30_0.<Stun>g__Wrapper\|0`）か。`Creature.StunInternal` が `STUNNED` に入れる delegate。false は「スタンではない」実値。v0.113.1 で `MonsterModel.stunnedMoveId`（`STUNNED`）を使うのは `StunInternal` だけなので、`id` が `STUNNED` なのに Wrapper と判定できない（Wrapper の名前・形が変わった版）とき、また Wrapper なのに `id` が `STUNNED` でないときは、false にせず `null` と理由（未観測） |
+| `is_stun` | `NextMove` の private `MoveState._onPerform` が `CreatureCmd.Stun` のローカル関数 Wrapper（`CreatureCmd` の入れ子型にある `<Stun>g__Wrapper`）か。`Creature.StunInternal` が `STUNNED` に入れる delegate。false は「スタンではない」実値。v0.114.0 で `MonsterModel.stunnedMoveId`（`STUNNED`）を使うのは `StunInternal` だけなので、`id` が `STUNNED` なのに Wrapper と判定できない（Wrapper の名前・形が変わった版）とき、また Wrapper なのに `id` が `STUNNED` でないときは、false にせず `null` と理由（未観測） |
 | `stun_handler` | `is_stun` のとき、Wrapper が捕捉した `stunMove`（宣言型と delegate 型を検査して読む。呼ばない）を許可リストの名前に対応付ける。`CreatureCmd.Stun.no_op`（引数なしの `CreatureCmd.Stun` の `_ => Task.CompletedTask`。宣言型が `CreatureCmd` の入れ子で IL が `call Task.get_CompletedTask; ret` だけであることを確かめる）、`BowlbugRock.DizzyMove`、`SlumberingBeetle.WakeUpMove`、`Tunneler.StillDizzyMove`、`CeremonialBeast.StunnedMove`、`LagavulinMatriarch.WakeUpMove`、`RavenousPower.StunnedMove`、`FlutterPower.StunnedMove`。Wrapper の `creature` がこの個体でない・敵のメソッドの Target がこの個体でない・パワーの処理の所有者（`PowerModel.Owner`）がこの個体でない・許可リストに無い delegate は `null` と理由（未観測）。`is_stun=false` なら理由なしの `null`。同じ復帰先（例: `ROLL_OUT_MOVE`）でも通常のスタンと起床はこの値で区別し、復帰 ID の一致では起床扱いにしない |
 | `inputs_readable` | 上の項目がすべて読めたときだけ true |
 
-`stun_handler` の許可リストは、v0.113.1 で `CreatureCmd.Stun(creature, stunMove, nextMoveId)` に処理を渡す呼び出しの全件
+`stun_handler` の許可リストは、v0.114.0 で `CreatureCmd.Stun(creature, stunMove, nextMoveId)` に処理を渡す呼び出しの全件
 （`BowlbugRock.Stun`、`SlumberPower.AfterDamageReceived`、`BurrowedPower.AfterBlockBroken`、`PlowPower.AfterDamageReceived`、
 `AsleepPower.AfterDamageReceived`、`RavenousPower.AfterDeath`、`FlutterPower.AfterDamageReceived`）。引数なしの呼び出し
 （`Whistle`、`PlowPower` の他の敵、`ImbalancedPower`、`ShriekPower`）は `CreatureCmd.Stun.no_op`。
@@ -3175,14 +3212,14 @@ Markdown は `## Enemies` の下に `Enemy move context: mode Standard | dread n
 | `hits` | `AttackIntent.Repeats` の int。`SingleAttackIntent`（`DeathBlowIntent` を含む）は 1、`MultiAttackIntent` は `_repeatCalc?.Invoke() ?? _repeat`（`TestSubject` の `MULTI_CLAW_MOVE` のように現在値で変わる）。0 も実値。負・例外なら null |
 | `resolved_damage` | `AttackIntent.GetSingleDamage(PlayerCreatures, creature)` の int。`label` と hover の数値と同じ経路で、ローカルのプレイヤー（`LocalContext.GetMe(creature.CombatState)`）が対象のときの 1 ヒットの解決値。協力プレイでも他のプレイヤーへの値ではない。ローカルのプレイヤーが居ないとき、ゲームは補正前の値を返すので、MOD は同じ判定を先に行って null にする |
 
-`resolved_damage` の計算（v0.113.1）: `GetSingleDamage` は `DamageCalc()` を
+`resolved_damage` の計算（v0.114.0）: `GetSingleDamage` は `DamageCalc()` を
 `Hook.ModifyDamage(..., target: 自分, dealer: 敵, ValueProp.Move, ModifyDamageHookType.All)` に通し、
 `Math.Max(0, (int)num)` で int にする（小数は 0 方向へ切り捨て）。`Hook.ModifyDamageInternal` の順序は
 加算（`StrengthPower.ModifyDamageAdditive` など）→ 倍率（`VulnerablePower` / `WeakPower.ModifyDamageMultiplicative` など）
 → 後段の倍率 → 上限。たとえば素 20・敵の筋力 4・自分が脆弱なら (20+4)×1.5=36、筋力 6 なら 39。
 敵が脱力なら (20+4)×0.75=18、筋力 6 なら 19.5→19。素 21・筋力 4・脱力でも 18 になるので、`label` から素値は一意に戻らない。
 
-読取は副作用を持たない。`DamageCalc` はモンスターが行動の定義で渡した delegate で、v0.113.1 では
+読取は副作用を持たない。`DamageCalc` はモンスターが行動の定義で渡した delegate で、v0.114.0 では
 定数を返す closure（`SingleAttackIntent(int)` / `MultiAttackIntent(int, …)`）か、フィールド・パワー量・アセンションを読む getter
 （`WaterfallGiant.CurrentPressureGunDamage` / `SteamEruptionDamage`、`TheForgotten.DreadDamage`、`GasBomb.ExplodeDamage`）だけ。
 `GetSingleDamage` はゲームの意図の表示（`GetIntentLabel`・`GetHoverTip`・`GetTexture`）が毎回呼ぶのと同じ読取で、
@@ -3207,7 +3244,7 @@ Markdown は `## Enemies` の下に `Enemy move context: mode Standard | dread n
 Markdown は意図の行の `label` の後に `[attack: base 20 | hits 1 | resolved 36]` を足す。
 取得不能の項目は `null (理由)` と表示する。
 
-根拠（v0.113.1、逆コンパイル `sts2-a671e9ef`）: `AttackIntent.DamageCalc` / `Repeats` / `GetSingleDamage`、
+根拠（v0.114.0、逆コンパイル `sts2-ae309f85`）: `AttackIntent.DamageCalc` / `Repeats` / `GetSingleDamage`、
 `SingleAttackIntent` / `MultiAttackIntent` / `DeathBlowIntent` のコンストラクタと `Repeats`・`GetIntentLabel`、
 `Hook.ModifyDamage` / `ModifyDamageInternal`、`StrengthPower.ModifyDamageAdditive`、
 `VulnerablePower` / `WeakPower.ModifyDamageMultiplicative`、`LocalContext.GetMe(ICombatState?)`。
@@ -3243,7 +3280,7 @@ move の実行・初期化・乱数・履歴の集計はしない。HP・行動 
 getter は `AscensionHelper.GetValueIfAscension` / `IsDread` を経て `RunManager.HasAscension`（`AscensionManager.HasLevel`、
 `List.Contains`）・`RunManager.IsDread`（`RunState.GameMode`）を読むだけで、状態を変えない。
 `RunManager.IsInProgress` が false のとき getter は Ascension・Dread を「無し」として返すので、そのときは getter を呼ばず、
-getter の 6 項目を `null`（理由付き）にする。括弧内の値は v0.113.1 のソースの分岐で、MOD はこれを使わず getter の現在値を出す。
+getter の 6 項目を `null`（理由付き）にする。括弧内の値は v0.114.0 のソースの分岐で、MOD はこれを使わず getter の現在値を出す。
 
 読取失敗は該当項目だけ `null` とし、`combat_state.unavailable_reasons.<key>` に理由、
 トップレベルの `warnings` に `battle.enemies.<entity_id>.combat_state.<key>` を出す。0 / false で補わない。
@@ -3345,7 +3382,7 @@ holder の `CardNode` が無い条件は、その holder に行が無いこと�
 ゲームは選択数がこの範囲にあるときだけ確定ボタンを有効にする（`RefreshSelectModeConfirmButton`）。読めないときは null と
 `select_range_unavailable_reason`。`can_confirm` は `%SelectModeConfirmButton` が有効かつ表示中で、`combat_confirm_selection` も同じ判定で押す。
 
-出典（v0.113.1、`sts2-a671e9ef`）: `NPlayerHand.ActiveHolders` / `_selectedCards` / `_prefs` / `PeekButton` /
+出典（v0.114.0、`sts2-ae309f85`）: `NPlayerHand.ActiveHolders` / `_selectedCards` / `_prefs` / `PeekButton` /
 `OnHolderPressed`（覗き見中・オーバーレイあり・戦闘外・CardNode なしは押下を無視）/ `UpdateSelectModeCardVisibility`（覗き見中以外は絞り込みで holder を隠す）/
 `SelectCardInSimpleMode` / `SelectCardInUpgradeMode` / `RefreshSelectModeConfirmButton`。
 
@@ -3568,7 +3605,7 @@ Pick one card to add to your deck. Appears after claiming a card reward, or dire
 `unavailable_reasons` に失敗位置と項目（例 `rows[2].enchantment_id`、デッキ全体なら `player.deck`）の理由を返す。
 Markdown は読み取れたデッキの枚数か取得失敗の項目を選択肢の下に表示する。
 
-| レリック ID | 行の追加項目と v0.113.1 の根拠 |
+| レリック ID | 行の追加項目と v0.114.0 の根拠 |
 |---|---|
 | `BEAUTIFUL_BRACELET` | `can_enchant` は `ModelDb.Enchantment<Swift>().CanEnchant(card)`。 `BeautifulBracelet.AfterObtained` が使う抽選母集団の判定。 |
 | `ELECTRIC_SHRYMP` | `can_enchant` は `ModelDb.Enchantment<Imbued>().CanEnchant(card)`。 `ElectricShrymp.AfterObtained` が呼ぶ `CardSelectCmd.FromDeckForEnchantment` の判定で、`Imbued.CanEnchantCardType` は Skill を許す。 |
@@ -3770,7 +3807,7 @@ Combat-pile screens retain their game class name as `screen_type` (e.g. `NCombat
   `card_reward`・`rewards`・未対応の `overlay`）には付けない。
 - Markdown は `battle` があると戦闘の表示（敵・手札・山）を出し、トップレベルの player の要約を省く（戦闘の画面と同じ）。
 
-出典（v0.113.1、`sts2-a671e9ef`）: `NCombatPileCardSelectScreen : NCardGridSelectionScreen`。
+出典（v0.114.0、`sts2-ae309f85`）: `NCombatPileCardSelectScreen : NCardGridSelectionScreen`。
 [SelectionBattleContract](../tests/SelectionBattleContract/README.md)
 
 #### 選択を開いた元（`choice_source`、schema 1.5.0）
@@ -3858,7 +3895,7 @@ choose / grid の札・`FromCombatPile` の `pile`）を記録し、戻り値の
 - Markdown は `Choice source: FromHand; models ENTROPY_POWER; hook AfterPlayerTurnStart (2 listeners left)` の 1 行
   （プレイ中の札は `card play SPLASH#15 (1/1)`、未知なら理由）。
 
-出典（v0.113.1、`sts2-a671e9ef`）: `CardSelectCmd` の各入口、`PlayerChoiceContext.ModelStack` / `PushModel`、
+出典（v0.114.0、`sts2-ae309f85`）: `CardSelectCmd` の各入口、`PlayerChoiceContext.ModelStack` / `PushModel`、
 `BranchingPlayerChoiceContext`、`HookPlayerChoiceContext`、`GameActionPlayerChoiceContext`、`GenericHookGameAction`、
 `PlayCardAction`、`Hook.AfterShuffle` / `AfterPlayerTurnStart` ほか、`CardModel.OnPlayWrapper`、`CombatManager.SetupPlayerTurn`、
 `CardPileCmd.Shuffle`、`StratagemPower.AfterShuffle`、`EntropyPower.AfterPlayerTurnStart`、`Splash.OnPlay`。
@@ -3976,7 +4013,7 @@ awaiter（`TaskAwaiter.m_task`）が内側の Task を指していることを�
   shuffle_if_necessary < draw (2 left, hand draw) < setup_player_turn < auto_pre_play_phase`（`kind` のある段だけ。
   無ければ足さない。未知なら理由）。
 
-出典（v0.113.1、`sts2-a671e9ef`）: `Toolbox.BeforeHandDraw`、`Discovery.OnPlay`、`Hook.BeforeHandDraw`
+出典（v0.114.0、`sts2-ae309f85`）: `Toolbox.BeforeHandDraw`、`Discovery.OnPlay`、`Hook.BeforeHandDraw`
 （`<BeforeHandDraw>d__39.MoveNext` の状態 0 / 1、`<>7__wrap1`・`<model>5__3`）、
 `Hook.AfterPlayerTurnStart` / `AfterShuffle`（`<AfterPlayerTurnStart>d__59` /
 `<AfterShuffle>d__76` の `<>7__wrap1`・`<model>5__3`）、`Hook.IterateCombatHookListeners`（`<>7__wrap1`）、
@@ -4010,7 +4047,7 @@ A と S は等値比較に使う。ローカル chooser・試行・入口・候�
 その試行を保持していれば追記する。終了後の `ended_combat.combat_log` は保存済みの値を使う。行の順と保持範囲は
 `seq`・`first_seq`・`next_seq`・`since_truncated` で確認する。
 
-出典（v0.113.1、`sts2-a671e9ef`）は `CombatManager.SetUpCombat` / `CurrentCombatId` / `DebugOnlyGetState` /
+出典（v0.114.0、`sts2-ae309f85`）は `CombatManager.SetUpCombat` / `CurrentCombatId` / `DebugOnlyGetState` /
 `IsCurrentLiveCombat` / `EndCombatInternal` / `CancelCombat`、`CombatTurnState..ctor`、`CardSelectCmd.FromChooseACardScreen`、
 `NChooseACardSelectionScreen.ShowScreen` / `CardsSelected`。契約試験は [CombatLogContract](../tests/CombatLogContract/README.md)。
 
@@ -4059,7 +4096,7 @@ A と S は等値比較に使う。ローカル chooser・試行・入口・候�
 - 戦闘中の選択が終わると、`combat_log` に `kind: "selection"` の行（選んだもの・skip）を書く（上の表）。
 - Markdown は `Decision context: FromDeckForUpgrade; opener rest_site_option SmithRestSiteOption.OnSelect` の 1 行。
 
-出典は v0.113.1 `sts2-a671e9ef` の `CardSelectCmd.FromDeck*` / `FromChooseABundleScreen` / `FromChooseACardScreen` / `FromSimpleGrid*` /
+出典は v0.114.0 `sts2-ae309f85` の `CardSelectCmd.FromDeck*` / `FromChooseABundleScreen` / `FromChooseACardScreen` / `FromSimpleGrid*` /
 `FromCombatPile` / `FromHand*`、`RelicSelectCmd.FromChooseARelicScreen`、`NDeckCardSelectScreen` / `NDeckUpgradeSelectScreen` /
 `NDeckTransformSelectScreen` / `NDeckEnchantSelectScreen`、`ModelDb.GetEntry`。契約試験は [`tests/CombatLogContract`](../tests/CombatLogContract/README.md)。
 
@@ -4095,7 +4132,7 @@ A と S は等値比較に使う。ローカル chooser・試行・入口・候�
   `  - instance: unknown (理由)` の1行。
 
 選ばれた候補の取得後の効果は、ready な戦闘 state のパイルの行で（uid で）照合する。
-出典（v0.113.1、`sts2-a671e9ef`）: `CardModel.Owner` / `Pile`、`Player.Piles`、`PlayerCombatState.AllPiles`、`CardPile.Cards` / `IsCombatPile`、
+出典（v0.114.0、`sts2-ae309f85`）: `CardModel.Owner` / `Pile`、`Player.Piles`、`PlayerCombatState.AllPiles`、`CardPile.Cards` / `IsCombatPile`、
 `AttackPotion.OnUse`（`CardFactory.GetDistinctForCombat` の候補を `CardSelectCmd.FromChooseACardScreen` に渡す）。
 [CombatUpgradePreviewContract](../tests/CombatUpgradePreviewContract/README.md)
 
@@ -4110,7 +4147,7 @@ grid と choose の両方に次を出す。
 | `hidden_by` | string \| null | 見えていない理由。`map`・`peek`・`capstone`・`unknown`。見えていれば `null` |
 | `reveal_on_action` | bool | `select_card` / `confirm_selection` / `cancel_selection` が、押す前に覆いを外すか |
 
-ゲーム側の仕組み（v0.113.1 のデコンパイル）:
+ゲーム側の仕組み（v0.114.0 のデコンパイル）:
 
 - `NOverlayStack.Push` は、`StackIsCovered`（`NMapScreen.Instance.IsOpen` か `NCapstoneContainer.InUse`）のときに
   積んだ画面の `AfterOverlayHidden` を呼び、画面を `Visible = false` にする。マップの `Opened` シグナルは
@@ -4286,7 +4323,7 @@ MOD は画面を開いた親の操作を区別しない。4 通知はポーシ�
 戦闘外の choose（イベントの報酬など）は従来どおり `BuildCardInfo` の行だけで、`battle` も付けない。
 GET では選択・無料化・カードの追加・抽選と、通知の hook（`After…`）の呼び出しをしない。`AttachCardPlayability` の `CanPlay` は
 手札・パイルの行と同じ読取で、可否の問い合わせの hook（`Hook.ShouldPlay`）を通る。追加だけなので版は上げていない（schema 4 のときの追加）。旧 MOD の欠落は未観測として扱う。
-出典は `sts2-a671e9ef` の各ポーションの `OnUse`、`CardFactory.GetDistinctForCombat`、`CombatState.CreateCard` /
+出典は `sts2-ae309f85` の各ポーションの `OnUse`、`CardFactory.GetDistinctForCombat`、`CombatState.CreateCard` /
 `IterateHookListeners`、`RunState.IterateHookListeners`、`Hook.IterateCombatHookListeners` / `AfterCardEnteredCombat` /
 `AfterCardGeneratedForCombat` / `AfterPotionUsed` / `AfterHandEmptied`、`CardModel.CombatState` / `CanPlay`、
 `CardEnergyCost.GetWithModifiers`、`ModHelper.IterateAllCombatStateSubscribers` / `IterateAllRunStateSubscribers`。

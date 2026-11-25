@@ -6,7 +6,7 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    // battle.enemies[].can_receive_powers: Creature.CanReceivePowers as the game answers it (sts2-a671e9ef):
+    // battle.enemies[].can_receive_powers: Creature.CanReceivePowers as the game answers it (sts2-ae309f85):
     // CombatState == null -> false, else Hook.ShouldAllowHitting(CombatState, creature) over the combat hook
     // listeners (ReattachPower / IllusionPower / AdaptablePower: not while the owner is reviving;
     // DieForYouPower / WuppysLoyaltyPower: creature.IsAlive). Unlike IsHittable there is no IsDead check, so a

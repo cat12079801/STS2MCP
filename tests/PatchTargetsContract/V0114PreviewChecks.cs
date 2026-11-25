@@ -113,6 +113,38 @@ static class V0114PreviewChecks
             var added = ((IEnumerable<Dictionary<string, object?>>)Log()["rows"]!).Last();
             check(Equals(added["action"], "added") && Equals(added["hp"], 11) && Equals(added["max_hp"], 18),
                 "the Wuppy added row carries the values already set internally");
+
+            wuppy.PetOwner = player;
+            combat.AddCreature(wuppy);
+            try
+            {
+                enemy.SetCurrentHpInternal(0);
+                typeof(MonsterModel).GetProperty(nameof(MonsterModel.IsPerformingMove))!.SetValue(enemy.Monster, true);
+                player.Creature.IsAttacking = true;
+                var beforeActivity = Log()["next_seq"];
+                Call("RefreshEntityIdRegistry", combat);
+                var battle = new Dictionary<string, object?>();
+                Call("AttachCreatureActivity", battle, combat);
+                var activity = (List<Dictionary<string, object?>>)battle["creature_activity"]!;
+                var self = activity.Single(row => Equals(row["combat_id"], player.Creature.CombatId));
+                var pet = activity.Single(row => Equals(row["combat_id"], 21u));
+                var dying = activity.Single(row => Equals(row["combat_id"], 20u));
+                check(Equals(self["player_id"], player.NetId.ToString()) && Equals(self["is_attacking"], true)
+                    && !self.ContainsKey("is_performing_move"), "installed DLL: player attack flag and Monster applicability");
+                check(Equals(pet["kind"], "pet") && Equals(pet["owner_player_id"], player.NetId.ToString())
+                    && Equals(pet["is_attacking"], false) && Equals(pet["is_performing_move"], false),
+                    "installed DLL: pet ownership and idle flags");
+                check(enemy.IsDead && Equals(dying["is_performing_move"], true)
+                    && Equals(dying["entity_id"], Call("GetStableEntityId", enemy)),
+                    "installed DLL: active move from a dead enemy still in CombatState.Creatures");
+                check(Equals(Log()["next_seq"], beforeActivity) && wuppy.CurrentHp == 11 && enemy.CurrentHp == 0,
+                    "reading the installed DLL's activity flags leaves HP and combat log unchanged");
+            }
+            finally
+            {
+                player.Creature.IsAttacking = false;
+                combat.RemoveCreature(wuppy);
+            }
         }
         finally
         {

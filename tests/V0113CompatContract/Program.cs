@@ -10,7 +10,7 @@ namespace STS2_MCP
         private const string Version = "test-mod";
         private const string BuildCommit = "test-mod-commit";
         private const int StateSchemaVersion = 12;
-        private const string StateSchema = "2.0.0";
+        private const string StateSchema = "2.1.0";
         private static int Checks;
         private static void Check(bool condition, string message)
         {
@@ -124,7 +124,10 @@ namespace STS2_MCP
             Check(Equals(hardToKill["damage"], 8) && Equals(hardToKill["total_damage"], 32)
                 && Equals(Cap(hardToKill)["per_hit_max"], 3) && ((string)Cap(hardToKill)["note"]!).Contains("after Block"),
                 "HardToKill caps HP loss, so a preview including Block may be above per_hit_max");
-            Check(Equals(Cap(Preview(1, null, power: new IntangiblePower()))["per_hit_max"], 1), "single-hit cap metadata");
+            var intangibleCap = Cap(Preview(1, null, power: new IntangiblePower()));
+            Check(Equals(intangibleCap["per_hit_max"], 1)
+                && (string?)intangibleCap["note"] == "damage before Block and HP loss after Osty each capped at 1",
+                "Intangible cap metadata describes both ModifyDamageCap and ModifyHpLostAfterOsty");
             Check(!Preview(5, null).ContainsKey("hits"), "single hit without count keeps old shape");
             var both = new Dictionary<string, object?> { ["Damage"] = 5, ["HitCount"] = 2, ["CalculatedHits"] = 4, ["Repeat"] = 1 };
             var result = new Dictionary<string, object?>();

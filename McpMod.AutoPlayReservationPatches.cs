@@ -22,7 +22,7 @@ public static partial class McpMod
     private const string AutoPlayReservationHarmonyId = "com.sts2mcp.autoplayreservation";
     private const string EndedCombatLossHarmonyId = "com.sts2mcp.endedcombatloss";
 
-    // Read-only patches (v0.113.1, decompile sts2-a671e9ef). None skips, reorders or repeats a game call, and
+    // Read-only patches (v0.114.0, decompile sts2-ae309f85). None skips, reorders or repeats a game call, and
     // none draws from an RNG. The one argument they touch is AutoPlayFromDrawPile's cardModification: it is
     // replaced by a delegate that calls the original with the same card first, then notes the card.
     private static void InstallAutoPlayReservationTracking()

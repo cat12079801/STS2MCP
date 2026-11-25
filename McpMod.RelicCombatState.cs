@@ -102,7 +102,7 @@ public static partial class McpMod
                     $"player.relics.{relic.Id.Entry}.combat_state");
                 AddRelicInternalField<int>(relic, state, "ethereal_count", "_etherealCount");
                 break;
-            // sts2#1020, v0.113.1 (sts2-a671e9ef): per-turn counters. AfterCardPlayed counts the owner's
+            // sts2#1020, v0.114.0 (sts2-ae309f85): per-turn counters. AfterCardPlayed counts the owner's
             // Attacks (Skills for Letter Opener) while a combat is in progress and fires on every multiple
             // of DynamicVars.Cards (relics[].vars). The resets differ per class:
             //   Kunai, Shuriken: BeforeSideTurnStart (owner participating) and AfterCombatEnd.
@@ -144,7 +144,7 @@ public static partial class McpMod
             $"player.relics.{relic.Id.Entry}.{section}");
 
     /// <summary>
-    /// sts2#1020: [SavedProperty] counters that live across combats (v0.113.1, sts2-a671e9ef). They are
+    /// sts2#1020: [SavedProperty] counters that live across combats (v0.114.0, sts2-ae309f85). They are
     /// emitted in and out of combat, as relics[].run_state, because their next trigger can lie in the
     /// next combat, a rest site or a reward screen. Each is the private backing field of the saved
     /// property, read by declared name and type (no getter, setter, hook or RNG). A failed read is null

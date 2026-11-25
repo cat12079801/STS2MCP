@@ -8,7 +8,7 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    // sts2-a671e9ef: CardModel.BaseStarCost / CanonicalStarCost / HasStarCostX / CurrentStarCost
+    // sts2-ae309f85: CardModel.BaseStarCost / CanonicalStarCost / HasStarCostX / CurrentStarCost
     // and the declared private _temporaryStarCosts (TemporaryCardCost list, latest wins).
     // Read the live ordered list; never reconstruct temporary costs from card/play history.
     // BaseStarCost's getter lazily copies CanonicalStarCost (a constant in every override)

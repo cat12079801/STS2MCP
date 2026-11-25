@@ -9,7 +9,7 @@ namespace STS2_MCP;
 
 public static partial class McpMod
 {
-    // v0.113.1（sts2-a671e9ef）の AttackIntent（SingleAttackIntent・MultiAttackIntent・DeathBlowIntent の基底）だけに付ける。
+    // v0.114.0（sts2-ae309f85）の AttackIntent（SingleAttackIntent・MultiAttackIntent・DeathBlowIntent の基底）だけに付ける。
     // 読むのは現在の行動（MonsterModel.NextMove）の意図そのもので、ラベル・本文・履歴から逆算しない。
     // DamageCalc はモンスターが行動の定義で渡した getter の delegate（定数か、フィールド・パワー量・アセンションを読むだけ）。
     // GetSingleDamage はゲームの意図の表示（GetIntentLabel / GetHoverTip）が毎回呼ぶのと同じ読取で、乱数・状態を動かさない。

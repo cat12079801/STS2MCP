@@ -369,9 +369,13 @@
  "Creature.IsAttacking": {
   "class": "public",
   "json_key": "is_attacking",
+  "reader_key": "CreatureIsAttackingKey",
+  "type_full": "MegaCrit.Sts2.Core.Entities.Creatures.Creature",
+  "cs_type": "bool",
+  "kind": "auto_property",
   "written": "AttackCommand.Execute（開始時に true、finally で元に戻す）",
-  "effect": "CreatureCmd.KillWithoutCheckingWinCondition（死亡後のパワー除去とフック解除を遅らせる）",
-  "note": "進行中の攻撃の印。攻撃の解決中に開いた選択で意味を持つ。公開する場合は敵・本人・ペットに共通する戦闘個体の行が必要。"
+  "effect": "CreatureCmd.KillWithoutCheckingWinCondition（戦闘 state からの除去や死亡後のパワー除去を保留する）",
+  "note": "攻撃の進行は画面で見える。解決中に開いた選択でも読めるよう、ICombatState.Creatures に残る全個体に getter の実値を battle.creature_activity[].is_attacking として出す"
  },
  "Creature.Monster": {
   "class": "static/derived",
@@ -761,8 +765,15 @@
   "note": "他のモデルへの参照（所属）"
  },
  "MonsterModel._isPerformingMove": {
-  "class": "static/derived",
-  "note": "PerformMove の実行中だけ true の一時値（CreatureCmd が死亡時の除去を遅らせる）。state を読む安定点では false"
+  "class": "public",
+  "json_key": "is_performing_move",
+  "reader_key": "MonsterIsPerformingMoveKey",
+  "type_full": "MegaCrit.Sts2.Core.Models.MonsterModel",
+  "cs_type": "bool",
+  "kind": "field",
+  "written": "MonsterModel.PerformMove",
+  "effect": "CreatureCmd.KillWithoutCheckingWinCondition（戦闘 state からの除去や死亡後のパワー除去を保留する）",
+  "note": "行動の進行は画面で見える。Monster を持つ戦闘個体に IsPerformingMove の実値を battle.creature_activity[].is_performing_move として出す。解決中に開いた選択にも付く"
  },
  "MusicBox._cardBeingPlayed": {
   "class": "public",

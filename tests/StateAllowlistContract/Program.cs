@@ -582,6 +582,7 @@ public static partial class McpMod
     {
         RunGeneratedIsCurrentContract();
         RunGeneratedTableContract();
+        RunCreatureActivityContract();
         RunCardContract();
         RunPowerContract();
         RunRelicContract();

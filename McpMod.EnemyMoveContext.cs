@@ -18,7 +18,7 @@ public static partial class McpMod
     ];
 
     // battle.enemy_move_context（schema 6、sts2#1018）。敵の行動表（ソースから生成）を評価するための戦闘全体の入力。
-    // v0.113.1（sts2-a671e9ef）:
+    // v0.114.0（sts2-ae309f85）:
     // - AscensionHelper.GetValueIfAscension / IsDread は RunManager.HasAscension（AscensionManager.HasLevel）と
     //   RunManager.IsDread（State.GameMode == Dread）を読む。どちらも IsInProgress が false なら「無し」を返すので、
     //   そのときは読まず理由付きの null にする（Ascension の数値から推測しない。Blitz は段階の対応が別）。

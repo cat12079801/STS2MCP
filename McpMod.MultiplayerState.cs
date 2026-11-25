@@ -282,6 +282,7 @@ public static partial class McpMod
         if (combatState == null)
         {
             battle["error"] = "Combat state unavailable";
+            AttachCreatureActivity(battle, combatState);
             return battle;
         }
 
@@ -291,6 +292,7 @@ public static partial class McpMod
         battle["all_players_ready"] = CombatManager.Instance.AllPlayersReadyToEndTurn();
 
         battle["enemies"] = BuildEnemyList(combatState);
+        AttachCreatureActivity(battle, combatState);
         battle["enemy_move_context"] = BuildEnemyMoveContext(combatState);
 
         return battle;

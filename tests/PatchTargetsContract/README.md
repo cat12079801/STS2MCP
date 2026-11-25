@@ -40,3 +40,4 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 v0.114.0 のプレビューは実際の `DamageVar`・`CalculatedDamageVar` で、ブロック、HP 減少の上限と下限、超過ダメージの合計を照合する。
 試算の前後で HP・ブロック・ログが変わらず、例外で試算が終わっても実際の HP 補正を記録できることを確かめる。
 ワッピーの追加行は設定済みの HP・最大 HP を、強化プレビューは実際の複製と、強化時の例外が起きたときの候補行・wiki の応答を照合する。
+戦闘個体の活動は本体の個体で本人・ワッピー・死亡処理を保留中の敵の参照と getter の実値を照合する。
