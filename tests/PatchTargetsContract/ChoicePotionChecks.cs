@@ -43,7 +43,7 @@ static class ChoicePotionChecks
         var slots = Rows(trinketsOnly["slots"]);
         check(trinketsOnly["known"] is true && Equals(trinketsOnly["owner_player_id"], "17")
             && Equals(trinketsOnly["version"], 1)
-            && Equals(trinketsOnly["game_assembly_sha256"], "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb")
+            && Equals(trinketsOnly["game_assembly_sha256"], "ae309f852fb69204a59c04b7b5af63acc839829c65c1349777621ce616e65310")
             && slots.Select(row => (int)row["slot"]!).SequenceEqual(new[] { 0, 2 })
             && slots.All(row => Equals(row["potion_id"], "ATTACK_POTION") && row["pick_known"] is true && row["skip_known"] is true),
             "same-ID choices are separate, retain physical slot numbers and identify their owner");

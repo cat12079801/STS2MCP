@@ -130,9 +130,9 @@ int Patched(string owner) => Harmony.GetAllPatchedMethods().Count(m =>
 int combatLog = Patched("com.sts2mcp.combatlog");
 int decision = Patched("com.sts2mcp.decisioncontext");
 int choice = Patched("com.sts2mcp.choicesource");
-// combat_log: history 18 (CombatHistory's public recording methods), hooks 53 (one overload each in v0.113.1), modify 5,
+// combat_log: history 18 (CombatHistory's public recording methods), hooks 53, modify 5 + 1 dry-run guard,
 // piles 6, cards 3, creatures 10, energy 1, potions 3, powers 5, flash 2, phases 12.
-Check(combatLog == 118, $"combat_log patched {combatLog} methods, expected 118");
+Check(combatLog == 119, $"combat_log patched {combatLog} methods, expected 119");
 
 // Every history entry has an emitting path that cannot be inlined away: each public recording method of CombatHistory
 // (each makes one *Entry) carries the combat_log prefix and postfix itself.

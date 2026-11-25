@@ -4,8 +4,8 @@
 使い方（リポジトリのルートから）:
 
     /Users/anshinin/workspace/repos/sts2/bin/sts2-python -B tools/state_inventory.py \
-        --decompile ~/.local/state/sts2/decompile/sts2-a671e9ef \
-        --mod . --game-version v0.113.1
+        --decompile ~/.local/state/sts2/decompile/sts2-ae309f85 \
+        --mod . --game-version v0.114.0
 
 入力:
   --decompile  ILSpy の出力（ゲーム本体 sts2.dll の -p 展開）。ディレクトリ名 sts2-<sha8> を版の印に使う。

@@ -169,7 +169,8 @@ public static partial class McpMod
             case IronClub:
                 Int("cards_played", "_cardsPlayed");
                 break;
-            // Happy Flower: AfterSideTurnStart sets (TurnsSeen + 1) % Turns and gains energy at 0.
+            // HappyFlower and FakeHappyFlower: BeforeSideTurnStart updates TurnsSeen and schedules
+            // energy at 0. AfterPlayerTurnStartEarly clears the flag and grants the energy.
             // Pendulum: BeforeHandDraw does the same and ModifyHandDraw adds Cards at 0. Pollinous Core:
             // BeforeHandDraw adds 1, ModifyHandDraw adds Cards once it reaches Turns and
             // AfterModifyingHandDraw sets 0. None resets at combat end.

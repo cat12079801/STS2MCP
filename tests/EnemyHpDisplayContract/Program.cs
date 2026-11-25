@@ -115,7 +115,7 @@ namespace STS2_MCP
 
             string mod = File.ReadAllText(Path.Combine(sources, "McpMod.cs"));
             Check(mod.Contains("public const int StateSchemaVersion = 12;"), "現行の schema_version は 12 のまま");
-            Check(Regex.IsMatch(mod, @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+            Check(Regex.IsMatch(mod, @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
             Check(mod.Contains("1.7.0: battle.enemies[].hp_display_is_infinite"), "1.7.0 の履歴");
             Console.WriteLine($"EnemyHpDisplayContract: {Checks} checks passed");
         }

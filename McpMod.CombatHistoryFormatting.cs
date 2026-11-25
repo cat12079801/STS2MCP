@@ -27,6 +27,7 @@ public static partial class McpMod
                     "unblocked_damage_events_this_turn" => "unblocked hits (turn)",
                     "unblocked_damage_events_this_combat" => "unblocked hits (combat)",
                     "block_gains_this_turn" => "card block gains",
+                    "card_plays_with_block_gains_this_turn" => "card plays with block gains",
                     "card_plays_finished_this_combat" => "finished plays (combat)",
                     _ => key
                 };

@@ -59,12 +59,11 @@ namespace MegaCrit.Sts2.Core.Entities.Players
 
 namespace MegaCrit.Sts2.Core.Entities.FoolArrows
 {
-    public enum ArrowStatus { Retrieved, Away, Destroyed }
+    public enum ArrowStatus { Retrieved, Away }
     public class ArrowSlot(Players.Player player)
     {
         public readonly Players.Player owner = player;
         public ArrowStatus Status;
-        public bool DestroyAfterImpaled;
         public bool IsAvailable => Status == ArrowStatus.Retrieved;
     }
 }

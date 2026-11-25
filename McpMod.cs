@@ -91,13 +91,15 @@ public static partial class McpMod
     /// 1.18.0: colorless potion generation pool and pre-use choice potion listeners (sts2#1353).
     /// 1.19.0: local player combat ID in live fights with multiple allied creatures (sts2#1456).
     /// 1.20.0: pre-play run and combat listener multisets for an upgraded Jack of All Trades (sts2#1466).
+    /// 2.0.0: targeted damage previews use game damage results, arrow slots use the two v0.114.0 states,
+    /// and combat history also counts distinct block-producing card plays (sts2#1480).
     /// </summary>
-    public const string StateSchema = "1.20.0";
+    public const string StateSchema = "2.0.0";
 
     /// <summary>
     /// Deprecated: the integer contract version, still reported as `schema_version` next to
-    /// `schema`. It is frozen at 12 and no longer changes; it is removed in the next MAJOR (2.0.0)
-    /// once sts2 reads `schema`. The history below is the history of this integer.
+    /// `schema`. It is frozen at 12 for clients and recorder metadata that still carry the legacy field.
+    /// The history below is the history of this integer.
     ///
     /// It was bumped when an existing field or action changed meaning or disappeared, and (6 to 12)
     /// for additive contracts that the engine required as a whole and gated on the version.

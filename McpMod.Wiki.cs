@@ -230,17 +230,22 @@ public static partial class McpMod
     private static Dictionary<string, object?> BuildWikiCardResult(WikiCandidate candidate, double score)
     {
         var card = candidate.Card!;
-        var upgraded = SafeBuildUpgradedCardPreview(card);
-        var upgradedVariant = upgraded != null
-            ? BuildWikiCardVariant(upgraded, "upgraded")
-            : card.IsUpgradable
-                ? new Dictionary<string, object?>
-                {
-                    ["variant"] = "upgraded",
-                    ["description"] = SafeGetCardUpgradePreviewDescription(card),
-                    ["preview_available"] = false
-                }
-                : null;
+        Dictionary<string, object?>? upgradedVariant = null;
+        try
+        {
+            if (card.IsUpgradable)
+                upgradedVariant = BuildWikiCardVariant(BuildUpgradedCardPreview(card), "upgraded");
+        }
+        catch (Exception ex)
+        {
+            upgradedVariant = new Dictionary<string, object?>
+            {
+                ["variant"] = "upgraded",
+                ["description"] = SafeGetText(() => card.GetDescriptionForUpgradePreview())?.Replace("\n", " "),
+                ["preview_available"] = false
+            };
+            RecordInternalStateFailure(upgradedVariant, "preview", ex, "wiki.upgraded");
+        }
 
         var result = new Dictionary<string, object?>
         {

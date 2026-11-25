@@ -56,37 +56,13 @@ public static partial class McpMod
         }
     }
 
-    private static CardModel? SafeBuildUpgradedCardPreview(CardModel card)
+    private static CardModel BuildUpgradedCardPreview(CardModel card)
     {
-        if (!card.IsUpgradable)
-            return null;
-
-        try
-        {
-            // A live card's MutableClone notifies its enchantment/affliction listeners
-            // (CardModel.DeepCloneFields); the isolated clone does not.
-            var preview = card.IsMutable
-                ? CreateIsolatedMutableClone(card)
-                : card.ToMutable();
-            preview.UpgradeInternal();
-            return preview;
-        }
-        catch (Exception ex)
-        {
-            Warn("card.upgrade_preview", ex);
-            return null;
-        }
-    }
-
-    private static string? SafeGetCardUpgradePreviewDescription(CardModel card, PileType pile = PileType.Hand)
-    {
-        var preview = SafeBuildUpgradedCardPreview(card);
-        if (preview != null)
-            return SafeGetCardDescription(preview, pile);
-
-        return card.IsUpgradable
-            ? SafeGetText(() => card.GetDescriptionForUpgradePreview())?.Replace("\n", " ")
-            : null;
+        // CardModel.DeepCloneFields can notify live enchantment/affliction listeners;
+        // use an isolated clone for a card already in play.
+        var preview = card.IsMutable ? CreateIsolatedMutableClone(card) : card.ToMutable();
+        preview.UpgradeInternal(silent: true);
+        return preview;
     }
 
     // The caller's name stands in for a field name: this helper reads a few hundred

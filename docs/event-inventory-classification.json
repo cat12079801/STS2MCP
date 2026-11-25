@@ -1,7 +1,7 @@
 {
  "version": 1,
- "game_version": "v0.113.1",
- "decompile": "sts2-a671e9ef",
+ "game_version": "v0.114.0",
+ "decompile": "sts2-ae309f85",
  "preamble": "## これは何か\n\n`docs/state-inventory.md` はモデルの **項目** を数える。ここは項目ではない情報、つまり戦闘中に **何がどの順で起きたか**\n（通知・履歴・山の移動・手番の段階）と、**選択画面がどの文脈で開いたか**（開いたもの・段階・残り回数・候補）を数える。\nMOD に 1 件ずつ足す PR（#110〜#115）を止め、public-missing を 1 本の MOD PR（phase 2）でまとめて出すための台帳。\n\n分類:\n\n| 分類 | 意味 |\n|---|---|\n| exposed | MOD が出している（`exposed_by` の MOD の行を引用。文字列が消えると `--check` が落ちる） |\n| public-missing | プレイヤーに見える（または公開のモデルだけから決まる）が MOD が出していない。提案キーと置き場所を持つ |\n| hidden | プレイヤーに見えない（山札の順・乱数・抽選の重み） |\n| cosmetic | 表示・演出だけ |\n| internal | 判定・下請けなど、それ自体は情報でないもの（入力はモデルの項目、結果は別の行に出る） |\n| out_of_scope | アイアンクラッドの範囲外（他キャラ・マルチプレイ） |\n| unknown | 確かめられていない |\n\npublic-missing だった行は phase 2（schema 1.10.0）ですべて exposed にした。出した先は `battle.combat_log`（戦闘ごとの通し列）、\n各選択画面の `decision_context`（いまの `choice_source` を内包する）、`player.potion_generation_pool`、手札の `energy_cost.x_value_if_played`。\nsts2#1115 が扱っていた行（段階・ドローの残り・シャッフル）は `choice_source.await_chain`（schema 1.9.0）を exposed_by に引く。\n`card_resolution_events` は互換のために今の形のまま残す。exposed の表の「JSON キー」は出した先のキー。\n「Issue」は open の sts2 の Issue のうち、その情報が揃うと進められるもの（本文と engine の「未観測」の箇所から対応を取った）。",
  "issue_titles": {
   "242": "engine 改良の第 2 弾（G01 捨て札からの移動）",
@@ -212,7 +212,7 @@
     "McpMod.StateBuilder.cs: [\"is_upgraded\"] = card.IsUpgraded,"
    ],
    "proposed_key": "カードの項目（is_upgraded・enchantment・affliction・keywords）",
-   "reason": "結果は札の項目に出る（uid は変わらない）。いつ変わったかの行は combat_log[kind=card_change] で出すと追える（優先度は低い）"
+   "reason": "CardModel.DowngradeInternal(1) で強化を1段戻す。結果は札の upgrade_level などに出る（uid は維持）。"
   },
   "cmd:CardCmd.Enchant": {
    "class": "exposed",
@@ -241,6 +241,14 @@
   "cmd:CardCmd.PreviewCardPileAdd": {
    "class": "cosmetic",
    "reason": "札を画面に見せる演出（効果は別のコマンド）"
+  },
+  "cmd:CardCmd.RemoveAllUpgrades": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.CombatUpgradePreview.cs: ReadCardDetailValue(row, reasons, \"upgrade_level\""
+   ],
+   "proposed_key": "戦闘中のカードの upgrade_level など",
+   "reason": "DampenPower が使う。CardModel.RemoveAllUpgradesInternal で全段の強化を取り消す。"
   },
   "cmd:CardCmd.RemoveKeyword": {
    "class": "exposed",
@@ -426,7 +434,8 @@
    "issues": [],
    "exposed_by": [
     "McpMod.CombatLogPatches.cs: row[\"action\"] = \"added\";"
-   ]
+   ],
+   "reason": "Relics.Wuppy.SummonPet の現在 HP と最大 HP は内部 setter の後、CreatureCmd.Add の行で読む。"
   },
   "cmd:CreatureCmd.Damage": {
    "class": "exposed",
@@ -463,6 +472,14 @@
    "exposed_by": [
     "McpMod.CombatLogPatches.cs: (nameof(CreatureCmd.GainMaxHp), new[]"
    ]
+  },
+  "cmd:CreatureCmd.GetDamageResultsPreview": {
+   "class": "exposed",
+   "exposed_by": [
+    "McpMod.StateBuilder.cs: card.UpdateDynamicVarPreview(CardPreviewMode.Normal, enemy, card.DynamicVars);"
+   ],
+   "proposed_key": "vs_targets[].values / damage",
+   "reason": "DamageVar・CalculatedDamageVar・OstyDamageVar が試算の合計を PreviewValue に出す。試算中の HP 損失補正は戦闘ログの出来事に数えない。"
   },
   "cmd:CreatureCmd.Heal": {
    "class": "exposed",
@@ -555,6 +572,30 @@
    ],
    "proposed_key": "map.boss"
   },
+  "cmd:MelodyCmd.PlayedChoThisTurn": {
+   "class": "exposed",
+   "proposed_key": "player.combat_history.played_cho_this_turn",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: ReadMelody(\"played_cho_this_turn\", MelodyCmd.PlayedChoThisTurn);"
+   ],
+   "reason": "Fool の旋律。MelodyCmd.PlayedThisTurn は当手番・同じ Player の CardPlaysStarted を調べる。"
+  },
+  "cmd:MelodyCmd.PlayedKiThisTurn": {
+   "class": "exposed",
+   "proposed_key": "player.combat_history.played_ki_this_turn",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: ReadMelody(\"played_ki_this_turn\", MelodyCmd.PlayedKiThisTurn);"
+   ],
+   "reason": "Fool の旋律。MelodyCmd.PlayedThisTurn は当手番・同じ Player の CardPlaysStarted を調べる。"
+  },
+  "cmd:MelodyCmd.PlayedWahThisTurn": {
+   "class": "exposed",
+   "proposed_key": "player.combat_history.played_wah_this_turn",
+   "exposed_by": [
+    "McpMod.CombatHistory.cs: ReadMelody(\"played_wah_this_turn\", MelodyCmd.PlayedWahThisTurn);"
+   ],
+   "reason": "Fool の旋律。MelodyCmd.PlayedThisTurn は当手番・同じ Player の CardPlaysStarted を調べる。"
+  },
   "cmd:OrbCmd.Channel": {
    "class": "out_of_scope",
    "reason": "オーブ（他キャラの仕組み）。InfusedCore から呼ばれるが、オーブ自体は他キャラの仕組み"
@@ -562,27 +603,6 @@
   "cmd:OstyCmd.Summon": {
    "class": "out_of_scope",
    "reason": "オスティ（他キャラの仕組み）"
-  },
-  "cmd:MelodyCmd.PlayedChoThisTurn": {
-   "class": "exposed",
-   "proposed_key": "player.combat_history.played_cho_this_turn",
-   "exposed_by": [
-    "McpMod.CombatHistory.cs: ReadMelody(\"played_cho_this_turn\", MelodyCmd.PlayedChoThisTurn);"
-   ]
-  },
-  "cmd:MelodyCmd.PlayedKiThisTurn": {
-   "class": "exposed",
-   "proposed_key": "player.combat_history.played_ki_this_turn",
-   "exposed_by": [
-    "McpMod.CombatHistory.cs: ReadMelody(\"played_ki_this_turn\", MelodyCmd.PlayedKiThisTurn);"
-   ]
-  },
-  "cmd:MelodyCmd.PlayedWahThisTurn": {
-   "class": "exposed",
-   "proposed_key": "player.combat_history.played_wah_this_turn",
-   "exposed_by": [
-    "McpMod.CombatHistory.cs: ReadMelody(\"played_wah_this_turn\", MelodyCmd.PlayedWahThisTurn);"
-   ]
   },
   "cmd:PlayerCmd.AddPet": {
    "class": "exposed",
@@ -997,7 +1017,8 @@
    "issues": [],
    "exposed_by": [
     "McpMod.CombatLogPatches.cs: row[\"hook\"] = \"ModifyHpLost\";"
-   ]
+   ],
+   "reason": "CreatureCmd.GetDamageResultsPreview の同期試算は除外する。"
   },
   "computed:Hook.ModifyKeywordsInCombat": {
    "class": "exposed",
@@ -1969,6 +1990,10 @@
    "exposed_by": [
     "McpMod.CombatLogPatches.cs: (\"AfterTakingExtraTurn\", \""
    ]
+  },
+  "hook:Hook.BeforeActEntered": {
+   "class": "out_of_scope",
+   "reason": "RunManager.EnterAct でマップを作った後、最初の部屋に入る前の通知。上書きは DreadRunModel.BeforeActEntered のみ。"
   },
   "hook:Hook.BeforeAttack": {
    "class": "exposed",

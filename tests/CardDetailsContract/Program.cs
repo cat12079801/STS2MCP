@@ -517,7 +517,7 @@ namespace STS2_MCP
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCardDetailsMarkdown(sb, card)"), "hand markdown wiring");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState("), "multiplayer shares player builder");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
-            Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+            Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
             string details = File.ReadAllText(Path.Combine(sources, "McpMod.CardDetails.cs"));
             Check(details.Contains("AttachCardTurnState(state, card, reasons);") && details.Contains("ReadEnchantmentDynamicVarSet(enchantment)"),
                 "every detail row (hand, piles, ready clone, choose rows) reads the turn state; enchantment vars come from the field");

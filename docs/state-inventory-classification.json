@@ -1,5 +1,4 @@
 {
- "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Always（常に表示。-1 などの未設定も実値）・Never・DiffersFromAmount。基底クラスのメンバーを MOD が派生の分岐の中だけで読んでいると、棚卸しはその候補を partial にして終了コード 4 で終わる。全派生に出すなら section を付け、ほかの派生が要らないなら class=exposed と partial_reason（その理由）を書く。",
  "AbstractModel.CategorySortingId": {
   "class": "static/derived",
   "note": "ModelDb の並び順（InitId）。ゲームの状態ではない"
@@ -367,6 +366,13 @@
   "class": "exposed",
   "note": "HP の表示の種類。効果で読む: HellraiserPower.AfterCardDrawnEarly が CombatState.HittableEnemies.All(c => c.HpDisplay.IsInfinite()) のときに、手番ごとの自動プレイの回数の上限を掛ける（Creature の注釈も、表示用だがいくつかの効果がダメージを受けうるかの判定に使うと書く）。書くのは HardenedShellPower（上限到達で InfiniteWithNumbers、陣営の手番の開始で Normal）と WaterfallGiant.TriggerAboutToBlowState（InfiniteWithoutNumbers）で、どちらも敵自身。enemies[].hp_display_is_infinite に本体の HpDisplayExtensions.IsInfinite の bool で出す（McpMod.EnemyHpDisplay.cs）。InfiniteWithNumbers と InfiniteWithoutNumbers の違い（ShowsNumbers）は NHealthBar の見た目にしか効かないので出さない。プレイヤーの値を変える通常の経路が無いので player には出さない。schema 1.7.0 より前は、名前と HardenedShellPower による表示の切り替えだけを見て cosmetic に分類し、参照元（TSV の external の列）に出ていた HellraiserPower の読み取り（Creature の外から IsInfinite で読むので readers の列には出ない）を確かめていなかったため、state に出ていなかった"
  },
+ "Creature.IsAttacking": {
+  "class": "public",
+  "json_key": "is_attacking",
+  "written": "AttackCommand.Execute（開始時に true、finally で元に戻す）",
+  "effect": "CreatureCmd.KillWithoutCheckingWinCondition（死亡後のパワー除去とフック解除を遅らせる）",
+  "note": "進行中の攻撃の印。攻撃の解決中に開いた選択で意味を持つ。公開する場合は敵・本人・ペットに共通する戦闘個体の行が必要。"
+ },
  "Creature.Monster": {
   "class": "static/derived",
   "note": "他のモデルへの参照（所属）。state では入れ子・id で表す"
@@ -493,6 +499,18 @@
   "class": "cosmetic",
   "note": "ラン中に得たウォンゴのポイント。WelcomeToWongos は書くだけ（WelcomeToWongos.cs:131。条件に読むのはプロファイルの SaveManager.Instance.Progress.WongoPoints）で、ランの終わりに進捗へ足す（ProgressSaveManager）。ラン中に読む効果は無い統計（DamageDealt・DebuffsApplied と同じ）。PR #108 のレビュー P3-1"
  },
+ "FakeHappyFlower._grantEnergyThisTurn": {
+  "class": "public",
+  "note": "FakeHappyFlower.BeforeSideTurnStart が所有者の手番数を更新して付与を予約する。初手ドローの途中の選択でも残り得る。AfterPlayerTurnStartEarly が所有者にエナジーを付与する直前に解除する。",
+  "written": "BeforeSideTurnStart、AfterPlayerTurnStartEarly",
+  "effect": "AfterPlayerTurnStartEarly",
+  "json_key": "grant_energy_this_turn",
+  "section": "relic",
+  "converter": "Bool",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.FakeHappyFlower",
+  "cs_type": "bool",
+  "kind": "field"
+ },
  "FakeHappyFlower._isActivating": {
   "class": "cosmetic",
   "note": "DoActivateVisuals の発動演出の間だけ true で、DisplayAmount を満了の値で見せる表示用"
@@ -574,6 +592,18 @@
  "Guilty._combatsSeen": {
   "class": "static/derived",
   "note": "setter が DynamicVars[\"Combats\"] = 5 - CombatsSeen に写す。dynamic_vars.Combats から決まる"
+ },
+ "HappyFlower._grantEnergyThisTurn": {
+  "class": "public",
+  "note": "HappyFlower.BeforeSideTurnStart が所有者の手番数を更新して付与を予約する。初手ドローの途中の選択でも残り得る。AfterPlayerTurnStartEarly が所有者にエナジーを付与する直前に解除する。",
+  "written": "BeforeSideTurnStart、AfterPlayerTurnStartEarly",
+  "effect": "AfterPlayerTurnStartEarly",
+  "json_key": "grant_energy_this_turn",
+  "section": "relic",
+  "converter": "Bool",
+  "type_full": "MegaCrit.Sts2.Core.Models.Relics.HappyFlower",
+  "cs_type": "bool",
+  "kind": "field"
  },
  "HappyFlower._isActivating": {
   "class": "cosmetic",
@@ -1060,7 +1090,7 @@
  },
  "RelicModel.StackCount": {
   "class": "static/derived",
-  "note": "IncrementStackCount の呼び出しが v0.113.1 のどこにも無く、常に 1"
+  "note": "IncrementStackCount の呼び出しが v0.114.0 のどこにも無く、常に 1"
  },
  "RelicModel._floorAddedToDeck": {
   "class": "public",
@@ -1303,12 +1333,6 @@
   "json_key": "increased_amount",
   "effect": "Update*"
  },
- "TheShot._cardsExhaustedByFlorescence": {
-  "class": "public",
-  "note": "BuffFromFlorescence の累計。CalculatedDamageVar の倍率で、今のダメージはカードの表示値に出るが、倍率そのものは出ていない",
-  "json_key": "cards_exhausted_by_florescence",
-  "effect": "CanonicalVars（CalculatedDamageVar.WithMultiplier）"
- },
  "ThievingHopper._isHovering": {
   "class": "cosmetic",
   "note": "効果音（AttackSfx・FleeSfx のホバー版）とループの停止だけ"
@@ -1452,5 +1476,6 @@
   "note": "このターンに発動したか",
   "json_key": "triggered_this_turn",
   "effect": "AfterArrowDislodged"
- }
+ },
+ "_comment": "state-inventory の手の分類。キーは Class.member（入れ子の Data は Power.Data.field、種別をまたいで同名のクラスは Name[family]）。class は exposed / public / hidden / cosmetic / static/derived / unknown。public には json_key を付ける。written・effect を書けば生成表はそれを使い、無ければ同じファイルの中で検出したメソッド名を出す。tools/state_inventory.py が読み、TSV と docs/state-inventory.md を作る。section（card / relic / power / player / battle）を付けた public の項目は、--write-allowlist で McpMod.StateAllowlist.Generated.cs に載り、state の各行の internal_state に出る。そのとき converter（値の変換）・type_full（ゲームの型の完全名）・cs_type・kind が要り、棚卸しの実行が今の版の宣言と照合する。markdown は NonDefault（既定値以外だけ表示）・Always（常に表示。-1 などの未設定も実値）・Never・DiffersFromAmount。基底クラスのメンバーを MOD が派生の分岐の中だけで読んでいると、棚卸しはその候補を partial にして終了コード 4 で終わる。全派生に出すなら section を付け、ほかの派生が要らないなら class=exposed と partial_reason（その理由）を書く。"
 }

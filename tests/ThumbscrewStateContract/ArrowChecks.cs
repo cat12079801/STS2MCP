@@ -58,10 +58,9 @@ public static partial class McpMod
             "repeated reads do not consume arrows or change slot or impalement order");
 
         b.Status = ArrowStatus.Away;
-        b.DestroyAfterImpaled = true;
         var beforeImpale = BuildArrowState(owner, combat);
         Check(Equals(beforeImpale[count], 1) && NextShot(beforeImpale) == 0 &&
-            Rows(beforeImpale, slots)[1]["destroy_after_impaled"] is true &&
+            Equals(Rows(beforeImpale, slots)[1]["status"], "Away") && !Rows(beforeImpale, slots)[1].ContainsKey("destroy_after_impaled") &&
             ((List<int>)Rows(beforeImpale, impalements).Single()["slot_indices"]!).SequenceEqual(new[] { 2 }),
             "a shot can be Away during its hook, before it reaches the impaled list");
         ownPower.Sources.Add(b);
@@ -82,12 +81,13 @@ public static partial class McpMod
             Equals(Rows(retrieved, impalements).Single()["hit_counter"], 3), "first impalement was retrieved and can be shot again");
         ownPower.Sources.RemoveAt(0);
         enemy.Powers.Remove(ownPower);
-        b.Status = ArrowStatus.Destroyed;
-        var destroyed = BuildArrowState(owner, combat);
-        Check(Equals(destroyed[count], 1) && NextShot(destroyed) == 2 &&
-            Equals(Rows(destroyed, slots)[1]["status"], "Destroyed") && Rows(destroyed, slots)[1]["is_available"] is false &&
-            Rows(destroyed, impalements).Count == 0, "destroyed arrow never becomes a candidate");
+        b.Status = ArrowStatus.Retrieved;
+        var dislodged = BuildArrowState(owner, combat);
+        Check(Equals(dislodged[count], 2) && NextShot(dislodged) == 2 &&
+            Equals(Rows(dislodged, slots)[1]["status"], "Retrieved") && Rows(dislodged, slots)[1]["is_available"] is true &&
+            Rows(dislodged, impalements).Count == 0, "the last dislodged arrow is available again");
 
+        b.Status = ArrowStatus.Away;
         var ally = new Creature { CombatId = 12 };
         combat.Allies.Add(ally);
         ownPower.Sources.Add(a);

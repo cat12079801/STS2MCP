@@ -26,6 +26,9 @@ public static partial class McpMod
 {
     private const string CombatLogHarmonyId = "com.sts2mcp.combatlog";
 
+    [ThreadStatic]
+    private static bool _inDamageResultsPreview;
+
     // The notifications combat_log records (v0.113.1, sts2-a671e9ef, Hook.cs): the Hook method, the listener list it
     // iterates ("combat" = Hook.IterateCombatHookListeners, nothing while CombatManager.ShouldSkipCombatEffect;
     // "combat_all" = ICombatState.IterateHookListeners(); "run" = IRunState.IterateHookListeners(combat)) and the
@@ -231,6 +234,13 @@ public static partial class McpMod
         {
             harmony.Patch(Declared(typeof(Hook), nameof(Hook.ModifyHandDraw), typeof(ICombatState), typeof(Player), typeof(decimal), typeof(IEnumerable<AbstractModel>).MakeByRefType()),
                 postfix: M(nameof(CombatLogHandDrawModified)));
+            // Install the dry-run guard before the HP-loss logger, so a failed guard cannot
+            // leave the logger active for previews.
+            harmony.Patch(Declared(typeof(CreatureCmd), nameof(CreatureCmd.GetDamageResultsPreview),
+                    typeof(IRunState), typeof(ICombatState), typeof(Creature), typeof(decimal),
+                    typeof(ValueProp), typeof(Creature), typeof(CardModel)),
+                prefix: M(nameof(CombatLogDamagePreviewStarting)),
+                finalizer: M(nameof(CombatLogDamagePreviewFinished)));
             harmony.Patch(AccessTools.DeclaredMethod(typeof(Hook), nameof(Hook.ModifyHpLost)) ?? throw new MissingMethodException(nameof(Hook), "ModifyHpLost"),
                 postfix: M(nameof(CombatLogHpLostModified)));
             harmony.Patch(AccessTools.DeclaredMethod(typeof(Hook), nameof(Hook.ModifyPowerAmountGiven)) ?? throw new MissingMethodException(nameof(Hook), "ModifyPowerAmountGiven"),
@@ -562,10 +572,19 @@ public static partial class McpMod
         });
     }
 
-    // Hook.ModifyHpLost: only CreatureCmd.Damage calls it. A row only when some listener changed the amount.
+    private static void CombatLogDamagePreviewStarting(out bool __state)
+    {
+        __state = _inDamageResultsPreview;
+        _inDamageResultsPreview = true;
+    }
+
+    private static void CombatLogDamagePreviewFinished(bool __state) => _inDamageResultsPreview = __state;
+
+    // The dry run and the real damage command share GetDamageResults and its HP loss hooks.
     private static void CombatLogHpLostModified(decimal __result, Creature target, decimal amount, ValueProp props, Creature? dealer,
         CardModel? cardSource, HpLossHookPhase phases, ref IEnumerable<AbstractModel> modifiers)
     {
+        if (_inDamageResultsPreview) return;
         var mods = modifiers?.ToList();
         if (mods == null || mods.Count == 0) return;
         LogCombatRow("modify", (row, _) =>
@@ -828,6 +847,12 @@ public static partial class McpMod
             row["creature"] = LogCreatureRef(creature);
             row["monster_id"] = creature.Monster?.Id.Entry;
             row["creature_side"] = creature.Side.ToString().ToLowerInvariant();
+            // Relics.Wuppy.SummonPet sets both values before PlayerCmd.AddPet -> CreatureCmd.Add.
+            if (creature.Monster is MegaCrit.Sts2.Core.Models.Monsters.Wuppy)
+            {
+                row["hp"] = creature.CurrentHp;
+                row["max_hp"] = creature.MaxHp;
+            }
         });
     }
 

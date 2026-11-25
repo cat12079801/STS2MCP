@@ -63,7 +63,7 @@ namespace STS2_MCP
             battleBody = battleBody[..battleBody.IndexOf("return battle;\n    }", StringComparison.Ordinal)];
             Check(!battleBody.Contains("Pile", StringComparison.Ordinal), "battle は山の中身を持たない（隠す情報は player 側の規則のまま）");
 
-            Check(System.Text.RegularExpressions.Regex.IsMatch(mod, @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";")
+            Check(System.Text.RegularExpressions.Regex.IsMatch(mod, @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";")
                 && mod.Contains("/// 1.4.0: every selection state (*_select) shown while a fight is in progress carries battle", StringComparison.Ordinal),
                 "追加は MINOR（1.4.0。版の値そのものは V0113CompatContract）");
 

@@ -199,7 +199,7 @@ namespace STS2_MCP
             }
             string mod = Source("McpMod.cs");
             Check(mod.Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
-            Check(System.Text.RegularExpressions.Regex.IsMatch(mod, @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+            Check(System.Text.RegularExpressions.Regex.IsMatch(mod, @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
             string getState = Slice(mod, "private static void HandleGetState", "if (format == \"markdown\")");
             Check(getState.Contains("bool setupGuard = passive\n") && getState.Contains("ScenarioSetupGuardKey, false)")
                 && getState.Contains("built[ScenarioSetupGuardKey] = BuildScenarioSetupGuard(built);"),

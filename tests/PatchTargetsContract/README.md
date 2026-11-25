@@ -13,7 +13,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 外では `GD.Print*` が native の Godot に入って落ちるので、試験の中だけ Harmony で標準エラーに回す。
 
 - すべての群が当たったこと（各 `*Error` が null、`CombatLogStore.InstallErrors` が空）
-- Harmony の ID ごとの patch の数（combat_log 118、decision_context 9、choice_source 8）
+- Harmony の ID ごとの patch の数（combat_log 119、decision_context 9、choice_source 8）
 - 履歴の行の出どころ: `CombatHistory` の公開の記録メソッド 18 件のそれぞれに combat_log の prefix・postfix が当たり、各メソッドが *Entry をちょうど 1 つ作り、
   *Entry の型がすべてどれかで作られること（private の `Add` に頼らない）
 - インライン化の危険: patch したメソッドを、IL で呼出し先へ（patch していないゲームのメソッドを通って 3 段まで）たどり、そのメソッドの置き換えが
@@ -36,3 +36,7 @@ env DOTNET_ROOT=/opt/homebrew/opt/dotnet@9/libexec /opt/homebrew/opt/dotnet@9/li
 重複、恒久デッキだけの札と付加、run に含まれる戦闘側のモデル、溶けたレリック、空瓶枠を照合する。
 外部購読者と外部パワーの判定はそれぞれのコードを呼ぶ前に止まり、主敵不在では戦闘終了の hook を呼ばない。
 片側だけの失敗は両列を未観測にし、既知の空列とは区別する。読み取りと山札の並べ替えを通じて、観測値とゲームの RNG・履歴・カウンタを照合する。
+
+v0.114.0 のプレビューは実際の `DamageVar`・`CalculatedDamageVar` で、ブロック、HP 減少の上限と下限、超過ダメージの合計を照合する。
+試算の前後で HP・ブロック・ログが変わらず、例外で試算が終わっても実際の HP 補正を記録できることを確かめる。
+ワッピーの追加行は設定済みの HP・最大 HP を、強化プレビューは実際の複製と、強化時の例外が起きたときの候補行・wiki の応答を照合する。

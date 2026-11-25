@@ -7,7 +7,7 @@ state inventory（tools/state_inventory.py）はモデルクラスの *項目* �
 使い方（リポジトリのルートから）:
 
     /Users/anshinin/workspace/repos/sts2/bin/sts2-python -B tools/event_inventory.py \
-        --decompile ~/.local/state/sts2/decompile/sts2-a671e9ef --game-version v0.113.1
+        --decompile ~/.local/state/sts2/decompile/sts2-ae309f85 --game-version v0.114.0
 
     # 文書を書かずに生成し直して比べる（違う・未分類・stale・被覆の引用切れがあれば終了コード 1）
     ... tools/event_inventory.py --decompile ... --check

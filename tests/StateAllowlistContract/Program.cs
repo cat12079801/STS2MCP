@@ -39,7 +39,7 @@ public static partial class McpMod
     private static void RunGeneratedTableContract()
     {
         var sections = new HashSet<string> { "card", "relic", "power", "player", "battle", "run" };
-        Check(StateAllowlist.Length == 35, "許可リストは 35 項目");
+        Check(StateAllowlist.Length == 37, "許可リストは 37 項目");
         Check(!StateAllowlist.Any(e => e.Key == "wongo_points"), "ラン中に読まれない wongo_points は出さない（cosmetic）");
         foreach (var e in StateAllowlist)
         {
@@ -289,6 +289,14 @@ public static partial class McpMod
             && Internal(Row("relic", new MusicBox())).ContainsKey("card_being_played_uid")
             && Internal(Row("relic", new Vambrace())).ContainsKey("triggering_card_uid"), "各レリックの項目");
         Check(Internal(Row("relic", new Byrdpip())).Count == 3, "許可リストに無いレリックは基底の項目だけ");
+        var happyFlower = new HappyFlower();
+        var fakeHappyFlower = new FakeHappyFlower();
+        Check(Internal(Row("relic", happyFlower))["grant_energy_this_turn"] is false
+            && Internal(Row("relic", fakeHappyFlower))["grant_energy_this_turn"] is false, "未予約の false も公開する");
+        happyFlower.Schedule();
+        fakeHappyFlower.Schedule();
+        Check(Internal(Row("relic", happyFlower))["grant_energy_this_turn"] is true
+            && Internal(Row("relic", fakeHappyFlower))["grant_energy_this_turn"] is true, "両方のレリックの付与予約を読む");
     }
 
     private static void RunModifierContract()

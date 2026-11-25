@@ -27,7 +27,7 @@ public static partial class McpMod
             ["game_version"] = release?.Version,
             ["game_commit"] = release?.Commit,
             ["schema"] = StateSchema,
-            // Deprecated: frozen at 12, removed in schema 2.0.0.
+            // Deprecated: frozen at 12.
             ["schema_version"] = StateSchemaVersion,
             // Build-level: which verification contracts this MOD implements (sts2#1037).
             ["scenario_capabilities"] = BuildScenarioCapabilities()
@@ -35,8 +35,8 @@ public static partial class McpMod
     }
 
     /// <summary>
-    /// The Markdown header line naming the build: `mod 0.4.0+&lt;commit&gt; · schema 1.20.0 (schema_version 12)`.
-    /// The deprecated integer is shown only beside the semver, until it is removed in schema 2.0.0.
+    /// The Markdown header line naming the build: `mod 0.4.0+&lt;commit&gt; · schema 2.0.0 (schema_version 12)`.
+    /// The deprecated integer is shown beside the semver when available.
     /// </summary>
     internal static string FormatStampLine(Dictionary<string, object?> state)
     {

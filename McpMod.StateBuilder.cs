@@ -1869,14 +1869,12 @@ public static partial class McpMod
     }
 
     /// <summary>
-    /// The card as it would read after one upgrade, or null when it cannot be upgraded
-    /// or the preview clone failed. Built from the real upgraded clone, so the numbers
-    /// are the game's own rather than something derived from the card text.
+    /// The card as it would read after one upgrade, or null at its upgrade cap.
     /// </summary>
     private static Dictionary<string, object?>? BuildUpgradePreviewInfo(CardModel card)
     {
-        var preview = SafeBuildUpgradedCardPreview(card);
-        if (preview == null) return null;
+        if (!card.IsUpgradable || card.CurrentUpgradeLevel >= card.MaxUpgradeLevel) return null;
+        var preview = BuildUpgradedCardPreview(card);
 
         return new Dictionary<string, object?>
         {
@@ -1896,10 +1894,16 @@ public static partial class McpMod
     /// </summary>
     private static void AttachUpgradePreview(Dictionary<string, object?> cardInfo, CardModel card)
     {
-        if (!card.IsUpgradable || card.CurrentUpgradeLevel >= card.MaxUpgradeLevel) return;
-
-        var preview = BuildUpgradePreviewInfo(card);
-        if (preview != null) cardInfo["upgrade_preview"] = preview;
+        try
+        {
+            var preview = BuildUpgradePreviewInfo(card);
+            if (preview != null) cardInfo["upgrade_preview"] = preview;
+        }
+        catch (Exception ex)
+        {
+            cardInfo["upgrade_preview"] = null;
+            RecordInternalStateFailure(cardInfo, "upgrade_preview", ex, "card");
+        }
     }
 
     private static Dictionary<string, object?> BuildCardState(CardModel card, int index)
@@ -1937,8 +1941,8 @@ public static partial class McpMod
     /// multipliers were already applied — 60 expected, 43 dealt.
     ///
     /// This runs the same preview the UI runs on hover (CardModel.UpdateDynamicVarPreview,
-    /// whose CalculatedDamageVar goes through Hook.ModifyDamage with the target) once per
-    /// enemy, reports the resolved damage, hit count and target-specific description, then
+    /// whose CalculatedDamageVar previews damage results with the target) once per
+    /// enemy, reports the previewed damage, hit count and target-specific description, then
     /// clears the preview so the live card is left exactly as it was found.
     /// </summary>
     private static List<Dictionary<string, object?>> BuildCardTargetPreviews(CardModel card)
@@ -2013,9 +2017,8 @@ public static partial class McpMod
     /// Every dynamic var on this card, by name, at its previewed value.
     ///
     /// Reads PreviewValue, not IntValue: IntValue is <c>(int)BaseValue</c>, i.e. the
-    /// printed number before any modifier. The preview run just before this is what
-    /// folds in Strength, the target's Vulnerable and everything else ModifyDamage
-    /// applies, and it writes its result to PreviewValue.
+    /// printed number before any modifier. DamageVar and CalculatedDamageVar write the
+    /// game's targeted damage results after the damage and HP loss modifiers.
     /// </summary>
     private static Dictionary<string, object?> ReadDynamicVarValues(CardModel card)
     {

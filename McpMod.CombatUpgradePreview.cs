@@ -14,9 +14,9 @@ namespace STS2_MCP;
 /// combat piles carries its upgrade level, its keywords and the result of upgrading that
 /// very card once, read off a detached clone of it.
 ///
-/// Sources (v0.113.1, sts2-a671e9ef): CardCmd.Upgrade(IEnumerable&lt;CardModel&gt;, ...) runs
+/// Sources (v0.114.0, sts2-ae309f85): CardCmd.Upgrade(IEnumerable&lt;CardModel&gt;, ...) runs
 /// CardModel.UpgradeInternal then FinalizeUpgradeInternal on the live card; this applies the
-/// same two calls to a clone. AbstractModel.MutableClone = MemberwiseClone -&gt; DeepCloneFields
+/// same two calls to a clone with the Upgraded event suppressed. AbstractModel.MutableClone = MemberwiseClone -&gt; DeepCloneFields
 /// -&gt; AfterCloned. CardModel.DeepCloneFields re-attaches the enchantment / affliction through
 /// EnchantInternal / AfflictInternal, which invoke EnchantmentChanged / AfflictionChanged while
 /// the clone still holds the original's shallow-copied delegates (CardModel.AfterCloned clears
@@ -128,7 +128,7 @@ public static partial class McpMod
             // GetKeywordsWithSources, UpdateDynamicVarPreview), as NUpgradePreview.Reload does.
             // The clone has no Pile, so pile-only hooks (FreeAttackPower etc.) do not see it.
             clone.UpgradePreviewType = CardUpgradePreviewType.Combat;
-            clone.UpgradeInternal();
+            clone.UpgradeInternal(silent: true);
             clone.FinalizeUpgradeInternal();
         }
         catch (Exception ex)

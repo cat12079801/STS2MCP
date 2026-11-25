@@ -150,7 +150,7 @@ namespace STS2_MCP
             Check(splashWiring > guard, "スプラッシュの候補は戦闘中の共通 Player builder だけで出す");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("Other-character attack pool:"), "スプラッシュの候補の Markdown の1行");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "pool 契約は filter_version で版を示す（state 全体の schema は 12）");
-            Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+            Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
             Console.WriteLine($"GenerationPoolContract: {Checks} checks passed");
         }
 

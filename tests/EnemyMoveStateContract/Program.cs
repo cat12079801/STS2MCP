@@ -362,7 +362,7 @@ public static partial class McpMod
         Check(!stun.Contains(".Invoke(") && !stun.Contains("DynamicInvoke") && !Source("McpMod.EnemyMoveState.cs").Contains("GetNextState(")
             && !Source("McpMod.EnemyMoveState.cs").Contains("RollMove("), "delegate・抽選・遷移を呼ばない");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
-        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
         Console.WriteLine($"敵行動状態の契約試験: {Checks} 件成功");
     }
 }

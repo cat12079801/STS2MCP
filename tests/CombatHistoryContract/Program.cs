@@ -75,6 +75,7 @@ public static partial class McpMod
         Check(Types(empty, "started").Keys.SequenceEqual(Enum.GetNames<CardType>()), "every card type including None/Status/Curse/Quest");
         Check(Last(empty).Count == 0 && ThisTurn(empty).Count == 0 && Reasons(empty).Count == 0 && _stateWarnings.Count == 0, "known empty differs from unknown");
         Check(Equals(empty["bound_afflictions_this_turn"], 0), "no Bound affliction events is explicit zero without requiring the power");
+        Check(Equals(empty["card_plays_with_block_gains_this_turn"], 0), "no observed CardPlay has granted block");
         using (var json = JsonDocument.Parse(JsonSerializer.Serialize(empty, WireOptions)))
             Check(json.RootElement.GetProperty("bound_afflictions_this_turn").GetInt32() == 0, "known zero Bound count survives production wire settings");
         Check(Markdown(empty).Contains("manual card played=no") && Markdown(null) == "", "empty history shows known manual-play false and missing history stays quiet");
@@ -117,6 +118,7 @@ public static partial class McpMod
         Current(new BlockGainedEntry(attackPlay, ValueProp.Unpowered) { Actor = owner.Creature });
         Current(new BlockGainedEntry(otherPlay, ValueProp.Move) { Actor = owner.Creature });
         Current(new BlockGainedEntry(attackPlay, ValueProp.Move), false);
+        Current(new BlockGainedEntry(new CardPlay(attack, owner), ValueProp.Move));
         var full = BuildCombatHistoryState(owner);
         Check(Equals(Plays(full, "started")["total"], 8) && Types(full, "started")["Attack"] == 2, "started filters turn and playing player, counts replays");
         foreach (var type in Enum.GetNames<CardType>().Where(t => t != "Attack"))
@@ -127,7 +129,8 @@ public static partial class McpMod
         Check(Equals(full["cards_exhausted_this_turn"], 2), "exhaust counts events for owner, not exhaust pile size");
         Check(Equals(full["bound_afflictions_this_turn"], 2) && attack.Affliction == null, "Bound count filters turn, recorded actor and entry affliction, keeps repeated events after current affliction cleared");
         Check(Equals(full["unblocked_damage_events_this_turn"], 2) && Equals(full["unblocked_damage_events_this_combat"], 3), "positive unblocked hits, not HP total, with separate time scopes");
-        Check(Equals(full["block_gains_this_turn"], 3), "Unmovable uses playing owner, Move flag, repeated events, no receiver filter");
+        Check(Equals(full["block_gains_this_turn"], 4), "legacy count preserves repeated events with the same CardPlay");
+        Check(Equals(full["card_plays_with_block_gains_this_turn"], 2), "Unmovable deduplicates by CardPlay and keeps a separate play of the same card");
         // GoldAxe.CanonicalVars: History.CardPlaysFinished.Count() over the whole combat and every player.
         Check(Equals(empty["card_plays_finished_this_combat"], 0), "empty history has a real zero combat-wide finished count");
         Check(Equals(full["card_plays_finished_this_combat"], 7), "combat-wide finished count keeps other turns, other players and replays (7 finished entries)");
@@ -135,7 +138,9 @@ public static partial class McpMod
         string saved = JsonSerializer.Serialize(full, WireOptions);
         string markdown = Markdown(full);
         Check(markdown.Contains("player turn 1") && markdown.Contains("started=8") && markdown.Contains("finished=2") && markdown.Contains("Attack:2") && markdown.Contains(pileUid), "compact markdown shows useful counts and uid");
-        Check(markdown.Contains("exhausted=2") && markdown.Contains("unblocked hits (turn)=2") && markdown.Contains("unblocked hits (combat)=3") && markdown.Contains("card block gains=3"), "compact markdown distinguishes damage scopes and block/exhaust events");
+        Check(markdown.Contains("exhausted=2") && markdown.Contains("unblocked hits (turn)=2")
+            && markdown.Contains("unblocked hits (combat)=3") && markdown.Contains("card block gains=4")
+            && markdown.Contains("card plays with block gains=2"), "compact markdown distinguishes damage scopes and block/exhaust events");
         Check(markdown.Contains("bound afflictions=2"), "markdown labels Bound affliction events");
         Check(markdown.Contains("finished plays (combat)=7"), "markdown labels the combat-wide finished count");
         Check(markdown.Contains($"this turn=[{string.Join(", ", ThisTurn(full))}]") && markdown.Contains($"last turn=[{string.Join(", ", Last(full))}]"), "markdown distinguishes nonempty current and previous uid arrays");
@@ -211,18 +216,19 @@ public static partial class McpMod
         history.ThrowFinished = false;
         history.ThrowEntries = true;
         var failedEntries = BuildCombatHistoryState(owner);
-        Check(Reasons(failedEntries).Count == 21 && failedEntries["card_plays_finished_this_combat"] == null && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
+        Check(Reasons(failedEntries).Count == 22 && failedEntries["card_plays_finished_this_combat"] == null && failedEntries[boundKey] == null && failedEntries["any_manual_cards_played_this_turn"] == null && Equals(failedEntries["turn_number"], 3), "all history failures preserve player turn number including unavailable Bound count");
         history.ThrowEntries = false;
         CombatManager.Instance.ThrowHistory = true;
         var failedHistory = BuildCombatHistoryState(owner);
-        Check(Reasons(failedHistory).Count == 21 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
+        Check(Reasons(failedHistory).Count == 22 && failedHistory[boundKey] == null && failedHistory["block_gains_this_turn"] == null
+            && failedHistory["card_plays_with_block_gains_this_turn"] == null, "missing History getter does not fabricate zero");
         CombatManager.Instance.ThrowHistory = false;
         CombatManager.Instance.Value = null;
-        Check(Reasons(BuildCombatHistoryState(owner)).Count == 21, "null history is unavailable");
+        Check(Reasons(BuildCombatHistoryState(owner)).Count == 22, "null history is unavailable");
         CombatManager.Instance.Value = history;
         owner.Creature.CombatState = null;
         var failedCombat = BuildCombatHistoryState(owner);
-        Check(Reasons(failedCombat).Count == 18 && Equals(failedCombat["card_plays_finished_this_combat"], 0) && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
+        Check(Reasons(failedCombat).Count == 19 && Equals(failedCombat["card_plays_finished_this_combat"], 0) && failedCombat[boundKey] == null && failedCombat["cards_exhausted_this_turn"] == null && failedCombat[currentUidKey] == null && Equals(failedCombat["unblocked_damage_events_this_combat"], 0), "missing combat never silently makes HappenedThisTurn false");
         owner.Creature.CombatState = combat;
         owner.PlayerCombatState!.ThrowTurn = true;
         var failedTurn = BuildCombatHistoryState(owner);
@@ -265,7 +271,7 @@ public static partial class McpMod
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.MultiplayerState.cs")).Contains("BuildPlayerState(localPlayer,"), "multiplayer uses same local-player history");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.Formatting.cs")).Contains("AppendCombatHistoryMarkdown(sb, player)"), "battle markdown wired");
         Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
-        Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+        Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
         Console.WriteLine($"CombatHistoryContract: {Checks} checks passed");
     }
 }

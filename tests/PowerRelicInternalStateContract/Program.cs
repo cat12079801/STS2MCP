@@ -1277,7 +1277,7 @@ public static partial class McpMod
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildPlayerState("), "multiplayer local player shares path");
         Check(Source("McpMod.Formatting.cs").Split("{FormatPowerInternalState(p)}").Length == 4, "player, enemy, pet markdown wired");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "current schema is 12 (sts2#1020)");
-        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
         Check(Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = power.Type.ToString(),")
             && Source("McpMod.StateBuilder.cs").Contains("[\"type\"] = SafeGetText(() => power.Type.ToString()),"),
             "status type stays PowerModel.Type in full and minimal rows (TypeForCurrentAmount is the new key)");

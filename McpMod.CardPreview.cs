@@ -28,7 +28,7 @@ public static partial class McpMod
 
         if (damage != null)
         {
-            var cap = BuildDamageCap(target, damage.Value, hits ?? 1);
+            var cap = BuildDamageCap(target);
             if (cap != null)
                 preview["damage_cap"] = cap;
         }
@@ -52,25 +52,22 @@ public static partial class McpMod
     }
 
     /// <summary>
-    /// Powers that cap how much HP a creature can lose, per hit. Damage modifiers do not
-    /// see these — they are applied when the damage lands — so a 18-damage card against
-    /// Slippery takes the enemy down by 1, and reporting 18 sends the caller into a
-    /// fight it cannot win. Keyed by power type because that survives an id rename.
+    /// Display metadata for damage caps. DamageVar and CalculatedDamageVar already
+    /// include these effects in the targeted game preview.
     /// </summary>
     private static readonly Dictionary<string, string> _perHitDamageCaps = new()
     {
-        ["SlipperyPower"] = "next hit reduced to 1",
-        ["IntangiblePower"] = "all damage reduced to 1",
-        ["HardToKillPower"] = "all damage reduced to the power's amount"
+        ["SlipperyPower"] = "HP loss after Block and Osty capped at 1 until Slippery is spent",
+        ["IntangiblePower"] = "damage before Block capped at 1",
+        ["HardToKillPower"] = "HP loss after Block, before Osty redirects it, capped at the power's amount"
     };
 
     private const string HardenedShellPowerName = "HardenedShellPower";
 
     /// <summary>
-    /// Describes any cap on what this target can actually lose from one hit, and the
-    /// resulting effective damage. Returns null when nothing caps it.
+    /// Describes the first recognized cap on this target for display.
     /// </summary>
-    private static Dictionary<string, object?>? BuildDamageCap(Creature target, int damage, int hits)
+    private static Dictionary<string, object?>? BuildDamageCap(Creature target)
     {
         try
         {
@@ -80,18 +77,12 @@ public static partial class McpMod
 
                 if (_perHitDamageCaps.TryGetValue(typeName, out var note))
                 {
-                    int perHit = typeName == "HardToKillPower" ? System.Math.Max(power.Amount, 0) : 1;
-                    int capped = System.Math.Min(damage, perHit);
-                    int remaining = typeName == "SlipperyPower" ? System.Math.Max(power.Amount, 0) : int.MaxValue;
-                    int cappedHits = System.Math.Min(hits, remaining);
-
                     return new Dictionary<string, object?>
                     {
                         ["capped_by"] = SafeGetText(() => power.Title) ?? typeName,
                         ["power_id"] = SafeGetText(() => power.Id.Entry),
-                        ["per_hit_max"] = perHit,
-                        ["note"] = note,
-                        ["effective_damage"] = capped * cappedHits + System.Math.Max(hits - cappedHits, 0) * damage
+                        ["per_hit_max"] = typeName == "HardToKillPower" ? power.Amount : 1,
+                        ["note"] = note
                     };
                 }
 
@@ -102,7 +93,7 @@ public static partial class McpMod
                         ["capped_by"] = SafeGetText(() => power.Title) ?? typeName,
                         ["power_id"] = SafeGetText(() => power.Id.Entry),
                         ["per_turn_max"] = power.Amount,
-                        ["note"] = "total HP lost this turn is capped, not per hit"
+                        ["note"] = "HP loss after Block, before Osty, capped by the remaining allowance this turn"
                     };
                 }
             }

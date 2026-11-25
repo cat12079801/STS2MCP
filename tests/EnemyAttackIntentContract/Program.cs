@@ -179,7 +179,7 @@ public static partial class McpMod
         Check(Source("McpMod.MultiplayerState.cs").Contains("BuildEnemyList(combatState)"), "協力プレイも共通の敵 builder");
         Check(Source("McpMod.Formatting.cs").Contains("{label}{FormatEnemyAttackIntent(i)}{desc}"), "意図の Markdown 行への配線");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
-        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
         Console.WriteLine($"敵の攻撃の意図の契約試験: {Checks} 件成功");
     }
 }

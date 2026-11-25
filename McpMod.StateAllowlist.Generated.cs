@@ -45,9 +45,15 @@ public static partial class McpMod
         // ExtraPlayerFields.CardShopRemovalsUsed（int）
         new("player", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "MegaCrit.Sts2.Core.Entities.Players.ExtraPlayerFields", "CardShopRemovalsUsed", StateMemberKind.AutoProperty, "card_shop_removals_used", StateValueConverter.Int, StateMarkdown.NonDefault,
             "ショップでカードを除去した回数。除去の値段（MerchantCardRemovalEntry）が上がる。人間は自分の除去の回数を知っている。戦闘外の判断（runplan）に効く"),
+        // FakeHappyFlower._grantEnergyThisTurn（bool）
+        new("relic", "MegaCrit.Sts2.Core.Models.Relics.FakeHappyFlower", "MegaCrit.Sts2.Core.Models.Relics.FakeHappyFlower", "_grantEnergyThisTurn", StateMemberKind.Field, "grant_energy_this_turn", StateValueConverter.Bool, StateMarkdown.NonDefault,
+            "FakeHappyFlower.BeforeSideTurnStart が所有者の手番数を更新して付与を予約する。初手ドローの途中の選択でも残り得る。AfterPlayerTurnStartEarly が所有者にエナジーを付与する直前に解除する。"),
         // GoldenCompass._goldenPathAct（int）
         new("relic", "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass", "MegaCrit.Sts2.Core.Models.Relics.GoldenCompass", "_goldenPathAct", StateMemberKind.Field, "golden_path_act", StateValueConverter.Int, StateMarkdown.Always,
             "黄金の道を引いた幕（AfterObtained）。その幕の地図の生成と、不明マスの部屋の種類（ModifyUnknownMapPointRoomTypes）を変える。取得した幕は人間に分かる"),
+        // HappyFlower._grantEnergyThisTurn（bool）
+        new("relic", "MegaCrit.Sts2.Core.Models.Relics.HappyFlower", "MegaCrit.Sts2.Core.Models.Relics.HappyFlower", "_grantEnergyThisTurn", StateMemberKind.Field, "grant_energy_this_turn", StateValueConverter.Bool, StateMarkdown.NonDefault,
+            "HappyFlower.BeforeSideTurnStart が所有者の手番数を更新して付与を予約する。初手ドローの途中の選択でも残り得る。AfterPlayerTurnStartEarly が所有者にエナジーを付与する直前に解除する。"),
         // InterceptPower.Data.coveredCreatures（List<Creature>）
         new("power", "MegaCrit.Sts2.Core.Models.Powers.InterceptPower", "MegaCrit.Sts2.Core.Models.Powers.InterceptPower+Data", "coveredCreatures", StateMemberKind.DataField, "covered_creature_ids", StateValueConverter.CreatureCombatIds, StateMarkdown.NonDefault,
             "かばっている味方（マルチプレイ）。ModifyDamageMultiplicative・IsCovering が読む"),

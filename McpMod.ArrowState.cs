@@ -26,14 +26,13 @@ public static partial class McpMod
             return slots.Select((slot, index) =>
             {
                 var status = slot.Status;
-                if (status is not (ArrowStatus.Retrieved or ArrowStatus.Away or ArrowStatus.Destroyed))
+                if (status is not (ArrowStatus.Retrieved or ArrowStatus.Away))
                     throw new InvalidOperationException($"Unknown ArrowStatus: {status}");
                 return new Dictionary<string, object?>
                 {
                     ["slot"] = index,
                     ["status"] = status.ToString(),
-                    ["is_available"] = slot.IsAvailable,
-                    ["destroy_after_impaled"] = slot.DestroyAfterImpaled
+                    ["is_available"] = slot.IsAvailable
                 };
             }).ToList();
         }, context);

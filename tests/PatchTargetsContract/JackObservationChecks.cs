@@ -98,7 +98,7 @@ static class JackObservationChecks
             var attemptId = attempt.GetType().GetProperty("Id", PrivateInstance)!.GetValue(attempt);
             check(state["known"] is true && Equals(state["version"], 1) && Equals(state["owner_player_id"], "17")
                 && Equals(state["attempt_id"], attemptId) && state["should_skip_combat_effect"] is false
-                && Equals(state["game_assembly_sha256"], "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb")
+                && Equals(state["game_assembly_sha256"], "ae309f852fb69204a59c04b7b5af63acc839829c65c1349777621ce616e65310")
                 && !((IEnumerable<string>)state["unavailable_reasons"]!).Any(),
                 "the matching live attempt and its DLL identify a known context");
 

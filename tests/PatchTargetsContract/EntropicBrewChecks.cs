@@ -66,7 +66,9 @@ static class EntropicBrewChecks
         ModelDb.Init(potionTypes.Concat(new[] { typeof(IroncladPotionPool), typeof(SharedPotionPool),
             typeof(ReptileTrinket), typeof(BeltBuckle), typeof(Sozu), typeof(SurroundedPower),
             typeof(RocketPunch), typeof(Stomp), typeof(RingingPower), typeof(JackOfAllTrades),
-            typeof(DefendIronclad), typeof(Sharp), typeof(Nibbit) }).ToArray());
+            typeof(DefendIronclad), typeof(Sharp), typeof(Nibbit), typeof(StrikeIronclad), typeof(BodySlam),
+            typeof(HardToKillPower), typeof(SlipperyPower), typeof(HardenedShellPower), typeof(TheBoot),
+            typeof(MegaCrit.Sts2.Core.Models.Monsters.Wuppy) }).ToArray());
         typeof(ModelDb).GetField("_allPotionPools", PrivateStatic)!.SetValue(null,
             new PotionPoolModel[] { ModelDb.PotionPool<IroncladPotionPool>(), ModelDb.PotionPool<SharedPotionPool>() });
         typeof(ModelDb).GetField("_allEncounters", PrivateStatic)!.SetValue(null, Array.Empty<EncounterModel>());
@@ -187,6 +189,7 @@ static class EntropicBrewChecks
         check(unknownOwner["known"] is false && unknownOwner["options"] == null && RowReasons(unknownOwner).ContainsKey("contract"),
             "a player absent from their run cannot publish a known pool");
 
+        V0114PreviewChecks.Run(mod, check, owner, combat, relics);
         JackObservationChecks.Run(mod, check, owner, ally, combat);
         ChoicePotionChecks.Run(mod, check, owner, ally, combat);
 

@@ -153,7 +153,7 @@ private の裏のフィールドを名前・宣言型で読み、getter・setter
 | ヌンチャク `Nunchaku` | `attacks_played` ← `_attacksPlayed` | `AfterCardPlayed` が所有者のアタックを数え、戦闘中に `vars.Cards` の倍数でエナジー。戦闘の終わりに戻さない。 |
 | 音叉 `TuningFork` | `skills_played` ← `_skillsPlayed` | 所有者のスキルを数え、`vars.Cards`（`SkillsThreshold`）に届いたらブロックを得て閾値を引く。 |
 | `IronClub` | `cards_played` ← `_cardsPlayed` | 所有者の札を数え、戦闘中に `vars.Cards` の倍数で 1 枚引く。 |
-| `HappyFlower`・`FakeHappyFlower` | `turns_seen` ← `_turnsSeen` | 所有者の `AfterSideTurnStart` で `(数 + 1) % vars.Turns`、0 でエナジー。戦闘の終わりに戻さない。 |
+| `HappyFlower`・`FakeHappyFlower` | `turns_seen` ← `_turnsSeen` | 所有者の `BeforeSideTurnStart` で `(数 + 1) % vars.Turns`。0 なら `internal_state.grant_energy_this_turn` に公開するフラグを立て、所有者の `AfterPlayerTurnStartEarly` でその予約を解除してエナジーを付与する。手番数は戦闘終了でリセットしない。 |
 | `Pendulum` | `turns_seen` ← `_turnsSeen` | `BeforeHandDraw` で `(数 + 1) % vars.Turns`、0 の手番の `ModifyHandDraw` で `vars.Cards` を足す。 |
 | `PollinousCore` | `turns_seen` ← `_turnsSeen` | `BeforeHandDraw` で 1 足し、`vars.Turns` 以上なら `ModifyHandDraw` で `vars.Cards` を足し、`AfterModifyingHandDraw` で 0。 |
 | `Girya` | `times_lifted` ← `_timesLifted` | 休憩所で持ち上げた回数。戦闘部屋に入ると同じ量の筋力を得る。3 未満の間は休憩所に選択肢を足す。 |

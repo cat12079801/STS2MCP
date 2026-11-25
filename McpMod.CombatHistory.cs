@@ -158,16 +158,16 @@ public static partial class McpMod
         ReadMelody("played_wah_this_turn", MelodyCmd.PlayedWahThisTurn);
         ReadMelody("played_cho_this_turn", MelodyCmd.PlayedChoThisTurn);
         ReadMelody("played_ki_this_turn", MelodyCmd.PlayedKiThisTurn);
-        Read("block_gains_this_turn", () =>
-        {
-            var combat = CurrentCombat();
-            // UnmovablePower.ModifyBlockMultiplicative with cardPlay=null (next
-            // play). No receiver/amount filter or Distinct: the engine has none.
-            return CombatManager.Instance.History.Entries.OfType<BlockGainedEntry>()
-                .Count(e => e.HappenedThisTurn(combat) && e.CardPlay != null
-                    && e.CardPlay.Player.Creature == owner.Creature && e.Props.IsCardOrMonsterMove());
-        });
+        Read("block_gains_this_turn", () => CardBlockGains(CurrentCombat()).Count());
+        // UnmovablePower.ModifyBlockMultiplicative with cardPlay=null (next play).
+        Read("card_plays_with_block_gains_this_turn",
+            () => CardBlockGains(CurrentCombat()).DistinctBy(e => e.CardPlay).Count());
         return state;
+
+        IEnumerable<BlockGainedEntry> CardBlockGains(ICombatState combat) =>
+            CombatManager.Instance.History.Entries.OfType<BlockGainedEntry>()
+                .Where(e => e.HappenedThisTurn(combat) && e.CardPlay != null
+                    && e.CardPlay.Player.Creature == owner.Creature && e.Props.IsCardOrMonsterMove());
 
         void ReadMelody(string key, Func<Player, bool> played) => Read(key, () =>
         {

@@ -12,21 +12,24 @@
 
 ## ゲームの版
 
-- **v0.113.0 に対応する。** 商人の在庫取得と購入は `MerchantSynchronizer` を通す（`Task<bool>` の失敗・選択待ちを扱う）。
-  多段攻撃の回数は `HitCount` → `CalculatedHits` → `Repeat` の順で解決する。詳細は [`v0.113-compat.md`](v0.113-compat.md)。参照 DLL を新版にしてビルドするので、旧版向けのバイナリ互換は無い（#74）
+- **対応するゲームは v0.114.0**（`a7b9a9c0`、`sts2.dll` SHA-256 先頭 `ae309f85`、`cat12079801/sts2#1480`）。
+  この DLL を参照してビルドする。カードの強化プレビューは `CardModel.UpgradeInternal(silent: true)` で複製を強化し、
+  失敗時は該当カードの欄に理由を出す。エントロピー醸造・三択ポーション・何でも屋+ の版検査は照合済みの DLL を使う。
+- 商人の在庫取得・購入は `MerchantSynchronizer` を通す。購入は `Task<bool>` の失敗と選択待ちを扱う。
+  多段攻撃の回数は `HitCount`、無ければ `CalculatedHits` を読む（#74）。
 - **v0.111 のロビー対応は本家 #132 の方式を取り込んでいる**（`LoadRunLobby.IsAboutToBeginGame()`。本家 `main` には未 merge）（#43）
 
 ## HTTP・応答の共通
 
 - **版の情報**: state の応答（`state_type` を持つもの。`menu`、マルチの `error`、`wait: true` の POST が返す `state` を含む）と `GET /` が `mod_version`（`GET /` は `version`）/ `mod_commit`（同 `commit`）/ `schema` / `schema_version` を返す。state の読み取りに失敗した 500、503 の `retry: true`、POST のアクションの結果とエラー、profile・図鑑・wiki のエンドポイントは返さない。`mod_commit` は焼いた木の git の版で、汚れた木なら `-dirty` が付く（#47）。
   state はゲームの `release_info.json` から `game_version` / `game_commit` も返す（#74）
-- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"1.20.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state`、`1.2.0` は棚卸しから生成した `internal_state`、`1.3.0` は全パワーの付与元・対象の `combat_id`、`1.4.0` は戦闘中の選択画面すべての `battle`、`1.5.0` は無色 4 札（金の斧・エントロピー・スプラッシュ・計略）の入力、`1.6.0` は戦闘全体の札の解決の通し列 `card_resolution_events`、`1.7.0` は敵の HP の無限表示 `hp_display_is_infinite`、`1.8.0` は札の解決の通し列への山札からの自動プレイの予約の行と、戦闘を終えた POST の応答の `ended_combat`、`1.9.0` は選択を待つ処理の鎖 `choice_source.await_chain`、`1.10.0` は出来事の棚卸しの public-missing（戦闘の出来事の通し列 `battle.combat_log`・全選択画面の `decision_context`・`player.potion_generation_pool`・手札の `energy_cost.x_value_if_played`）、`1.11.0` は敵のパワーを付けられるか `can_receive_powers`、`1.12.0` は戦闘の札の `internal_state.deck_version_id` と 4 パイルの行の `rarity`、`1.13.0` は醸造の候補・通知・使用履歴と歯のあるランの修飾子、`1.14.0` は試行と choose の識別子・初手ドロー前の待機段と残りの listener、`1.15.0` は多段攻撃用の戦闘履歴・戦闘の実カード個体の星 X・矢の枠と刺突、`1.16.0` は戦闘中のワッピーの個体行、`1.17.0` は提示中のエンシェント6候補の `deck_targets`、`1.18.0` は無色ポーションの母集団と三択ポーションの飲用前通知、`1.19.0` は複数の味方がいる戦闘での本人の戦闘個体 ID、`1.20.0` は何でも屋+ の使用前の通知元を足す）。Markdown は先頭の行に `mod … · schema 1.20.0 (schema_version 12)` と出す。
+- **`schema`**: state・アクションの契約の版を semver の文字列で返す。現在は `"2.0.0"`（`1.0.0` が整数の `schema_version` 12 の契約そのもので、`1.1.0` は敵の台詞の印の `combat_state`、`1.2.0` は棚卸しから生成した `internal_state`、`1.3.0` は全パワーの付与元・対象の `combat_id`、`1.4.0` は戦闘中の選択画面すべての `battle`、`1.5.0` は無色 4 札（金の斧・エントロピー・スプラッシュ・計略）の入力、`1.6.0` は戦闘全体の札の解決の通し列 `card_resolution_events`、`1.7.0` は敵の HP の無限表示 `hp_display_is_infinite`、`1.8.0` は札の解決の通し列への山札からの自動プレイの予約の行と、戦闘を終えた POST の応答の `ended_combat`、`1.9.0` は選択を待つ処理の鎖 `choice_source.await_chain`、`1.10.0` は出来事の棚卸しの public-missing（戦闘の出来事の通し列 `battle.combat_log`・全選択画面の `decision_context`・`player.potion_generation_pool`・手札の `energy_cost.x_value_if_played`）、`1.11.0` は敵のパワーを付けられるか `can_receive_powers`、`1.12.0` は戦闘の札の `internal_state.deck_version_id` と 4 パイルの行の `rarity`、`1.13.0` は醸造の候補・通知・使用履歴と歯のあるランの修飾子、`1.14.0` は試行と choose の識別子・初手ドロー前の待機段と残りの listener、`1.15.0` は多段攻撃用の戦闘履歴・戦闘の実カード個体の星 X・矢の枠と刺突、`1.16.0` は戦闘中のワッピーの個体行、`1.17.0` は提示中のエンシェント6候補の `deck_targets`、`1.18.0` は無色ポーションの母集団と三択ポーションの飲用前通知、`1.19.0` は複数の味方がいる戦闘での本人の戦闘個体 ID、`1.20.0` は何でも屋+ の使用前の通知元を足す）。`2.0.0` では対象別ダメージの意味と矢の枠の形が変わる。Markdown は先頭の行に `mod … · schema 2.0.0 (schema_version 12)` と出す。
   - MAJOR: 後方互換の無い変更（既存の項目の意味・型・形を変える、項目・アクション・列挙の値・`state_type` を消す・名前を変える、構造を変える）。クライアントは MAJOR が同じことだけを求める
   - MINOR: 後方互換の追加（項目・アクション・任意の引数・`state_type`、既存の列挙の項目〔`resolving_reasons`・`upgrade_preview.status`・`can_use_now_reason` など〕の新しい値を足す）。クライアントは足された機能を版で比べず、項目の有無と既存の `unavailable_reasons` / `warnings` の慣習で検出する。知らない値は未観測として安全側で止め、既知の値に読み替えない
   - PATCH: 契約を変えない直し（文書の意味のとおりでなかった値を正す、文書・表示の直し）
   - 版を独自に持つ部分契約（`generation_pool.filter_version`・`scenario_capabilities` の各値・Recorder の `sts2-mod-record/N`）は、その版で判定する。それらの版が変わる更新でも、`schema` は変更の中身で通常どおり動かす（項目の追加は MINOR、意味の変更は MAJOR）
   - 規則の正本は [`raw-full.md`](raw-full.md#common-top-level-fields)
-- **`schema_version`（非推奨）**: 整数の版。12 で固定し、もう上げない。sts2 が `schema` を読むようになったあと、次の MAJOR（2.0.0）で消す。
+- **`schema_version`（非推奨）**: 整数の版。既存のクライアントと録画メタデータ用に 12 で固定する。
   以下は整数の版の履歴（既存の項目・アクションの意味を変えたり消したりしたときに上げた。6〜12 は追加だけでも、読み手が一式を必須として扱えるように上げた）。
   2 = 死亡中の敵を `enemies[]` に残す（#55）、3 = `map.next_encounters` の撤去（#57）、4 = `card_select` の候補と index を全候補にした（#73）、
   5 = 戦闘の全行の `upgrade_preview` を常時の status 付きにした（`cat12079801/sts2#1003`）、
@@ -179,7 +182,7 @@
 - **親指締め具の多段攻撃の入力**（schema 1.15.0、`cat12079801/sts2#1296`）を、戦闘中のローカル所有者の通常・選択入力に出す。
   - `player.combat_history` に当手番のエナジー消費・最新の未完了 play の uid 別支払い・正の星獲得・オスティの攻撃・旋律 3 種、当戦闘のエセリアル完了件数を出す。[集計契約と出典](raw-full.md#多段攻撃用の戦闘履歴schema-1150)
   - 手札と 4 パイルの星 X 札に保存額・保存 X、手札には手動支払見込み・その補正後 X も出す。[星 X の契約と出典](raw-full.md#戦闘カード個体の星-xschema-1150)
-  - `player.arrow_state` に矢枠の順・使用可否・破壊予定、対象別の刺突順と回収カウンタを出す。項目ごとの読取失敗を空や 0 と区別する。[矢の契約と出典](raw-full.md#矢の枠と刺突schema-1150)
+  - `player.arrow_state` に矢枠の順・使用可否、対象別の刺突順と回収カウンタを出す。項目ごとの読取失敗を空や 0 と区別する。[矢の契約と出典](raw-full.md#矢の枠と刺突schema-200)
 - **エントロピー醸造**（schema 1.13.0、`cat12079801/sts2#991`）がベルトにある戦闘では、`PotionFactory.GetPotionOptions` の候補を所有者・DLL・レアリティの累積閾値付きで出す。同一 ID の多重度を保持し、所持行と同じ公開変数と、全物理枠での条件付き可否・対象を添える。本体の列挙順で BeforePotionUsed・ShouldProcurePotion・AfterPotionProcured・AfterPotionUsed の override を識別する。本人の使用済みポーションは `PotionUsedEntry` の順で読み、醸造が補充されなかった直後にも履歴を保持する。[入力と出典](raw-full.md#エントロピー醸造playerentropic_brew_poolschema-1130)
 - **生成の候補**:
   - `player.generation_pool`: オロビックの酸液の抽選前の候補。本体の `CardModel.IsAllowedInRun`（`CardFactory.FilterForRun`。人数と Blitz）→ `FilterForCombat` を通した一覧で、`filter_version: 2`（#63・#95、`cat12079801/sts2#940`）
@@ -189,6 +192,15 @@
   - `player.unlocked_pools`: 何でも屋・ジャックポット・錬金術と同じ関数で取った、解放済みのカード・無色カード・ポーションの ID（戦闘中だけ）（#71）
 - **`end_turn` と `discard_potion` は本体の UI と同じ GameAction を積む**（`EndPlayerTurnAction` / `DiscardPotionGameAction`）。本体の戦闘リプレイに残る（#61）
 
+## v0.114.0 の戦闘の契約
+
+- `vs_targets[].damage` は、現在の対象への 1 ヒットで本体が試算したブロック吸収分・補正後の HP 減少・超過分の合計。
+  `total_damage` は同じ試算値とヒット数の積。`damage_cap` は説明用の欄。[ダメージプレビューの契約](raw-full.md#対象別のダメージプレビューschema-200)
+- 盤石は `player.combat_history.card_plays_with_block_gains_this_turn` を使う。従来の `block_gains_this_turn` は履歴 entry の件数を返す。
+- 矢の枠は `Retrieved` / `Away` を返す。ゲームから消えた枠の `destroy_after_impaled` 欄を削除する。
+- ワッピーの戦闘参加直前の HP・最大 HP は `battle.combat_log` の `creature` / `added` 行で読む。
+  ダメージの試算中に呼ばれる HP 補正はログから除外する。
+
 ## レリック
 
 - **パエルの歯のあるランの修飾子**（schema 1.13.0、`cat12079801/sts2#1214`）を `RunState.Modifiers` から `run.internal_state.modifier_ids` に出す。保管札 `stored_cards` と修飾子の列は、空を `[]`、読取失敗を `null`・理由・警告で表す。[入力と出典](raw-full.md#パエルの歯のあるランの修飾子runinternal_statemodifier_idsschema-1130)
@@ -196,6 +208,7 @@
 - `used_up`（`RelicModel.IsUsedUp`）と `melted`（#62）
 - `vars`: 所有レリックの `DynamicVars` の名前 → 現在の値（戦闘中・戦闘外）（#66）。private `RelicModel._dynamicVars` を読み（getter で作らない）、読めなければ null と `unavailable_reasons.vars`、1 変数の失敗はその名前だけ null と理由（`cat12079801/sts2#1020`、schema 12）
 - `run_state`: 戦闘をまたいで残る保存カウンタ（ヌンチャク・音叉・`IronClub` の数、`HappyFlower`・`Pendulum`・`PollinousCore` の手番数、`Girya`・`LastingCandy`・`BookOfFiveRings`・`VenerableTeaSet`・`PumpkinCandle`・`SwordOfStone`・`WingedBoots`・`SilverCrucible`・`FishingRod`・`ToyBox`・`WongosMysteryTicket`・`PaelsWing`・`LavaRock`）を戦闘中・戦闘外とも出す。詳細は [`relic-combat-state.md`](relic-combat-state.md#保存カウンタrun_stateschema-12)（`cat12079801/sts2#1020`、schema 12）
+- `HappyFlower` / `FakeHappyFlower` は `BeforeSideTurnStart` で手番数を進め、`AfterPlayerTurnStartEarly` で予約分のエナジーを付与する。予約の実値は `internal_state.grant_energy_this_turn` に出す。
 - `combat_state`: 戦闘中の内部状態（使用フラグ・カウンタ。苦無・手裏剣・扇子・鎖鎌・レターオープナー・懐中時計の手番の数とオリハルコンの予約を含む）をクラス別の許可リストで出す。詳細は [`relic-combat-state.md`](relic-combat-state.md)（#65・#78）
 - **パエルの眼の手動プレイ判定**は `player.combat_history.any_manual_cards_played_this_turn`（bool）に出す。v0.113.1 の `PaelsEye.AnyCardsPlayedThisTurn` と同じ Actor・手番・非 AutoPlay の完了履歴条件を読み、false も保持する。取得失敗は null・理由・warnings。`WhisperingEarring` 所持時の初手番の例外は所持レリック・`turn_number` と合わせて評価する。版は上げていない（schema 4 のときの追加）（#90、`cat12079801/sts2#911`）
 

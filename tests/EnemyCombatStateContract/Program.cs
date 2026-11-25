@@ -16,7 +16,7 @@ public static partial class McpMod
     private static Dictionary<string, object?> BuildGameStateCore() => new();
     private static Dictionary<string, object?> BuildMultiplayerGameStateCore() => new();
     // 本番は McpMod.GenerationPool.cs（ロードした本体 DLL の SHA-256）と McpMod.EntityIdentity.cs。
-    private static readonly Lazy<string> GenerationAssemblySha256 = new(() => "a671e9ef-test");
+    private static readonly Lazy<string> GenerationAssemblySha256 = new(() => "test-game-assembly");
     internal static string GetStableEntityId(Creature creature) => creature.EntityIdValue;
 
     private static void Check(bool condition, string message)
@@ -173,7 +173,7 @@ public static partial class McpMod
         Check(Source("McpMod.Formatting.cs").Contains("FormatEnemyMoveContext(battle)") && Source("McpMod.Formatting.cs").Contains("FormatEnemySlotName(enemy)"),
             "Markdown への配線");
         Check(Source("McpMod.cs").Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
-        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+        Check(System.Text.RegularExpressions.Regex.IsMatch(Source("McpMod.cs"), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
         Console.WriteLine($"敵の戦闘内部状態の契約試験: {Checks} 件成功");
     }
 
@@ -322,7 +322,7 @@ public static partial class McpMod
         var combat = new StubCombatState { Enemies = [front, corpse, illusion], EncounterValue = encounter };
         var ctx = Context(combat);
         Check(ctx["readable"] is true && !ctx.ContainsKey("unavailable_reasons") && _stateWarnings.Count == 0, "成功時に理由・警告なし");
-        Check(Equals(ctx["game_assembly_sha256"], "a671e9ef-test") && Equals(ctx["game_mode"], "Standard") && ctx["is_dread"] is false
+        Check(Equals(ctx["game_assembly_sha256"], "test-game-assembly") && Equals(ctx["game_mode"], "Standard") && ctx["is_dread"] is false
             && ((List<string>)ctx["ascension_levels"]!).SequenceEqual(["SwarmingElites", "ToughEnemies", "DeadlyEnemies"])
             && Equals(ctx["combat_player_count"], 1) && ctx["has_encounter"] is true && Equals(ctx["encounter_id"], "NIBBITS_WEAK"),
             "hash・モード・Dread・HasAscension が true の段階（列挙順）・人数・遭遇");

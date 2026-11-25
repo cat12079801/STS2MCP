@@ -186,6 +186,8 @@ namespace MegaCrit.Sts2.Core.Models.Powers
 namespace MegaCrit.Sts2.Core.Models.Relics
 {
     public sealed class GoldenCompass : RelicModel { private int _goldenPathAct = -1; public void SetAct(int v) => _goldenPathAct = v; }
+    public sealed class HappyFlower : RelicModel { private bool _grantEnergyThisTurn; public void Schedule() => _grantEnergyThisTurn = true; }
+    public sealed class FakeHappyFlower : RelicModel { private bool _grantEnergyThisTurn; public void Schedule() => _grantEnergyThisTurn = true; }
     public sealed class MusicBox : RelicModel { private CardModel? _cardBeingPlayed; }
     public sealed class PaelsLegion : RelicModel { private Entities.Cards.CardPlay? _affectedCardPlay; public void Set(Entities.Cards.CardPlay? p) => _affectedCardPlay = p; }
     public sealed class PaelsTooth : RelicModel

@@ -2,7 +2,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Enchantments;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 
-// Boundary doubles that copy the v0.113.1 (sts2-a671e9ef) clone/upgrade mechanics the
+// Boundary doubles that copy the v0.114.0 (sts2-ae309f85) clone/upgrade mechanics the
 // production code depends on: AbstractModel.MutableClone, CardModel.DeepCloneFields /
 // AfterCloned / EnchantInternal / AfflictInternal / UpgradeInternal / FinalizeUpgradeInternal /
 // GetKeywordsWithSources / UpgradeStarCostBy, CardEnergyCost.GetWithModifiers / UpgradeBy /
@@ -515,14 +515,14 @@ namespace MegaCrit.Sts2.Core.Models
 
         protected virtual void OnUpgrade() => DynamicVars["Damage"].UpgradeValueBy(3m);
 
-        public void UpgradeInternal()
+        public void UpgradeInternal(bool silent = false)
         {
             AssertMutable();
             CurrentUpgradeLevel++;
             _isUpgrading = true;
             try { OnUpgrade(); }
             finally { _isUpgrading = false; }
-            Upgraded?.Invoke();
+            if (!silent) Upgraded?.Invoke();
         }
 
         public void FinalizeUpgradeInternal()

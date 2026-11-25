@@ -76,7 +76,7 @@ uid registry は本番を実行し、パイルとこのターン・前手番の�
    次手番の開始時に同じ uid の札が回収されるかを照合する。
    追加ターンでは player の TurnNumber と battle.round を区別する。
 5. 不動を持ち、カードでの獲得とカード外の獲得、同じ CardPlay の複数回獲得を照合する。
-   `block_gains_this_turn` は次のプレイの null 文脈の件数なので、落ち着いた state を使う。
+   `card_plays_with_block_gains_this_turn` は次のプレイの null 文脈で CardPlay を数える。`block_gains_this_turn` は履歴 entry の件数。
 6. 非戦闘で省略、新しい戦闘でリセット、マルチのローカル Player のみの集計を確認する
    （このターン／前手番の uid 集合は他 Player の札も含む）。
 7. 拘束の鎖（`CHAINS_OF_BINDING_POWER`）の作用中、`bound_afflictions_this_turn` が付与前 0、付与ごとに +1、

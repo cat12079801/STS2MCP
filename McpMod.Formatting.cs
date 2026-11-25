@@ -573,9 +573,7 @@ public static partial class McpMod
     }
 
     /// <summary>
-    /// Resolved damage per living enemy, as the game would apply it right now
-    /// (Strength, Pen Nib, Vulnerable, Weak all folded in). The card's own text bakes
-    /// in an inconsistent subset of those, so this is the line to compute lethal from.
+    /// The game's targeted per-hit damage previews at the current state.
     /// </summary>
     private static void FormatCardTargetPreviews(StringBuilder sb, Dictionary<string, object?> card)
     {
@@ -591,17 +589,12 @@ public static partial class McpMod
                 return $"{label}: -";
             string hits = t.TryGetValue("hits", out var h) && h != null
                 ? $" x{h} = {t.GetValueOrDefault("total_damage")}" : "";
-            // A damage cap turns a big hit into a wasted card; say so on the same line.
             string cap = "";
             if (t.TryGetValue("damage_cap", out var capObj) && capObj is Dictionary<string, object?> c)
-            {
-                cap = c.TryGetValue("effective_damage", out var eff) && eff != null
-                    ? $" ⚠ actually {eff} ({c.GetValueOrDefault("capped_by")})"
-                    : $" ⚠ capped by {c.GetValueOrDefault("capped_by")}";
-            }
+                cap = $" ({c.GetValueOrDefault("capped_by")}: {c.GetValueOrDefault("note")})";
             return $"{label}: {dmg}{hits}{cap}";
         });
-        sb.AppendLine($"  - resolved damage: {string.Join(", ", parts)}");
+        sb.AppendLine($"  - damage preview: {string.Join(", ", parts)}");
     }
 
     /// <summary>

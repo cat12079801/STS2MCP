@@ -15,7 +15,7 @@ namespace STS2_MCP;
 public static partial class McpMod
 {
     // Recheck the guard and the iterator bodies together when adding a game assembly.
-    private const string AuditedJackObservationAssembly = "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb";
+    private const string AuditedJackObservationAssembly = "ae309f852fb69204a59c04b7b5af63acc839829c65c1349777621ce616e65310";
 
     private static void AttachJackObservationContext(Dictionary<string, object?> state, Player player, string? screen)
     {

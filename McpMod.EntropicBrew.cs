@@ -20,9 +20,9 @@ namespace STS2_MCP;
 public static partial class McpMod
 {
     private const string EntropicBrewPath = "player.entropic_brew_pool";
-    // PotionFactory.CreateRandomPotions: the const fields and the compiled comparison branches
-    // were checked together for this DLL. A different build needs its own audit.
-    private const string AuditedPotionAssembly = "a671e9efb86a7b80405133105665867b053c787670d475b4347cf5ccc15cb5fb";
+    // Audit PotionFactory.CreateRandomPotions' thresholds and branches, and the
+    // choice potion notification paths in McpMod.ChoicePotionContext.cs, for this DLL.
+    private const string AuditedPotionAssembly = "ae309f852fb69204a59c04b7b5af63acc839829c65c1349777621ce616e65310";
     private static readonly (string Notification, string Method, Type[] Parameters, bool RunScope)[] EntropicBrewHooks =
     {
         BeforePotionUsedHook,

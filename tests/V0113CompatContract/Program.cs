@@ -10,7 +10,7 @@ namespace STS2_MCP
         private const string Version = "test-mod";
         private const string BuildCommit = "test-mod-commit";
         private const int StateSchemaVersion = 12;
-        private const string StateSchema = "1.20.0";
+        private const string StateSchema = "2.0.0";
         private static int Checks;
         private static void Check(bool condition, string message)
         {
@@ -23,7 +23,7 @@ namespace STS2_MCP
             => new() { ["status"] = "error", ["message"] = message };
 
         // The published `schema` is semver: MAJOR.MINOR.PATCH, digits only, no leading zeros.
-        // The integer schema_version stays frozen at 12 beside it until 2.0.0.
+        // The integer schema_version stays frozen at 12 beside it.
         private static void CheckSemverSchema(string sources)
         {
             var semver = new System.Text.RegularExpressions.Regex(@"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$");
@@ -68,10 +68,10 @@ namespace STS2_MCP
                 AddCardPreviewValues(preview, values, target, cardId, vulnerable, lostHp);
                 return preview;
             }
-            static int Effective(Dictionary<string, object?> preview)
-                => (int)((Dictionary<string, object?>)preview["damage_cap"]!)["effective_damage"]!;
+            static Dictionary<string, object?> Cap(Dictionary<string, object?> preview)
+                => (Dictionary<string, object?>)preview["damage_cap"]!;
 
-            // Values from v0.113 CanonicalVars and targeted previews, not a running game.
+            // Supply previewed values directly to exercise the MOD projection.
             foreach (var (damage, hits, key, total, label) in new[]
             {
                 (5, 2, "HitCount", 10, "TwinStrike"),
@@ -86,14 +86,16 @@ namespace STS2_MCP
                 var preview = Preview(damage, hits, key, repeat: key == "CalculatedHits");
                 Check(Equals(preview["hits"], hits) && Equals(preview["total_damage"], total), label);
                 Check(!preview.ContainsKey("damage_cap"), "uncapped target");
-                Check(Effective(Preview(damage, hits, key, new IntangiblePower(), key == "CalculatedHits")) == hits,
-                    label + " intangible");
+                var intangible = Preview(1, hits, key, new IntangiblePower());
+                Check(Equals(intangible["total_damage"], hits) && Equals(Cap(intangible)["per_hit_max"], 1),
+                    label + " retains the already capped preview");
             }
             foreach (int repeat in new[] { 1, 3 })
             {
                 var preview = Preview(19, repeat, "Repeat", new SlipperyPower(1));
                 Check(!preview.ContainsKey("hits") && !preview.ContainsKey("total_damage"), "Repeat alone is not a hit count");
-                Check(Effective(preview) == 1, "Repeat alone does not inflate capped damage");
+                Check(Equals(preview["damage"], 19) && !Cap(preview).ContainsKey("effective_damage"),
+                    "Repeat and Slippery do not cause a second cap calculation");
             }
             foreach (string cardId in new[] { "DISMANTLE", "SPITE" })
             foreach (bool condition in new[] { false, true })
@@ -109,20 +111,20 @@ namespace STS2_MCP
                 var preview = Preview(damage, previewHits, cardId: cardId, vulnerable: vulnerable, lostHp: lostHp);
                 Check(Equals(preview["hits"], expectedHits) && Equals(preview["total_damage"], damage * expectedHits),
                     $"{cardId}: corrected count drives total damage");
-                Check(Effective(Preview(damage, previewHits, power: new SlipperyPower(1), cardId: cardId,
-                    vulnerable: vulnerable, lostHp: lostHp)) == 1 + damage * (expectedHits - 1),
-                    $"{cardId}: corrected count drives Slippery cap");
-                Check(Effective(Preview(damage, previewHits, power: new IntangiblePower(), cardId: cardId,
-                    vulnerable: vulnerable, lostHp: lostHp)) == expectedHits,
-                    $"{cardId}: corrected count drives Intangible cap");
+                var slippery = Preview(5, previewHits, power: new SlipperyPower(1), cardId: cardId,
+                    vulnerable: vulnerable, lostHp: lostHp);
+                Check(Equals(slippery["total_damage"], 5 * expectedHits) && !Cap(slippery).ContainsKey("effective_damage"),
+                    $"{cardId}: corrected hit count multiplies the observed value, including Block");
             }
             Check(Equals(Preview(8, 2, cardId: "DISMANTLE", lostHp: true)["hits"], 1), "Dismantle ignores owner HP loss");
             Check(Equals(Preview(5, 2, cardId: "SPITE", vulnerable: true)["hits"], 1), "Spite ignores target Vulnerable");
             Check(ResolveCardPreviewHitCount(new() { ["Repeat"] = 3 }, "DISMANTLE", false, false) == null,
                 "conditional correction does not invent a missing attack count");
-            Check(Effective(Preview(5, 4, "CalculatedHits", new SlipperyPower(2), true)) == 12, "first two hits capped");
-            Check(Effective(Preview(5, 4, "CalculatedHits", new HardToKillPower(3), true)) == 12, "all four hits capped");
-            Check(Effective(Preview(5, null, power: new IntangiblePower())) == 1, "no hit var defaults to one for caps");
+            var hardToKill = Preview(8, 4, "CalculatedHits", new HardToKillPower(3), true);
+            Check(Equals(hardToKill["damage"], 8) && Equals(hardToKill["total_damage"], 32)
+                && Equals(Cap(hardToKill)["per_hit_max"], 3) && ((string)Cap(hardToKill)["note"]!).Contains("after Block"),
+                "HardToKill caps HP loss, so a preview including Block may be above per_hit_max");
+            Check(Equals(Cap(Preview(1, null, power: new IntangiblePower()))["per_hit_max"], 1), "single-hit cap metadata");
             Check(!Preview(5, null).ContainsKey("hits"), "single hit without count keeps old shape");
             var both = new Dictionary<string, object?> { ["Damage"] = 5, ["HitCount"] = 2, ["CalculatedHits"] = 4, ["Repeat"] = 1 };
             var result = new Dictionary<string, object?>();
@@ -131,11 +133,11 @@ namespace STS2_MCP
             var shell = (Dictionary<string, object?>)Preview(5, 4, power: new HardenedShellPower(7))["damage_cap"]!;
             Check(Equals(shell["per_turn_max"], 7) && !shell.ContainsKey("effective_damage"), "per-turn cap unchanged");
 
-            ReleaseInfoManager.Instance.ReleaseInfo = new("v0.113.0", "16ac0fe3");
+            ReleaseInfoManager.Instance.ReleaseInfo = new("v0.114.0", "a7b9a9c0");
             foreach (var type in new[] { "unknown", "menu", "shop", "monster" })
             {
                 var state = NewStateResult(type);
-                Check(Equals(state["game_version"], "v0.113.0") && Equals(state["game_commit"], "16ac0fe3"), "release stamp " + type);
+                Check(Equals(state["game_version"], "v0.114.0") && Equals(state["game_commit"], "a7b9a9c0"), "release stamp " + type);
                 Check(Equals(state["mod_version"], Version) && Equals(state["mod_commit"], BuildCommit)
                     && Equals(state["schema_version"], 12), "independent mod/schema stamp");
                 Check(Equals(state["schema"], StateSchema), "every stamped state carries the semver schema " + type);
@@ -157,8 +159,8 @@ namespace STS2_MCP
                     "release exception preserves state response");
                 ReleaseInfoManager.FailInstance = ReleaseInfoManager.FailReleaseInfo = false;
             }
-            ReleaseInfoManager.Instance.ReleaseInfo = new("v0.113.0", "16ac0fe3");
-            Check(Equals(NewStateResult()["game_version"], "v0.113.0"), "release metadata recovers after failure");
+            ReleaseInfoManager.Instance.ReleaseInfo = new("v0.114.0", "a7b9a9c0");
+            Check(Equals(NewStateResult()["game_version"], "v0.114.0"), "release metadata recovers after failure");
 
             var success = BuildShopPurchaseResult(Task.FromResult(true), 75);
             Check(Equals(success["purchase_success"], true) && Equals(success["purchase_completed"], true), "purchase completed");
@@ -186,7 +188,7 @@ namespace STS2_MCP
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "published schema is 12 (sts2#1020)");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains($"public const string StateSchema = \"{StateSchema}\";"), $"published schema is semver {StateSchema} (schema_version 12 is frozen)");
             CheckSemverSchema(sources);
-            Console.WriteLine($"v0.113 compatibility contract: {Checks} checks passed");
+            Console.WriteLine($"Compatibility contract: {Checks} checks passed");
         }
     }
 }

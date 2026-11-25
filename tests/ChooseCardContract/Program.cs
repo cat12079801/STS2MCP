@@ -277,7 +277,7 @@ namespace STS2_MCP
             int reveal = actions.IndexOf("RevealCardSelectScreen(chooseScreen, revealed)", StringComparison.Ordinal);
             Check(nullGuard > 0 && nullGuard < reveal, "CardModel の無い holder は覆いを外す前に拒否する");
             Check(File.ReadAllText(Path.Combine(sources, "McpMod.cs")).Contains("public const int StateSchemaVersion = 12;"), "現行の schema は 12（sts2#1020）");
-            Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 1 (the exact version is checked in V0113CompatContract)");
+            Check(System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(Path.Combine(sources, "McpMod.cs")), @"public const string StateSchema = ""2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"";"), "published schema MAJOR is 2 (the exact version is checked in V0113CompatContract)");
             Console.WriteLine($"ChooseCardContract: {Checks} checks passed");
         }
     }
